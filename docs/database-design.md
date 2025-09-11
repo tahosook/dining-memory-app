@@ -14,6 +14,11 @@
 - **画像データ分離**: BLOB データの効率的管理
 - **バックアップ対応**: JSON エクスポート可能な構造
 
+### 40代男性ターゲット特化
+- **実用的な分析**: 自炊レベル分類、行動パターン発見
+- **メモ重視**: 振り返りに重要な自由記述の活用
+- **プライバシー**: 端末内完結、外部送信最小限
+
 ---
 
 ## データベーススキーマ
@@ -35,10 +40,14 @@ CREATE TABLE meals (
     -- AI解析結果
     ai_confidence REAL,                  -- AI解析の確信度 (0.0-1.0)
     ai_raw_result TEXT,                  -- AI解析の生データ（JSON）
+    ai_source TEXT,                      -- 'local' or 'cloud' AI解析元
     
-    -- ユーザー入力
-    satisfaction_rating INTEGER,         -- 満足度 (1-5)
-    notes TEXT,                          -- ユーザーメモ
+    -- ユーザー入力（満足度削除、メモ重視）
+    notes TEXT,                          -- ユーザーメモ（重要フィールド）
+    
+    -- 自炊分析用
+    cooking_level TEXT,                  -- 'quick'(時短)/'daily'(日常)/'gourmet'(本格)
+    is_homemade BOOLEAN DEFAULT 0,       -- 自炊フラグ
     
     -- メタデータ
     photo_path TEXT NOT NULL,           -- 画像ファイルパス
@@ -77,6 +86,9 @@ CREATE TABLE ingredients (
     -- 分量情報（将来拡張用）
     quantity TEXT,                      -- 分量（例：1個、少々）
     
+    -- 自炊分析用
+    ingredient_type TEXT,               -- 'fresh'(生鮮)/'processed'(加工)/'seasoning'(調味料)
+    
     -- メタデータ
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     is_user_added BOOLEAN DEFAULT 0,    -- ユーザーが手動追加したか
@@ -103,10 +115,17 @@ CREATE TABLE locations (
     -- 統計情報
     visit_count INTEGER DEFAULT 0,      -- 訪問回数
     last_visit DATETIME,                -- 最終訪問日
+    first_visit DATETIME,               -- 初回訪問日
+    
+    -- 40代男性向け分析用
+    average_interval_days REAL,         -- 平均訪問間隔（日数）
+    business_hours TEXT,                -- 営業時間情報
+    price_range TEXT,                   -- 価格帯（S/M/L/XL）
     
     -- メタデータ
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    is_favorite BOOLEAN DEFAULT 0       -- お気に入り場所
+    is_favorite BOOLEAN DEFAULT 0,      -- お気に入り場所
+    notes TEXT                          -- 場所に関するメモ
 );
 ```
 
@@ -136,12 +155,42 @@ CREATE TABLE meal_images (
     -- 処理フラグ
     is_processed BOOLEAN DEFAULT 0,     -- AI処理済みフラグ
     processing_status TEXT,             -- 処理状況
+    quality_score REAL,                 -- 画像品質スコア
     
     FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE CASCADE
 );
 ```
 
-### 5. tags テーブル（タグマスター）
+### 5. cooking_patterns テーブル（自炊パターン分析用）
+
+```sql
+CREATE TABLE cooking_patterns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meal_id INTEGER NOT NULL,
+    
+    -- 自炊分析
+    recipe_complexity INTEGER,          -- レシピ複雑度 (1-5)
+    cooking_time_minutes INTEGER,       -- 調理時間（分）
+    skill_level TEXT,                   -- 'beginner'/'intermediate'/'advanced'
+    
+    -- 材料分析
+    ingredient_count INTEGER,           -- 使用材料数
+    fresh_ingredient_ratio REAL,        -- 生鮮材料比率
+    
+    -- パターン分析用
+    day_of_week INTEGER,                -- 曜日 (0=Sunday)
+    time_of_day TEXT,                   -- 'morning'/'afternoon'/'evening'/'night'
+    weather_condition TEXT,             -- 天気情報（将来拡張）
+    
+    -- メタデータ
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    analysis_version TEXT,              -- 分析ロジックのバージョン
+    
+    FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE CASCADE
+);
+```
+
+### 6. tags テーブル（タグマスター）
 
 ```sql
 CREATE TABLE tags (
@@ -155,13 +204,17 @@ CREATE TABLE tags (
     -- 統計情報
     usage_count INTEGER DEFAULT 0,      -- 使用回数
     
+    -- 40代男性向け分析用
+    business_usage BOOLEAN DEFAULT 0,   -- ビジネス関連タグか
+    health_related BOOLEAN DEFAULT 0,   -- 健康関連タグか
+    
     -- メタデータ
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     is_system_tag BOOLEAN DEFAULT 0     -- システム定義タグか
 );
 ```
 
-### 6. meal_tags テーブル（食事-タグ関連）
+### 7. meal_tags テーブル（食事-タグ関連）
 
 ```sql
 CREATE TABLE meal_tags (
@@ -171,6 +224,7 @@ CREATE TABLE meal_tags (
     
     -- メタデータ
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    confidence REAL,                    -- タグ付けの確信度
     
     FOREIGN KEY (meal_id) REFERENCES meals(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
@@ -179,7 +233,39 @@ CREATE TABLE meal_tags (
 );
 ```
 
-### 7. search_vectors テーブル（セマンティック検索用）
+### 8. behavior_insights テーブル（行動パターン分析結果）
+
+```sql
+CREATE TABLE behavior_insights (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    
+    -- インサイト情報
+    insight_type TEXT NOT NULL,         -- 'routine'/'pattern'/'change'/'discovery'
+    title TEXT NOT NULL,                -- インサイトのタイトル
+    description TEXT,                   -- 詳細説明
+    confidence REAL,                    -- 確信度
+    
+    -- 対象期間
+    analysis_start_date DATE,           -- 分析開始日
+    analysis_end_date DATE,             -- 分析終了日
+    
+    -- 関連データ
+    related_meals TEXT,                 -- 関連する食事ID（JSON配列）
+    statistical_data TEXT,             -- 統計データ（JSON）
+    
+    -- メタデータ
+    discovered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_dismissed BOOLEAN DEFAULT 0,     -- ユーザーが却下したか
+    shown_to_user BOOLEAN DEFAULT 0,    -- ユーザーに表示したか
+    
+    -- 40代男性向け
+    business_relevance REAL,           -- ビジネス関連度
+    health_relevance REAL,             -- 健康関連度
+    lifestyle_relevance REAL           -- ライフスタイル関連度
+);
+```
+
+### 9. search_vectors テーブル（セマンティック検索用）
 
 ```sql
 CREATE TABLE search_vectors (
@@ -193,6 +279,7 @@ CREATE TABLE search_vectors (
     
     -- テキスト情報
     indexed_text TEXT,                  -- ベクトル化対象テキスト
+    keywords TEXT,                      -- 抽出キーワード
     
     -- メタデータ
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -202,7 +289,7 @@ CREATE TABLE search_vectors (
 );
 ```
 
-### 8. app_settings テーブル（アプリ設定）
+### 10. app_settings テーブル（アプリ設定）
 
 ```sql
 CREATE TABLE app_settings (
@@ -215,7 +302,11 @@ CREATE TABLE app_settings (
     
     -- メタデータ
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    description TEXT                    -- 設定の説明
+    description TEXT,                   -- 設定の説明
+    
+    -- ユーザー関連
+    is_user_setting BOOLEAN DEFAULT 1, -- ユーザー設定かシステム設定か
+    requires_restart BOOLEAN DEFAULT 0  -- 変更時の再起動要否
 );
 ```
 
@@ -226,30 +317,42 @@ CREATE TABLE app_settings (
 ### パフォーマンス最適化インデックス
 
 ```sql
--- 日時検索用
+-- 基本検索用インデックス
 CREATE INDEX idx_meals_meal_datetime ON meals(meal_datetime);
 CREATE INDEX idx_meals_created_at ON meals(created_at);
+CREATE INDEX idx_meals_is_deleted ON meals(is_deleted);
 
--- 場所検索用
+-- 場所・位置情報検索用
 CREATE INDEX idx_meals_location ON meals(location_name, latitude, longitude);
+CREATE INDEX idx_locations_name ON locations(name);
+CREATE INDEX idx_locations_category ON locations(category);
 
--- 満足度検索用
-CREATE INDEX idx_meals_satisfaction ON meals(satisfaction_rating);
+-- 自炊分析用インデックス
+CREATE INDEX idx_meals_homemade ON meals(is_homemade);
+CREATE INDEX idx_meals_cooking_level ON meals(cooking_level);
+CREATE INDEX idx_cooking_patterns_complexity ON cooking_patterns(recipe_complexity, skill_level);
 
--- テキスト検索用（FTS）
-CREATE INDEX idx_meals_search_text ON meals(search_text);
-
--- 論理削除・同期用
-CREATE INDEX idx_meals_deleted ON meals(is_deleted);
-CREATE INDEX idx_meals_sync ON meals(synced_at);
+-- AI解析用インデックス
+CREATE INDEX idx_meals_ai_confidence ON meals(ai_confidence);
+CREATE INDEX idx_meals_ai_source ON meals(ai_source);
 
 -- 材料検索用
 CREATE INDEX idx_ingredients_name ON ingredients(name);
 CREATE INDEX idx_ingredients_category ON ingredients(category);
+CREATE INDEX idx_ingredients_type ON ingredients(ingredient_type);
+
+-- 行動分析用インデックス
+CREATE INDEX idx_cooking_patterns_day ON cooking_patterns(day_of_week, time_of_day);
+CREATE INDEX idx_behavior_insights_type ON behavior_insights(insight_type, confidence);
 
 -- 複合インデックス（よく使われる組み合わせ）
 CREATE INDEX idx_meals_datetime_location ON meals(meal_datetime, location_name);
 CREATE INDEX idx_meals_type_cuisine ON meals(meal_type, cuisine_type);
+CREATE INDEX idx_meals_homemade_datetime ON meals(is_homemade, meal_datetime);
+CREATE INDEX idx_meals_cooking_level_datetime ON meals(cooking_level, meal_datetime);
+
+-- 同期・バックアップ用
+CREATE INDEX idx_meals_sync ON meals(synced_at, is_deleted);
 ```
 
 ### 全文検索（FTS5）設定
@@ -260,21 +363,25 @@ CREATE VIRTUAL TABLE meals_fts USING fts5(
     meal_name,
     search_text,
     notes,
+    location_name,
+    tags,
     content='meals',
     content_rowid='id'
 );
 
 -- FTS更新トリガー
 CREATE TRIGGER meals_fts_insert AFTER INSERT ON meals BEGIN
-    INSERT INTO meals_fts(rowid, meal_name, search_text, notes)
-    VALUES (new.id, new.meal_name, new.search_text, new.notes);
+    INSERT INTO meals_fts(rowid, meal_name, search_text, notes, location_name, tags)
+    VALUES (new.id, new.meal_name, new.search_text, new.notes, new.location_name, new.tags);
 END;
 
 CREATE TRIGGER meals_fts_update AFTER UPDATE ON meals BEGIN
     UPDATE meals_fts SET 
         meal_name = new.meal_name,
         search_text = new.search_text,
-        notes = new.notes
+        notes = new.notes,
+        location_name = new.location_name,
+        tags = new.tags
     WHERE rowid = new.id;
 END;
 
@@ -290,93 +397,186 @@ END;
 ### サンプルデータ
 
 ```sql
--- 食事記録サンプル
+-- 自炊記録の例
 INSERT INTO meals (
     uuid, meal_name, meal_type, cuisine_type,
-    ai_confidence, satisfaction_rating, notes,
+    ai_confidence, notes, is_homemade, cooking_level,
+    photo_path, location_name, meal_datetime, search_text, tags
+) VALUES (
+    '12345678-1234-5678-9abc-123456789abc',
+    '手作り親子丼', '夕食', '和食',
+    0.75, '久しぶりに作った。思ったより美味しくできた。', 1, 'daily',
+    '/images/meal_001.jpg', '自宅', '2025-09-11 19:30:00',
+    '親子丼 和食 自宅 手作り 久しぶり 美味しい',
+    '和食,自炊,親子丼'
+);
+
+-- 外食記録の例
+INSERT INTO meals (
+    uuid, meal_name, meal_type, cuisine_type,
+    ai_confidence, notes, is_homemade, cooking_level,
     photo_path, location_name, latitude, longitude,
     meal_datetime, search_text, tags
 ) VALUES (
-    '12345678-1234-5678-9abc-123456789abc',
+    '87654321-4321-8765-cba9-876543210abc',
     'ラーメン（醤油）', '夕食', '和食',
-    0.85, 4, '美味しかった。また来たい。',
-    '/images/meal_001.jpg', '○○ラーメン店', 35.6762, 139.6503,
-    '2025-09-09 19:30:00',
-    'ラーメン 醤油 和食 ○○ラーメン店 美味しかった',
-    'ラーメン,醤油,麺類'
+    0.85, '行きつけの店。安定の美味しさ。', 0, null,
+    '/images/meal_002.jpg', '○○ラーメン店', 35.6762, 139.6503,
+    '2025-09-11 20:15:00',
+    'ラーメン 醤油 和食 ○○ラーメン店 行きつけ 安定',
+    'ラーメン,外食,行きつけ'
 );
 
--- 材料データサンプル
-INSERT INTO ingredients (meal_id, name, category, confidence) VALUES
-(1, 'ラーメン', 'メイン', 0.95),
-(1, '煮卵', 'トッピング', 0.80),
-(1, 'ネギ', 'トッピング', 0.75),
-(1, 'チャーシュー', 'トッピング', 0.90);
+-- 材料データ
+INSERT INTO ingredients (meal_id, name, category, confidence, ingredient_type) VALUES
+(1, '鶏肉', 'メイン', 0.90, 'fresh'),
+(1, '玉子', 'メイン', 0.85, 'fresh'),
+(1, '玉ねぎ', 'サイド', 0.80, 'fresh'),
+(1, '醤油', '調味料', 0.70, 'seasoning');
+
+-- 自炊パターンデータ
+INSERT INTO cooking_patterns (
+    meal_id, recipe_complexity, cooking_time_minutes, skill_level,
+    ingredient_count, fresh_ingredient_ratio, day_of_week, time_of_day
+) VALUES (
+    1, 2, 20, 'intermediate', 4, 0.75, 3, 'evening'
+);
 ```
 
 ### よく使われるクエリパターン
 
-#### 1. 期間別検索
+#### 1. 期間別検索・統計
 ```sql
--- 今月の食事記録
-SELECT * FROM meals 
+-- 今月の自炊回数と外食回数
+SELECT 
+    is_homemade,
+    COUNT(*) as count,
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM meals WHERE meal_datetime >= date('now', 'start of month') AND is_deleted = 0), 1) as percentage
+FROM meals 
 WHERE meal_datetime >= date('now', 'start of month')
   AND is_deleted = 0
-ORDER BY meal_datetime DESC;
+GROUP BY is_homemade;
 
--- 過去1週間の満足度平均
-SELECT AVG(satisfaction_rating) as avg_satisfaction
-FROM meals 
-WHERE meal_datetime >= datetime('now', '-7 days')
-  AND satisfaction_rating IS NOT NULL;
+-- 過去3ヶ月の自炊レベル分析
+SELECT 
+    cooking_level,
+    COUNT(*) as count,
+    AVG(cp.recipe_complexity) as avg_complexity,
+    AVG(cp.cooking_time_minutes) as avg_time
+FROM meals m
+LEFT JOIN cooking_patterns cp ON m.id = cp.meal_id
+WHERE m.meal_datetime >= date('now', '-3 months')
+  AND m.is_homemade = 1
+  AND m.is_deleted = 0
+GROUP BY cooking_level 
+ORDER BY count DESC;
 ```
 
-#### 2. テキスト検索
+#### 2. 行動パターン発見
 ```sql
--- 全文検索
-SELECT m.* FROM meals m
+-- 曜日別の外食・自炊傾向
+SELECT 
+    CASE strftime('%w', meal_datetime)
+        WHEN '0' THEN '日'
+        WHEN '1' THEN '月' 
+        WHEN '2' THEN '火'
+        WHEN '3' THEN '水'
+        WHEN '4' THEN '木'
+        WHEN '5' THEN '金'
+        WHEN '6' THEN '土'
+    END as day_of_week,
+    COUNT(*) as total,
+    SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) as homemade_count,
+    SUM(CASE WHEN is_homemade = 0 THEN 1 ELSE 0 END) as eating_out_count,
+    ROUND(SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) * 100.0 / COUNT(*), 1) as homemade_rate
+FROM meals 
+WHERE meal_datetime >= date('now', '-3 months')
+  AND is_deleted = 0
+GROUP BY strftime('%w', meal_datetime)
+ORDER BY strftime('%w', meal_datetime);
+
+-- 忘れかけてるメニュー発見
+SELECT 
+    meal_name,
+    MAX(meal_datetime) as last_cooked,
+    COUNT(*) as total_times,
+    julianday('now') - julianday(MAX(meal_datetime)) as days_since
+FROM meals
+WHERE is_homemade = 1 
+  AND is_deleted = 0
+GROUP BY meal_name
+HAVING total_times >= 2
+  AND days_since > 60
+ORDER BY total_times DESC, days_since DESC;
+```
+
+#### 3. インサイト生成用クエリ
+```sql
+-- ルーティン発見（特定の曜日に特定の料理）
+SELECT 
+    strftime('%w', meal_datetime) as day_of_week,
+    cuisine_type,
+    COUNT(*) as frequency,
+    COUNT(DISTINCT date(meal_datetime)) as unique_days,
+    ROUND(COUNT(*) * 100.0 / COUNT(DISTINCT date(meal_datetime)), 1) as consistency_rate
+FROM meals
+WHERE meal_datetime >= date('now', '-8 weeks')
+  AND is_deleted = 0
+GROUP BY strftime('%w', meal_datetime), cuisine_type
+HAVING frequency >= 4 AND consistency_rate >= 50
+ORDER BY consistency_rate DESC;
+
+-- 最近の変化検出（3ヶ月前 vs 最近1ヶ月）
+WITH recent_period AS (
+    SELECT cuisine_type, COUNT(*) as recent_count
+    FROM meals 
+    WHERE meal_datetime >= date('now', '-1 month')
+      AND is_deleted = 0
+    GROUP BY cuisine_type
+),
+past_period AS (
+    SELECT cuisine_type, COUNT(*) as past_count
+    FROM meals 
+    WHERE meal_datetime >= date('now', '-4 months')
+      AND meal_datetime < date('now', '-3 months')
+      AND is_deleted = 0
+    GROUP BY cuisine_type
+)
+SELECT 
+    COALESCE(r.cuisine_type, p.cuisine_type) as cuisine_type,
+    COALESCE(r.recent_count, 0) as recent_count,
+    COALESCE(p.past_count, 0) as past_count,
+    CASE 
+        WHEN p.past_count = 0 THEN 'NEW'
+        WHEN r.recent_count = 0 THEN 'STOPPED'
+        ELSE ROUND((r.recent_count - p.past_count) * 100.0 / p.past_count, 1)
+    END as change_rate
+FROM recent_period r
+FULL OUTER JOIN past_period p ON r.cuisine_type = p.cuisine_type
+ORDER BY change_rate DESC;
+```
+
+#### 4. 検索機能
+```sql
+-- 全文検索（メモ内容も含む）
+SELECT m.*, 
+       snippet(meals_fts, 1, '<mark>', '</mark>', '...', 32) as snippet
+FROM meals m
 JOIN meals_fts fts ON m.id = fts.rowid
-WHERE meals_fts MATCH 'ラーメン'
+WHERE meals_fts MATCH '美味しい AND ラーメン'
+  AND m.is_deleted = 0
+ORDER BY fts.rank
+LIMIT 20;
+
+-- 複合条件検索
+SELECT m.*, l.visit_count
+FROM meals m
+LEFT JOIN locations l ON m.location_name = l.name
+WHERE m.meal_datetime BETWEEN ? AND ?
+  AND m.cuisine_type IN ('和食', '中華')
+  AND (m.is_homemade = 1 OR l.visit_count > 3)
   AND m.is_deleted = 0
 ORDER BY m.meal_datetime DESC;
-
--- 材料検索
-SELECT DISTINCT m.* FROM meals m
-JOIN ingredients i ON m.id = i.meal_id
-WHERE i.name LIKE '%卵%'
-  AND m.is_deleted = 0;
-```
-
-#### 3. 統計クエリ
-```sql
--- よく食べる料理Top10
-SELECT meal_name, COUNT(*) as count
-FROM meals 
-WHERE is_deleted = 0
-GROUP BY meal_name 
-ORDER BY count DESC 
-LIMIT 10;
-
--- 場所別訪問回数
-SELECT location_name, COUNT(*) as visit_count,
-       AVG(satisfaction_rating) as avg_rating
-FROM meals 
-WHERE location_name IS NOT NULL 
-  AND is_deleted = 0
-GROUP BY location_name 
-ORDER BY visit_count DESC;
-```
-
-#### 4. セマンティック検索（将来実装）
-```sql
--- ベクトル類似度検索（概念的な例）
-SELECT m.*, 
-       vector_similarity(sv.vector_data, ?) as similarity
-FROM meals m
-JOIN search_vectors sv ON m.id = sv.meal_id
-WHERE similarity > 0.7
-ORDER BY similarity DESC
-LIMIT 10;
 ```
 
 ---
@@ -388,25 +588,33 @@ LIMIT 10;
 #### JSON エクスポート形式
 ```json
 {
-  "version": "1.0",
-  "exported_at": "2025-09-09T10:00:00Z",
+  "version": "1.2.0",
+  "exported_at": "2025-09-11T10:00:00Z",
+  "user_preferences": {
+    "cooking_level_thresholds": {
+      "quick": 15,
+      "daily": 45,
+      "gourmet": 90
+    }
+  },
   "meals": [
     {
       "uuid": "12345678-1234-5678-9abc-123456789abc",
-      "meal_name": "ラーメン（醤油）",
+      "meal_name": "手作り親子丼",
       "meal_type": "夕食",
       "cuisine_type": "和食",
-      "satisfaction_rating": 4,
-      "notes": "美味しかった",
-      "meal_datetime": "2025-09-09T19:30:00Z",
+      "notes": "久しぶりに作った。思ったより美味しくできた。",
+      "is_homemade": true,
+      "cooking_level": "daily",
+      "meal_datetime": "2025-09-11T19:30:00Z",
       "location": {
-        "name": "○○ラーメン店",
-        "latitude": 35.6762,
-        "longitude": 139.6503
+        "name": "自宅",
+        "latitude": null,
+        "longitude": null
       },
       "ingredients": [
-        {"name": "ラーメン", "category": "メイン"},
-        {"name": "煮卵", "category": "トッピング"}
+        {"name": "鶏肉", "category": "メイン", "ingredient_type": "fresh"},
+        {"name": "玉子", "category": "メイン", "ingredient_type": "fresh"}
       ],
       "images": [
         {
@@ -415,15 +623,33 @@ LIMIT 10;
         }
       ],
       "ai_analysis": {
-        "confidence": 0.85,
+        "confidence": 0.75,
+        "source": "local",
         "raw_result": "..."
+      },
+      "cooking_pattern": {
+        "recipe_complexity": 2,
+        "cooking_time_minutes": 20,
+        "skill_level": "intermediate"
+      }
+    }
+  ],
+  "behavior_insights": [
+    {
+      "insight_type": "routine",
+      "title": "火曜日は中華の日",
+      "description": "過去8週間中6回が中華料理",
+      "confidence": 0.85,
+      "analysis_period": {
+        "start": "2025-07-16",
+        "end": "2025-09-10"
       }
     }
   ]
 }
 ```
 
-### データ最適化
+### データ最適化・メンテナンス
 
 #### 定期メンテナンス
 ```sql
@@ -438,6 +664,12 @@ WHERE usage_count = 0
   AND created_at < datetime('now', '-7 days')
   AND is_system_tag = 0;
 
+-- 古いインサイトの削除（表示済み&低関連度）
+DELETE FROM behavior_insights 
+WHERE shown_to_user = 1 
+  AND discovered_at < datetime('now', '-3 months')
+  AND (business_relevance + health_relevance + lifestyle_relevance) < 1.5;
+
 -- インデックス再構築
 REINDEX;
 
@@ -445,10 +677,26 @@ REINDEX;
 VACUUM;
 ```
 
-#### ストレージ効率化
-- **画像圧縮**: WebP形式で保存、サムネイル生成
-- **重複排除**: 同じ画像のハッシュチェック
-- **アーカイブ**: 古いデータの圧縮保存
+#### 自動データ整理
+```sql
+-- 重複検出・マージ候補
+SELECT 
+    meal_name, location_name, date(meal_datetime),
+    COUNT(*) as duplicate_count,
+    GROUP_CONCAT(id) as meal_ids
+FROM meals
+WHERE is_deleted = 0
+GROUP BY meal_name, location_name, date(meal_datetime)
+HAVING COUNT(*) > 1;
+
+-- 品質スコアの低い画像特定
+SELECT m.id, m.meal_name, mi.quality_score, mi.file_size
+FROM meals m
+JOIN meal_images mi ON m.id = mi.meal_id
+WHERE mi.quality_score < 0.3 
+   OR (mi.file_size > 5000000 AND mi.quality_score < 0.7)
+ORDER BY mi.quality_score ASC;
+```
 
 ---
 
@@ -461,7 +709,7 @@ VACUUM;
 import { appSchema, tableSchema } from '@nozbe/watermelondb'
 
 export default appSchema({
-  version: 1,
+  version: 2,
   tables: [
     tableSchema({
       name: 'meals',
@@ -471,9 +719,12 @@ export default appSchema({
         { name: 'meal_type', type: 'string' },
         { name: 'cuisine_type', type: 'string' },
         { name: 'ai_confidence', type: 'number' },
-        { name: 'satisfaction_rating', type: 'number' },
+        { name: 'ai_source', type: 'string' },
         { name: 'notes', type: 'string' },
+        { name: 'cooking_level', type: 'string' },
+        { name: 'is_homemade', type: 'boolean' },
         { name: 'photo_path', type: 'string' },
+        { name: 'photo_thumbnail_path', type: 'string' },
         { name: 'location_name', type: 'string' },
         { name: 'latitude', type: 'number' },
         { name: 'longitude', type: 'number' },
@@ -484,63 +735,4 @@ export default appSchema({
         { name: 'created_at', type: 'number' },
         { name: 'updated_at', type: 'number' },
       ]
-    })
-    // ... 他のテーブル定義
-  ]
-})
-```
-
-### Model定義例
-
-```javascript
-// Meal.js
-import { Model } from '@nozbe/watermelondb'
-import { field, date, children, json } from '@nozbe/watermelondb/decorators'
-
-export default class Meal extends Model {
-  static table = 'meals'
-  static associations = {
-    ingredients: { type: 'has_many', foreignKey: 'meal_id' },
-    images: { type: 'has_many', foreignKey: 'meal_id' },
-  }
-
-  @field('uuid') uuid
-  @field('meal_name') mealName
-  @field('meal_type') mealType
-  @field('cuisine_type') cuisineType
-  @field('ai_confidence') aiConfidence
-  @field('satisfaction_rating') satisfactionRating
-  @field('notes') notes
-  @field('photo_path') photoPath
-  @field('location_name') locationName
-  @field('latitude') latitude
-  @field('longitude') longitude
-  @date('meal_datetime') mealDatetime
-  @field('search_text') searchText
-  @field('tags') tags
-  @field('is_deleted') isDeleted
-
-  @children('ingredients') ingredients
-  @children('meal_images') images
-}
-```
-
----
-
-## 将来の拡張予定
-
-### Phase 2 機能
-- **栄養情報テーブル**: カロリー、栄養素情報
-- **レシピテーブル**: 自炊記録との連携
-- **共有機能**: 友人・家族との記録共有
-- **レコメンド**: 過去データに基づく推奨
-
-### セマンティック検索強化
-- **ベクトル検索エンジン**: Faiss等の統合
-- **多言語対応**: 英語・中国語等の検索
-- **画像類似検索**: 見た目の近い料理検索
-- **味覚プロファイル**: 個人の嗜好学習
-
----
-
-*このスキーマは開発進捗に合わせて随時更新・最適化する*
+    }),
