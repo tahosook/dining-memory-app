@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "dining-memory-app",
+    "name": "Dining Memory",
     "slug": "dining-memory-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -28,6 +28,11 @@
     },
     "plugins": [
       "expo-sqlite"
+    ],
+    "permissions": [
+      "CAMERA",
+      "ACCESS_MEDIA_LIBRARY",
+      "ACCESS_FINE_LOCATION"
     ]
   }
 }
