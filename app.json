@@ -29,12 +29,8 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite"
-    ],
-    "permissions": [
-      "CAMERA",
-      "ACCESS_MEDIA_LIBRARY",
-      "ACCESS_FINE_LOCATION"
+      "expo-sqlite",
+      "expo-font"
     ]
   }
 }
