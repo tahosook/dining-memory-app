@@ -39,3 +39,27 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# ビルド成果物（APK）を無視
+build*.apk
+*.apk
+
+# Android ビルドディレクトリ
+android/app/build/
+android/build/
+
+# 署名鍵や gradle 一時ファイル
+*.keystore
+*.jks
+.gradle/
+android/.gradle/
+
+# Expo / Metro / node
+.expo/
+.expo-shared/
+node_modules/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
