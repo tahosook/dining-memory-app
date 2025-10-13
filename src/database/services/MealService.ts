@@ -242,4 +242,3 @@ export class MealService {
     return parts.join(' ').toLowerCase()
   }
 }
-}

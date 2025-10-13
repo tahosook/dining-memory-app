@@ -164,8 +164,15 @@ export default function CameraScreen() {
       await FileSystem.moveAsync({ from: compressedImage.uri, to: compressedPath });
       await FileSystem.moveAsync({ from: thumbnail.uri, to: thumbnailPath });
 
-      // Also save to media library
-      await MediaLibrary.createAssetAsync(photo.uri);
+      // Also save to media library (only if permission granted)
+      try {
+        console.log('Saving to media library...');
+        await MediaLibrary.createAssetAsync(photo.uri);
+        console.log('Successfully saved to media library');
+      } catch (mediaError) {
+        console.warn('Failed to save to media library:', mediaError);
+        // Continue without media library saving
+      }
 
       // TODO: Pass to AI analysis and meal creation screen
       Alert.alert(

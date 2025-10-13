@@ -120,7 +120,12 @@ dining-memory-app/
   - 画像自動圧縮・サムネイル生成機能
   - 40代男性向け撮影UI（大ボタン・ガイド枠）
   - ファイル管理とメディアライブラリ保存
-- [ ] RecordsScreen（一覧・詳細表示）
+  - Expo Go Android権限処理強化（カメラ・メディアライブラリ）
+- [x] **RecordsScreen実装** ⭐完了（2025/10/13）
+  - MealService統合 + 日付グループ化表示 ✅
+  - サムネイル画像対応 + CRUD操作機能
+  - 40代男性向け一覧UI（カードベース・タグ表示）
+  - プルリフレッシュ + 詳細ポップアップ + 削除機能
 - [ ] SearchScreen（検索・フィルター）
 - [ ] StatsScreen（統計・インサイト）
 - [ ] SettingsScreen（設定・バックアップ）
