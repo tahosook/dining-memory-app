@@ -36,7 +36,14 @@
     },
     "plugins": [
       "expo-camera",
-      "expo-media-library",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
+          "isAccessMediaLocationEnabled": false
+        }
+      ],
       "expo-file-system",
       [
         "expo-build-properties",
@@ -45,10 +52,11 @@
             "deploymentTarget": "15.1"
           },
           "android": {
-            "minSdkVersion": 21
+            "minSdkVersion": 24
           }
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
