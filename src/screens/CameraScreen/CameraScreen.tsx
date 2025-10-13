@@ -8,17 +8,21 @@ import {
   Dimensions,
   Platform
 } from 'react-native';
-import { Camera, CameraView } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export default function CameraScreen() {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const [photoPaths, setPhotoPaths] = useState<{
+    compressedPath: string;
+    thumbnailPath: string;
+  }>({ compressedPath: '', thumbnailPath: '' });
 
   // Request permissions
   useEffect(() => {
@@ -28,12 +32,11 @@ export default function CameraScreen() {
 
         // Camera permission first
         console.log('Requesting camera permission...');
-        const cameraPermission = await Camera.requestCameraPermissionsAsync();
-        console.log('Camera permission result:', cameraPermission);
+        const permissionResult = await requestCameraPermission();
+        console.log('Camera permission result:', permissionResult);
 
-        if (cameraPermission.status !== 'granted') {
+        if (!permissionResult.granted) {
           console.log('Camera permission denied');
-          setHasPermission(false);
           Alert.alert(
             'カメラ権限が必要です',
             '写真撮影するためにカメラへのアクセス権限を許可してください。',
@@ -47,10 +50,6 @@ export default function CameraScreen() {
 
         // Media library permission (Expo Go may have compatibility issues)
         console.log('Requesting media library permission...');
-        const hasCameraPermission = cameraPermission.status === 'granted';
-        console.log('Camera permission status:', hasCameraPermission);
-
-        setHasPermission(hasCameraPermission);
 
         // Try media library permission but don't block on it
         try {
@@ -61,14 +60,8 @@ export default function CameraScreen() {
           console.warn('Media library permission check failed (expected on some Expo Go versions):', mediaError);
         }
 
-        // Show note about media library not being critical
-        if (hasCameraPermission) {
-          console.log('Camera permission granted, proceeding...');
-        }
-
       } catch (error) {
         console.error('Permission request error:', error);
-        setHasPermission(false);
 
         // More specific error handling for Expo Go
         if (error instanceof Error) {
@@ -85,18 +78,21 @@ export default function CameraScreen() {
       }
     };
 
-    // Add timeout for Expo Go compatibility
-    const timeoutId = setTimeout(() => {
-      console.log('Permission request timed out, trying again...');
-      requestPermissions();
-    }, 10000); // 10 second timeout
+    // Only request permissions if not already determined
+    if (cameraPermission?.status !== 'granted' && cameraPermission?.status !== 'denied') {
+      // Add timeout for Expo Go compatibility
+      const timeoutId = setTimeout(() => {
+        console.log('Permission request timed out, trying again...');
+        requestPermissions();
+      }, 10000); // 10 second timeout
 
-    requestPermissions().finally(() => {
-      clearTimeout(timeoutId);
-      console.log('Permission request completed');
-    });
+      requestPermissions().finally(() => {
+        clearTimeout(timeoutId);
+        console.log('Permission request completed');
+      });
+    }
 
-  }, []);
+  }, [cameraPermission, requestCameraPermission]);
 
   // Take photo
   const takePicture = async () => {
@@ -116,21 +112,12 @@ export default function CameraScreen() {
       console.log('Photo captured successfully:', photo.uri);
       console.log('Photo details:', { width: photo.width, height: photo.height });
 
-      // Create compressed version for storage (only for dev build, skip in Expo Go)
-      let compressedPath = '';
-      let thumbnailPath = '';
-
-      try {
-        // For Expo Go, create file paths but skip actual resizing
-        const timestamp = Date.now();
-        const baseDir = '/tmp/'; // Use temp directory for Expo Go
-        compressedPath = `meal_${timestamp}_compressed.jpg`;
-        thumbnailPath = `meal_${timestamp}_thumbnail.jpg`;
-
-        console.log('Using Expo Go mode - skipping image resizing, saving original to gallery');
-      } catch (resizeError: any) {
-        console.warn('Image resizing setup failed (expected in Expo Go):', resizeError.message);
-      }
+      // Set photo paths for future image analysis
+      const timestamp = Date.now();
+      setPhotoPaths({
+        compressedPath: `meal_${timestamp}_compressed.jpg`,
+        thumbnailPath: `meal_${timestamp}_thumbnail.jpg`
+      });
 
       // Save to media library - primary functionality for Expo Go
       try {
@@ -191,7 +178,7 @@ export default function CameraScreen() {
     setFacing(current => current === 'back' ? 'front' : 'back');
   };
 
-  if (hasPermission === null) {
+  if (cameraPermission === null) {
     return (
       <View style={styles.container}>
         <Text style={styles.permissionText}>カメラ権限を確認中...</Text>
@@ -199,7 +186,7 @@ export default function CameraScreen() {
     );
   }
 
-  if (hasPermission === false) {
+  if (!cameraPermission?.granted) {
     return (
       <View style={styles.container}>
         <Text style={styles.permissionText}>
@@ -235,6 +222,7 @@ export default function CameraScreen() {
               { text: 'キャンセル', style: 'cancel' },
               { text: '終了', onPress: () => {/* TODO: Navigate back */} }
             ])}
+            testID="close-button"
           >
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
@@ -261,6 +249,7 @@ export default function CameraScreen() {
               style={[styles.captureButton, takingPhoto && styles.captureButtonDisabled]}
               onPress={takePicture}
               disabled={takingPhoto}
+              testID="capture-button"
             >
               <View style={styles.captureButtonInner}>
                 {takingPhoto ? (
