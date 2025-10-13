@@ -1,11 +1,20 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import TabNavigator from './src/navigation/TabNavigator';
+import { StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import RootNavigator from './src/navigation/RootNavigator';
 
+// Basic app setup - will add database provider later
 export default function App() {
   return (
-      <NavigationContainer>
-        <TabNavigator/>
-      </NavigationContainer>
+    <View style={styles.container}>
+      <RootNavigator />
+      <StatusBar style="auto" />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
