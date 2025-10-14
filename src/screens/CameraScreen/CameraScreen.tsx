@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -15,6 +16,7 @@ import * as FileSystem from 'expo-file-system';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export default function CameraScreen() {
+  const navigation = useNavigation();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
@@ -152,8 +154,8 @@ export default function CameraScreen() {
             text: '記録タブで確認',
             style: 'default',
             onPress: () => {
-              // TODO: Navigate to RecordsScreen
-              console.log('Navigate to RecordsScreen');
+              // @ts-ignore
+              navigation.navigate('Records');
             }
           }
         ]
@@ -218,9 +220,12 @@ export default function CameraScreen() {
         <View style={[styles.topBar, { marginTop: 44 }]}>
           <TouchableOpacity
             style={styles.closeButton}
-            onPress={() => Alert.alert('確認', '撮影を終了しますか？', [
+            onPress={() => Alert.alert('確認', '撮影を終了して記録タブに移動しますか？', [
               { text: 'キャンセル', style: 'cancel' },
-              { text: '終了', onPress: () => {/* TODO: Navigate back */} }
+              { text: '撮影を終了しました', onPress: () => {
+                // @ts-ignore
+                navigation.navigate('Records');
+              }}
             ])}
             testID="close-button"
           >

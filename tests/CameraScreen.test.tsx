@@ -5,6 +5,14 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Camera from 'expo-camera';
 import CameraScreen from '../src/screens/CameraScreen/CameraScreen';
 
+// Mock React Navigation
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({
+    navigate: mockNavigate,
+  }),
+}));
+
 // Mock Expo APIs
 jest.mock('expo-camera', () => ({
   CameraView: ({ children }: { children: React.ReactNode }) => (
@@ -117,9 +125,10 @@ describe('CameraScreen Normal Flow Tests', () => {
     });
 
     test('should allow camera access when permission granted', async () => {
+      const mockRequestPermission = jest.fn().mockResolvedValue(mockCameraPermissionsGranted);
       (Camera.useCameraPermissions as jest.Mock).mockReturnValue([
         mockCameraPermissionsGranted,
-        jest.fn().mockResolvedValue(mockCameraPermissionsGranted)
+        mockRequestPermission
       ]);
 
       const { queryByText } = render(<CameraScreen />);
@@ -199,6 +208,107 @@ describe('CameraScreen Normal Flow Tests', () => {
       await findByTestId('capture-button');
       await findByText('撮影範囲に料理を合わせてください');
       await findByText('ボタンをタップして撮影');
+    });
+  });
+
+  describe('Navigation Tests', () => {
+    beforeEach(() => {
+      (Camera.useCameraPermissions as jest.Mock).mockReturnValue([
+        mockCameraPermissionsGranted,
+        jest.fn().mockResolvedValue(mockCameraPermissionsGranted)
+      ]);
+      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(
+        mockMediaLibraryPermissionsGranted
+      );
+      // Reset mockNavigate before each test
+      mockNavigate.mockClear();
+    });
+
+    test('should navigate to Records screen when "撮影を終了しました" button is pressed', async () => {
+      const { findByTestId } = render(<CameraScreen />);
+
+      const closeButton = await findByTestId('close-button');
+      fireEvent.press(closeButton);
+
+      // Verify that Alert.alert was called with the correct arguments
+      expect(Alert.alert).toHaveBeenCalledWith(
+        '確認',
+        '撮影を終了して記録タブに移動しますか？',
+        [
+          expect.objectContaining({
+            text: 'キャンセル',
+            style: 'cancel',
+          }),
+          expect.objectContaining({
+            text: '撮影を終了しました',
+            onPress: expect.any(Function),
+          }),
+        ]
+      );
+
+      // Extract the onPress handler and call it
+      const alertArgs = (Alert.alert as jest.Mock).mock.calls[0];
+      const buttons = alertArgs[2];
+      const exitButton = buttons.find((button: any) => button.text === '撮影を終了しました');
+      exitButton.onPress();
+
+      // Verify that navigation.navigate was called with 'Records'
+      expect(mockNavigate).toHaveBeenCalledWith('Records');
+    });
+
+    test('should not navigate when cancel button is pressed in close dialog', async () => {
+      const { findByTestId } = render(<CameraScreen />);
+
+      const closeButton = await findByTestId('close-button');
+      fireEvent.press(closeButton);
+
+      // Extract the onPress handler for cancel button and call it
+      const alertArgs = (Alert.alert as jest.Mock).mock.calls[0];
+      const buttons = alertArgs[2];
+      const cancelButton = buttons.find((button: any) => button.text === 'キャンセル');
+      // Fire event with onPress to trigger it properly to avoid undefined
+      if (cancelButton && cancelButton.onPress) {
+        cancelButton.onPress();
+      }
+
+      // Verify that navigation.navigate was NOT called
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    test('should not navigate when OK button is pressed in success alert', async () => {
+      const { findByTestId } = render(<CameraScreen />);
+
+      // Set up mock camera ref with takePictureAsync
+      mockCameraRef.current = {
+        takePictureAsync: jest.fn().mockResolvedValue({
+          uri: '/mock/photo.jpg',
+          width: 1920,
+          height: 1080,
+        }),
+      };
+
+      (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({
+        uri: '/mock/photo.jpg',
+        width: 1920,
+        height: 1080,
+      });
+
+      const captureButton = await findByTestId('capture-button');
+      fireEvent.press(captureButton);
+
+      // Wait for async operations to complete
+      await waitFor(() => {
+        if ((Alert.alert as jest.Mock).mock.calls.length > 0) {
+          // Extract the onPress handler for OK button and call it
+          const alertArgs = (Alert.alert as jest.Mock).mock.calls[0];
+          const buttons = alertArgs[2];
+          const okButton = buttons.find((button: any) => button.text === 'OK');
+          okButton.onPress();
+
+          // Verify that navigation.navigate was NOT called
+          expect(mockNavigate).not.toHaveBeenCalled();
+        }
+      });
     });
   });
 });
