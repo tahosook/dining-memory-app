@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import {
   View,
@@ -15,30 +15,57 @@ import * as FileSystem from 'expo-file-system';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-export default function CameraScreen() {
-  const navigation = useNavigation();
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
-  const [takingPhoto, setTakingPhoto] = useState(false);
-  const [facing, setFacing] = useState<'front' | 'back'>('back');
-  const [photoPaths, setPhotoPaths] = useState<{
-    compressedPath: string;
-    thumbnailPath: string;
-  }>({ compressedPath: '', thumbnailPath: '' });
+// Constants
+const PERMISSION_TIMEOUT_MS = 10000;
+const PHOTO_QUALITY = 0.8;
 
-  // Request permissions
+// Types
+interface PhotoPaths {
+  compressedPath: string;
+  thumbnailPath: string;
+}
+
+// Components
+interface TopBarProps {
+  onClosePress: () => void;
+  onFlipPress: () => void;
+}
+
+const TopBar: React.FC<TopBarProps> = ({ onClosePress, onFlipPress }) => (
+  <View style={[styles.topBar, { marginTop: 44 }]}>
+    <TouchableOpacity
+      style={styles.closeButton}
+      onPress={onClosePress}
+      testID="close-button"
+    >
+      <Text style={styles.closeButtonText}>✕</Text>
+    </TouchableOpacity>
+
+    <TouchableOpacity
+      style={styles.flipButton}
+      onPress={onFlipPress}
+    >
+      <Text style={styles.buttonText}>🔄</Text>
+    </TouchableOpacity>
+  </View>
+);
+
+// Custom hooks
+const useCameraPermission = () => {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [hasRequested, setHasRequested] = useState(false);
+
   useEffect(() => {
     const requestPermissions = async () => {
-      try {
-        console.log('Starting permission requests...');
+      if (hasRequested || permission?.status === 'granted' || permission?.status === 'denied') {
+        return;
+      }
 
-        // Camera permission first
+      try {
         console.log('Requesting camera permission...');
-        const permissionResult = await requestCameraPermission();
-        console.log('Camera permission result:', permissionResult);
+        const permissionResult = await requestPermission();
 
         if (!permissionResult.granted) {
-          console.log('Camera permission denied');
           Alert.alert(
             'カメラ権限が必要です',
             '写真撮影するためにカメラへのアクセス権限を許可してください。',
@@ -50,61 +77,126 @@ export default function CameraScreen() {
           return;
         }
 
-        // Media library permission (Expo Go may have compatibility issues)
-        console.log('Requesting media library permission...');
-
-        // Try media library permission but don't block on it
-        try {
-          console.log('Media library permission attempt...');
-          const mediaPermission = await MediaLibrary.getPermissionsAsync();
-          console.log('Media library permission result:', mediaPermission);
-        } catch (mediaError) {
-          console.warn('Media library permission check failed (expected on some Expo Go versions):', mediaError);
-        }
+        // Request media library permission
+        await requestMediaLibraryPermission();
 
       } catch (error) {
-        console.error('Permission request error:', error);
-
-        // More specific error handling for Expo Go
-        if (error instanceof Error) {
-          if (error.message.includes('camera')) {
-            Alert.alert('カメラエラー', 'カメラの初期化に失敗しました。Expo Goを再起動するか、開発ビルドを使用してください。');
-          } else if (error.message.includes('permission')) {
-            Alert.alert('権限エラー', 'カメラ権限が拒否されました。アプリの設定から権限を許可してください。');
-          } else {
-            Alert.alert('エラー', `権限確認中にエラーが発生しました: ${error.message}`);
-          }
-        } else {
-          Alert.alert('エラー', '権限確認中に予期しないエラーが発生しました。');
-        }
+        handlePermissionError(error);
+      } finally {
+        setHasRequested(true);
       }
     };
 
-    // Only request permissions if not already determined
-    if (cameraPermission?.status !== 'granted' && cameraPermission?.status !== 'denied') {
-      // Add timeout for Expo Go compatibility
+    const requestMediaLibraryPermission = async () => {
+      try {
+        await MediaLibrary.getPermissionsAsync();
+      } catch (mediaError) {
+        console.warn('Media library permission check failed (expected on some Expo Go versions):', mediaError);
+      }
+    };
+
+    const handlePermissionError = (error: unknown) => {
+      console.error('Permission request error:', error);
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('camera')) {
+        Alert.alert('カメラエラー', 'カメラの初期化に失敗しました。Expo Goを再起動するか、開発ビルドを使用してください。');
+      } else if (errorMessage.includes('permission')) {
+        Alert.alert('権限エラー', 'カメラ権限が拒否されました。アプリの設定から権限を許可してください。');
+      } else {
+        Alert.alert('エラー', `権限確認中にエラーが発生しました: ${errorMessage}`);
+      }
+    };
+
+    if (!hasRequested && permission?.status !== 'granted' && permission?.status !== 'denied') {
       const timeoutId = setTimeout(() => {
         console.log('Permission request timed out, trying again...');
         requestPermissions();
-      }, 10000); // 10 second timeout
+      }, PERMISSION_TIMEOUT_MS);
 
       requestPermissions().finally(() => {
         clearTimeout(timeoutId);
         console.log('Permission request completed');
       });
     }
+  }, [permission, requestPermission, hasRequested]);
 
-  }, [cameraPermission, requestCameraPermission]);
+  return permission;
+};
+
+export default function CameraScreen() {
+  const navigation = useNavigation();
+  const cameraPermission = useCameraPermission();
+  const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
+  const [takingPhoto, setTakingPhoto] = useState(false);
+  const [facing, setFacing] = useState<'front' | 'back'>('back');
+  const [photoPaths, setPhotoPaths] = useState<PhotoPaths>({
+    compressedPath: '',
+    thumbnailPath: ''
+  });
+
+
+
+  // Photo utilities
+  const generatePhotoPaths = useCallback((timestamp: number): PhotoPaths => ({
+    compressedPath: `meal_${timestamp}_compressed.jpg`,
+    thumbnailPath: `meal_${timestamp}_thumbnail.jpg`
+  }), []);
+
+  const savePhotoToMediaLibrary = useCallback(async (photoUri: string) => {
+    try {
+      console.log('Saving photo to MediaLibrary...');
+      await MediaLibrary.createAssetAsync(photoUri);
+      console.log('✅ Successfully saved photo to user\'s photo gallery!');
+      return true;
+    } catch (mediaError: any) {
+      console.warn('Media library save failed:', mediaError.message);
+      return false;
+    }
+  }, []);
+
+  const cleanupTempFile = useCallback(async (photoUri: string) => {
+    try {
+      await FileSystem.deleteAsync(photoUri);
+      console.log('Temp file cleaned up');
+    } catch (cleanupError: any) {
+      console.warn('Cleanup failed:', cleanupError.message);
+    }
+  }, []);
+
+  const showPhotoSuccessAlert = useCallback((photo: any) => {
+    Alert.alert(
+      '写真撮影完了',
+      `✅ 写真を写真ライブラリに保存しました！
+
+📸 写真詳細:
+• ${photo.width}x${photo.height}
+• 保存時刻: ${new Date().toLocaleString()}`,
+      [
+        { text: 'OK', style: 'default' },
+        {
+          text: '記録タブで確認',
+          style: 'default',
+          onPress: () => navigateToRecords()
+        }
+      ]
+    );
+  }, []);
+
+  const navigateToRecords = useCallback(() => {
+    // @ts-ignore
+    navigation.navigate('Records');
+  }, [navigation]);
 
   // Take photo
-  const takePicture = async () => {
+  const takePicture = useCallback(async () => {
     if (!cameraRef || takingPhoto) return;
 
     try {
       setTakingPhoto(true);
 
       const photo = await cameraRef.takePictureAsync({
-        quality: 0.8,
+        quality: PHOTO_QUALITY,
         skipProcessing: false,
       });
 
@@ -116,50 +208,17 @@ export default function CameraScreen() {
 
       // Set photo paths for future image analysis
       const timestamp = Date.now();
-      setPhotoPaths({
-        compressedPath: `meal_${timestamp}_compressed.jpg`,
-        thumbnailPath: `meal_${timestamp}_thumbnail.jpg`
-      });
+      const photoPaths = generatePhotoPaths(timestamp);
+      setPhotoPaths(photoPaths);
 
       // Save to media library - primary functionality for Expo Go
-      try {
-        console.log('Saving photo to MediaLibrary...');
-        await MediaLibrary.createAssetAsync(photo.uri);
-        console.log('✅ Successfully saved photo to user\'s photo gallery!');
-      } catch (mediaError: any) {
-        console.warn('Media library save failed:', mediaError.message);
-
-        // Clean up temp file if MediaLibrary failed
-        try {
-          await FileSystem.deleteAsync(photo.uri);
-          console.log('Temp file cleaned up');
-        } catch (cleanupError: any) {
-          console.warn('Cleanup failed:', cleanupError.message);
-        }
-
-        throw mediaError; // Re-throw to show error alert
+      const saveSuccess = await savePhotoToMediaLibrary(photo.uri);
+      if (!saveSuccess) {
+        await cleanupTempFile(photo.uri);
+        throw new Error('写真の保存に失敗しました');
       }
 
-      // Show success alert
-      Alert.alert(
-        '写真撮影完了',
-        `✅ 写真を写真ライブラリに保存しました！
-
-📸 写真詳細:
-• ${photo.width}x${photo.height}
-• 保存時刻: ${new Date().toLocaleString()}`,
-        [
-          { text: 'OK', style: 'default' },
-          {
-            text: '記録タブで確認',
-            style: 'default',
-            onPress: () => {
-              // @ts-ignore
-              navigation.navigate('Records');
-            }
-          }
-        ]
-      );
+      showPhotoSuccessAlert(photo);
 
     } catch (error) {
       console.error('写真撮影エラー:', error);
@@ -167,7 +226,7 @@ export default function CameraScreen() {
     } finally {
       setTakingPhoto(false);
     }
-  };
+  }, [cameraRef, takingPhoto, generatePhotoPaths, savePhotoToMediaLibrary, cleanupTempFile, showPhotoSuccessAlert]);
 
   // Navigate to analysis screen (placeholder)
   const navigateToAnalysis = (compressedPath: string, thumbnailPath: string) => {
@@ -175,10 +234,18 @@ export default function CameraScreen() {
     console.log('Analysis with:', { compressedPath, thumbnailPath });
   };
 
+  // UI Alert functions
+  const showCloseConfirmDialog = useCallback(() => {
+    Alert.alert('確認', '撮影を終了して記録タブに移動しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '撮影を終了しました', onPress: navigateToRecords }
+    ]);
+  }, [navigateToRecords]);
+
   // Toggle camera facing
-  const toggleCameraFacing = () => {
+  const toggleCameraFacing = useCallback(() => {
     setFacing(current => current === 'back' ? 'front' : 'back');
-  };
+  }, []);
 
   if (cameraPermission === null) {
     return (
@@ -216,29 +283,11 @@ export default function CameraScreen() {
       {/* Overlay UI */}
       <View style={styles.overlay}>
 
-        {/* Top Bar - Add top safe area for devices with notches */}
-        <View style={[styles.topBar, { marginTop: 44 }]}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={() => Alert.alert('確認', '撮影を終了して記録タブに移動しますか？', [
-              { text: 'キャンセル', style: 'cancel' },
-              { text: '撮影を終了しました', onPress: () => {
-                // @ts-ignore
-                navigation.navigate('Records');
-              }}
-            ])}
-            testID="close-button"
-          >
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.flipButton}
-            onPress={toggleCameraFacing}
-          >
-            <Text style={styles.buttonText}>🔄</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Top Bar */}
+        <TopBar
+          onClosePress={showCloseConfirmDialog}
+          onFlipPress={toggleCameraFacing}
+        />
 
         {/* Center Focus Area */}
         <View style={styles.focusArea}>
