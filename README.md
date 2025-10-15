@@ -1,5 +1,74 @@
 # Dining Memory App
 
+AI-powered dining memory app that analyzes food & drink photos using TensorFlow Lite and stores them in a local SQLite database with WatermelonDB, focusing on meal tracking and pattern discovery for middle-aged men.
+
+## 📚 Documentation
+
+### 📋 Docs Structure
+- **[`docs/tech-spec.md`](docs/tech-spec.md)** - Technology specification and implementation plan
+- **[`docs/coding-standards.md`](docs/coding-standards.md)** - Comprehensive coding standards for React Native development
+- **[`docs/ai-guidelines.md`](docs/ai-guidelines.md)** - Guidelines for AI-assisted development tools
+- **[`docs/database-design.md`](docs/database-design.md)** - Detailed database schema and query patterns
+- **[`docs/screen-designs.md`](docs/screen-designs.md)** - Complete UI/UX specifications
+- **[`docs/user-flows.md`](docs/user-flows.md)** - User interaction flows and scenarios
+- **[`docs/notes/`](docs/notes/)** - Additional technical notes and problem-solving records
+
+### 🎯 Key Standards
+- **TypeScript first**: Strict typing with no `any` usage
+- **React Native optimized**: Performance-focused patterns
+- **Database-driven**: WatermelonDB + SQLite architecture
+- **AI-assisted**: Consistent code generation through documented standards
+
+## 🚀 Quick Start
+
+### Environment Setup
+- Node.js 18.x+
+- Expo CLI & EAS CLI
+- React Native development environment
+
+### Installation
+```bash
+npm install
+```
+
+### Development
+```bash
+npm start  # or expo start
+```
+
+### Testing
+```bash
+npm test
+```
+
+---
+
+## 📋 Implementation Readiness Checklist
+
+### Environment Setup ✅
+- [x] Node.js 18.x+ installed (v18.20.7)
+- [x] Expo CLI installed (v54.0.11)
+- [x] EAS CLI installed (v16.20.4)
+- [ ] Apple/Google developer accounts (Optional for personal deployment)
+
+### Project Initialization ✅
+- [x] Project structure created
+- [x] Required dependencies installed (WatermelonDB, Camera, Navigation)
+- [x] Git repository initialized
+- [x] React v19.1.0 + RN 0.81.4 compatibility verified
+
+### Development Setup ✅
+- [x] Navigation system (5 tabs: Camera, Records, Search, Stats, Settings)
+- [x] Basic database schema implemented
+- [x] First screen confirmation complete (Camera tab functional)
+
+### Integration Confirmed ✅
+- [x] All design docs cross-referenced and aligned
+- [x] Technical specifications integrated across docs
+- [x] Known issues resolved (React version conflicts fixed)
+
+---
+
 AI-powered dining memory app that analyzes food & drink photos with semantic search
 
 ## 概要
