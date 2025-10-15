@@ -8,9 +8,9 @@ import {
   Alert,
   Dimensions,
   Image,
-  SafeAreaView,
   ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
