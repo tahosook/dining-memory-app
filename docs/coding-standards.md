@@ -298,6 +298,69 @@ const handleSubmit = () => console.log('Submitted');
 const onPress = () => console.log('Pressed');
 ```
 
+### Presentational/Container パターン
+```typescript
+// ✅ Good: Presentational/Container 分離
+
+// Container: ビジネスロジック、状態管理、hooks
+interface ContainerProps {
+  navigation: NavigationProps;
+}
+
+const CameraScreenContainer: React.FC<ContainerProps> = () => {
+  const permission = useCameraPermission();
+  const [state, setState] = useState(initialState);
+
+  // ビジネスロジックをここに集約
+  const handleTakePhoto = async () => {
+    // 写真撮影・保存処理
+  };
+
+  // 型合成で不要拡張を防止
+  const presentationalProps: CameraScreenPresentationalProps = {
+    permissionGranted: permission?.granted ?? false,
+    takingPhoto: state.takingPhoto,
+    onTakePhoto: handleTakePhoto,
+  } as const;
+
+  return <CameraScreenPresentational {...presentationalProps} />;
+};
+
+// Presentational: UI描画のみの純粋コンポーネント
+interface CameraScreenPresentationalProps {
+  readonly permissionGranted: boolean;
+  readonly takingPhoto: boolean;
+  readonly onTakePhoto: () => Promise<void>;
+}
+
+const CameraScreenPresentational: React.FC<CameraScreenPresentationalProps> = ({
+  permissionGranted,
+  takingPhoto,
+  onTakePhoto
+}) => {
+  // 副作用ない純粋UIコンポーネント
+  return (
+    <View>
+      {/* UI描画のみ */}
+    </View>
+  );
+};
+
+// Props定義原則: Pick<> + 型合成 + Readonly
+type NavigationProps = Pick<NavigationProp<CameraStackParamList>, 'navigate' | 'goBack'>;
+
+interface BusinessLogicProps {
+  permissionStatus: PermissionStatus;
+  cameraState: CameraState;
+  photoOperations: PhotoOperations;
+}
+
+type CameraScreenProps = Pick<BusinessLogicProps, 'permissionStatus' | 'photoOperations'> &
+  Readonly<{
+    takingPhoto: boolean;
+  }>;
+```
+
 ### Propsの構造化
 ```typescript
 // ✅ Good: 構造化代入
@@ -735,13 +798,14 @@ module.exports = {
 
 新規コード作成時:
 - [ ] **単一責任の原則**を守っている（1つの役割のみ）
+- [ ] **Presentational/Container パターン**が適用されている（複雑なコンポーネントの場合）
 - [ ] **プラットフォーム抽象化**を行っている（iOS/Android固有コードはPlatform.select使用）
 - [ ] **Error Boundary**が適切に配置されている
 - [ ] 定数管理が徹底されている（ハードコーディングを避ける）
 - [ ] メモリ管理が適切（useEffectクリーンアップ、イベントリスナー解放）
 - [ ] テスト容易性を考慮した設計（依存性の注入、副作用の分離）
 - [ ] TypeScriptの型が適切に定義されている
-- [ ] コンポーネントは適切なPropsインターフェースを持つ
+- [ ] **Propsの型定義**がPick<>や型合成で最小限に維持されている
 - [ ] 非同期処理に適切なエラーハンドリングがある
 - [ ] スタイルはStyleSheetオブジェクト化されている
 - [ ] ハードコーディングされた値は定数化されている
