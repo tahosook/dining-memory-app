@@ -1,24 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../../constants/Colors';
+import { GlobalStyles } from '../../constants/Styles';
 
-export default function SearchScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
+/**
+ * 検索画面コンポーネント
+ *
+ * 食事記録の検索機能を提供するスクリーン。
+ * キーワード検索、フィルタリング、検索候補の表示を行う。
+ *
+ * @component
+ * @returns {JSX.Element} 検索画面
+ */
+interface SearchScreenProps {
+  // Props are not required for this screen currently
+}
+
+export const SearchScreen: React.FC<SearchScreenProps> = () => {
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  /**
+   * 検索クエリをクリアするハンドラ
+   */
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+  }, []);
+
+  /**
+   * 検索クエリが変更されたときのハンドラ
+   */
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchQuery(text);
+  }, []);
+
+  /**
+   * 検索候補がタップされたときのハンドラ
+   */
+  const handleSuggestionPress = useCallback((suggestion: string) => {
+    setSearchQuery(suggestion);
+  }, []);
 
   return (
-    <View style={styles.container}>
+    <View style={GlobalStyles.screen}>
       {/* 検索バー */}
       <View style={styles.searchBar}>
-        <Ionicons name="search-outline" size={20} color="#666" style={styles.searchIcon} />
+        <Ionicons name="search-outline" size={20} color={Colors.gray} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="検索キーワード入力..."
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={handleSearchChange}
+          testID="search-input"
         />
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.clearButton}>
-            <Ionicons name="close-circle" size={20} color="#666" />
+          <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
+            <Ionicons name="close-circle" size={20} color={Colors.gray} />
           </TouchableOpacity>
         )}
       </View>
@@ -57,22 +94,37 @@ export default function SearchScreen() {
         {searchQuery.length === 0 ? (
           // 検索候補表示
           <View style={styles.suggestions}>
-            <Text style={styles.sectionTitle}>💭 検索候補</Text>
-            <TouchableOpacity style={styles.suggestionItem}>
+            <Text style={GlobalStyles.title}>💭 検索候補</Text>
+            <TouchableOpacity
+              style={styles.suggestionItem}
+              onPress={() => handleSuggestionPress('ラーメン')}
+            >
               <Text style={styles.suggestionText}>🍜 ラーメン (28件)</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.suggestionItem}>
+            <TouchableOpacity
+              style={styles.suggestionItem}
+              onPress={() => handleSuggestionPress('ランチ')}
+            >
               <Text style={styles.suggestionText}>🥗 ランチ (15件)</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.suggestionItem}>
+            <TouchableOpacity
+              style={styles.suggestionItem}
+              onPress={() => handleSuggestionPress('ライス')}
+            >
               <Text style={styles.suggestionText}>🍛 ライス (8件)</Text>
             </TouchableOpacity>
 
-            <Text style={styles.sectionTitle}>🕐 最近の検索</Text>
-            <TouchableOpacity style={styles.suggestionItem}>
+            <Text style={GlobalStyles.title}>🕐 最近の検索</Text>
+            <TouchableOpacity
+              style={styles.suggestionItem}
+              onPress={() => handleSuggestionPress('ラーメン')}
+            >
               <Text style={styles.recentSearchText}>ラーメン</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.suggestionItem}>
+            <TouchableOpacity
+              style={styles.suggestionItem}
+              onPress={() => handleSuggestionPress('渋谷 ランチ')}
+            >
               <Text style={styles.recentSearchText}>渋谷 ランチ</Text>
             </TouchableOpacity>
           </View>
@@ -80,21 +132,21 @@ export default function SearchScreen() {
           // 検索結果表示
           <View style={styles.searchResults}>
             <Text style={styles.resultsHeader}>検索結果: 12件</Text>
-            
+
             {/* 検索結果カード */}
             <TouchableOpacity style={styles.resultCard}>
               <View style={styles.resultThumbnail}>
                 <Text style={styles.thumbnailText}>📸</Text>
               </View>
               <View style={styles.resultInfo}>
-                <Text style={styles.resultTitle}>
+                <Text style={GlobalStyles.title}>
                   🍜 <Text style={styles.highlightText}>ラーメン</Text>（醤油）
                 </Text>
-                <Text style={styles.resultDate}>2025/9/11 19:30</Text>
-                <Text style={styles.resultLocation}>
+                <Text style={GlobalStyles.body}>2025/9/11 19:30</Text>
+                <Text style={GlobalStyles.body}>
                   📍 ○○<Text style={styles.highlightText}>ラーメン</Text>店
                 </Text>
-                <Text style={styles.resultNote}>💬 美味しかった！</Text>
+                <Text style={GlobalStyles.body}>💬 美味しかった！</Text>
               </View>
             </TouchableOpacity>
 
@@ -103,11 +155,11 @@ export default function SearchScreen() {
                 <Text style={styles.thumbnailText}>📸</Text>
               </View>
               <View style={styles.resultInfo}>
-                <Text style={styles.resultTitle}>
+                <Text style={GlobalStyles.title}>
                   🍜 <Text style={styles.highlightText}>ラーメン</Text>（味噌）
                 </Text>
-                <Text style={styles.resultDate}>2025/9/8 20:15</Text>
-                <Text style={styles.resultLocation}>📍 △△食堂</Text>
+                <Text style={GlobalStyles.body}>2025/9/8 20:15</Text>
+                <Text style={GlobalStyles.body}>📍 △△食堂</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -115,7 +167,7 @@ export default function SearchScreen() {
       </ScrollView>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {

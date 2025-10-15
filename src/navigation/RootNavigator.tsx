@@ -5,10 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 // Screen imports
 import CameraScreen from '../screens/CameraScreen/CameraScreen';
-import RecordsScreen from '../screens/RecordsScreen/RecordsScreen';
-import SearchScreen from '../screens/SearchScreen/SearchSreen';
+import { RecordsScreen } from '../screens/RecordsScreen/RecordsScreen';
+import { SearchScreen } from '../screens/SearchScreen/SearchScreen';
 import StatsScreen from '../screens/StatsScreen/StatsScreen';
-import SettingsScreen from '../screens/SettingsScreen/SettingScreen';
+import SettingsScreen from '../screens/SettingsScreen/SettingsScreen';
 
 // Tab navigator
 const Tab = createBottomTabNavigator();

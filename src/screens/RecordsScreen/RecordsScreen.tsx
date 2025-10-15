@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
+import { Colors } from '../../constants/Colors';
+import { GlobalStyles } from '../../constants/Styles';
+import { Meal } from '../../types/MealTypes';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -37,7 +40,16 @@ interface MealGroup {
   meals: MealRecord[];
 }
 
-export default function RecordsScreen() {
+/**
+ * 食事記録一覧画面コンポーネント
+ *
+ * ユーザーが撮影した食事記録の一覧を表示し、
+ * 日付ごとにグルーピングして最新順に表示する。
+ *
+ * @component
+ * @returns {JSX.Element} 食事記録一覧画面
+ */
+export const RecordsScreen: React.FC = () => {
   const [mealGroups, setMealGroups] = useState<MealGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

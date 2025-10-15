@@ -12,6 +12,8 @@ import {
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
+import { Colors } from '../../constants/Colors';
+import { GlobalStyles } from '../../constants/Styles';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -328,18 +330,17 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: Colors.black,
   },
   permissionText: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 18,
+    ...GlobalStyles.body,
+    color: Colors.white,
     textAlign: 'center',
     textAlignVertical: 'center',
   },
   permissionSubText: {
-    color: '#ccc',
-    fontSize: 14,
+    ...GlobalStyles.body,
+    color: Colors.gray,
     textAlign: 'center',
     marginBottom: 50,
   },
@@ -370,7 +371,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   closeButtonText: {
-    color: '#fff',
+    color: Colors.white,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -398,9 +399,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   instructionText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '500',
+    ...GlobalStyles.body,
+    color: Colors.white,
     textAlign: 'center',
     padding: 20,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -453,12 +453,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   captureHint: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
+    ...GlobalStyles.body,
+    color: Colors.white,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
+    ...GlobalStyles.body,
+    color: Colors.white,
   },
 });
