@@ -92,24 +92,23 @@ export class ErrorBoundary extends Component<Props, State> {
 
 ### 定数管理とハードコーディング回避
 ```typescript
-// ✅ Good: 定数として管理し変更箇所を一元化
-const PERMISSION_TIMEOUT_MS = 10000;
-const PHOTO_QUALITY = 0.8;
+// ✅ Good: 論理的にグループ化した定数管理
+export const CAMERA_CONSTANTS = {
+  PERMISSION_TIMEOUT_MS: 10000,
+  PHOTO_QUALITY: 0.8,
+  CAMERA_BUTTON_SIZE: 80,
+} as const;
 
-// Style constants
-const CAMERA_BUTTON_SIZE = 80;
-const FOCUS_AREA_RATIO = 0.8;
-
-// API endpoints
-const API_ENDPOINTS = {
+export const API_ENDPOINTS = {
   MEALS: '/meals',
   IMAGES: '/images',
 } as const;
 
-// Navigation route names
-const ROUTE_NAMES = {
+export const ROUTE_NAMES = {
   CAMERA: 'Camera',
   RECORDS: 'Records',
+  SEARCH: 'Search',
+  STATS: 'Stats',
   SETTINGS: 'Settings',
 } as const;
 ```
@@ -162,34 +161,57 @@ const useMealForm = () => {
 };
 ```
 
-## 1. プロジェクト構成
+## 2. プロジェクト構成
 
-### ディレクトリ構造
+### 📁 ディレクトリ構造 & 🏗️ アーキテクチャ層
+
+**4層クリーンアーキテクチャを採用し、各層の責任を明確に分離**：
+
 ```
 src/
-├── components/
-│   ├── common/          # 汎用コンポーネント
-│   ├── ui/             # UI専用コンポーネント
-│   └── screens/        # スクリーン固有
-├── screens/            # 画面コンポーネント
-├── navigation/         # ナビゲーション設定
-├── database/           # DB関連（モデル、サービス）
-│   ├── models/         # Watermelon DBモデル
-│   ├── services/       # DB操作サービス
-│   └── migrations/     # DBマイグレーション
-├── hooks/              # カスタムHooks
-├── utils/              # ユーティリティ関数
-├── constants/          # 定数定義
-├── types/              # TypeScript型定義
-└── contexts/           # React Context
+├── 📱 screens/           # 🎨 UI表示のみ（Presentational層）
+├── 🎨 components/        # 🎨 UIコンポーネント（Presentational層）
+│   ├── common/           # 汎用UI部品（ErrorBoundary等）
+├── 🎣 hooks/             # 🎣 UIベースのビジネスロジック（Application層）
+├── 🏛️ domain/            # 🏛️ 純粋なビジネスルール・エンティティ（Domain層）
+├── ️ services/          # 🏗️ 外部API/DB統合サービス（Infrastructure層）
+├── 📀 database/          # 📀 DB定義・スキーマ（Infrastructure層）
+│   ├── models/           # WatermelonDBモデル定義
+│   ├── services/         # DB操作・Query（Infrastructure）
+│   └── migrations/       # DBスキーママイグレーション
+├── 🧭 navigation/        # 🧭 画面遷移設定
+├── 🔧 utils/             # 🔧 汎用ユーティリティ
+├── 🔒 constants/         # 🔒 アプリ定数
+├── 🎯 types/             # 🎯 グローバル型定義（Utility型限定）
+├── 🌐 contexts/          # 🌐 React Context
+├── 🌍 locales/           # 🌍 多言語対応（拡張用）
+└── 🎭 mocks/             # 🎭 テスト用モックデータ（拡張用）
+
+📚 docs/                   # 📚 プロジェクトドキュメント
+├── ai-guidelines.md      # AI開発支援ガイド
+├── coding-standards.md   # このコーディング規約
+├── database-design.md    # DB設計仕様
+├── screen-designs.md     # 画面設計仕様
+├── tech-spec.md          # 技術仕様
+├── user-flows.md         # ユーザーフロー
+└── notes/                # 技術ノート集
 ```
 
-### ファイル命名規則
-- **コンポーネント**: `PascalCase` (例: MealCard.tsx)
-- **Hooks**: `useCamelCase` (例: useCamera.ts)
-- **ユーティリティ**: `camelCase` (例: dateFormatter.ts)
-- **型定義**: `PascalCase` + `Types` (例: MealTypes.ts)
-- **定数**: `SCREAMING_SNAKE_CASE` (例: SCREEN_NAMES.ts)
+#### **各層の役割分担**
+- **🎨 Presentational**: UI描画・操作受付（`screens/`, `components/`）
+- **🎣 Application**: ユースケース・ビジネスロジック（`hooks/` 将来的に実装）
+- **🏗️ Service**: ユースケース実装・外部サービス連携（`services/` 将来的に実装）
+- **🏛️ Domain**: 型定義・ビジネスルール・Domainオブジェクト（`database/`, `types/`）
+
+### 📝 ファイル命名規則
+- **UIコンポーネント**: `PascalCase.tsx` (例: `MealCard.tsx`)
+- **Hooks**: `useCamelCase.ts` (例: `useCameraCapture.ts`)
+- **Services**: `camelCase.ts` (例: `cameraService.ts`)
+- **DAO**: `camelCaseDao.ts` (例: `cameraDao.ts`)
+- **Models**: `PascalCase.ts` (例: `MealModel.ts`)
+- **Types**: `camelCaseTypes.ts` (例: `cameraTypes.ts`)
+- **Utilites**: `camelCase.ts` (例: `dateFormatter.ts`)
+- **Constants**: `SCREAMING_SNAKE_CASE.ts` (例: `CAMERA_CONSTANTS.ts`)
 
 ## 2. TypeScript 型定義規約
 
@@ -247,6 +269,11 @@ if (!meal) return null;
 
 ## 3. React コンポーネント規約
 
+### 🎯 設計原則
+- **関数コンポーネント優先**: クラスコンポーネントはError Boundary専用
+- **Hooksの効果的活用**: ロジックをカスタムHookで分離
+- **型安全性の確保**: 全てのpropsに適切な型定義
+
 ### 関数コンポーネントの書き方
 ```typescript
 // ✅ Good: Arrow function + 型定義
@@ -299,66 +326,95 @@ const onPress = () => console.log('Pressed');
 ```
 
 ### Presentational/Container パターン
+
+#### 🎯 基本概念
 ```typescript
-// ✅ Good: Presentational/Container 分離
+// ✅ Good: Presentational（UI）/ Container（ロジック）の明確分離
 
-// Container: ビジネスロジック、状態管理、hooks
-interface ContainerProps {
-  navigation: NavigationProps;
-}
-
-const CameraScreenContainer: React.FC<ContainerProps> = () => {
-  const permission = useCameraPermission();
-  const [state, setState] = useState(initialState);
-
-  // ビジネスロジックをここに集約
-  const handleTakePhoto = async () => {
-    // 写真撮影・保存処理
-  };
-
-  // 型合成で不要拡張を防止
-  const presentationalProps: CameraScreenPresentationalProps = {
-    permissionGranted: permission?.granted ?? false,
-    takingPhoto: state.takingPhoto,
-    onTakePhoto: handleTakePhoto,
-  } as const;
-
-  return <CameraScreenPresentational {...presentationalProps} />;
-};
-
-// Presentational: UI描画のみの純粋コンポーネント
-interface CameraScreenPresentationalProps {
-  readonly permissionGranted: boolean;
-  readonly takingPhoto: boolean;
-  readonly onTakePhoto: () => Promise<void>;
-}
-
+// 🎨 Presentational（表示専用）
 const CameraScreenPresentational: React.FC<CameraScreenPresentationalProps> = ({
-  permissionGranted,
   takingPhoto,
-  onTakePhoto
+  cameraPermission,
+  onTakePicture,
+  onClose,
+  onFlipCamera
 }) => {
-  // 副作用ない純粋UIコンポーネント
+  // 🔍 権限チェック - UIロジックのみ
+  if (cameraPermission === null) {
+    return <PermissionLoading />;
+  }
+
+  if (!cameraPermission?.granted) {
+    return <PermissionDenied />;
+  }
+
+  // 📱 UI描画のみ - ビジネスロジックなし
   return (
-    <View>
-      {/* UI描画のみ */}
-    </View>
+    <CameraView
+      taking={takingPhoto}
+      onCapture={onTakePicture}
+      onClose={onClose}
+      onFlip={onFlipCamera}
+    />
   );
 };
 
-// Props定義原則: Pick<> + 型合成 + Readonly
-type NavigationProps = Pick<NavigationProp<CameraStackParamList>, 'navigate' | 'goBack'>;
+// 🚀 Container（ビジネスロジック）
+const CameraScreenContainer: React.FC = () => {
+  // Hooksで状態管理・副作用処理
+  const cameraPermission = useCameraPermission();
+  const cameraRef = useRef<CameraView>(null);
+  const [takingPhoto, setTakingPhoto] = useState(false);
 
-interface BusinessLogicProps {
-  permissionStatus: PermissionStatus;
-  cameraState: CameraState;
-  photoOperations: PhotoOperations;
-}
+  // 📷 写真撮影のユースケース
+  const takePicture = useCallback(async () => {
+    if (!cameraRef.current || takingPhoto) return;
 
-type CameraScreenProps = Pick<BusinessLogicProps, 'permissionStatus' | 'photoOperations'> &
-  Readonly<{
-    takingPhoto: boolean;
-  }>;
+    try {
+      setTakingPhoto(true);
+      const photo = await cameraRef.current.takePictureAsync();
+      await savePhotoToMediaLibrary(photo.uri);
+      showPhotoSuccessAlert(photo);
+    } catch (error) {
+      Alert.alert('エラー', '写真撮影に失敗しました');
+    } finally {
+      setTakingPhoto(false);
+    }
+  }, [cameraRef, takingPhoto]);
+
+  return (
+    <CameraScreenPresentational
+      takingPhoto={takingPhoto}
+      cameraPermission={cameraPermission}
+      onTakePicture={takePicture}
+      onClose={showCloseConfirmDialog}
+      onFlipCamera={toggleCameraFacing}
+    />
+  );
+};
+```
+
+#### 🎯 Props定義原則: Pick<> + 型合成 + Readonly
+```typescript
+// ✅ Good: 最小限の依存関係で型安全性を確保
+type CameraScreenPresentationalProps = Pick<TypedNavigationProps, 'onClose'> &
+  Pick<CameraLogicState, 'takingPhoto' | 'cameraPermission'> &
+  Pick<PhotoOperations, 'onTakePicture' | 'onFlipCamera'>;
+
+// 🎯 各型の定義
+type TypedNavigationProps = {
+  onClose: () => void;
+};
+
+type CameraLogicState = {
+  takingPhoto: boolean;
+  cameraPermission: PermissionResponse | null;
+};
+
+type PhotoOperations = {
+  onTakePicture: () => Promise<void>;
+  onFlipCamera: () => void;
+};
 ```
 
 ### Propsの構造化
