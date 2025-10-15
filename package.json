@@ -9,14 +9,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-
-    // メンテナンス / 再現性確保
     "clean": "rm -rf node_modules package-lock.json yarn.lock && echo 'cleaned node_modules and lockfiles'",
     "install:fresh": "npm run clean && npm install",
-
-    // 検査 / 同期
     "check:deps": "npx depcheck --json --specials=expo,react-native",
-    "check:react-versions": "node -e \"try{const r=require('./node_modules/react/package.json').version; const rr=require('./node_modules/react-native-renderer/package.json').version; if(r!==rr){console.error('ERROR: react vs react-native-renderer version mismatch:', r, rr); process.exit(1);} console.log('OK: react and react-native-renderer match:', r);}catch(e){console.error('check failed:', e.message); process.exit(2);}\"",
+    "check:react-versions": "node -e \"try{const r=require('./node_modules/react/package.json').version; const rr=require('./node_modules/react-native-renderer/package.json').version; if(r!==rr){console.error('ERROR: react vs react-native-renderer version mismatch:', r, rr); process.exit(1);} console.log('OK: react and react-native-renderer match:', r);}catch(e){console.error('check failed:', e.message); process.exit(2);)\"",
     "test": "jest",
     "lint": "eslint . --ext .ts,.tsx --cache --cache-location .eslintcache",
     "lint:fix": "eslint . --ext .ts,.tsx --fix --cache --cache-location .eslintcache",
