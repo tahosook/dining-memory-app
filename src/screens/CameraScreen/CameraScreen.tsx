@@ -20,8 +20,8 @@ import { CAMERA_CONSTANTS, ROUTE_NAMES, PLATFORM_CONFIGS } from '../../constants
 const { width: screenWidth } = Dimensions.get('window');
 
 // Platform-specific configurations using centralized constants
-const platformConfig = Platform.select(PLATFORM_CONFIGS) ?? PLATFORM_CONFIGS.default;
-const safeAreaEdges = platformConfig.safeAreaEdges;
+const platformConfig = Platform.select(PLATFORM_CONFIGS) ?? PLATFORM_CONFIGS.default as any;
+const safeAreaEdges = platformConfig.safeAreaEdges as ('top' | 'bottom' | 'left' | 'right')[];
 const topBarMarginTop = platformConfig.topBarMarginTop;
 const bottomBarMarginBottom = platformConfig.bottomBarMarginBottom;
 

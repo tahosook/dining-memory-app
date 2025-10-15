@@ -18,20 +18,26 @@ export const ROUTE_NAMES = {
 } as const;
 
 // Platform-specific configurations
-export const PLATFORM_CONFIGS = {
+type PlatformConfig = {
+  topBarMarginTop: number;
+  bottomBarMarginBottom: number;
+  safeAreaEdges: readonly ('top' | 'bottom' | 'left' | 'right')[];
+};
+
+export const PLATFORM_CONFIGS: Record<string, PlatformConfig> = {
   ios: {
     topBarMarginTop: 0, // SafeArea handles this
     bottomBarMarginBottom: 0, // SafeArea handles this
-    safeAreaEdges: ['top', 'bottom'] as const,
+    safeAreaEdges: ['top', 'bottom'],
   },
   android: {
-    topBarMarginTop: 24,
-    bottomBarMarginBottom: 24,
-    safeAreaEdges: ['top'] as const,
+    topBarMarginTop: 0, // Override for consistency with Platform.select expectations
+    bottomBarMarginBottom: 0, // Override for consistency with Platform.select expectations
+    safeAreaEdges: ['top'],
   },
   default: {
     topBarMarginTop: 0,
     bottomBarMarginBottom: 0,
-    safeAreaEdges: [] as const,
+    safeAreaEdges: [],
   },
-} as const;
+};
