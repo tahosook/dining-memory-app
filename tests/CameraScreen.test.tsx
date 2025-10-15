@@ -5,6 +5,17 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Camera from 'expo-camera';
 import CameraScreen from '../src/screens/CameraScreen/CameraScreen';
 
+// Mock SafeAreaView and ErrorBoundary
+jest.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  useSafeAreaInsets: jest.fn(() => ({ top: 0, bottom: 0 })),
+}));
+
+// Mock ErrorBoundary
+jest.mock('../src/components/common/ErrorBoundary', () => ({
+  ErrorBoundary: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}));
+
 // Mock React Navigation
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({

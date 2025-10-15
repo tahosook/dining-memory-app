@@ -9,17 +9,37 @@ import {
   Dimensions,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 
 // Constants
 const PERMISSION_TIMEOUT_MS = 10000;
 const PHOTO_QUALITY = 0.8;
+
+// Platform-specific configurations
+const safeAreaEdges = Platform.select({
+  ios: ['top', 'bottom'],
+  android: ['top'],
+  default: []
+}) as ('top' | 'bottom')[];
+
+const topBarMarginTop = Platform.select({
+  ios: 0, // SafeArea handles this
+  android: 24,
+  default: 0
+});
+
+const bottomBarMarginBottom = Platform.select({
+  ios: 0, // SafeArea handles this
+  android: 24,
+  default: 0
+});
 
 // Types
 interface PhotoPaths {
@@ -34,11 +54,14 @@ interface TopBarProps {
 }
 
 const TopBar: React.FC<TopBarProps> = ({ onClosePress, onFlipPress }) => (
-  <View style={[styles.topBar, { marginTop: 44 }]}>
+  <View style={[styles.topBar, { marginTop: topBarMarginTop }]}>
     <TouchableOpacity
       style={styles.closeButton}
       onPress={onClosePress}
       testID="close-button"
+      accessibilityLabel="撮影画面を閉じる"
+      accessibilityHint="このボタンをタップすると撮影を終了します"
+      accessibilityRole="button"
     >
       <Text style={styles.closeButtonText}>✕</Text>
     </TouchableOpacity>
@@ -46,6 +69,9 @@ const TopBar: React.FC<TopBarProps> = ({ onClosePress, onFlipPress }) => (
     <TouchableOpacity
       style={styles.flipButton}
       onPress={onFlipPress}
+      accessibilityLabel="カメラを反転"
+      accessibilityHint="フロントカメラとバックカメラを切り替えます"
+      accessibilityRole="button"
     >
       <Text style={styles.buttonText}>🔄</Text>
     </TouchableOpacity>
@@ -126,10 +152,12 @@ const useCameraPermission = () => {
   return permission;
 };
 
+import { ErrorBoundary } from '../../components/common/ErrorBoundary';
+
 export default function CameraScreen() {
   const navigation = useNavigation();
   const cameraPermission = useCameraPermission();
-  const [cameraRef, setCameraRef] = useState<CameraView | null>(null);
+  const cameraRef = useRef<CameraView>(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [photoPaths, setPhotoPaths] = useState<PhotoPaths>({
@@ -137,7 +165,16 @@ export default function CameraScreen() {
     thumbnailPath: ''
   });
 
-
+  // Cleanup on unmount
+  useEffect(() => {
+    const cameraCurrent = cameraRef.current;
+    return () => {
+      if (cameraCurrent) {
+        console.log('Pausing camera on unmount');
+        // CameraView does not have direct pause method, but we can stop any ongoing processes
+      }
+    };
+  }, []);
 
   // Photo utilities
   const generatePhotoPaths = useCallback((timestamp: number): PhotoPaths => ({
@@ -166,7 +203,12 @@ export default function CameraScreen() {
     }
   }, []);
 
-  const showPhotoSuccessAlert = useCallback((photo: any) => {
+  const navigateToRecords = useCallback(() => {
+    // @ts-ignore
+    navigation.navigate('Records');
+  }, [navigation]);
+
+  const showPhotoSuccessAlert = useCallback((photo: { width: number; height: number; uri: string }) => {
     Alert.alert(
       '写真撮影完了',
       `✅ 写真を写真ライブラリに保存しました！
@@ -179,25 +221,28 @@ export default function CameraScreen() {
         {
           text: '記録タブで確認',
           style: 'default',
-          onPress: () => navigateToRecords()
+          onPress: navigateToRecords
         }
       ]
     );
-  }, []);
+  }, [navigateToRecords]);
 
-  const navigateToRecords = useCallback(() => {
-    // @ts-ignore
-    navigation.navigate('Records');
-  }, [navigation]);
+  // UI Alert functions
+  const showCloseConfirmDialog = useCallback(() => {
+    Alert.alert('確認', '撮影を終了して記録タブに移動しますか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      { text: '撮影を終了しました',      onPress: navigateToRecords }
+    ]);
+  }, [navigateToRecords]);
 
   // Take photo
   const takePicture = useCallback(async () => {
-    if (!cameraRef || takingPhoto) return;
+    if (!cameraRef.current || takingPhoto) return;
 
     try {
       setTakingPhoto(true);
 
-      const photo = await cameraRef.takePictureAsync({
+      const photo = await cameraRef.current.takePictureAsync({
         quality: PHOTO_QUALITY,
         skipProcessing: false,
       });
@@ -210,8 +255,8 @@ export default function CameraScreen() {
 
       // Set photo paths for future image analysis
       const timestamp = Date.now();
-      const photoPaths = generatePhotoPaths(timestamp);
-      setPhotoPaths(photoPaths);
+      const paths = generatePhotoPaths(timestamp);
+      setPhotoPaths(paths);
 
       // Save to media library - primary functionality for Expo Go
       const saveSuccess = await savePhotoToMediaLibrary(photo.uri);
@@ -229,20 +274,6 @@ export default function CameraScreen() {
       setTakingPhoto(false);
     }
   }, [cameraRef, takingPhoto, generatePhotoPaths, savePhotoToMediaLibrary, cleanupTempFile, showPhotoSuccessAlert]);
-
-  // Navigate to analysis screen (placeholder)
-  const navigateToAnalysis = (compressedPath: string, thumbnailPath: string) => {
-    // TODO: Navigate to analysis/editing screen with captured image paths
-    console.log('Analysis with:', { compressedPath, thumbnailPath });
-  };
-
-  // UI Alert functions
-  const showCloseConfirmDialog = useCallback(() => {
-    Alert.alert('確認', '撮影を終了して記録タブに移動しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '撮影を終了しました', onPress: navigateToRecords }
-    ]);
-  }, [navigateToRecords]);
 
   // Toggle camera facing
   const toggleCameraFacing = useCallback(() => {
@@ -271,59 +302,62 @@ export default function CameraScreen() {
   }
 
   return (
-    <View style={styles.container}>
-
-      {/* Camera View */}
-      <CameraView
-        ref={ref => setCameraRef(ref)}
-        style={styles.camera}
-        facing={facing}
-        mode="picture"
-        ratio="16:9"
-      />
-
-      {/* Overlay UI */}
-      <View style={styles.overlay}>
-
-        {/* Top Bar */}
-        <TopBar
-          onClosePress={showCloseConfirmDialog}
-          onFlipPress={toggleCameraFacing}
+    <ErrorBoundary>
+      <SafeAreaView style={styles.container} edges={safeAreaEdges}>
+        {/* Camera View */}
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing={facing}
+          mode="picture"
+          ratio="16:9"
         />
 
-        {/* Center Focus Area */}
-        <View style={styles.focusArea}>
-          <View style={styles.focusSquare}>
-            <Text style={styles.instructionText}>撮影範囲に料理を合わせてください</Text>
+        {/* Overlay UI */}
+        <View style={styles.overlay}>
+          {/* Top Bar */}
+          <TopBar
+            onClosePress={showCloseConfirmDialog}
+            onFlipPress={toggleCameraFacing}
+          />
+
+          {/* Center Focus Area */}
+          <View style={styles.focusArea}>
+            <View style={styles.focusSquare} accessibilityLabel="撮影範囲">
+              <Text style={styles.instructionText} accessibilityLabel="撮影ガイド">撮影範囲に料理を合わせてください</Text>
+            </View>
+          </View>
+
+          {/* Bottom Controls */}
+          <View style={[styles.bottomBar, { marginBottom: bottomBarMarginBottom }]}>
+            <View style={styles.buttonGroup}>
+              <TouchableOpacity
+                style={[styles.captureButton, takingPhoto && styles.captureButtonDisabled]}
+                onPress={takePicture}
+                disabled={takingPhoto}
+                testID="capture-button"
+                accessibilityLabel="写真を撮る"
+                accessibilityHint="カメラボタンをタップして料理の写真を撮影します"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: takingPhoto }}
+              >
+                <View style={styles.captureButtonInner}>
+                  {takingPhoto ? (
+                    <Text style={styles.captureButtonText}>撮影中...</Text>
+                  ) : (
+                    <View style={styles.captureButtonCircle} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              <Text style={styles.captureHint} accessibilityLabel="カメラ操作ガイド">
+                ボタンをタップして撮影
+              </Text>
+            </View>
           </View>
         </View>
-
-        {/* Bottom Controls - Add bottom safe area for home indicator */}
-        <View style={[styles.bottomBar, { marginBottom: 34 }]}>
-          <View style={styles.buttonGroup}>
-            <TouchableOpacity
-              style={[styles.captureButton, takingPhoto && styles.captureButtonDisabled]}
-              onPress={takePicture}
-              disabled={takingPhoto}
-              testID="capture-button"
-            >
-              <View style={styles.captureButtonInner}>
-                {takingPhoto ? (
-                  <Text style={styles.captureButtonText}>撮影中...</Text>
-                ) : (
-                  <View style={styles.captureButtonCircle} />
-                )}
-              </View>
-            </TouchableOpacity>
-
-            <Text style={styles.captureHint}>
-              ボタンをタップして撮影
-            </Text>
-          </View>
-        </View>
-
-      </View>
-    </View>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 }
 
