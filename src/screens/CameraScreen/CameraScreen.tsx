@@ -10,36 +10,20 @@ import {
   Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView, useCameraPermissions, CameraCapturedPicture } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
+import { CAMERA_CONSTANTS, ROUTE_NAMES, PLATFORM_CONFIGS } from '../../constants/CameraConstants';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-// Constants
-const PERMISSION_TIMEOUT_MS = 10000;
-const PHOTO_QUALITY = 0.8;
-
-// Platform-specific configurations
-const safeAreaEdges = Platform.select({
-  ios: ['top', 'bottom'],
-  android: ['top'],
-  default: []
-}) as ('top' | 'bottom')[];
-
-const topBarMarginTop = Platform.select({
-  ios: 0, // SafeArea handles this
-  android: 24,
-  default: 0
-});
-
-const bottomBarMarginBottom = Platform.select({
-  ios: 0, // SafeArea handles this
-  android: 24,
-  default: 0
-});
+// Platform-specific configurations using centralized constants
+const platformConfig = Platform.select(PLATFORM_CONFIGS) ?? PLATFORM_CONFIGS.default;
+const safeAreaEdges = platformConfig.safeAreaEdges;
+const topBarMarginTop = platformConfig.topBarMarginTop;
+const bottomBarMarginBottom = platformConfig.bottomBarMarginBottom;
 
 // Types
 interface PhotoPaths {
@@ -140,7 +124,7 @@ const useCameraPermission = () => {
       const timeoutId = setTimeout(() => {
         console.log('Permission request timed out, trying again...');
         requestPermissions();
-      }, PERMISSION_TIMEOUT_MS);
+      }, CAMERA_CONSTANTS.PERMISSION_TIMEOUT_MS);
 
       requestPermissions().finally(() => {
         clearTimeout(timeoutId);
@@ -160,11 +144,6 @@ export default function CameraScreen() {
   const cameraRef = useRef<CameraView>(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
-  const [photoPaths, setPhotoPaths] = useState<PhotoPaths>({
-    compressedPath: '',
-    thumbnailPath: ''
-  });
-
   // Cleanup on unmount
   useEffect(() => {
     const cameraCurrent = cameraRef.current;
@@ -176,7 +155,7 @@ export default function CameraScreen() {
     };
   }, []);
 
-  // Photo utilities
+  // Photo utilities - removed unused photoPaths state variable
   const generatePhotoPaths = useCallback((timestamp: number): PhotoPaths => ({
     compressedPath: `meal_${timestamp}_compressed.jpg`,
     thumbnailPath: `meal_${timestamp}_thumbnail.jpg`
@@ -204,7 +183,7 @@ export default function CameraScreen() {
   }, []);
 
   const navigateToRecords = useCallback(() => {
-    // @ts-ignore
+    // @ts-expect-error Navigation type inference issue
     navigation.navigate('Records');
   }, [navigation]);
 
@@ -243,7 +222,7 @@ export default function CameraScreen() {
       setTakingPhoto(true);
 
       const photo = await cameraRef.current.takePictureAsync({
-        quality: PHOTO_QUALITY,
+        quality: CAMERA_CONSTANTS.PHOTO_QUALITY,
         skipProcessing: false,
       });
 
@@ -253,10 +232,10 @@ export default function CameraScreen() {
       console.log('Photo captured successfully:', photo.uri);
       console.log('Photo details:', { width: photo.width, height: photo.height });
 
-      // Set photo paths for future image analysis
-      const timestamp = Date.now();
-      const paths = generatePhotoPaths(timestamp);
-      setPhotoPaths(paths);
+      // Note: photoPaths is prepared for future image analysis feature
+      // const timestamp = Date.now();
+      // const paths = generatePhotoPaths(timestamp);
+      // Future: setPhotoPaths(paths);
 
       // Save to media library - primary functionality for Expo Go
       const saveSuccess = await savePhotoToMediaLibrary(photo.uri);

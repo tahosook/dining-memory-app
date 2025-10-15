@@ -6,11 +6,161 @@ AI開発支援ツール（Cursor, GitHub Copilot, Claude.ai）がこの文書を
 一貫性のある高品質なコード生成が可能となる。
 
 ## 基本原則
+- **単一責任の原則 (SRP)**: 各コンポーネント/関数/クラスは1つの責任のみ
 - **簡潔さ**: 読みやすく、理解しやすいコード
 - **一貫性**: プロジェクト内での統一された書き方
 - **保守性**: 将来の変更・拡張を考慮した構造
 - **パフォーマンス**: React Native特化の最適化
 - **安全性**: TypeScriptの強みを活かした型安全
+- **テスト容易性**: 依存性の注入と副作用の分離
+- **プラットフォーム抽象化**: iOS/Android固有の処理を統一的なAPIで扱う
+
+## 最も重要な原則（トッププライオリティ）
+### 単一責任の原則
+コンポーネントや関数は1つの役割のみを担う。これが守られない場合、メンテナンス性が急激に低下し、テストもリファクタリングも困難になる。
+
+### プラットフォーム抽象化パターン
+```typescript
+// ✅ Good: Platform.selectを使用したプラットフォーム固有設定
+const safeAreaEdges = Platform.select({
+  ios: ['top', 'bottom'],
+  android: ['top'],
+  default: []
+}) as ('top' | 'bottom')[];
+
+const topBarMarginTop = Platform.select({
+  ios: 0, // SafeArea handles this
+  android: 24,
+  default: 0
+});
+```
+
+### Error Boundary実装
+```typescript
+// ✅ Good: ランタイムエラーハンドリング
+import React, { Component, ReactNode } from 'react';
+
+interface Props {
+  children: ReactNode;
+  fallback?: (error: Error, retry: () => void) => ReactNode;
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  constructor(props: Props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('Error:', error);
+    // TODO: Send to error monitoring service
+  }
+
+  handleRetry = () => {
+    this.setState({ hasError: false, error: undefined });
+  };
+
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) {
+        return this.props.fallback(this.state.error!, this.handleRetry);
+      }
+
+      return (
+        <View style={styles.container}>
+          <Text>エラーが発生しました</Text>
+          <TouchableOpacity onPress={this.handleRetry}>
+            <Text>再試行</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+### 定数管理とハードコーディング回避
+```typescript
+// ✅ Good: 定数として管理し変更箇所を一元化
+const PERMISSION_TIMEOUT_MS = 10000;
+const PHOTO_QUALITY = 0.8;
+
+// Style constants
+const CAMERA_BUTTON_SIZE = 80;
+const FOCUS_AREA_RATIO = 0.8;
+
+// API endpoints
+const API_ENDPOINTS = {
+  MEALS: '/meals',
+  IMAGES: '/images',
+} as const;
+
+// Navigation route names
+const ROUTE_NAMES = {
+  CAMERA: 'Camera',
+  RECORDS: 'Records',
+  SETTINGS: 'Settings',
+} as const;
+```
+
+### メモリ管理とライフサイクル
+```typescript
+// ✅ Good: useEffectのクリーンアップ
+useEffect(() => {
+  const cameraCurrent = cameraRef.current;
+  return () => {
+    if (cameraCurrent) {
+      // カメラリソースのクリーンアップ
+      console.log('Camera cleanup');
+    }
+  };
+}, []);
+
+// ✅ Good: EventListenerのクリーンアップ
+useEffect(() => {
+  const subscription = databaseSubscription.observe(callback);
+
+  return () => {
+    subscription.unsubscribe();  // メモリリーク防止
+  };
+}, [callback]);
+```
+
+### テスト容易性設計
+```typescript
+// ✅ Good: 依存性の注入でテスト容易性を向上
+const useCameraLogic = (deps: {
+  permissionHook: typeof useCameraPermissions;
+  mediaLibrary: typeof MediaLibrary;
+  navigation: Navigation;
+}) => {
+  const [permission, requestPermission] = deps.permissionHook();
+  // ...
+};
+
+// ✅ Good: 副作用を分離した純粋関数
+export const validateMealInput = (input: MealInput): ValidationResult => {
+  // 副作用のない純粋関数
+  return { isValid: true, errors: [] };
+};
+
+// ✅ Good: カスタムHookでロジックを分離
+const useMealForm = () => {
+  // UIロジックと副作用をここに集約
+  // テスト時にMock可能に
+};
+```
 
 ## 1. プロジェクト構成
 
@@ -584,18 +734,35 @@ module.exports = {
 ## 規約コンプライアンスチェックリスト
 
 新規コード作成時:
+- [ ] **単一責任の原則**を守っている（1つの役割のみ）
+- [ ] **プラットフォーム抽象化**を行っている（iOS/Android固有コードはPlatform.select使用）
+- [ ] **Error Boundary**が適切に配置されている
+- [ ] 定数管理が徹底されている（ハードコーディングを避ける）
+- [ ] メモリ管理が適切（useEffectクリーンアップ、イベントリスナー解放）
+- [ ] テスト容易性を考慮した設計（依存性の注入、副作用の分離）
 - [ ] TypeScriptの型が適切に定義されている
 - [ ] コンポーネントは適切なPropsインターフェースを持つ
 - [ ] 非同期処理に適切なエラーハンドリングがある
 - [ ] スタイルはStyleSheetオブジェクト化されている
 - [ ] ハードコーディングされた値は定数化されている
+- [ ] アクセシビリティ属性が適切に設定されている
 - [ ] 適切なドキュメントコメントがある
 - [ ] パフォーマンス考慮（不必要な再レンダリング防止）
 
 既存コード修正時:
-- [ ] 規約に準拠した書き方に修正されている
+- [ ] 上記新規コード作成チェックリスト全てを遵守
 - [ ] 関連ファイルも同時に更新されている
 - [ ] テストが追加・更新されている
 - [ ] ドキュメントが更新されている
+
+### トッププライオリティチェックリスト（必須遵守）
+
+コードレビューの必須チェックポイント:
+- [ ] **SRP違反がないか** - 各関数/コンポーネントは1つの責任のみか
+- [ ] **プラットフォーム固有コードの抽象化** - Platform.selectが使用されているか
+- [ ] **エラーハンドリング** - Error Boundaryと適切なtry/catchがあるか
+- [ ] **メモリリーク防止** - useEffectクリーンアップと unsubscribe処理があるか
+- [ ] **定数管理** - マジックナンバーやハードコーディングがないか
+- [ ] **テスト容易性** - 副作用が分離されMock可能か
 
 この規約はプロジェクトの成長とともに継続的に改善されるものとする。
