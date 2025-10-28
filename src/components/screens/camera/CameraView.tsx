@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView as ExpoCameraView } from 'expo-camera';
 import { Colors } from '../../../constants/Colors';
@@ -42,10 +42,16 @@ type CameraSuccessState = {
   successMessage: string;
 };
 
+type CameraSuccessOperations = {
+  onSuccessMessageOk: () => void;
+  onSuccessMessageGoToRecords: () => void;
+};
+
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
   Pick<CameraOperations, 'onTakePicture' | 'onFlipCamera' | 'onClose'> &
   Pick<CameraPermissionState, 'cameraPermission'> &
-  Pick<CameraSuccessState, 'successMessage'>;
+  Pick<CameraSuccessState, 'successMessage'> &
+  Pick<CameraSuccessOperations, 'onSuccessMessageOk' | 'onSuccessMessageGoToRecords'>;
 
 // コンポーネント
 const PermissionLoadingView: React.FC = () => (
@@ -65,7 +71,13 @@ const PermissionDeniedView: React.FC = () => (
   </View>
 );
 
-const SuccessMessage: React.FC<{ message: string }> = ({ message }) => {
+interface SuccessMessageProps {
+  message: string;
+  onOk: () => void;
+  onGoToRecords: () => void;
+}
+
+const SuccessMessage: React.FC<SuccessMessageProps> = ({ message, onOk, onGoToRecords }) => {
   if (!message) return null;
 
   return (
@@ -74,6 +86,14 @@ const SuccessMessage: React.FC<{ message: string }> = ({ message }) => {
         <Text style={styles.successText} accessibilityLabel="撮影成功メッセージ">
           {message}
         </Text>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={[styles.successButton, styles.okButton]} onPress={onOk}>
+            <Text style={styles.buttonText}>OK</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.successButton, styles.recordsButton]} onPress={onGoToRecords}>
+            <Text style={styles.buttonText}>記録タブで確認</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -121,6 +141,8 @@ const CameraView: React.FC<CameraViewProps> = ({
   onClose,
   onTakePicture,
   onFlipCamera,
+  onSuccessMessageOk,
+  onSuccessMessageGoToRecords,
 }) => {
   // 権限チェック（UIロジックのみ）
   // webモードで権限がない場合はモックモードで表示
@@ -156,7 +178,7 @@ const CameraView: React.FC<CameraViewProps> = ({
 
           {/* Center Area - ガイドまたは成功メッセージを表示 */}
           {successMessage ? (
-            <SuccessMessage message={successMessage} />
+            <SuccessMessage message={successMessage} onOk={onSuccessMessageOk} onGoToRecords={onSuccessMessageGoToRecords} />
           ) : (
             <FocusArea />
           )}
@@ -249,6 +271,29 @@ const styles = StyleSheet.create({
     ...GlobalStyles.body,
     color: Colors.white,
     textAlign: 'center',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+  },
+  successButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  okButton: {
+    backgroundColor: Colors.white,
+  },
+  recordsButton: {
+    backgroundColor: Colors.primary,
+  },
+  buttonText: {
+    ...GlobalStyles.body,
+    color: Colors.black,
+    fontWeight: 'bold',
   },
 });
 

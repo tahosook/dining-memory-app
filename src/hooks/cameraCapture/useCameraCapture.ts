@@ -60,29 +60,24 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     navigation.navigate(ROUTE_NAMES.RECORDS);
   }, [navigation]);
 
-  // 成功時のアラート表示
-  const showPhotoSuccessAlert = useCallback((photo: CameraCapturedPicture) => {
+  // 成功メッセージのクリア（OKボタン操作用）
+  const clearSuccessMessage = useCallback(() => {
+    setSuccessMessage('');
+  }, []);
+
+  // 成功時のメッセージ表示
+  const showPhotoSuccessMessage = useCallback((photo: CameraCapturedPicture) => {
     const message = `✅ 写真を写真ライブラリに保存しました！
 
 📸 写真詳細:
 • ${photo.width}x${photo.height}
 • 保存時刻: ${new Date().toLocaleString()}`;
 
-    if (Platform.OS === 'web') {
-      // Webモードではconsole.logのみ（UIメッセージなし）
-      console.log('写真撮影完了', { message });
-    } else {
-      // NativeモードではAlertを表示
-      Alert.alert('写真撮影完了', message, [
-        { text: 'OK', style: 'default' },
-        {
-          text: '記録タブで確認',
-          style: 'default',
-          onPress: navigateToRecords
-        }
-      ]);
-    }
-  }, [navigateToRecords]);
+    setSuccessMessage(message);
+
+    // UIにメッセージを表示し、コンソールにもログ
+    console.log('写真撮影完了', { message });
+  }, []);
 
 
 
@@ -125,7 +120,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         }
       }
 
-      showPhotoSuccessAlert(photo);
+      showPhotoSuccessMessage(photo);
 
     } catch (error) {
       console.error('写真撮影エラー:', error);
@@ -133,7 +128,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     } finally {
       setTakingPhoto(false);
     }
-  }, [cameraRef, takingPhoto, savePhotoToMediaLibrary, cleanupTempFile, showPhotoSuccessAlert, cameraPermission]);
+  }, [cameraRef, takingPhoto, savePhotoToMediaLibrary, cleanupTempFile, showPhotoSuccessMessage, cameraPermission]);
 
   // カメラ反転
   const flipCamera = useCallback(() => {
@@ -159,5 +154,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     takePicture,
     flipCamera,
     showCloseConfirmDialog,
+    onSuccessMessageOk: clearSuccessMessage,
+    onSuccessMessageGoToRecords: navigateToRecords,
   };
 };
