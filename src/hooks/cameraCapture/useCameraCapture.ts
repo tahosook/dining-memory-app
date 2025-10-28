@@ -5,6 +5,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { writeAsStringAsync, deleteAsync, EncodingType, documentDirectory } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
+import { CameraCaptureMock } from './useCameraCaptureMock';
 
 /**
  * カメラキャプチャ機能のHook
@@ -65,19 +66,10 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
 📸 写真詳細:
 • ${photo.width}x${photo.height}
-• 保存時刻: ${new Date().toLocaleString()}
-
-・記録タブで確認`;
-
-    setSuccessMessage(message);
-
-    // 5秒後にメッセージをクリアしてガイドに戻る
-    setTimeout(() => {
-      setSuccessMessage('');
-    }, 5000);
+• 保存時刻: ${new Date().toLocaleString()}`;
 
     if (Platform.OS === 'web') {
-      // WebモードではUIにメッセージ表示 (console.logも残す)
+      // Webモードではconsole.logのみ（UIメッセージなし）
       console.log('写真撮影完了', { message });
     } else {
       // NativeモードではAlertを表示
@@ -92,43 +84,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     }
   }, [navigateToRecords]);
 
-  // モック画像作成関数 (webモードのテスト用)
-  const createMockImage = useCallback(async (): Promise<CameraCapturedPicture> => {
-    if (Platform.OS !== 'web') {
-      throw new Error('Mock image only for web platform');
-    }
 
-    // Canvasを作成して日時を描画
-    const canvas = document.createElement('canvas');
-    canvas.width = 800;
-    canvas.height = 600;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      throw new Error('Canvas context not available');
-    }
-
-    // 白い背景
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // 日時テキスト
-    ctx.fillStyle = 'black';
-    ctx.font = '30px Arial';
-    ctx.textAlign = 'center';
-    const now = new Date().toLocaleString('ja-JP');
-    ctx.fillText(now, canvas.width / 2, canvas.height / 2);
-
-    // Data URLを取得 (webモードではファイル保存せずに直接使用)
-    const dataUrl = canvas.toDataURL('image/jpeg');
-
-    return {
-      uri: dataUrl,
-      width: canvas.width,
-      height: canvas.height,
-      format: 'jpg',
-    };
-  }, []);
 
   // 写真撮影のメイン関数
   const takePicture = useCallback(async (): Promise<void> => {
@@ -144,8 +100,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       let photo: CameraCapturedPicture;
 
       if (isWebWithoutPermissions) {
-        // モック画像作成
-        photo = await createMockImage();
+        // Webモードテスト用モック画像作成（正常系コードから分離）
+        photo = await CameraCaptureMock.createMockImage();
       } else {
         // 通常のカメラ撮影
         photo = await cameraRef.current!.takePictureAsync({
@@ -177,7 +133,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     } finally {
       setTakingPhoto(false);
     }
-  }, [cameraRef, takingPhoto, savePhotoToMediaLibrary, cleanupTempFile, showPhotoSuccessAlert, cameraPermission, createMockImage]);
+  }, [cameraRef, takingPhoto, savePhotoToMediaLibrary, cleanupTempFile, showPhotoSuccessAlert, cameraPermission]);
 
   // カメラ反転
   const flipCamera = useCallback(() => {

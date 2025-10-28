@@ -386,7 +386,7 @@ describe('CameraScreen Web Mode Mock Tests', () => {
     });
 
     // Mock fetch for Data URL handling
-    global.fetch = jest.fn(() =>
+    (global as any).fetch = jest.fn(() =>
       Promise.resolve({
         blob: () => Promise.resolve(new Blob(['mock data'])),
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
