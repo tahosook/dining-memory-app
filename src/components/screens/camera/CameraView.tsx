@@ -38,9 +38,14 @@ type CameraPermissionState = {
   cameraPermission: PermissionResponse | null;
 };
 
+type CameraSuccessState = {
+  successMessage: string;
+};
+
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
   Pick<CameraOperations, 'onTakePicture' | 'onFlipCamera' | 'onClose'> &
-  Pick<CameraPermissionState, 'cameraPermission'>;
+  Pick<CameraPermissionState, 'cameraPermission'> &
+  Pick<CameraSuccessState, 'successMessage'>;
 
 // コンポーネント
 const PermissionLoadingView: React.FC = () => (
@@ -59,6 +64,20 @@ const PermissionDeniedView: React.FC = () => (
     </Text>
   </View>
 );
+
+const SuccessMessage: React.FC<{ message: string }> = ({ message }) => {
+  if (!message) return null;
+
+  return (
+    <View style={styles.successContainer}>
+      <View style={styles.successContent}>
+        <Text style={styles.successText} accessibilityLabel="撮影成功メッセージ">
+          {message}
+        </Text>
+      </View>
+    </View>
+  );
+};
 
 const FocusArea: React.FC = () => (
   <View style={styles.focusArea}>
@@ -98,16 +117,20 @@ const CameraView: React.FC<CameraViewProps> = ({
   facing,
   cameraPermission,
   cameraRef,
+  successMessage,
   onClose,
   onTakePicture,
   onFlipCamera,
 }) => {
   // 権限チェック（UIロジックのみ）
-  if (cameraPermission === null) {
+  // webモードで権限がない場合はモックモードで表示
+  const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
+
+  if (cameraPermission === null && !isWebWithoutPermissions) {
     return <PermissionLoadingView />;
   }
 
-  if (!cameraPermission?.granted) {
+  if (!cameraPermission?.granted && !isWebWithoutPermissions) {
     return <PermissionDeniedView />;
   }
 
@@ -131,8 +154,12 @@ const CameraView: React.FC<CameraViewProps> = ({
             onFlipPress={onFlipCamera}
           />
 
-          {/* Center Focus Area */}
-          <FocusArea />
+          {/* Center Area - ガイドまたは成功メッセージを表示 */}
+          {successMessage ? (
+            <SuccessMessage message={successMessage} />
+          ) : (
+            <FocusArea />
+          )}
 
           {/* Bottom Controls */}
           <BottomControls
@@ -206,6 +233,22 @@ const styles = StyleSheet.create({
   captureHint: {
     ...GlobalStyles.body,
     color: Colors.white,
+  },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successContent: {
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    padding: 20,
+    borderRadius: 8,
+    margin: 20,
+  },
+  successText: {
+    ...GlobalStyles.body,
+    color: Colors.white,
+    textAlign: 'center',
   },
 });
 

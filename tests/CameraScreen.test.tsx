@@ -54,6 +54,19 @@ jest.mock('expo-file-system', () => ({
   documentDirectory: '/mock/documents/',
   cacheDirectory: '/mock/cache/',
   deleteAsync: jest.fn(),
+  writeAsStringAsync: jest.fn(),
+  EncodingType: {
+    Base64: 'base64',
+  },
+}));
+
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: '/mock/documents/',
+  deleteAsync: jest.fn(),
+  writeAsStringAsync: jest.fn(),
+  EncodingType: {
+    Base64: 'base64',
+  },
 }));
 
 // Mock React Native modules more comprehensively
@@ -104,6 +117,15 @@ jest.mock('react-native', () => ({
   },
 }));
 
+// Mock canvas for web mode tests
+jest.mock('canvas', () => ({
+  createCanvas: jest.fn(() => ({
+    width: 800,
+    height: 600,
+    toDataURL: jest.fn(() => 'data:image/jpeg;base64,mockBase64Data'),
+  })),
+}), { virtual: true });
+
 const mockCameraPermissionsGranted = {
   granted: true,
   status: 'granted',
@@ -116,6 +138,13 @@ const mockMediaLibraryPermissionsGranted = {
   status: 'granted',
   canAskAgain: true,
   accessPrivileges: 'all',
+  expires: 'never',
+};
+
+const mockCameraPermissionsDenied = {
+  granted: false,
+  status: 'denied',
+  canAskAgain: false,
   expires: 'never',
 };
 
@@ -319,6 +348,110 @@ describe('CameraScreen Normal Flow Tests', () => {
           // Verify that navigation.navigate was NOT called
           expect(mockNavigate).not.toHaveBeenCalled();
         }
+      });
+    });
+  });
+});
+
+// Web Mode Mock Tests
+describe('CameraScreen Web Mode Mock Tests', () => {
+  let consoleLogSpy: jest.SpyInstance;
+
+  beforeAll(() => {
+    // Mock Platform.OS for web
+    (require('react-native') as any).Platform.OS = 'web';
+
+    // Mock document.createElement for canvas
+    Object.defineProperty(global, 'document', {
+      value: {
+        createElement: jest.fn((tag: string) => {
+          if (tag === 'canvas') {
+            return {
+              width: 800,
+              height: 600,
+              getContext: jest.fn(() => ({
+                fillStyle: '',
+                fillRect: jest.fn(),
+                font: '',
+                textAlign: '',
+                fillText: jest.fn(),
+              })),
+              toDataURL: jest.fn(() => 'data:image/jpeg;base64,mockImageData'),
+            };
+          }
+          return {};
+        }),
+      },
+      writable: true,
+    });
+
+    // Mock fetch for Data URL handling
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        blob: () => Promise.resolve(new Blob(['mock data'])),
+        arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
+      })
+    ) as any;
+  });
+
+  afterAll(() => {
+    // Restore original Platform.OS
+    (require('react-native') as any).Platform.OS = 'ios';
+    delete (global as any).document;
+    delete (global as any).fetch;
+    consoleLogSpy.mockRestore();
+  });
+
+  beforeEach(() => {
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+    jest.clearAllMocks();
+    mockCameraRef.current = null;
+  });
+
+  describe('Web Mock Functionality', () => {
+    beforeEach(() => {
+      (Camera.useCameraPermissions as jest.Mock).mockReturnValue([
+        mockCameraPermissionsDenied,
+        jest.fn().mockResolvedValue(mockCameraPermissionsDenied)
+      ]);
+      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(
+        mockMediaLibraryPermissionsGranted
+      );
+    });
+
+    test('should render camera interface in web mode without permissions', async () => {
+      const { findByText } = render(<CameraScreen />);
+
+      const instructionText = await findByText('撮影範囲に料理を合わせてください');
+      expect(instructionText).toBeTruthy();
+
+      const captureHint = await findByText('ボタンをタップして撮影');
+      expect(captureHint).toBeTruthy();
+    });
+
+    test('should create mock image when capture button is pressed in web mode', async () => {
+      const { findByTestId } = render(<CameraScreen />);
+
+      (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({
+        uri: '/mock/documents/mock_123456789.jpg',
+        width: 800,
+        height: 600,
+      });
+
+      const captureButton = await findByTestId('capture-button');
+      fireEvent.press(captureButton);
+
+      // Wait for async operations
+      await waitFor(() => {
+        // webモードではMediaLibrary保存をスキップ
+        expect(MediaLibrary.createAssetAsync).not.toHaveBeenCalled();
+        // WebモードではAlert.alertではなくconsole.logを使用
+        expect(console.log).toHaveBeenCalledWith(
+          '写真撮影完了',
+          expect.objectContaining({
+            message: expect.stringContaining('✅ 写真を写真ライブラリに保存しました！'),
+          })
+        );
       });
     });
   });
