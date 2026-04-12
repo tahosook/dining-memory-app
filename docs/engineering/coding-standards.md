@@ -41,6 +41,16 @@
 - Use the tab shell as the main app structure.
 - Preserve the camera-first flow as the default user path.
 
+## Security Basics
+- Do not commit API keys, tokens, or other credentials to the repository.
+- Treat photo paths, notes, location data, and exported records as sensitive user data.
+- Request camera, photo, and location permissions only when the feature actually needs them.
+- Do not add new OS permissions without documenting the feature need, data stored, and user value.
+- Keep local storage minimal: store only data needed for the user-facing feature or an explicitly planned capability.
+- Do not log secrets, photo URIs, location data, full search text, or raw AI output in production-like code.
+- If external AI, backup, or export behavior is added, make data transfer explicit and opt-in by default.
+- Prefer existing platform or project capabilities before adding security-related dependencies with broad native access.
+
 ## Testing Rules
 - Add or update tests when behavior changes.
 - Prefer focused tests for logic, screen state, and navigation behavior.
@@ -74,3 +84,5 @@
 - Did the change add a dependency, and if so, was that dependency reviewed?
 - Were any tests removed, skipped, or weakened to make the change pass?
 - Was the final result reviewed by a human instead of trusting the generated diff on its own?
+- Did the change add or widen access to camera, photos, location, files, backup, or export behavior?
+- Does the change store or log more personal data than the feature actually needs?

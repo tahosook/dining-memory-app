@@ -32,6 +32,13 @@
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
 
+## Security and Privacy Defaults
+- Prefer local storage and local processing unless a feature clearly needs external transfer.
+- Request only the minimum camera, photo, and location access needed for the active feature.
+- Treat photos, notes, location data, export data, and file paths as sensitive user data.
+- Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
+- Keep secrets out of source control and out of runtime logs.
+
 ## Implementation Boundaries
 - UI details belong in `docs/ux/`.
 - Table-by-table schema details belong in `docs/domain/database-design.md`.

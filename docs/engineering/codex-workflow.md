@@ -36,12 +36,14 @@
 - Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test`.
 - Add `npm run check:deps` when dependencies are added, removed, or significantly reorganized.
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
+- Add a security review pass when changes touch permissions, file storage, location, export, backup, or external AI calls.
 
 ## When to Run What
 - Docs-only changes: verify links, filenames, and document consistency.
 - Type or interface changes: run `npm run type-check`.
 - Behavior changes: run `npm test`, and run `npm run lint` if touched files include application code.
 - Dependency changes: run `npm run check:deps` and review the dependency choice directly.
+- Permission, export, backup, location, file, or external-send changes: confirm what data is accessed, stored, logged, or sent.
 
 ## AI-specific Risks
 - Hallucinated APIs or unsupported library behavior.
@@ -51,12 +53,20 @@
 - Security, maintenance, or license issues introduced through new dependencies.
 - False confidence from automated review without human inspection.
 
+## Security-specific Risks
+- Secrets committed to code, examples, or debug output.
+- Personal data exposed through logs, alerts, exports, or notes.
+- Permissions requested earlier or more broadly than the feature requires.
+- External transmission introduced without a clear user-facing explanation.
+- Backup or export flows exposing more data than the user expects.
+
 ## Documentation Update Rules
 - If product scope changes, update `docs/product/overview.md`.
 - If a screen or interaction changes, update `docs/ux/*`.
 - If schema or storage changes, update `docs/domain/database-design.md`.
 - If coding conventions change, update `docs/engineering/coding-standards.md`.
 - If the way Codex should work changes, update this file and `AGENTS.md`.
+- If a change affects permissions, local storage, export, backup, or external data transfer, update `docs/architecture/tech-spec.md`.
 
 ## Output Expectations
 - Summarize what changed.
