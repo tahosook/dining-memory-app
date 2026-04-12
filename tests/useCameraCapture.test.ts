@@ -35,11 +35,17 @@ describe('useCameraCapture', () => {
     canAskAgain: true,
     expires: 'never',
   } as unknown as PermissionResponse;
+  let consoleLogSpy: jest.SpyInstance;
+  let consoleWarnSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     Platform.OS = 'ios';
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(jest.fn());
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
     (FileSystem.copyAsync as jest.Mock).mockResolvedValue(undefined);
     (FileSystem.deleteAsync as jest.Mock).mockResolvedValue(undefined);
     (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({ id: 'asset-1' });
@@ -47,6 +53,9 @@ describe('useCameraCapture', () => {
   });
 
   afterEach(() => {
+    consoleLogSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
     jest.restoreAllMocks();
   });
 

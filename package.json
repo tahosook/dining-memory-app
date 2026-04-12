@@ -13,7 +13,7 @@
     "install:fresh": "npm run clean && npm install",
     "check:deps": "npx depcheck --json --specials=expo,react-native",
     "check:react-versions": "node -e \"try{const r=require('./node_modules/react/package.json').version; const rr=require('./node_modules/react-native-renderer/package.json').version; if(r!==rr){console.error('ERROR: react vs react-native-renderer version mismatch:', r, rr); process.exit(1);} console.log('OK: react and react-native-renderer match:', r);}catch(e){console.error('check failed:', e.message); process.exit(2);)\"",
-    "test": "jest",
+    "test": "BROWSERSLIST_IGNORE_OLD_DATA=1 jest",
     "lint": "eslint . --ext .ts,.tsx --cache --cache-location .eslintcache",
     "lint:fix": "eslint . --ext .ts,.tsx --fix --cache --cache-location .eslintcache",
     "format": "prettier --write src/**/*.{ts,tsx}",

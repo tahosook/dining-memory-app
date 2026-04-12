@@ -1,5 +1,7 @@
 // React Native Jest Setup is handled by jest-expo preset
 
+process.env.BROWSERSLIST_IGNORE_OLD_DATA = 'true';
+
 // Prevent React Native from redefining window
 if (typeof global.window === 'undefined') {
   Object.defineProperty(global, 'window', {
