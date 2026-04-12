@@ -38,6 +38,98 @@ interface MealGroup {
   meals: MealRecord[];
 }
 
+type MealItemProps = {
+  item: MealRecord;
+  onPress: (meal: MealRecord) => void;
+};
+
+type MealGroupSectionProps = {
+  item: MealGroup;
+  onMealPress: (meal: MealRecord) => void;
+};
+
+const Separator = () => <View style={styles.separator} />;
+
+const GroupSeparator = () => <View style={styles.groupSeparator} />;
+
+const MealGroupHeader: React.FC<{ item: MealGroup }> = ({ item }) => (
+  <View style={styles.dateHeader}>
+    <Text style={styles.dateHeaderText}>{item.dateLabel}</Text>
+  </View>
+);
+
+const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => (
+  <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)}>
+    <View style={styles.mealImageContainer}>
+      {item.photo_thumbnail_path ? (
+        <Image
+          source={{ uri: `file://${item.photo_thumbnail_path}` }}
+          style={styles.mealImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={styles.noImageContainer}>
+          <Text style={styles.noImageText}>📷</Text>
+        </View>
+      )}
+    </View>
+
+    <View style={styles.mealInfo}>
+      <Text style={styles.mealName} numberOfLines={2}>
+        {item.meal_name}
+      </Text>
+
+      <View style={styles.mealMeta}>
+        <Text style={styles.mealTime}>
+          {new Date(item.meal_datetime).toLocaleTimeString('ja-JP', {
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </Text>
+
+        {item.location_name && (
+          <Text style={styles.mealLocation} numberOfLines={1}>
+            {item.location_name}
+          </Text>
+        )}
+      </View>
+
+      <View style={styles.mealTags}>
+        {item.cuisine_type && (
+          <View style={styles.tag}>
+            <Text style={styles.tagText}>{item.cuisine_type}</Text>
+          </View>
+        )}
+
+        <View style={[styles.tag, item.is_homemade ? styles.homemadeTag : styles.takeoutTag]}>
+          <Text style={styles.tagText}>
+            {item.is_homemade ? '自家製' : '外食'}
+          </Text>
+        </View>
+
+        {item.cooking_level && (
+          <View style={[styles.tag, styles.cookingLevelTag]}>
+            <Text style={styles.tagText}>{item.cooking_level}</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  </TouchableOpacity>
+);
+
+const MealGroupSection: React.FC<MealGroupSectionProps> = ({ item, onMealPress }) => (
+  <View>
+    <MealGroupHeader item={item} />
+    <FlatList
+      data={item.meals}
+      keyExtractor={(meal) => meal.id}
+      renderItem={({ item: meal }) => <MealListItem item={meal} onPress={onMealPress} />}
+      scrollEnabled={false}
+      ItemSeparatorComponent={Separator}
+    />
+  </View>
+);
+
 function formatDateLabel(date: Date): string {
   const today = new Date();
   const yesterday = new Date(today);
@@ -186,92 +278,6 @@ export const RecordsScreen: React.FC = () => {
     loadMeals();
   }, [editHomemade, editLocation, editMealName, editNotes, editingMeal, loadMeals]);
 
-  // Render meal item
-  const renderMealItem = ({ item }: { item: MealRecord }) => (
-    <TouchableOpacity
-      style={styles.mealCard}
-      onPress={() => handleMealPress(item)}
-    >
-      {/* Thumbnail Image */}
-      <View style={styles.mealImageContainer}>
-        {item.photo_thumbnail_path ? (
-          <Image
-            source={{ uri: `file://${item.photo_thumbnail_path}` }}
-            style={styles.mealImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={styles.noImageContainer}>
-            <Text style={styles.noImageText}>📷</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Meal Info */}
-      <View style={styles.mealInfo}>
-        <Text style={styles.mealName} numberOfLines={2}>
-          {item.meal_name}
-        </Text>
-
-        <View style={styles.mealMeta}>
-          <Text style={styles.mealTime}>
-            {new Date(item.meal_datetime).toLocaleTimeString('ja-JP', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </Text>
-
-          {item.location_name && (
-            <Text style={styles.mealLocation} numberOfLines={1}>
-              {item.location_name}
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.mealTags}>
-          {item.cuisine_type && (
-            <View style={styles.tag}>
-              <Text style={styles.tagText}>{item.cuisine_type}</Text>
-            </View>
-          )}
-
-          <View style={[styles.tag, item.is_homemade ? styles.homemadeTag : styles.takeoutTag]}>
-            <Text style={styles.tagText}>
-              {item.is_homemade ? '自家製' : '外食'}
-            </Text>
-          </View>
-
-          {item.cooking_level && (
-            <View style={[styles.tag, styles.cookingLevelTag]}>
-              <Text style={styles.tagText}>{item.cooking_level}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  // Render date group header
-  const renderGroupHeader = ({ item }: { item: MealGroup }) => (
-    <View style={styles.dateHeader}>
-      <Text style={styles.dateHeaderText}>{item.dateLabel}</Text>
-    </View>
-  );
-
-  // Render meal group
-  const renderMealGroup = ({ item }: { item: MealGroup }) => (
-    <View>
-      {renderGroupHeader({ item })}
-      <FlatList
-        data={item.meals}
-        keyExtractor={(meal) => meal.id}
-        renderItem={renderMealItem}
-        scrollEnabled={false}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-      />
-    </View>
-  );
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -307,11 +313,11 @@ export const RecordsScreen: React.FC = () => {
           <FlatList
             data={mealGroups}
             keyExtractor={(group) => group.date}
-            renderItem={renderMealGroup}
+            renderItem={({ item }) => <MealGroupSection item={item} onMealPress={handleMealPress} />}
             refreshing={refreshing}
             onRefresh={handleRefresh}
             showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={() => <View style={styles.groupSeparator} />}
+            ItemSeparatorComponent={GroupSeparator}
           />
         )}
       </View>

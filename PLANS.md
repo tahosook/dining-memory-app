@@ -36,7 +36,8 @@
 ### Results
 - `npm run type-check`: pass
 - `npm test -- --runInBand`: pass (5 suites, 23 tests)
-- `npm run lint`: pass with warnings only
-  - `src/navigation/RootNavigator.tsx`
-  - `src/navigation/TabNavigator.tsx`
-  - `src/screens/RecordsScreen/RecordsScreen.tsx`
+- `npm run lint`: pass
+- follow-up: warning cleanup 完了
+  - 未使用の `src/navigation/TabNavigator.tsx` を削除
+  - `src/navigation/RootNavigator.tsx` の tab icon 定義を安定化
+  - `src/screens/RecordsScreen/RecordsScreen.tsx` の render 内部品を外出し

@@ -36,15 +36,17 @@ function getTabIconName(routeName: string, focused: boolean): keyof typeof Ionic
   return focused ? 'settings' : 'settings-outline';
 }
 
+function renderTabIcon(routeName: string, focused: boolean) {
+  const iconName = getTabIconName(routeName, focused);
+  return <Ionicons name={iconName} size={24} color={focused ? COLORS.activeTint : COLORS.inactiveTint} />;
+}
+
 export default function RootNavigator() {
   return (
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused }) => {
-            const iconName = getTabIconName(route.name, focused);
-            return <Ionicons name={iconName} size={24} color={focused ? COLORS.activeTint : COLORS.inactiveTint} />;
-          },
+          tabBarIcon: ({ focused }) => renderTabIcon(route.name, focused),
           tabBarActiveTintColor: COLORS.activeTint,
           tabBarInactiveTintColor: COLORS.inactiveTint,
           tabBarStyle: {
