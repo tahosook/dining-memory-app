@@ -1,15 +1,11 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const focusCallbacks: Array<() => void> = [];
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: () => void) => {
-    const ReactModule = jest.requireActual('react') as typeof import('react');
     focusCallbacks.push(callback);
-    ReactModule.useEffect(() => {
-      callback();
-    }, [callback]);
   },
 }));
 
@@ -26,6 +22,13 @@ jest.mock('../src/database/services/MealService', () => ({
 import { SearchScreen } from '../src/screens/SearchScreen/SearchScreen';
 import { MealService } from '../src/database/services/MealService';
 
+async function triggerLatestFocus() {
+  await act(async () => {
+    focusCallbacks[focusCallbacks.length - 1]?.();
+    await Promise.resolve();
+  });
+}
+
 describe('SearchScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -36,6 +39,7 @@ describe('SearchScreen', () => {
     (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
 
     const { findByText } = render(<SearchScreen />);
+    await triggerLatestFocus();
 
     expect(await findByText('条件に合う記録がありません')).toBeTruthy();
   });
@@ -57,6 +61,7 @@ describe('SearchScreen', () => {
     ]);
 
     const { getByTestId, findByText } = render(<SearchScreen />);
+    await triggerLatestFocus();
     fireEvent.changeText(getByTestId('search-input'), 'ラーメン');
 
     await waitFor(() => {
@@ -70,6 +75,7 @@ describe('SearchScreen', () => {
     (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
 
     const { getByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus();
 
     fireEvent.changeText(getByTestId('search-input'), '定食');
 
@@ -78,7 +84,7 @@ describe('SearchScreen', () => {
     });
 
     const callsAfterTyping = (MealService.searchMeals as jest.Mock).mock.calls.length;
-    focusCallbacks[focusCallbacks.length - 1]?.();
+    await triggerLatestFocus();
 
     await waitFor(() => {
       expect((MealService.searchMeals as jest.Mock).mock.calls.length).toBeGreaterThan(callsAfterTyping);

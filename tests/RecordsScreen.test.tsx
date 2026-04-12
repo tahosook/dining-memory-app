@@ -5,11 +5,7 @@ const focusCallbacks: Array<() => void> = [];
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: () => void) => {
-    const ReactModule = jest.requireActual('react') as typeof import('react');
     focusCallbacks.push(callback);
-    ReactModule.useEffect(() => {
-      callback();
-    }, [callback]);
   },
 }));
 
@@ -32,6 +28,13 @@ jest.mock('../src/database/services/MealService', () => ({
 import { RecordsScreen } from '../src/screens/RecordsScreen/RecordsScreen';
 import { MealService } from '../src/database/services/MealService';
 
+async function triggerLatestFocus() {
+  await act(async () => {
+    focusCallbacks[focusCallbacks.length - 1]?.();
+    await Promise.resolve();
+  });
+}
+
 describe('RecordsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -42,6 +45,7 @@ describe('RecordsScreen', () => {
     (MealService.getRecentMeals as jest.Mock).mockResolvedValue([]);
 
     const { findByText } = render(<RecordsScreen />);
+    await triggerLatestFocus();
 
     expect(await findByText('まだ食事記録がありません')).toBeTruthy();
   });
@@ -59,6 +63,7 @@ describe('RecordsScreen', () => {
     ]);
 
     const { findByText } = render(<RecordsScreen />);
+    await triggerLatestFocus();
 
     expect(await findByText('ラーメン')).toBeTruthy();
   });
@@ -76,6 +81,7 @@ describe('RecordsScreen', () => {
     ]);
 
     const { findByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
 
     expect(await findByTestId('meal-image-1')).toBeTruthy();
   });
@@ -84,12 +90,11 @@ describe('RecordsScreen', () => {
     (MealService.getRecentMeals as jest.Mock).mockResolvedValue([]);
 
     render(<RecordsScreen />);
+    await triggerLatestFocus();
 
     expect(MealService.getRecentMeals).toHaveBeenCalledTimes(1);
 
-    act(() => {
-      focusCallbacks[0]?.();
-    });
+    await triggerLatestFocus();
 
     expect(MealService.getRecentMeals).toHaveBeenCalledTimes(2);
   });

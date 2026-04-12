@@ -1,22 +1,25 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const focusCallbacks: Array<() => void> = [];
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: () => void) => {
-    const ReactModule = jest.requireActual('react') as typeof import('react');
     focusCallbacks.push(callback);
-    ReactModule.useEffect(() => {
-      callback();
-    }, [callback]);
   },
 }));
 
 import StatsScreen from '../src/screens/StatsScreen/StatsScreen';
 import SettingsScreen from '../src/screens/SettingsScreen/SettingsScreen';
 import { MealService } from '../src/database/services/MealService';
+
+async function triggerLatestFocus() {
+  await act(async () => {
+    focusCallbacks[focusCallbacks.length - 1]?.();
+    await Promise.resolve();
+  });
+}
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
@@ -41,6 +44,7 @@ describe('StatsScreen', () => {
     });
 
     const { findByText } = render(<StatsScreen />);
+    await triggerLatestFocus();
 
     expect(await findByText('5件')).toBeTruthy();
     expect(await findByText('料理ジャンル: 和食')).toBeTruthy();
@@ -54,10 +58,11 @@ describe('StatsScreen', () => {
     });
 
     render(<StatsScreen />);
+    await triggerLatestFocus();
 
     expect(MealService.getStatistics).toHaveBeenCalledTimes(1);
 
-    focusCallbacks[0]?.();
+    await triggerLatestFocus();
 
     await waitFor(() => {
       expect(MealService.getStatistics).toHaveBeenCalledTimes(2);
