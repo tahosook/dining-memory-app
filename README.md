@@ -62,13 +62,14 @@
 
 ```
 dining-memory-app/
+├── AGENTS.md                  # 🤖 Codex の最初の参照先
 ├── docs/                        # 📋 設計ドキュメント群
-│   ├── tech-spec.md             # 技術仕様書
-│   ├── coding-standards.md      # コーディング規約集
-│   ├── ai-guidelines.md         # AI開発支援ガイドライン
-│   ├── database-design.md       # データベース設計
-│   ├── screen-designs.md        # 画面設計仕様
-│   ├── user-flows.md            # ユーザーフロー設計
+│   ├── index.md                 # 入口
+│   ├── product/                 # プロダクト定義
+│   ├── architecture/            # 技術仕様
+│   ├── domain/                  # データ設計
+│   ├── ux/                      # 画面設計・ユーザーフロー
+│   ├── engineering/             # 実装規約・Codex ワークフロー
 │   └── notes/                   # 技術ノート・問題解決記録
 ├── src/                         # 🔧 ソースコード
 │   ├── screens/                 # 📱 画面コンポーネント
@@ -210,13 +211,16 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 - **保守性重視**: TypeScript厳密型付け + テスト充実
 
 ### 📋 主なドキュメント
-- **[`docs/tech-spec.md`](docs/tech-spec.md)** - 技術仕様・実装計画
-- **[`docs/coding-standards.md`](docs/coding-standards.md)** - React Nativeコーディング規約
-- **[`docs/ai-guidelines.md`](docs/ai-guidelines.md)** - AI支援開発ガイドライン
-- **[`docs/database-design.md`](docs/database-design.md)** - DBスキーマ設計
-- **[`docs/screen-designs.md`](docs/screen-designs.md)** - 画面設計仕様
-- **[`docs/user-flows.md`](docs/user-flows.md)** - ユーザーフロー・使用シナリオ
-- **[`docs/notes/camera-success-message-fix.md`](docs/notes/camera-success-message-fix.md)** - 最新修正履歴: カメラ成功メッセージボタン機能修正 (2025/10/28)
+- **[`AGENTS.md`](AGENTS.md)** - Codex の入口と文書作成ルール
+- **[`docs/index.md`](docs/index.md)** - ドキュメントの案内板
+- **[`docs/product/overview.md`](docs/product/overview.md)** - プロダクト概要
+- **[`docs/architecture/tech-spec.md`](docs/architecture/tech-spec.md)** - 技術仕様
+- **[`docs/domain/database-design.md`](docs/domain/database-design.md)** - DB 設計
+- **[`docs/ux/screen-designs.md`](docs/ux/screen-designs.md)** - 画面設計
+- **[`docs/ux/user-flows.md`](docs/ux/user-flows.md)** - ユーザーフロー
+- **[`docs/engineering/coding-standards.md`](docs/engineering/coding-standards.md)** - 実装規約
+- **[`docs/engineering/codex-workflow.md`](docs/engineering/codex-workflow.md)** - Codex の作業ルール
+- **[`docs/notes/`](docs/notes/)** - 技術ノート・問題解決記録
 
 ### 🧪 テスト戦略
 - **ユニットテスト**: データベース操作・個別関数
@@ -270,7 +274,7 @@ Phase 3 (2-3週間): AI統合・最終調整
 ```
 
 ### 🤖 AI開発支援
-- **設計支援**: Claude.aiでの仕様検討・問題解決
+- **設計支援**: Codex での仕様把握・差分整理
 - **実装支援**: Cursor IDEでのリアルタイムコード生成
 - **デバッグ支援**: GitHub Copilotでの効率化
 - **品質管理**: AI支援でのコードレビュー・改善提案

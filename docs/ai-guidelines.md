@@ -1,5 +1,7 @@
 # AI 生成支援ガイドライン - Dining Memory App
 
+> Deprecated. Canonical guidance now lives in [AGENTS.md](../AGENTS.md) and [docs/engineering/codex-workflow.md](engineering/codex-workflow.md). The rest of this file is historical and should not be treated as current process.
+
 ## 概要
 
 このガイドラインは、Cursor、GitHub Copilot、Claude.ai等のAI開発支援ツールが、

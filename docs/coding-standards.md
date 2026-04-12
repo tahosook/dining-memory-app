@@ -1,5 +1,7 @@
 # React Native コーディング標準 - Dining Memory App
 
+> Deprecated. Canonical version: [docs/engineering/coding-standards.md](engineering/coding-standards.md). The rest of this file is historical and should not be treated as current process.
+
 ## 概要
 Dining Memory Appの長期メンテナンス性とコード品質を維持するためのコーディング規約。
 AI開発支援ツール（Cursor, GitHub Copilot, Claude.ai）がこの文書を参照することで、

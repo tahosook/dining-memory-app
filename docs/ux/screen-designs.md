@@ -1,0 +1,41 @@
+# Screen Designs
+
+## Meta
+- Purpose: define what each screen shows and how it behaves.
+- Audience: engineers and designers working on the mobile UI.
+- Update trigger: layout, interaction, or screen-state changes.
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/ux/user-flows.md](user-flows.md)
+
+## Navigation Shell
+- Bottom tabs: Camera, Records, Search, Stats, Settings.
+- Camera is the primary entry point.
+- Other screens should stay lightweight and support the main capture-and-review loop.
+
+## Camera Screen
+- Main area: live camera preview.
+- Top area: settings access and record shortcuts.
+- Bottom area: gallery, shutter, and flash controls.
+- States to support: permission denied, taking photo, success message, capture error, and fallback/manual entry.
+
+## Records Screen
+- Shows meal records grouped by date.
+- Card layout should keep the meal name, time, location, and note visible at a glance.
+- Must support editing and deletion entry points.
+
+## Search Screen
+- Search bar and filter area should be the first things the user sees.
+- Results should remain scannable and support quick refinement.
+
+## Stats Screen
+- Use summaries and compact cards instead of dense dashboards.
+- Keep insights readable and practical, not decorative.
+
+## Settings Screen
+- Prioritize backup, export, privacy, and app information.
+- Keep destructive actions visually separated.
+
+## UI Rules
+- Keep tap targets large enough for quick use.
+- Favor clear labels over clever wording.
+- Use explicit empty, loading, and error states.
+- Keep screen behavior aligned with the current implementation before inventing new interactions.

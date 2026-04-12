@@ -1,5 +1,7 @@
 # 画面設計仕様書 - Dining Memory App
 
+> Deprecated. Canonical version: [docs/ux/screen-designs.md](ux/screen-designs.md). The rest of this file is historical and should not be treated as current process.
+
 ## ドキュメント概要
 - **作成日**: 2025年9月11日
 - **最終更新**: 2025年9月11日

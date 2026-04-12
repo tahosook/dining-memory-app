@@ -1,5 +1,7 @@
 # データベース設計書 - Dining Memory App
 
+> Deprecated. Canonical version: [docs/domain/database-design.md](domain/database-design.md). The rest of this file is historical and should not be treated as current process.
+
 ## 設計方針
 
 ### 基本方針
