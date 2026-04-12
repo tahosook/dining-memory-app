@@ -7,8 +7,8 @@
 - Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/domain/database-design.md](../domain/database-design.md)
 
 ## Current Stack
-- React Native + Expo
-- TypeScript
+- Expo SDK 55 on React Native 0.83 / React 19.2
+- TypeScript 6
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
 - Expo Camera, expo-file-system, expo-media-library, and related native modules
@@ -27,6 +27,8 @@
 - `Settings` for data, privacy, and app controls.
 
 ## Runtime Assumptions
+- Local development uses Node.js 20.19+.
+- Expo SDK 55 keeps the New Architecture enabled at all times.
 - App data lives primarily on the device.
 - Captured photos should be copied to an app-local stable path before the meal record is stored.
 - Cloud use is optional and should be treated as a future fallback path, not the default path.
@@ -37,6 +39,7 @@
 ## Security and Privacy Defaults
 - Prefer local storage and local processing unless a feature clearly needs external transfer.
 - Request only the minimum camera, photo, and location access needed for the active feature.
+- Do not request Android storage or location permissions when the current feature set only needs camera access and media-library save access.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
 - Keep secrets out of source control and out of runtime logs.

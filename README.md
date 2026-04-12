@@ -49,8 +49,9 @@ dining-memory-app/
 ## 開発環境セットアップ
 
 ### システム要件
-- Node.js 18.x 以上
-- Expo CLI 54.x 以上
+- Node.js 20.19.x 以上
+- Expo SDK 55.x
+- Expo CLI 55.x 以上（`npx expo` 推奨）
 - iOS 開発: Xcode
 - Android 開発: Android Studio（任意）
 
@@ -60,10 +61,14 @@ git clone https://github.com/tahosook/dining-memory-app.git
 cd dining-memory-app
 node --version
 npm install
-npm install -g @expo/cli
 cp .env.example .env.local
 npx expo start
 ```
+
+### 実行時前提
+- React Native 0.83 系 / React 19.2 系を前提としています
+- Expo SDK 55 以降のため New Architecture は常時有効です
+- Android の写真保存権限は `expo-media-library` プラグインで管理します
 
 ### 環境変数
 ```env
