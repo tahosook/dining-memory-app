@@ -12,6 +12,27 @@ export const useCameraPermission = (): PermissionResponse | null => {
   const [permission, requestPermission] = useCameraPermissions();
   const [hasRequested, setHasRequested] = useState(false);
 
+  const requestMediaLibraryPermission = useCallback(async (): Promise<void> => {
+    try {
+      await MediaLibrary.getPermissionsAsync();
+    } catch (mediaError) {
+      console.warn('Media library permission check failed (expected on some Expo Go versions):', mediaError);
+    }
+  }, []);
+
+  const handlePermissionError = useCallback((error: unknown): void => {
+    console.error('Permission request error:', error);
+
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    if (errorMessage.includes('camera')) {
+      Alert.alert('カメラエラー', 'カメラの初期化に失敗しました。Expo Goを再起動するか、開発ビルドを使用してください。');
+    } else if (errorMessage.includes('permission')) {
+      Alert.alert('権限エラー', 'カメラ権限が拒否されました。アプリの設定から権限を許可してください。');
+    } else {
+      Alert.alert('エラー', `権限確認中にエラーが発生しました: ${errorMessage}`);
+    }
+  }, []);
+
   const requestPermissions = useCallback(async (): Promise<void> => {
     if (hasRequested || permission?.status === 'granted' || permission?.status === 'denied') {
       return;
@@ -33,36 +54,13 @@ export const useCameraPermission = (): PermissionResponse | null => {
         return;
       }
 
-      // Request media library permission
       await requestMediaLibraryPermission();
-
     } catch (error) {
       handlePermissionError(error);
     } finally {
       setHasRequested(true);
     }
-  }, [permission, requestPermission, hasRequested]);
-
-  const requestMediaLibraryPermission = useCallback(async (): Promise<void> => {
-    try {
-      await MediaLibrary.getPermissionsAsync();
-    } catch (mediaError) {
-      console.warn('Media library permission check failed (expected on some Expo Go versions):', mediaError);
-    }
-  }, []);
-
-  const handlePermissionError = useCallback((error: unknown): void => {
-    console.error('Permission request error:', error);
-
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    if (errorMessage.includes('camera')) {
-      Alert.alert('カメラエラー', 'カメラの初期化に失敗しました。Expo Goを再起動するか、開発ビルドを使用してください。');
-    } else if (errorMessage.includes('permission')) {
-      Alert.alert('権限エラー', 'カメラ権限が拒否されました。アプリの設定から権限を許可してください。');
-    } else {
-      Alert.alert('エラー', `権限確認中にエラーが発生しました: ${errorMessage}`);
-    }
-  }, []);
+  }, [handlePermissionError, hasRequested, permission, requestMediaLibraryPermission, requestPermission]);
 
   useEffect(() => {
     if (!hasRequested && permission?.status !== 'granted' && permission?.status !== 'denied') {

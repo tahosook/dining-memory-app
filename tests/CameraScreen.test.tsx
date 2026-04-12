@@ -1,5 +1,6 @@
 import React from 'react';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import * as ReactNative from 'react-native';
 import { Alert } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as Camera from 'expo-camera';
@@ -33,11 +34,15 @@ jest.mock('../src/hooks/cameraCapture', () => ({
     facing: 'back',
     cameraRef: { current: null },
     successMessage: '',
+    captureReview: null,
     takePicture: jest.fn(),
     flipCamera: jest.fn(),
     showCloseConfirmDialog: jest.fn(),
     onSuccessMessageOk: jest.fn(),
     onSuccessMessageGoToRecords: jest.fn(),
+    onCaptureReviewChange: jest.fn(),
+    onCaptureReviewCancel: jest.fn(),
+    onCaptureReviewSave: jest.fn(),
   })),
 }));
 
@@ -50,7 +55,7 @@ jest.mock('expo-camera', () => ({
 }));
 
 // Mock useRef to control camera ref
-let mockCameraRef: { current: any } = {
+let mockCameraRef: { current: unknown } = {
   current: null,
 };
 
@@ -108,6 +113,9 @@ jest.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',
   TouchableOpacity: 'TouchableOpacity',
+  Image: 'Image',
+  TextInput: 'TextInput',
+  Switch: 'Switch',
   // Mock DevMenu and related modules that cause issues in tests
   DevMenu: {
     show: jest.fn(),
@@ -170,6 +178,21 @@ describe('CameraScreen Normal Flow Tests', () => {
     jest.clearAllMocks();
     // Reset camera ref before each test
     mockCameraRef.current = null;
+    (useCameraCapture as jest.Mock).mockReturnValue({
+      takingPhoto: false,
+      facing: 'back',
+      cameraRef: mockCameraRef,
+      successMessage: '',
+      captureReview: null,
+      takePicture: jest.fn(),
+      flipCamera: jest.fn(),
+      showCloseConfirmDialog: jest.fn(),
+      onSuccessMessageOk: jest.fn(),
+      onSuccessMessageGoToRecords: jest.fn(),
+      onCaptureReviewChange: jest.fn(),
+      onCaptureReviewCancel: jest.fn(),
+      onCaptureReviewSave: jest.fn(),
+    });
   });
 
   describe('Permission Flow', () => {
@@ -275,11 +298,15 @@ describe('CameraScreen Normal Flow Tests', () => {
         facing: 'back',
         cameraRef: mockCameraRef,
         successMessage: '✅ 写真を写真ライブラリに保存しました！\n\n📸 写真詳細:\n• 1920x1080\n• 保存時刻: 10/28/2025, 9:36:00 PM',
+        captureReview: null,
         takePicture: jest.fn(),
         flipCamera: jest.fn(),
         showCloseConfirmDialog: jest.fn(),
         onSuccessMessageOk: jest.fn(),
         onSuccessMessageGoToRecords: jest.fn(),
+        onCaptureReviewChange: jest.fn(),
+        onCaptureReviewCancel: jest.fn(),
+        onCaptureReviewSave: jest.fn(),
       });
 
       const { findByText } = render(<CameraScreen />);
@@ -306,11 +333,15 @@ describe('CameraScreen Normal Flow Tests', () => {
         facing: 'back',
         cameraRef: mockCameraRef,
         successMessage: '✅ 写真を写真ライブラリに保存しました！\n\n📸 写真詳細:\n• 1920x1080\n• 保存時刻: 10/28/2025, 9:36:00 PM',
+        captureReview: null,
         takePicture: jest.fn(),
         flipCamera: jest.fn(),
         showCloseConfirmDialog: jest.fn(),
         onSuccessMessageOk: mockOnOk,
         onSuccessMessageGoToRecords: jest.fn(),
+        onCaptureReviewChange: jest.fn(),
+        onCaptureReviewCancel: jest.fn(),
+        onCaptureReviewSave: jest.fn(),
       });
 
       const { findByText } = render(<CameraScreen />);
@@ -329,11 +360,15 @@ describe('CameraScreen Normal Flow Tests', () => {
         facing: 'back',
         cameraRef: mockCameraRef,
         successMessage: '✅ 写真を写真ライブラリに保存しました！\n\n📸 写真詳細:\n• 1920x1080\n• 保存時刻: 10/28/2025, 9:36:00 PM',
+        captureReview: null,
         takePicture: jest.fn(),
         flipCamera: jest.fn(),
         showCloseConfirmDialog: jest.fn(),
         onSuccessMessageOk: jest.fn(),
         onSuccessMessageGoToRecords: () => mockNavigate('Records'),
+        onCaptureReviewChange: jest.fn(),
+        onCaptureReviewCancel: jest.fn(),
+        onCaptureReviewSave: jest.fn(),
       });
 
       const { findByText } = render(<CameraScreen />);
@@ -369,6 +404,7 @@ describe('CameraScreen Normal Flow Tests', () => {
         facing: 'back',
         cameraRef: mockCameraRef,
         successMessage: '',
+        captureReview: null,
         takePicture: jest.fn(),
         flipCamera: jest.fn(),
         showCloseConfirmDialog: () => {
@@ -379,6 +415,9 @@ describe('CameraScreen Normal Flow Tests', () => {
         },
         onSuccessMessageOk: jest.fn(),
         onSuccessMessageGoToRecords: jest.fn(),
+        onCaptureReviewChange: jest.fn(),
+        onCaptureReviewCancel: jest.fn(),
+        onCaptureReviewSave: jest.fn(),
       });
     });
 
@@ -407,7 +446,7 @@ describe('CameraScreen Normal Flow Tests', () => {
       // Extract the onPress handler and call it
       const alertArgs = (Alert.alert as jest.Mock).mock.calls[0];
       const buttons = alertArgs[2];
-      const exitButton = buttons.find((button: any) => button.text === '撮影を終了しました');
+      const exitButton = buttons.find((button: { text: string; onPress?: () => void }) => button.text === '撮影を終了しました');
       exitButton.onPress();
 
       // Verify that navigation.navigate was called with 'Records'
@@ -423,7 +462,7 @@ describe('CameraScreen Normal Flow Tests', () => {
       // Extract the onPress handler for cancel button and call it
       const alertArgs = (Alert.alert as jest.Mock).mock.calls[0];
       const buttons = alertArgs[2];
-      const cancelButton = buttons.find((button: any) => button.text === 'キャンセル');
+      const cancelButton = buttons.find((button: { text: string; onPress?: () => void }) => button.text === 'キャンセル');
       // Fire event with onPress to trigger it properly to avoid undefined
       if (cancelButton && cancelButton.onPress) {
         cancelButton.onPress();
@@ -460,13 +499,45 @@ describe('CameraScreen Normal Flow Tests', () => {
           // Extract the onPress handler for OK button and call it
           const alertArgs = (Alert.alert as jest.Mock).mock.calls[0];
           const buttons = alertArgs[2];
-          const okButton = buttons.find((button: any) => button.text === 'OK');
+          const okButton = buttons.find((button: { text: string; onPress?: () => void }) => button.text === 'OK');
           okButton.onPress();
 
           // Verify that navigation.navigate was NOT called
           expect(mockNavigate).not.toHaveBeenCalled();
         }
       });
+    });
+
+    test('should render review form when captureReview is present', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue({
+        takingPhoto: false,
+        facing: 'back',
+        cameraRef: mockCameraRef,
+        successMessage: '',
+        captureReview: {
+          photoUri: '/mock/photo.jpg',
+          width: 800,
+          height: 600,
+          mealName: '',
+          notes: '',
+          locationName: '',
+          isHomemade: true,
+        },
+        takePicture: jest.fn(),
+        flipCamera: jest.fn(),
+        showCloseConfirmDialog: jest.fn(),
+        onSuccessMessageOk: jest.fn(),
+        onSuccessMessageGoToRecords: jest.fn(),
+        onCaptureReviewChange: jest.fn(),
+        onCaptureReviewCancel: jest.fn(),
+        onCaptureReviewSave: jest.fn(),
+      });
+
+      const { findByText, findByTestId } = render(<CameraScreen />);
+
+      expect(await findByText('撮影内容を確認')).toBeTruthy();
+      expect(await findByTestId('meal-name-input')).toBeTruthy();
+      expect(await findByTestId('save-meal-button')).toBeTruthy();
     });
   });
 });
@@ -477,10 +548,10 @@ describe('CameraScreen Web Mode Mock Tests', () => {
 
   beforeAll(() => {
     // Mock Platform.OS for web
-    (require('react-native') as any).Platform.OS = 'web';
+    ReactNative.Platform.OS = 'web';
 
     // Mock document.createElement for canvas
-    Object.defineProperty(global, 'document', {
+    Object.defineProperty(globalThis, 'document', {
       value: {
         createElement: jest.fn((tag: string) => {
           if (tag === 'canvas') {
@@ -504,19 +575,37 @@ describe('CameraScreen Web Mode Mock Tests', () => {
     });
 
     // Mock fetch for Data URL handling
-    (global as any).fetch = jest.fn(() =>
+    globalThis.fetch = jest.fn(() =>
       Promise.resolve({
         blob: () => Promise.resolve(new Blob(['mock data'])),
         arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)),
       })
-    ) as any;
+    ) as unknown as typeof fetch;
+  });
+
+  beforeEach(() => {
+    (useCameraCapture as jest.Mock).mockReturnValue({
+      takingPhoto: false,
+      facing: 'back',
+      cameraRef: mockCameraRef,
+      successMessage: '',
+      captureReview: null,
+      takePicture: jest.fn(),
+      flipCamera: jest.fn(),
+      showCloseConfirmDialog: jest.fn(),
+      onSuccessMessageOk: jest.fn(),
+      onSuccessMessageGoToRecords: jest.fn(),
+      onCaptureReviewChange: jest.fn(),
+      onCaptureReviewCancel: jest.fn(),
+      onCaptureReviewSave: jest.fn(),
+    });
   });
 
   afterAll(() => {
     // Restore original Platform.OS
-    (require('react-native') as any).Platform.OS = 'ios';
-    delete (global as any).document;
-    delete (global as any).fetch;
+    ReactNative.Platform.OS = 'ios';
+    delete (globalThis as Record<string, unknown>).document;
+    delete (globalThis as Record<string, unknown>).fetch;
     consoleLogSpy.mockRestore();
   });
 

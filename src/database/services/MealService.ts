@@ -1,118 +1,311 @@
-import { database } from '../models'
-import { Platform } from 'react-native'
-// import { Q } from '@nozbe/watermelondb'  // Disable for Web compatibility
+import { getDatabase, getInMemoryMeals, initializeDatabase, isUsingNativeDatabase, mapRowToMeal, setInMemoryMeals, type PersistedMealRow } from './localDatabase';
+import type { Meal } from '../../types/MealTypes';
 
 export interface CreateMealData {
-  meal_name: string
-  meal_type?: string
-  cuisine_type?: string
-  ai_confidence?: number
-  ai_source?: string
-  notes?: string
-  cooking_level?: string
-  is_homemade: boolean
-  photo_path: string
-  photo_thumbnail_path?: string
-  location_name?: string
-  latitude?: number
-  longitude?: number
-  meal_datetime: Date
-  search_text?: string
-  ingredients?: Array<{name: string, category?: string, confidence?: number, quantity?: string, ingredient_type?: string}>
-  cooking_pattern?: {
-    recipe_complexity?: number
-    cooking_time_minutes?: number
-    skill_level?: string
-    ingredient_count?: number
-    fresh_ingredient_ratio?: number
-    day_of_week?: number
-    time_of_day?: string
-  }
+  meal_name: string;
+  meal_type?: string;
+  cuisine_type?: string;
+  ai_confidence?: number;
+  ai_source?: string;
+  notes?: string;
+  cooking_level?: string;
+  is_homemade: boolean;
+  photo_path: string;
+  photo_thumbnail_path?: string;
+  location_name?: string;
+  latitude?: number;
+  longitude?: number;
+  meal_datetime: Date;
+  search_text?: string;
+  tags?: string;
 }
 
 export interface SearchFilters {
-  dateFrom?: Date
-  dateTo?: Date
-  cuisine_type?: string
-  is_homemade?: boolean
-  cooking_level?: string
-  location_name?: string
-  text?: string
+  dateFrom?: Date;
+  dateTo?: Date;
+  cuisine_type?: string;
+  is_homemade?: boolean;
+  cooking_level?: string;
+  location_name?: string;
+  text?: string;
+}
+
+export interface StatisticsSummary {
+  totalMeals: number;
+  homemadeMeals: number;
+  takeoutMeals: number;
+  favoriteCuisine?: string;
+  favoriteLocation?: string;
+}
+
+type MealUpdateData = Partial<CreateMealData>;
+
+function createId() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): PersistedMealRow {
+  const now = Date.now();
+  const searchText = data.search_text ?? generateSearchText(data);
+
+  return {
+    id: existing?.id ?? createId(),
+    uuid: existing?.uuid ?? createId(),
+    meal_name: data.meal_name,
+    meal_type: data.meal_type ?? null,
+    cuisine_type: data.cuisine_type ?? null,
+    ai_confidence: data.ai_confidence ?? null,
+    ai_source: data.ai_source ?? null,
+    notes: data.notes ?? null,
+    cooking_level: data.cooking_level ?? null,
+    is_homemade: data.is_homemade ? 1 : 0,
+    photo_path: data.photo_path,
+    photo_thumbnail_path: data.photo_thumbnail_path ?? null,
+    location_name: data.location_name ?? null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    meal_datetime: data.meal_datetime.getTime(),
+    search_text: searchText,
+    tags: data.tags ?? null,
+    is_deleted: existing?.is_deleted ?? 0,
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
+  };
+}
+
+function generateSearchText(data: Partial<CreateMealData>): string {
+  return [data.meal_name, data.cuisine_type, data.location_name, data.notes, data.tags]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+}
+
+async function getAllRows(): Promise<PersistedMealRow[]> {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    return getInMemoryMeals();
+  }
+
+  const db = getDatabase();
+  if (!db) {
+    return [];
+  }
+
+  return db.getAllAsync<PersistedMealRow>('SELECT * FROM meals');
+}
+
+async function saveRows(rows: PersistedMealRow[]) {
+  if (isUsingNativeDatabase()) {
+    return;
+  }
+
+  setInMemoryMeals(rows);
+}
+
+async function upsertRow(row: PersistedMealRow) {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    const rows = getInMemoryMeals();
+    const nextRows = rows.filter((item) => item.id !== row.id);
+    nextRows.push(row);
+    setInMemoryMeals(nextRows);
+    return;
+  }
+
+  const db = getDatabase();
+  if (!db) {
+    return;
+  }
+
+  await db.runAsync(
+    `INSERT OR REPLACE INTO meals (
+      id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source, notes, cooking_level,
+      is_homemade, photo_path, photo_thumbnail_path, location_name, latitude, longitude, meal_datetime,
+      search_text, tags, is_deleted, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    row.id,
+    row.uuid,
+    row.meal_name,
+    row.meal_type ?? null,
+    row.cuisine_type ?? null,
+    row.ai_confidence ?? null,
+    row.ai_source ?? null,
+    row.notes ?? null,
+    row.cooking_level ?? null,
+    row.is_homemade,
+    row.photo_path,
+    row.photo_thumbnail_path ?? null,
+    row.location_name ?? null,
+    row.latitude ?? null,
+    row.longitude ?? null,
+    row.meal_datetime,
+    row.search_text ?? null,
+    row.tags ?? null,
+    row.is_deleted,
+    row.created_at,
+    row.updated_at
+  );
+}
+
+function applyFilters(rows: PersistedMealRow[], filters: SearchFilters): PersistedMealRow[] {
+  return rows.filter((row) => {
+    if (row.is_deleted) {
+      return false;
+    }
+
+    if (filters.dateFrom && row.meal_datetime < filters.dateFrom.getTime()) {
+      return false;
+    }
+
+    if (filters.dateTo && row.meal_datetime > filters.dateTo.getTime()) {
+      return false;
+    }
+
+    if (filters.cuisine_type && row.cuisine_type !== filters.cuisine_type) {
+      return false;
+    }
+
+    if (typeof filters.is_homemade === 'boolean' && Boolean(row.is_homemade) !== filters.is_homemade) {
+      return false;
+    }
+
+    if (filters.cooking_level && row.cooking_level !== filters.cooking_level) {
+      return false;
+    }
+
+    if (filters.location_name && !(row.location_name ?? '').toLowerCase().includes(filters.location_name.toLowerCase())) {
+      return false;
+    }
+
+    if (filters.text) {
+      const haystack = `${row.meal_name} ${row.location_name ?? ''} ${row.notes ?? ''} ${row.search_text ?? ''}`.toLowerCase();
+      if (!haystack.includes(filters.text.toLowerCase())) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 }
 
 export class MealService {
-  // Create a new meal record - Web mock implementation
-  static async createMeal(data: CreateMealData): Promise<any> {
-    console.log('MealService.createMeal called (Web mock)', data)
-    return {
-      id: 'mock_' + Date.now(),
-      ...data,
-      meal_datetime: data.meal_datetime.getTime()
-    }
+  static async createMeal(data: CreateMealData): Promise<Meal> {
+    const row = normalizeRow(data);
+    await upsertRow(row);
+    return mapRowToMeal(row);
   }
 
-  // Search meals with filters - Web mock implementation
-  static async searchMeals(query: SearchFilters = {}): Promise<any[]> {
-    console.log('MealService.searchMeals called (Web mock)', query)
-    return []
+  static async searchMeals(filters: SearchFilters = {}): Promise<Meal[]> {
+    const rows = await getAllRows();
+    return applyFilters(rows, filters)
+      .sort((a, b) => b.meal_datetime - a.meal_datetime)
+      .map(mapRowToMeal);
   }
 
-  // Full text search - Web mock implementation
-  static async searchMealsByText(searchText: string): Promise<any[]> {
-    console.log('MealService.searchMealsByText called (Web mock)', searchText)
-    return []
+  static async searchMealsByText(searchText: string): Promise<Meal[]> {
+    return this.searchMeals({ text: searchText });
   }
 
-  // Get meals by date range - Web mock implementation
-  static async getMealsByDateRange(startDate: Date, endDate: Date): Promise<any[]> {
-    console.log('MealService.getMealsByDateRange called (Web mock)', { startDate, endDate })
-    return []
+  static async getMealsByDateRange(startDate: Date, endDate: Date): Promise<Meal[]> {
+    return this.searchMeals({ dateFrom: startDate, dateTo: endDate });
   }
 
-  // Get recent meals - Web mock implementation
-  static async getRecentMeals(limit: number = 20): Promise<any[]> {
-    console.log('MealService.getRecentMeals called (Web mock)', limit)
-    return []
+  static async getRecentMeals(limit = 20): Promise<Meal[]> {
+    const rows = await getAllRows();
+    return rows
+      .filter((row) => !row.is_deleted)
+      .sort((a, b) => b.meal_datetime - a.meal_datetime)
+      .slice(0, limit)
+      .map(mapRowToMeal);
   }
 
-  // Soft delete meal - Web mock implementation
   static async softDeleteMeal(mealId: string): Promise<void> {
-    console.log('MealService.softDeleteMeal called (Web mock)', mealId)
-    return Promise.resolve()
+    const rows = await getAllRows();
+    const row = rows.find((item) => item.id === mealId);
+    if (!row) {
+      return;
+    }
+
+    row.is_deleted = 1;
+    row.updated_at = Date.now();
+    await upsertRow(row);
   }
 
-  // Update meal - Web mock implementation
-  static async updateMeal(mealId: string, updates: Partial<CreateMealData>): Promise<any> {
-    console.log('MealService.updateMeal called (Web mock)', { mealId, updates })
-    return { id: mealId, ...updates }
+  static async updateMeal(mealId: string, updates: MealUpdateData): Promise<Meal | null> {
+    const rows = await getAllRows();
+    const row = rows.find((item) => item.id === mealId);
+    if (!row) {
+      return null;
+    }
+
+    const merged: CreateMealData = {
+      meal_name: updates.meal_name ?? row.meal_name,
+      meal_type: updates.meal_type ?? row.meal_type ?? undefined,
+      cuisine_type: updates.cuisine_type ?? row.cuisine_type ?? undefined,
+      ai_confidence: updates.ai_confidence ?? row.ai_confidence ?? undefined,
+      ai_source: updates.ai_source ?? row.ai_source ?? undefined,
+      notes: updates.notes ?? row.notes ?? undefined,
+      cooking_level: updates.cooking_level ?? row.cooking_level ?? undefined,
+      is_homemade: updates.is_homemade ?? Boolean(row.is_homemade),
+      photo_path: updates.photo_path ?? row.photo_path,
+      photo_thumbnail_path: updates.photo_thumbnail_path ?? row.photo_thumbnail_path ?? undefined,
+      location_name: updates.location_name ?? row.location_name ?? undefined,
+      latitude: updates.latitude ?? row.latitude ?? undefined,
+      longitude: updates.longitude ?? row.longitude ?? undefined,
+      meal_datetime: updates.meal_datetime ?? new Date(row.meal_datetime),
+      search_text: updates.search_text ?? row.search_text ?? undefined,
+      tags: updates.tags ?? row.tags ?? undefined,
+    };
+
+    const nextRow = normalizeRow(merged, row);
+    await upsertRow(nextRow);
+    return mapRowToMeal(nextRow);
   }
 
-  // Get statistics - Web mock implementation
-  static async getStatistics(): Promise<{
-    totalMeals: number
-    homemadeMeals: number
-    takeoutMeals: number
-    favoriteCuisine?: string
-  }> {
-    console.log('MealService.getStatistics called (Web mock)')
+  static async getStatistics(): Promise<StatisticsSummary> {
+    const rows = (await getAllRows()).filter((row) => !row.is_deleted);
+    const homemadeMeals = rows.filter((row) => Boolean(row.is_homemade)).length;
+    const takeoutMeals = rows.length - homemadeMeals;
+    const favoriteCuisine = pickFavorite(rows.map((row) => row.cuisine_type).filter(Boolean) as string[]);
+    const favoriteLocation = pickFavorite(rows.map((row) => row.location_name).filter(Boolean) as string[]);
+
     return {
-      totalMeals: 0,
-      homemadeMeals: 0,
-      takeoutMeals: 0,
-      favoriteCuisine: undefined
-    }
+      totalMeals: rows.length,
+      homemadeMeals,
+      takeoutMeals,
+      favoriteCuisine,
+      favoriteLocation,
+    };
   }
 
-  // Generate search text for full-text search
-  private static generateSearchText(data: Partial<CreateMealData>): string {
-    const parts = []
-    if (data.meal_name) parts.push(data.meal_name)
-    if (data.cuisine_type) parts.push(data.cuisine_type)
-    if (data.location_name) parts.push(data.location_name)
-    if (data.notes) parts.push(data.notes)
-    if (data.ingredients) {
-      parts.push(...data.ingredients.map(ing => ing.name))
+  static async clearAllMeals(): Promise<void> {
+    await initializeDatabase();
+
+    if (!isUsingNativeDatabase()) {
+      await saveRows([]);
+      return;
     }
-    return parts.join(' ').toLowerCase()
+
+    const db = getDatabase();
+    if (!db) {
+      return;
+    }
+
+    await db.runAsync('DELETE FROM meals');
   }
+}
+
+function pickFavorite(values: string[]): string | undefined {
+  if (!values.length) {
+    return undefined;
+  }
+
+  const counts = new Map<string, number>();
+  values.forEach((value) => {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  });
+
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
 }

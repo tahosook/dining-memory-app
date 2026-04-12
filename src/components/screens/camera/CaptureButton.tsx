@@ -1,7 +1,5 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../../constants/Colors';
-import { GlobalStyles } from '../../../constants/Styles';
 import { CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
 
 /**

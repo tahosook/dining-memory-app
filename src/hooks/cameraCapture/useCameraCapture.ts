@@ -2,10 +2,21 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as MediaLibrary from 'expo-media-library';
-import { writeAsStringAsync, deleteAsync, EncodingType, documentDirectory } from 'expo-file-system/legacy';
+import { deleteAsync } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
 import { CameraCaptureMock } from './useCameraCaptureMock';
+import { MealService } from '../../database/services/MealService';
+
+export interface CaptureReviewState {
+  photoUri: string;
+  width: number;
+  height: number;
+  mealName: string;
+  notes: string;
+  locationName: string;
+  isHomemade: boolean;
+}
 
 /**
  * カメラキャプチャ機能のHook
@@ -17,6 +28,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [captureReview, setCaptureReview] = useState<CaptureReviewState | null>(null);
 
   // 撮影中の状態管理
   const isTakingPhoto = takingPhoto;
@@ -38,8 +50,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       await MediaLibrary.createAssetAsync(photoUri);
       console.log('✅ Successfully saved photo to user\'s photo gallery!');
       return true;
-    } catch (mediaError: any) {
-      console.warn('Media library save failed:', mediaError.message);
+    } catch (mediaError: unknown) {
+      console.warn('Media library save failed:', mediaError instanceof Error ? mediaError.message : mediaError);
       return false;
     }
   }, []);
@@ -49,8 +61,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     try {
       await deleteAsync(photoUri);
       console.log('Temp file cleaned up');
-    } catch (cleanupError: any) {
-      console.warn('Cleanup failed:', cleanupError.message);
+    } catch (cleanupError: unknown) {
+      console.warn('Cleanup failed:', cleanupError instanceof Error ? cleanupError.message : cleanupError);
     }
   }, []);
 
@@ -65,21 +77,25 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     setSuccessMessage('');
   }, []);
 
-  // 成功時のメッセージ表示
-  const showPhotoSuccessMessage = useCallback((photo: CameraCapturedPicture) => {
-    const message = `✅ 写真を写真ライブラリに保存しました！
+  const showSaveSuccessMessage = useCallback((mealName: string) => {
+    const message = `✅ ${mealName} を記録しました
 
-📸 写真詳細:
-• ${photo.width}x${photo.height}
-• 保存時刻: ${new Date().toLocaleString()}`;
+続けて撮影するか、記録タブで確認できます。`;
 
     setSuccessMessage(message);
-
-    // UIにメッセージを表示し、コンソールにもログ
-    console.log('写真撮影完了', { message });
   }, []);
 
-
+  const beginReview = useCallback((photo: CameraCapturedPicture) => {
+    setCaptureReview({
+      photoUri: photo.uri,
+      width: photo.width,
+      height: photo.height,
+      mealName: '',
+      notes: '',
+      locationName: '',
+      isHomemade: true,
+    });
+  }, []);
 
   // 写真撮影のメイン関数
   const takePicture = useCallback(async (): Promise<void> => {
@@ -110,17 +126,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       console.log('Photo captured successfully:', photo.uri);
       console.log('Photo details:', { width: photo.width, height: photo.height });
 
-      // webモードのモック画像の場合はMediaLibrary保存をスキップ (webではサポートされない)
-      if (!isWebWithoutPermissions) {
-        // MediaLibraryに保存
-        const saveSuccess = await savePhotoToMediaLibrary(photo.uri);
-        if (!saveSuccess) {
-          await cleanupTempFile(photo.uri);
-          throw new Error('写真の保存に失敗しました');
-        }
-      }
-
-      showPhotoSuccessMessage(photo);
+      setSuccessMessage('');
+      beginReview(photo);
 
     } catch (error) {
       console.error('写真撮影エラー:', error);
@@ -128,7 +135,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     } finally {
       setTakingPhoto(false);
     }
-  }, [cameraRef, takingPhoto, savePhotoToMediaLibrary, cleanupTempFile, showPhotoSuccessMessage, cameraPermission]);
+  }, [cameraRef, takingPhoto, beginReview, cameraPermission]);
 
   // カメラ反転
   const flipCamera = useCallback(() => {
@@ -143,12 +150,69 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     ]);
   }, [navigateToRecords]);
 
+  const updateCaptureReview = useCallback(
+    (field: keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>, value: string | boolean) => {
+      setCaptureReview((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [field]: value,
+        };
+      });
+    },
+    []
+  );
+
+  const cancelReview = useCallback(() => {
+    setCaptureReview(null);
+  }, []);
+
+  const saveCapture = useCallback(async () => {
+    if (!captureReview) {
+      return;
+    }
+
+    if (!captureReview.mealName.trim()) {
+      Alert.alert('入力が必要です', '料理名を入力してください。');
+      return;
+    }
+
+    try {
+      await MealService.createMeal({
+        meal_name: captureReview.mealName.trim(),
+        notes: captureReview.notes.trim() || undefined,
+        location_name: captureReview.locationName.trim() || undefined,
+        is_homemade: captureReview.isHomemade,
+        photo_path: captureReview.photoUri,
+        meal_datetime: new Date(),
+      });
+
+      const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
+      if (!isWebWithoutPermissions) {
+        const saveSuccess = await savePhotoToMediaLibrary(captureReview.photoUri);
+        if (!saveSuccess) {
+          await cleanupTempFile(captureReview.photoUri);
+        }
+      }
+
+      setCaptureReview(null);
+      showSaveSuccessMessage(captureReview.mealName.trim());
+    } catch (error) {
+      console.error('記録保存エラー:', error);
+      Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
+    }
+  }, [cameraPermission, captureReview, cleanupTempFile, savePhotoToMediaLibrary, showSaveSuccessMessage]);
+
   return {
     // State
     takingPhoto: isTakingPhoto,
     facing,
     cameraRef,
     successMessage,
+    captureReview,
 
     // Actions
     takePicture,
@@ -156,5 +220,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     showCloseConfirmDialog,
     onSuccessMessageOk: clearSuccessMessage,
     onSuccessMessageGoToRecords: navigateToRecords,
+    onCaptureReviewChange: updateCaptureReview,
+    onCaptureReviewCancel: cancelReview,
+    onCaptureReviewSave: saveCapture,
   };
 };

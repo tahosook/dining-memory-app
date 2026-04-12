@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity, Image, TextInput, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView as ExpoCameraView } from 'expo-camera';
 import { Colors } from '../../../constants/Colors';
@@ -8,6 +8,7 @@ import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraCon
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 import { Platform } from 'react-native';
 import { PermissionResponse, CameraView as CameraViewType } from 'expo-camera';
+import type { CaptureReviewState } from '../../../hooks/cameraCapture/useCameraCapture';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -40,18 +41,28 @@ type CameraPermissionState = {
 
 type CameraSuccessState = {
   successMessage: string;
+  captureReview: CaptureReviewState | null;
 };
 
 type CameraSuccessOperations = {
   onSuccessMessageOk: () => void;
   onSuccessMessageGoToRecords: () => void;
+  onCaptureReviewChange: (
+    field: keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>,
+    value: string | boolean
+  ) => void;
+  onCaptureReviewCancel: () => void;
+  onCaptureReviewSave: () => Promise<void>;
 };
 
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
   Pick<CameraOperations, 'onTakePicture' | 'onFlipCamera' | 'onClose'> &
   Pick<CameraPermissionState, 'cameraPermission'> &
-  Pick<CameraSuccessState, 'successMessage'> &
-  Pick<CameraSuccessOperations, 'onSuccessMessageOk' | 'onSuccessMessageGoToRecords'>;
+  Pick<CameraSuccessState, 'successMessage' | 'captureReview'> &
+  Pick<
+    CameraSuccessOperations,
+    'onSuccessMessageOk' | 'onSuccessMessageGoToRecords' | 'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'
+  >;
 
 // コンポーネント
 const PermissionLoadingView: React.FC = () => (
@@ -109,6 +120,57 @@ const FocusArea: React.FC = () => (
   </View>
 );
 
+interface CaptureReviewProps {
+  captureReview: CaptureReviewState;
+  onChange: (
+    field: keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>,
+    value: string | boolean
+  ) => void;
+  onCancel: () => void;
+  onSave: () => Promise<void>;
+}
+
+const CaptureReview: React.FC<CaptureReviewProps> = ({ captureReview, onChange, onCancel, onSave }) => (
+  <View style={styles.reviewContainer}>
+    <View style={styles.reviewCard}>
+      <Text style={styles.reviewTitle}>撮影内容を確認</Text>
+      <Image source={{ uri: captureReview.photoUri }} style={styles.reviewImage} resizeMode="cover" />
+      <TextInput
+        style={styles.reviewInput}
+        placeholder="料理名"
+        value={captureReview.mealName}
+        onChangeText={(value) => onChange('mealName', value)}
+        testID="meal-name-input"
+      />
+      <TextInput
+        style={styles.reviewInput}
+        placeholder="場所"
+        value={captureReview.locationName}
+        onChangeText={(value) => onChange('locationName', value)}
+      />
+      <TextInput
+        style={[styles.reviewInput, styles.reviewNotes]}
+        placeholder="メモ"
+        value={captureReview.notes}
+        onChangeText={(value) => onChange('notes', value)}
+        multiline
+      />
+      <View style={styles.reviewSwitchRow}>
+        <Text style={styles.reviewSwitchLabel}>自炊として記録</Text>
+        <Switch value={captureReview.isHomemade} onValueChange={(value) => onChange('isHomemade', value)} />
+      </View>
+      <View style={styles.reviewButtonRow}>
+        <TouchableOpacity style={[styles.reviewButton, styles.reviewCancelButton]} onPress={onCancel}>
+          <Text style={styles.reviewCancelText}>キャンセル</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.reviewButton, styles.reviewSaveButton]} onPress={onSave} testID="save-meal-button">
+          <Text style={styles.reviewSaveText}>保存</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+);
+
 interface BottomControlsProps {
   takingPhoto: boolean;
   onTakePicture: () => Promise<void>;
@@ -138,11 +200,15 @@ const CameraView: React.FC<CameraViewProps> = ({
   cameraPermission,
   cameraRef,
   successMessage,
+  captureReview,
   onClose,
   onTakePicture,
   onFlipCamera,
   onSuccessMessageOk,
   onSuccessMessageGoToRecords,
+  onCaptureReviewChange,
+  onCaptureReviewCancel,
+  onCaptureReviewSave,
 }) => {
   // 権限チェック（UIロジックのみ）
   // webモードで権限がない場合はモックモードで表示
@@ -177,7 +243,14 @@ const CameraView: React.FC<CameraViewProps> = ({
           />
 
           {/* Center Area - ガイドまたは成功メッセージを表示 */}
-          {successMessage ? (
+          {captureReview ? (
+            <CaptureReview
+              captureReview={captureReview}
+              onChange={onCaptureReviewChange}
+              onCancel={onCaptureReviewCancel}
+              onSave={onCaptureReviewSave}
+            />
+          ) : successMessage ? (
             <SuccessMessage message={successMessage} onOk={onSuccessMessageOk} onGoToRecords={onSuccessMessageGoToRecords} />
           ) : (
             <FocusArea />
@@ -294,6 +367,72 @@ const styles = StyleSheet.create({
     ...GlobalStyles.body,
     color: Colors.black,
     fontWeight: 'bold',
+  },
+  reviewContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  reviewCard: {
+    backgroundColor: 'rgba(0,0,0,0.88)',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  reviewTitle: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  reviewImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    backgroundColor: Colors.gray,
+  },
+  reviewInput: {
+    backgroundColor: Colors.white,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  reviewNotes: {
+    minHeight: 84,
+    textAlignVertical: 'top',
+  },
+  reviewSwitchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reviewSwitchLabel: {
+    color: Colors.white,
+    fontSize: 16,
+  },
+  reviewButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  reviewButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  reviewCancelButton: {
+    backgroundColor: Colors.white,
+  },
+  reviewSaveButton: {
+    backgroundColor: Colors.primary,
+  },
+  reviewCancelText: {
+    color: Colors.black,
+    fontWeight: '600',
+  },
+  reviewSaveText: {
+    color: Colors.white,
+    fontWeight: '600',
   },
 });
 

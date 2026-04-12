@@ -6,18 +6,16 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
-  Dimensions,
   Image,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
-import { GlobalStyles } from '../../constants/Styles';
-import { Meal } from '../../types/MealTypes';
-
-const { width: screenWidth } = Dimensions.get('window');
 
 interface MealRecord {
   id: string;
@@ -40,6 +38,42 @@ interface MealGroup {
   meals: MealRecord[];
 }
 
+function formatDateLabel(date: Date): string {
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) {
+    return '今日';
+  }
+
+  if (date.toDateString() === yesterday.toDateString()) {
+    return '昨日';
+  }
+
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+function groupMealsByDate(records: MealRecord[]): MealGroup[] {
+  const groups: Record<string, MealRecord[]> = {};
+
+  records.forEach((meal) => {
+    const dateKey = new Date(meal.meal_datetime).toDateString();
+    if (!groups[dateKey]) {
+      groups[dateKey] = [];
+    }
+    groups[dateKey].push(meal);
+  });
+
+  return Object.entries(groups)
+    .map(([dateKey, groupMeals]) => ({
+      date: dateKey,
+      dateLabel: formatDateLabel(new Date(dateKey)),
+      meals: groupMeals.sort((a, b) => b.meal_datetime - a.meal_datetime),
+    }))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
 /**
  * 食事記録一覧画面コンポーネント
  *
@@ -53,12 +87,17 @@ export const RecordsScreen: React.FC = () => {
   const [mealGroups, setMealGroups] = useState<MealGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editingMeal, setEditingMeal] = useState<MealRecord | null>(null);
+  const [editMealName, setEditMealName] = useState('');
+  const [editLocation, setEditLocation] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editHomemade, setEditHomemade] = useState(true);
 
   // Load meal records
   const loadMeals = useCallback(async () => {
     try {
       const meals = await MealService.getRecentMeals(100); // Get last 100 meals
-      const groupedMeals = groupMealsByDate(meals);
+      const groupedMeals = groupMealsByDate(meals as MealRecord[]);
       setMealGroups(groupedMeals);
     } catch (error) {
       console.error('Failed to load meals:', error);
@@ -68,60 +107,6 @@ export const RecordsScreen: React.FC = () => {
       setRefreshing(false);
     }
   }, []);
-
-  // Group meals by date
-  const groupMealsByDate = (meals: any[]): MealGroup[] => {
-    const groups: Record<string, MealRecord[]> = {};
-
-    meals.forEach(meal => {
-      const date = new Date(meal.meal_datetime).toDateString();
-      if (!groups[date]) {
-        groups[date] = [];
-      }
-      groups[date].push({
-        id: meal.id,
-        uuid: meal.uuid,
-        meal_name: meal.meal_name,
-        meal_type: meal.meal_type,
-        cuisine_type: meal.cuisine_type,
-        is_homemade: meal.is_homemade,
-        photo_path: meal.photo_path,
-        photo_thumbnail_path: meal.photo_thumbnail_path,
-        location_name: meal.location_name,
-        meal_datetime: meal.meal_datetime,
-        notes: meal.notes,
-        cooking_level: meal.cooking_level
-      });
-    });
-
-    // Convert to array and sort by date (newest first)
-    return Object.entries(groups)
-      .map(([date, meals]) => {
-        const dateObj = new Date(date);
-        const dateLabel = formatDateLabel(dateObj);
-        return {
-          date,
-          dateLabel,
-          meals: meals.sort((a, b) => b.meal_datetime - a.meal_datetime) // Within date, sort by time (newest first)
-        };
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Sort groups by date (newest first)
-  };
-
-  // Format date label for display
-  const formatDateLabel = (date: Date): string => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return '今日';
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return '昨日';
-    } else {
-      return `${date.getMonth() + 1}月${date.getDate()}日`;
-    }
-  };
 
   // Initial load
   useEffect(() => {
@@ -155,8 +140,11 @@ export const RecordsScreen: React.FC = () => {
 
   // Handle edit meal
   const handleEditMeal = (meal: MealRecord) => {
-    // TODO: Navigate to edit screen
-    Alert.alert('編集機能', '編集画面は準備中です。');
+    setEditingMeal(meal);
+    setEditMealName(meal.meal_name);
+    setEditLocation(meal.location_name ?? '');
+    setEditNotes(meal.notes ?? '');
+    setEditHomemade(meal.is_homemade);
   };
 
   // Handle delete meal
@@ -182,6 +170,21 @@ export const RecordsScreen: React.FC = () => {
       ]
     );
   };
+
+  const saveEdit = useCallback(async () => {
+    if (!editingMeal) {
+      return;
+    }
+
+    await MealService.updateMeal(editingMeal.id, {
+      meal_name: editMealName,
+      location_name: editLocation || undefined,
+      notes: editNotes || undefined,
+      is_homemade: editHomemade,
+    });
+    setEditingMeal(null);
+    loadMeals();
+  }, [editHomemade, editLocation, editMealName, editNotes, editingMeal, loadMeals]);
 
   // Render meal item
   const renderMealItem = ({ item }: { item: MealRecord }) => (
@@ -312,6 +315,35 @@ export const RecordsScreen: React.FC = () => {
           />
         )}
       </View>
+
+      <Modal visible={Boolean(editingMeal)} transparent animationType="slide" onRequestClose={() => setEditingMeal(null)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>記録を編集</Text>
+            <TextInput style={styles.modalInput} value={editMealName} onChangeText={setEditMealName} placeholder="料理名" />
+            <TextInput style={styles.modalInput} value={editLocation} onChangeText={setEditLocation} placeholder="場所" />
+            <TextInput
+              style={[styles.modalInput, styles.modalNotes]}
+              value={editNotes}
+              onChangeText={setEditNotes}
+              placeholder="メモ"
+              multiline
+            />
+            <View style={styles.modalSwitchRow}>
+              <Text style={styles.modalSwitchLabel}>自炊として記録</Text>
+              <Switch value={editHomemade} onValueChange={setEditHomemade} />
+            </View>
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity style={styles.modalCancelButton} onPress={() => setEditingMeal(null)}>
+                <Text style={styles.modalCancelText}>閉じる</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSaveButton} onPress={saveEdit}>
+                <Text style={styles.modalSaveText}>保存</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -320,6 +352,70 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#d9d9d9',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+  },
+  modalNotes: {
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+  modalSwitchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalSwitchLabel: {
+    fontSize: 15,
+    color: Colors.text,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    backgroundColor: Colors.lightGray,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalSaveButton: {
+    flex: 1,
+    backgroundColor: Colors.primary,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  modalSaveText: {
+    color: Colors.white,
+    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

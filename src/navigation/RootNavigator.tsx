@@ -20,27 +20,29 @@ const COLORS = {
   inactiveTint: '#8e8e93',
 };
 
+function getTabIconName(routeName: string, focused: boolean): keyof typeof Ionicons.glyphMap {
+  if (routeName === 'Camera') {
+    return focused ? 'camera' : 'camera-outline';
+  }
+  if (routeName === 'Records') {
+    return focused ? 'list' : 'list-outline';
+  }
+  if (routeName === 'Search') {
+    return focused ? 'search' : 'search-outline';
+  }
+  if (routeName === 'Stats') {
+    return focused ? 'bar-chart' : 'bar-chart-outline';
+  }
+  return focused ? 'settings' : 'settings-outline';
+}
+
 export default function RootNavigator() {
-  console.log('RootNavigator with tabs loaded');
   return (
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused, size }) => {
-            let iconName: any = 'home';
-
-            if (route.name === 'Camera') {
-              iconName = focused ? 'camera' : 'camera-outline';
-            } else if (route.name === 'Records') {
-              iconName = focused ? 'list' : 'list-outline';
-            } else if (route.name === 'Search') {
-              iconName = focused ? 'search' : 'search-outline';
-            } else if (route.name === 'Stats') {
-              iconName = focused ? 'bar-chart' : 'bar-chart-outline';
-            } else if (route.name === 'Settings') {
-              iconName = focused ? 'settings' : 'settings-outline';
-            }
-
+          tabBarIcon: ({ focused }) => {
+            const iconName = getTabIconName(route.name, focused);
             return <Ionicons name={iconName} size={24} color={focused ? COLORS.activeTint : COLORS.inactiveTint} />;
           },
           tabBarActiveTintColor: COLORS.activeTint,

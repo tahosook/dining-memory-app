@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../../constants/Colors';
 import { GlobalStyles } from '../../../constants/Styles';
-import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
+import { CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -14,8 +14,8 @@ const { width: screenWidth } = Dimensions.get('window');
  */
 type MockCameraViewProps = {
   takingPhoto: boolean;
-  facing: 'front' | 'back';
-  cameraRef: React.RefObject<any>;
+  _facing: 'front' | 'back';
+  _cameraRef: React.RefObject<unknown>;
   successMessage: string;
   onSuccessMessageOk: () => void;
   onSuccessMessageGoToRecords: () => void;
@@ -28,7 +28,7 @@ type MockCameraViewProps = {
 const MockCameraPreview: React.FC = () => (
   <View style={styles.mockCamera}>
     <Text style={styles.mockCameraText}>📷 Test Camera Preview</Text>
-    <Text style={[styles.mockCameraText, { fontSize: 16 }]}>
+    <Text style={styles.mockCameraSubText}>
       Web mode mock - 写真撮影権限なし
     </Text>
   </View>
@@ -79,7 +79,7 @@ interface BottomControlsProps {
 }
 
 const BottomControls: React.FC<BottomControlsProps> = ({ takingPhoto, onTakePicture }) => (
-  <View style={[styles.bottomBar, { marginBottom: 0 }]}>
+  <View style={styles.bottomBar}>
     <View style={styles.buttonGroup}>
       <CaptureButton takingPhoto={takingPhoto} onPress={onTakePicture} />
       <Text style={styles.captureHint}>
@@ -103,8 +103,8 @@ import TopBar from './TopBar';
 
 const MockCameraView: React.FC<MockCameraViewProps> = ({
   takingPhoto,
-  facing,
-  cameraRef,
+  _facing,
+  _cameraRef,
   successMessage,
   onSuccessMessageOk,
   onSuccessMessageGoToRecords,
@@ -157,6 +157,12 @@ const styles = StyleSheet.create({
     ...GlobalStyles.body,
     color: Colors.white,
     textAlign: 'center',
+  },
+  mockCameraSubText: {
+    ...GlobalStyles.body,
+    color: Colors.white,
+    textAlign: 'center',
+    fontSize: 16,
   },
   overlay: {
     position: 'absolute',

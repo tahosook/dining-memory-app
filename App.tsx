@@ -1,14 +1,13 @@
 import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import RootNavigator from './src/navigation/RootNavigator';
+import { DatabaseProvider } from './src/database/services/DatabaseProvider';
 
-// Basic app setup for Expo Go testing
 export default function App() {
-  console.log('App component loaded');
   return (
-    <>
+    <DatabaseProvider>
       <RootNavigator />
       <StatusBar style="auto" />
-    </>
+    </DatabaseProvider>
   );
 }

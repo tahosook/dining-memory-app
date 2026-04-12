@@ -51,6 +51,14 @@ jest.mock('expo-font', () => ({
   isLoaded: jest.fn(() => true),
 }));
 
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: 'Ionicons',
+}));
+
+jest.mock('expo-status-bar', () => ({
+  StatusBar: () => null,
+}));
+
 // AsyncStorage mock
 jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: jest.fn(),

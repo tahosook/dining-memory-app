@@ -1,187 +1,106 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, TextInput, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, TextInput, StyleSheet, Switch, TouchableOpacity, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
+import type { Meal } from '../../types/MealTypes';
 
-/**
- * 検索画面コンポーネント
- *
- * 食事記録の検索機能を提供するスクリーン。
- * キーワード検索、フィルタリング、検索候補の表示を行う。
- *
- * @component
- * @returns {JSX.Element} 検索画面
- */
-interface SearchScreenProps {
-  // Props are not required for this screen currently
-}
+export const SearchScreen: React.FC = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [homemadeOnly, setHomemadeOnly] = useState(false);
+  const [results, setResults] = useState<Meal[]>([]);
+  const [loading, setLoading] = useState(false);
 
-export const SearchScreen: React.FC<SearchScreenProps> = () => {
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const runSearch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const meals = await MealService.searchMeals({
+        text: searchQuery.trim() || undefined,
+        location_name: locationFilter.trim() || undefined,
+        is_homemade: homemadeOnly || undefined,
+      });
+      setResults(meals);
+    } finally {
+      setLoading(false);
+    }
+  }, [homemadeOnly, locationFilter, searchQuery]);
 
-  /**
-   * 検索クエリをクリアするハンドラ
-   */
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
-  }, []);
-
-  /**
-   * 検索クエリが変更されたときのハンドラ
-   */
-  const handleSearchChange = useCallback((text: string) => {
-    setSearchQuery(text);
-  }, []);
-
-  /**
-   * 検索候補がタップされたときのハンドラ
-   */
-  const handleSuggestionPress = useCallback((suggestion: string) => {
-    setSearchQuery(suggestion);
-  }, []);
+  useEffect(() => {
+    runSearch();
+  }, [runSearch]);
 
   return (
     <View style={GlobalStyles.screen}>
-      {/* 検索バー */}
       <View style={styles.searchBar}>
         <Ionicons name="search-outline" size={20} color={Colors.gray} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
-          placeholder="検索キーワード入力..."
+          placeholder="料理名・メモ・場所を検索"
           value={searchQuery}
-          onChangeText={handleSearchChange}
+          onChangeText={setSearchQuery}
           testID="search-input"
         />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={handleClearSearch} style={styles.clearButton}>
-            <Ionicons name="close-circle" size={20} color={Colors.gray} />
-          </TouchableOpacity>
-        )}
       </View>
 
-      {/* 検索範囲タブ */}
-      <View style={styles.scopeTabs}>
-        <TouchableOpacity style={[styles.scopeTab, styles.activeScopeTab]}>
-          <Text style={styles.activeScopeTabText}>すべて</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.scopeTab}>
-          <Text style={styles.scopeTabText}>料理</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.scopeTab}>
-          <Text style={styles.scopeTabText}>場所</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.scopeTab}>
-          <Text style={styles.scopeTabText}>メモ</Text>
+      <View style={styles.filtersCard}>
+        <TextInput
+          style={styles.filterInput}
+          placeholder="場所フィルター"
+          value={locationFilter}
+          onChangeText={setLocationFilter}
+        />
+        <View style={styles.switchRow}>
+          <Text style={styles.switchLabel}>自炊のみ</Text>
+          <Switch value={homemadeOnly} onValueChange={setHomemadeOnly} />
+        </View>
+        <TouchableOpacity style={styles.searchButton} onPress={runSearch}>
+          <Text style={styles.searchButtonText}>検索する</Text>
         </TouchableOpacity>
       </View>
 
-      {/* フィルターボタン */}
-      <View style={styles.filterButtons}>
-        <TouchableOpacity style={styles.filterButton}>
-          <Text style={styles.filterButtonText}>📅 期間</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.filterButton}>
-          <Text style={styles.filterButtonText}>📍 場所</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.filterButton}>
-          <Text style={styles.filterButtonText}>🏷️ タグ</Text>
-        </TouchableOpacity>
+      <View style={styles.resultsHeader}>
+        <Text style={styles.resultsTitle}>検索結果</Text>
+        <Text style={styles.resultsCount}>{loading ? '読み込み中...' : `${results.length}件`}</Text>
       </View>
 
-      {/* 検索結果または候補 */}
-      <ScrollView style={styles.content}>
-        {searchQuery.length === 0 ? (
-          // 検索候補表示
-          <View style={styles.suggestions}>
-            <Text style={GlobalStyles.title}>💭 検索候補</Text>
-            <TouchableOpacity
-              style={styles.suggestionItem}
-              onPress={() => handleSuggestionPress('ラーメン')}
-            >
-              <Text style={styles.suggestionText}>🍜 ラーメン (28件)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.suggestionItem}
-              onPress={() => handleSuggestionPress('ランチ')}
-            >
-              <Text style={styles.suggestionText}>🥗 ランチ (15件)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.suggestionItem}
-              onPress={() => handleSuggestionPress('ライス')}
-            >
-              <Text style={styles.suggestionText}>🍛 ライス (8件)</Text>
-            </TouchableOpacity>
-
-            <Text style={GlobalStyles.title}>🕐 最近の検索</Text>
-            <TouchableOpacity
-              style={styles.suggestionItem}
-              onPress={() => handleSuggestionPress('ラーメン')}
-            >
-              <Text style={styles.recentSearchText}>ラーメン</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.suggestionItem}
-              onPress={() => handleSuggestionPress('渋谷 ランチ')}
-            >
-              <Text style={styles.recentSearchText}>渋谷 ランチ</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          // 検索結果表示
-          <View style={styles.searchResults}>
-            <Text style={styles.resultsHeader}>検索結果: 12件</Text>
-
-            {/* 検索結果カード */}
-            <TouchableOpacity style={styles.resultCard}>
-              <View style={styles.resultThumbnail}>
-                <Text style={styles.thumbnailText}>📸</Text>
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={GlobalStyles.title}>
-                  🍜 <Text style={styles.highlightText}>ラーメン</Text>（醤油）
-                </Text>
-                <Text style={GlobalStyles.body}>2025/9/11 19:30</Text>
-                <Text style={GlobalStyles.body}>
-                  📍 ○○<Text style={styles.highlightText}>ラーメン</Text>店
-                </Text>
-                <Text style={GlobalStyles.body}>💬 美味しかった！</Text>
-              </View>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.resultCard}>
-              <View style={styles.resultThumbnail}>
-                <Text style={styles.thumbnailText}>📸</Text>
-              </View>
-              <View style={styles.resultInfo}>
-                <Text style={GlobalStyles.title}>
-                  🍜 <Text style={styles.highlightText}>ラーメン</Text>（味噌）
-                </Text>
-                <Text style={GlobalStyles.body}>2025/9/8 20:15</Text>
-                <Text style={GlobalStyles.body}>📍 △△食堂</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+      {results.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>条件に合う記録がありません</Text>
+          <Text style={styles.emptyDescription}>検索語やフィルターを変えて再度試してください。</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={results}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.resultsList}
+          renderItem={({ item }) => (
+            <View style={styles.resultCard}>
+              <Text style={styles.resultName}>{item.meal_name}</Text>
+              <Text style={styles.resultMeta}>
+                {new Date(item.meal_datetime).toLocaleString('ja-JP')}
+                {item.location_name ? ` ・ ${item.location_name}` : ''}
+              </Text>
+              {item.notes ? <Text style={styles.resultNotes}>{item.notes}</Text> : null}
+              <Text style={styles.resultType}>{item.is_homemade ? '自炊' : '外食'}</Text>
+            </View>
+          )}
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     margin: 16,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 10,
   },
   searchIcon: {
     marginRight: 8,
@@ -190,127 +109,102 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
   },
-  clearButton: {
-    marginLeft: 8,
+  filtersCard: {
+    marginHorizontal: 16,
+    padding: 16,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    gap: 12,
   },
-  scopeTabs: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  scopeTab: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-  },
-  activeScopeTab: {
-    backgroundColor: '#2196F3',
-  },
-  scopeTabText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  activeScopeTabText: {
-    color: 'white',
-    fontSize: 14,
-  },
-  filterButtons: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  filterButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    borderRadius: 16,
+  filterInput: {
     borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  filterButtonText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  content: {
-    flex: 1,
-  },
-  suggestions: {
-    padding: 16,
-  },
-  sectionTitle: {
+    borderColor: '#d9d9d9',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 16,
-    fontWeight: 'bold',
-    marginTop: 16,
-    marginBottom: 8,
   },
-  suggestionItem: {
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  switchLabel: {
+    ...GlobalStyles.body,
+  },
+  searchButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    alignItems: 'center',
   },
-  suggestionText: {
+  searchButtonText: {
+    color: Colors.white,
+    fontWeight: '600',
     fontSize: 16,
-  },
-  recentSearchText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  searchResults: {
-    padding: 16,
   },
   resultsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  resultsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  resultsCount: {
+    fontSize: 14,
+    color: Colors.gray,
+  },
+  emptyState: {
+    margin: 16,
+    padding: 20,
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  emptyTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
+  },
+  emptyDescription: {
+    fontSize: 14,
+    color: Colors.gray,
+    textAlign: 'center',
+  },
+  resultsList: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    gap: 12,
   },
   resultCard: {
-    flexDirection: 'row',
-    padding: 12,
-    marginBottom: 8,
-    borderRadius: 8,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: Colors.white,
+    borderRadius: 12,
+    padding: 16,
+    gap: 6,
   },
-  resultThumbnail: {
-    width: 50,
-    height: 50,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+  resultName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
   },
-  thumbnailText: {
-    fontSize: 20,
+  resultMeta: {
+    fontSize: 13,
+    color: Colors.gray,
   },
-  resultInfo: {
-    flex: 1,
-  },
-  resultTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  highlightText: {
-    backgroundColor: '#ffeb3b',
-    fontWeight: 'bold',
-  },
-  resultDate: {
+  resultNotes: {
     fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
+    color: Colors.text,
   },
-  resultLocation: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  resultNote: {
-    fontSize: 14,
-    color: '#888',
-    fontStyle: 'italic',
+  resultType: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });
