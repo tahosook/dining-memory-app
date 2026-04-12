@@ -1,6 +1,6 @@
 # Dining Memory App - ユーザーフロー設計
 
-> Deprecated. Canonical version: [docs/ux/user-flows.md](ux/user-flows.md). The rest of this file is historical and should not be treated as current process.
+> Deprecated. Canonical version: [docs/ux/user-flows.md](../ux/user-flows.md). The rest of this file is historical and should not be treated as current process.
 
 ## プロジェクト概要
 

@@ -34,6 +34,18 @@
 - Prioritize backup, export, privacy, and app information.
 - Keep destructive actions visually separated.
 
+## Shared States
+- Empty state: each major screen should explain what is missing and give the next useful action.
+- Loading state: show progress without blocking the user longer than necessary.
+- Error state: explain what failed, what data is affected, and whether retry or fallback is available.
+- Zero-result state: search and filter views should suggest how to broaden or reset the query.
+
+## Accessibility Rules
+- Provide clear accessibility labels and hints for camera controls, record cards, and stats summaries.
+- Keep tap targets large enough for quick use and dynamic text scaling.
+- Preserve readable layouts under larger system font settings.
+- Do not rely on color alone to communicate status or destructive intent.
+
 ## UI Rules
 - Keep tap targets large enough for quick use.
 - Favor clear labels over clever wording.

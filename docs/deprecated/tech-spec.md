@@ -1,6 +1,6 @@
 # 技術仕様書 - Dining Memory App
 
-> Deprecated. Canonical version: [docs/architecture/tech-spec.md](architecture/tech-spec.md). The rest of this file is historical and should not be treated as current process.
+> Deprecated. Canonical version: [docs/architecture/tech-spec.md](../architecture/tech-spec.md). The rest of this file is historical and should not be treated as current process.
 
 ## プロジェクト概要
 食事とお酒の写真をAIで解析し、テキスト化してセマンティック検索可能な記録アプリ

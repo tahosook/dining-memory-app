@@ -38,13 +38,23 @@
 2. Review backup, export, privacy, and app info.
 3. Change the setting or launch the related action.
 
+## Onboarding Flow
+1. First launch shows a short welcome and the app's basic value.
+2. Explain camera permission before requesting it.
+3. Explain that location is optional and can be enabled later.
+4. Keep the initial tutorial short, skippable, and centered on capture, review, and revisit.
+5. End onboarding by guiding the user into the first capture action.
+
 ## Exception Flows
 - Permission denied: explain why the permission is needed and give a way forward.
 - Capture failure: let the user retry or return to the camera.
 - Analysis fallback: allow manual entry when automatic recognition is not enough.
+- Network or cloud fallback: when a remote step fails, prefer local continuation when possible and make the fallback explicit.
 - Delete action: confirm destructive changes before applying them.
 
 ## UX Rules
 - Keep capture and save fast.
 - Prefer clear recovery options over dead ends.
 - Do not hide the path back to the main capture loop.
+- Make onboarding, help, and recovery guidance available without forcing a long tutorial.
+- Keep accessibility support aligned with the main flow, including clear labels, large tap targets, and support for assistive technologies.

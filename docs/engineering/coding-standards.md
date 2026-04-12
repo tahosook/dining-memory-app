@@ -31,15 +31,19 @@
 
 ## React Native Rules
 - Keep screens thin and move business logic into hooks or services.
+- Split large screens into presentational UI and container logic when permission handling, loading states, or side effects start to obscure the screen structure.
 - Use `StyleSheet.create` for styles unless a component already has a clear exception.
+- Prefer `async` / `await` over long Promise chains for app-side asynchronous flows.
 - Clean up subscriptions and effects.
 - Respect platform-specific behavior without splitting the whole codebase unnecessarily.
+- Keep permission, loading, empty, and error states explicit in the rendered UI.
 
 ## Data and Navigation Rules
 - Keep database operations inside the database service layer.
 - Keep navigation definitions in one place per navigator.
 - Use the tab shell as the main app structure.
 - Preserve the camera-first flow as the default user path.
+- Add an error boundary or equivalent recovery path around app-level UI where an uncaught render failure would otherwise blank the experience.
 
 ## Security Basics
 - Do not commit API keys, tokens, or other credentials to the repository.
@@ -61,6 +65,7 @@
 ## Testing Rules
 - Add or update tests when behavior changes.
 - Prefer focused tests for logic, screen state, and navigation behavior.
+- Keep the capture, analyze, edit, save, search, and destructive-action flows covered across unit, integration, or device-level checks as the change requires.
 - Mock dependencies at the boundary, not deep inside the component tree.
 - A bug fix is not complete until the regression path is covered.
 

@@ -39,6 +39,12 @@
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
 - Keep secrets out of source control and out of runtime logs.
 
+## Quality and Delivery Defaults
+- Keep the core capture, save, search, and export paths covered through a mix of unit, integration, and device-level verification.
+- Treat type checking, linting, and automated tests as the normal gate for meaningful app changes.
+- Keep build and release assumptions aligned with the current Expo and EAS workflow rather than maintaining parallel delivery paths.
+- Prefer privacy-preserving crash and usage diagnostics; do not introduce telemetry that weakens the app's local-first posture by default.
+
 ## Implementation Boundaries
 - UI details belong in `docs/ux/`.
 - Table-by-table schema details belong in `docs/domain/database-design.md`.

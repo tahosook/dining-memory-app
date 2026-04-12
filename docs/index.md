@@ -35,12 +35,13 @@
 
 ### Notes
 - [notes/](./notes/): temporary investigations, incident follow-ups, and one-off fixes.
+- [deprecated/](./deprecated/): retired pre-reorganization documents kept only for historical reference.
 
 ## Writing Rules
 - Put each topic in one canonical document only.
 - Prefer links over repetition.
 - If you create a new canonical doc, add it here and in `README.md`.
-- If a document is temporary or historical, place it under `docs/notes/` and mark it clearly.
+- If a document is temporary or historical, place it under `docs/notes/` or `docs/deprecated/` and mark it clearly.
 
 ## Suggested Reading Paths
 - New feature work: Product -> UX -> Domain -> Engineering

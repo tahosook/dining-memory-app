@@ -32,8 +32,11 @@
 - The schema supports text search, filter search, and future semantic search.
 - Analysis tables should stay additive and not block core capture and browse flows.
 - Generated insights should be separable from raw meal records.
+- Export and backup formats should stay versioned and preserve the relationships needed to rebuild meals, ingredients, images, settings, and generated insights.
 
 ## Design Notes
 - Favor small records and file paths over BLOB-heavy rows.
 - Preserve data needed for export, backup, and future migration.
+- Keep indexing focused on the read paths users actually use: date, meal identity, location, deletion state, and search support.
+- Treat cleanup and maintenance as additive safety work: remove orphaned, temporary, or low-value generated data without risking primary meal history.
 - Keep the schema readable enough that new table changes can be reviewed without reopening the entire app architecture.
