@@ -51,6 +51,9 @@ Read this file first, then follow [docs/index.md](docs/index.md) to the relevant
 - Update tests and docs when behavior changes.
 - Prefer the current source of truth in `src/` over stale prose in old docs.
 - If a change touches product, UX, data, or engineering conventions, update the matching canonical doc in the same task.
+- Verify AI-generated code before trusting it.
+- Treat automated review as support, not as a replacement for human judgment.
+- Consider `npm run check:deps` whenever dependencies are added or reorganized.
 
 ## New Document Template
 Use this structure for new docs when practical:

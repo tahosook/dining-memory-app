@@ -32,6 +32,25 @@
 - For type or interface changes, run type checking or the narrowest equivalent validation.
 - For docs-only changes, confirm links and structure are correct.
 
+## Review Gate
+- Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test`.
+- Add `npm run check:deps` when dependencies are added, removed, or significantly reorganized.
+- Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
+
+## When to Run What
+- Docs-only changes: verify links, filenames, and document consistency.
+- Type or interface changes: run `npm run type-check`.
+- Behavior changes: run `npm test`, and run `npm run lint` if touched files include application code.
+- Dependency changes: run `npm run check:deps` and review the dependency choice directly.
+
+## AI-specific Risks
+- Hallucinated APIs or unsupported library behavior.
+- Code that technically runs but does not match the intended behavior.
+- Duplicate helpers, dead abstractions, or unused branches left by generated code.
+- Missing regression coverage or tests that were weakened to avoid failures.
+- Security, maintenance, or license issues introduced through new dependencies.
+- False confidence from automated review without human inspection.
+
 ## Documentation Update Rules
 - If product scope changes, update `docs/product/overview.md`.
 - If a screen or interaction changes, update `docs/ux/*`.
@@ -49,3 +68,5 @@
 - Keep prompts and task descriptions specific.
 - Prefer existing patterns in the repo.
 - Treat the canonical docs as the source of truth.
+- Verify AI-generated code before trusting it.
+- Use human review to supplement automated review and test output.

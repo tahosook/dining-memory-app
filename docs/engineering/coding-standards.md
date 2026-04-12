@@ -47,6 +47,16 @@
 - Mock dependencies at the boundary, not deep inside the component tree.
 - A bug fix is not complete until the regression path is covered.
 
+## AI-generated Code Review
+- Treat AI-generated code as a draft, not as trusted output.
+- Check that the implementation matches the requested behavior, not just the prompt wording.
+- Prefer code that follows the existing architecture over code that introduces a new pattern for convenience.
+- Reject code that adds duplicate logic, dead abstractions, or helpers that are only used once without a clear benefit.
+- Watch for hallucinated APIs, imports, config keys, and library features.
+- Do not accept code that removes, skips, or weakens tests just to make the change pass.
+- When dependencies change, review maintenance status, security impact, license fit, and whether an existing dependency already solves the problem.
+- If generated code is harder to read than a direct hand-written version, simplify it before merging.
+
 ## Naming Rules
 - Components: `PascalCase`.
 - Hooks: `useCamelCase`.
@@ -60,3 +70,7 @@
 - Are tests updated?
 - Did the change introduce duplicated knowledge?
 - Did the implementation stay consistent with the existing app shape?
+- Did the code introduce any nonexistent or suspicious APIs, imports, or configuration?
+- Did the change add a dependency, and if so, was that dependency reviewed?
+- Were any tests removed, skipped, or weakened to make the change pass?
+- Was the final result reviewed by a human instead of trusting the generated diff on its own?

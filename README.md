@@ -344,6 +344,9 @@ MIT License - 個人・商用問わず自由に利用・改変・配布可能
 - npm run check:react-versions
   - react と react-native-renderer のバージョン一致をチェックする簡易スクリプト。
 
+レビュー時によく使うコマンド:
+`npm run lint`, `npm run type-check`, `npm test`, `npm run check:deps`
+
 メンテナンスのコツ:
 1. 依存バージョンを変えるときはまず `npm run check:react-versions` を実行して不一致を検出する。  
 2. 大きな依存更新やビルド失敗時は `npm run install:fresh` を試す。  
