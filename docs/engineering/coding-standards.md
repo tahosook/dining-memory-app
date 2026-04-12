@@ -51,6 +51,13 @@
 - If external AI, backup, or export behavior is added, make data transfer explicit and opt-in by default.
 - Prefer existing platform or project capabilities before adding security-related dependencies with broad native access.
 
+## Change Discipline
+- Prefer the existing naming, structure, and abstraction style before inventing a new one.
+- Add a new abstraction only when it clearly improves reuse, clarity, or isolation.
+- Avoid one-off helpers and wrapper layers that make the code harder to trace.
+- Keep behavior changes, cleanup changes, and formatting changes separate when possible.
+- Make the changed path easier to understand, not just different.
+
 ## Testing Rules
 - Add or update tests when behavior changes.
 - Prefer focused tests for logic, screen state, and navigation behavior.
@@ -86,3 +93,6 @@
 - Was the final result reviewed by a human instead of trusting the generated diff on its own?
 - Did the change add or widen access to camera, photos, location, files, backup, or export behavior?
 - Does the change store or log more personal data than the feature actually needs?
+- Did the change stay focused on the intended task instead of drifting into cleanup or redesign?
+- Did the implementation reuse an existing pattern where one already existed?
+- Did the change avoid adding new abstractions or debug logs without a clear need?

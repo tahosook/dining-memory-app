@@ -30,8 +30,8 @@
 - [User Flows](./ux/user-flows.md): main journeys, exception flows, and UX rules.
 
 ### Engineering
-- [Coding Standards](./engineering/coding-standards.md): TypeScript, React Native, naming, and architecture conventions.
-- [Codex Workflow](./engineering/codex-workflow.md): how agentic work should be read, changed, and verified.
+- [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
+- [Codex Workflow](./engineering/codex-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
 
 ### Notes
 - [notes/](./notes/): temporary investigations, incident follow-ups, and one-off fixes.

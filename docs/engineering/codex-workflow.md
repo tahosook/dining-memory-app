@@ -10,21 +10,37 @@
 1. Read `AGENTS.md`.
 2. Open `docs/index.md`.
 3. Read the smallest set of canonical docs needed for the task.
-4. Inspect the relevant source files before editing.
-5. Make the smallest safe change that solves the problem.
-6. Update tests and documentation when behavior changes.
-7. Verify the result.
+4. Confirm the source of truth for the area you are changing.
+5. Inspect the relevant source files before editing.
+6. Identify at least one existing implementation pattern to follow when possible.
+7. Make the smallest safe change that solves the problem.
+8. Update tests and documentation when behavior changes.
+9. Verify the result.
 
 ## Task Shape
 - Prefer bounded tasks with one clear outcome.
+- Keep one task focused on one primary purpose.
 - If a task spans product, UX, and implementation, resolve the docs first and then edit code.
 - Avoid mixing unrelated changes in one pass.
+- Separate behavior changes from cleanup-only changes unless combining them clearly reduces risk.
+
+## Before Editing
+- Identify the canonical doc and the implementation files that are the source of truth.
+- Prefer `src/` and current canonical docs over deprecated docs and historical notes.
+- Read the nearest existing pattern before adding a new abstraction, helper, or file shape.
+- Reuse an established pattern unless there is a clear reason not to.
 
 ## Editing Rules
 - Preserve user changes.
 - Do not rewrite unrelated files.
 - Keep diffs local to the behavior being changed.
 - If a doc is now stale, update the canonical doc instead of adding a second copy elsewhere.
+
+## Prohibited Shortcuts
+- Do not delete, skip, or weaken failing tests just to make the task pass.
+- Do not mix unrelated refactors into a targeted feature or bug fix.
+- Do not add a new dependency if the existing stack already solves the problem well enough.
+- Do not leave broad debug logging in production-like application code.
 
 ## Verification Rules
 - Run the most relevant checks for the change.
@@ -68,11 +84,12 @@
 - If the way Codex should work changes, update this file and `AGENTS.md`.
 - If a change affects permissions, local storage, export, backup, or external data transfer, update `docs/architecture/tech-spec.md`.
 
-## Output Expectations
+## Definition of Done
 - Summarize what changed.
 - List the files touched.
 - State what was verified.
 - Call out any risks or follow-up work that remains.
+- Make any unverified assumptions explicit.
 
 ## Good Defaults
 - Keep prompts and task descriptions specific.

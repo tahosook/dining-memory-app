@@ -45,11 +45,14 @@ Read this file first, then follow [docs/index.md](docs/index.md) to the relevant
 - Historical fixes, investigations, and temporary notes belong in `docs/notes/`.
 
 ## Codex Working Rules
+- Keep each task focused on one primary outcome.
 - Inspect before editing.
+- Read the relevant existing implementation pattern before introducing a new one.
 - Keep diffs small and local.
+- Do not mix unrelated cleanup or refactors into a behavior change unless the task explicitly asks for it.
 - Preserve user changes unless explicitly asked to replace them.
 - Update tests and docs when behavior changes.
-- Prefer the current source of truth in `src/` over stale prose in old docs.
+- Prefer the current source of truth in `src/` and canonical docs over deprecated or historical docs.
 - If a change touches product, UX, data, or engineering conventions, update the matching canonical doc in the same task.
 - Verify AI-generated code before trusting it.
 - Treat automated review as support, not as a replacement for human judgment.
