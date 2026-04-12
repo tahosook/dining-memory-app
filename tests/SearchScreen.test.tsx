@@ -1,6 +1,18 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
+const focusCallbacks: Array<() => void> = [];
+
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (callback: () => void) => {
+    const ReactModule = jest.requireActual('react') as typeof import('react');
+    focusCallbacks.push(callback);
+    ReactModule.useEffect(() => {
+      callback();
+    }, [callback]);
+  },
+}));
+
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: 'Ionicons',
 }));
@@ -17,6 +29,7 @@ import { MealService } from '../src/database/services/MealService';
 describe('SearchScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    focusCallbacks.length = 0;
   });
 
   test('shows empty state when there are no matches', async () => {
@@ -51,5 +64,24 @@ describe('SearchScreen', () => {
     });
 
     expect(await findByText('ラーメン')).toBeTruthy();
+  });
+
+  test('reruns the current search when focus is regained', async () => {
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
+
+    const { getByTestId } = render(<SearchScreen />);
+
+    fireEvent.changeText(getByTestId('search-input'), '定食');
+
+    await waitFor(() => {
+      expect(MealService.searchMeals).toHaveBeenCalled();
+    });
+
+    const callsAfterTyping = (MealService.searchMeals as jest.Mock).mock.calls.length;
+    focusCallbacks[focusCallbacks.length - 1]?.();
+
+    await waitFor(() => {
+      expect((MealService.searchMeals as jest.Mock).mock.calls.length).toBeGreaterThan(callsAfterTyping);
+    });
   });
 });

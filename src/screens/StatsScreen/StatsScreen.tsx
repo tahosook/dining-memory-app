@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MealService, type StatisticsSummary } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
 
@@ -12,11 +13,17 @@ const emptyStats: StatisticsSummary = {
 export default function StatsScreen() {
   const [stats, setStats] = useState<StatisticsSummary>(emptyStats);
 
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     MealService.getStatistics().then(setStats).catch((error) => {
       console.error('Failed to load stats:', error);
     });
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
 
   const homemadeRatio = stats.totalMeals > 0 ? Math.round((stats.homemadeMeals / stats.totalMeals) * 100) : 0;
 

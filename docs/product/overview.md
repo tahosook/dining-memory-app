@@ -1,32 +1,44 @@
-# Product Overview
+# プロダクト概要
 
 ## Meta
-- Purpose: describe what Dining Memory App is trying to solve.
-- Audience: anyone making product, UX, or roadmap decisions.
-- Update trigger: scope, audience, or MVP changes.
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/ux/user-flows.md](../ux/user-flows.md)
+- Purpose: Dining Memory で目指す体験とプロダクトの方向性を整理する。
+- Audience: プロダクト確認者、オーナー、UX やロードマップを判断する人。
+- Update trigger: 目標、対象ユーザー、MVP 範囲、将来構想が変わったとき。
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/product/progress.md](progress.md), [docs/ux/user-flows.md](../ux/user-flows.md)
+
+この文書は、プロダクトの目指す姿を日本語で確認するための文書です。
 
 ## Summary
-Dining Memory App is an offline-first mobile app for recording food and drink photos, turning them into structured memory, and making past experiences easy to search and revisit.
+Dining Memory は、食事やお酒の写真を「あとで思い出せる記録」に変えるためのアプリです。  
+撮った瞬間の記録だけで終わらせず、料理名、場所、メモ、傾向まで含めて振り返れる体験を目指します。
 
-## Target User
-- Primary audience: a technically literate man in his late 40s.
-- Core expectations: simple UI, practical value, low friction, privacy-first storage.
-- Usage pattern: capture quickly, review later, search by memory or context.
+## 解決したい課題
+- 撮った料理写真をあとで活用できていない
+- 美味しかった料理や店の記憶が散らばってしまう
+- 自分の食事傾向や行動パターンに気づきにくい
+- プライバシーを保ちながら記録したい
 
-## MVP Scope
-- Capture a meal photo from the camera.
-- Save meal records with editable text, location, tags, and notes.
-- Browse records in a date-grouped timeline.
-- Search by text and basic filters.
+## 対象ユーザー
+- 主な対象: 40代後半で技術リテラシーが高く、実用性を重視する人
+- 期待する価値: 手間なく記録できること、あとで探しやすいこと、データを自分で管理できること
+- 想定する使い方: 撮ってすぐ保存し、あとで一覧や検索から振り返る
 
-## Planned Expansion
-- Local AI assistance for recognition and metadata extraction.
-- Better search, including semantic search.
-- Statistics and pattern discovery.
-- Backup, export, and settings controls.
+## MVP の考え方
+- 撮影して保存するまでの流れを迷わず行えること
+- 記録をあとで一覧・検索で見返せること
+- 最低限の統計で、自分の記録傾向を把握できること
+- まずはローカル保存を中心にして、安心して使えること
 
-## Non-Goals for the Current Core
-- Social sharing.
-- Cloud-first storage.
-- Feature-rich workflows that slow down capture.
+## 将来構想
+- AI による料理認識や入力補助
+- より強い検索体験
+  - 複合条件検索
+  - セマンティック検索
+- 深い統計と傾向分析
+- バックアップ、エクスポート、復元
+- 記録の振り返り体験をより豊かにする提案機能
+
+## 現時点で目指さないこと
+- SNS のような共有中心の体験
+- クラウド前提のプロダクト設計
+- 記録までの導線を重くする高機能すぎる入力フロー

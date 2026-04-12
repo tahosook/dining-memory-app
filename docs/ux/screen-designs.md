@@ -13,25 +13,28 @@
 
 ## Camera Screen
 - Main area: live camera preview.
-- Top area: settings access and record shortcuts.
-- Bottom area: gallery, shutter, and flash controls.
-- States to support: permission denied, taking photo, success message, capture error, and fallback/manual entry.
+- Top area: close and camera-flip actions.
+- Bottom area: shutter and capture guidance.
+- States to support: permission denied, taking photo, capture review, success message, capture error, and web/mock fallback.
 
 ## Records Screen
 - Shows meal records grouped by date.
 - Card layout should keep the meal name, time, location, and note visible at a glance.
+- If a thumbnail is missing, fall back to the saved photo path instead of showing an empty placeholder.
 - Must support editing and deletion entry points.
 
 ## Search Screen
 - Search bar and filter area should be the first things the user sees.
 - Results should remain scannable and support quick refinement.
+- The current filters are text, location, and homemade-only.
 
 ## Stats Screen
 - Use summaries and compact cards instead of dense dashboards.
 - Keep insights readable and practical, not decorative.
+- The current MVP only shows totals, homemade ratio, favorite cuisine, and favorite location.
 
 ## Settings Screen
-- Prioritize backup, export, privacy, and app information.
+- Prioritize privacy, current scope, local data deletion, and app information.
 - Keep destructive actions visually separated.
 
 ## Shared States

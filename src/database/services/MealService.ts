@@ -10,7 +10,7 @@ export interface CreateMealData {
   notes?: string;
   cooking_level?: string;
   is_homemade: boolean;
-  photo_path: string;
+  photo_path: string; // Caller must provide a stable, displayable URI.
   photo_thumbnail_path?: string;
   location_name?: string;
   latitude?: number;

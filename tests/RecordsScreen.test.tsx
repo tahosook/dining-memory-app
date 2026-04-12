@@ -1,5 +1,17 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
+
+const focusCallbacks: Array<() => void> = [];
+
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (callback: () => void) => {
+    const ReactModule = jest.requireActual('react') as typeof import('react');
+    focusCallbacks.push(callback);
+    ReactModule.useEffect(() => {
+      callback();
+    }, [callback]);
+  },
+}));
 
 jest.mock('expo-status-bar', () => ({
   StatusBar: () => null,
@@ -23,6 +35,7 @@ import { MealService } from '../src/database/services/MealService';
 describe('RecordsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    focusCallbacks.length = 0;
   });
 
   test('renders empty state when there are no records', async () => {
@@ -48,5 +61,36 @@ describe('RecordsScreen', () => {
     const { findByText } = render(<RecordsScreen />);
 
     expect(await findByText('ラーメン')).toBeTruthy();
+  });
+
+  test('falls back to photo_path when thumbnail is missing', async () => {
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
+      {
+        id: '1',
+        uuid: '1',
+        meal_name: 'カレー',
+        meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
+        is_homemade: true,
+        photo_path: 'file:///curry.jpg',
+      },
+    ]);
+
+    const { findByTestId } = render(<RecordsScreen />);
+
+    expect(await findByTestId('meal-image-1')).toBeTruthy();
+  });
+
+  test('reloads meals when focus is regained', async () => {
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([]);
+
+    render(<RecordsScreen />);
+
+    expect(MealService.getRecentMeals).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      focusCallbacks[0]?.();
+    });
+
+    expect(MealService.getRecentMeals).toHaveBeenCalledTimes(2);
   });
 });

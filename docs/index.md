@@ -11,6 +11,20 @@
 2. This index
 3. The document that matches the task category
 
+## Reader Paths
+
+### For You
+- [docs/product/overview.md](./product/overview.md): 何を作りたいか、誰のためのものか、将来どうしたいか
+- [docs/product/progress.md](./product/progress.md): 今どこまでできているか、何が未実装か
+
+### For Implementation
+- [docs/architecture/tech-spec.md](./architecture/tech-spec.md): current implementation and runtime assumptions
+- [docs/ux/screen-designs.md](./ux/screen-designs.md): current screen behavior
+- [docs/ux/user-flows.md](./ux/user-flows.md): current implemented flows
+- [docs/domain/database-design.md](./domain/database-design.md): current storage rules
+- [docs/engineering/coding-standards.md](./engineering/coding-standards.md): coding rules
+- [docs/engineering/codex-workflow.md](./engineering/codex-workflow.md): verification and workflow
+
 ## Canonical Docs
 
 ### Repository
@@ -18,6 +32,7 @@
 
 ### Product
 - [Overview](./product/overview.md): product vision, target user, MVP scope, and non-goals.
+- [Progress](./product/progress.md): current implementation progress, available features, and planned next areas.
 
 ### Architecture
 - [Tech Spec](./architecture/tech-spec.md): current stack, runtime assumptions, and app-level architecture.
@@ -44,6 +59,8 @@
 - If a document is temporary or historical, place it under `docs/notes/` or `docs/deprecated/` and mark it clearly.
 
 ## Suggested Reading Paths
+- Product direction: Product Overview -> Product Progress
+- Current implementation review: Architecture -> UX -> Domain -> Engineering
 - New feature work: Product -> UX -> Domain -> Engineering
 - Bug fix: Engineering -> relevant UX or Domain doc -> notes if needed
 - Refactor: Engineering -> Architecture -> relevant implementation files

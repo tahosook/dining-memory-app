@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   TextInput,
   Switch
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
@@ -58,64 +59,81 @@ const MealGroupHeader: React.FC<{ item: MealGroup }> = ({ item }) => (
   </View>
 );
 
-const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => (
-  <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)}>
-    <View style={styles.mealImageContainer}>
-      {item.photo_thumbnail_path ? (
-        <Image
-          source={{ uri: `file://${item.photo_thumbnail_path}` }}
-          style={styles.mealImage}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={styles.noImageContainer}>
-          <Text style={styles.noImageText}>📷</Text>
-        </View>
-      )}
-    </View>
+function getDisplayImageUri(path?: string): string | undefined {
+  if (!path) {
+    return undefined;
+  }
 
-    <View style={styles.mealInfo}>
-      <Text style={styles.mealName} numberOfLines={2}>
-        {item.meal_name}
-      </Text>
+  if (path.startsWith('file://') || path.startsWith('content://') || path.startsWith('ph://') || path.startsWith('http')) {
+    return path;
+  }
 
-      <View style={styles.mealMeta}>
-        <Text style={styles.mealTime}>
-          {new Date(item.meal_datetime).toLocaleTimeString('ja-JP', {
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
+  return `file://${path}`;
+}
+
+const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
+  const imageUri = getDisplayImageUri(item.photo_thumbnail_path ?? item.photo_path);
+
+  return (
+    <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)}>
+      <View style={styles.mealImageContainer}>
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.mealImage}
+            resizeMode="cover"
+            testID={`meal-image-${item.id}`}
+          />
+        ) : (
+          <View style={styles.noImageContainer}>
+            <Text style={styles.noImageText}>📷</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.mealInfo}>
+        <Text style={styles.mealName} numberOfLines={2}>
+          {item.meal_name}
         </Text>
 
-        {item.location_name && (
-          <Text style={styles.mealLocation} numberOfLines={1}>
-            {item.location_name}
+        <View style={styles.mealMeta}>
+          <Text style={styles.mealTime}>
+            {new Date(item.meal_datetime).toLocaleTimeString('ja-JP', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
           </Text>
-        )}
-      </View>
 
-      <View style={styles.mealTags}>
-        {item.cuisine_type && (
-          <View style={styles.tag}>
-            <Text style={styles.tagText}>{item.cuisine_type}</Text>
-          </View>
-        )}
-
-        <View style={[styles.tag, item.is_homemade ? styles.homemadeTag : styles.takeoutTag]}>
-          <Text style={styles.tagText}>
-            {item.is_homemade ? '自家製' : '外食'}
-          </Text>
+          {item.location_name && (
+            <Text style={styles.mealLocation} numberOfLines={1}>
+              {item.location_name}
+            </Text>
+          )}
         </View>
 
-        {item.cooking_level && (
-          <View style={[styles.tag, styles.cookingLevelTag]}>
-            <Text style={styles.tagText}>{item.cooking_level}</Text>
+        <View style={styles.mealTags}>
+          {item.cuisine_type && (
+            <View style={styles.tag}>
+              <Text style={styles.tagText}>{item.cuisine_type}</Text>
+            </View>
+          )}
+
+          <View style={[styles.tag, item.is_homemade ? styles.homemadeTag : styles.takeoutTag]}>
+            <Text style={styles.tagText}>
+              {item.is_homemade ? '自家製' : '外食'}
+            </Text>
           </View>
-        )}
+
+          {item.cooking_level && (
+            <View style={[styles.tag, styles.cookingLevelTag]}>
+              <Text style={styles.tagText}>{item.cooking_level}</Text>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
-  </TouchableOpacity>
-);
+    </TouchableOpacity>
+  );
+};
 
 const MealGroupSection: React.FC<MealGroupSectionProps> = ({ item, onMealPress }) => (
   <View>
@@ -200,10 +218,11 @@ export const RecordsScreen: React.FC = () => {
     }
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    loadMeals();
-  }, [loadMeals]);
+  useFocusEffect(
+    useCallback(() => {
+      loadMeals();
+    }, [loadMeals])
+  );
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {

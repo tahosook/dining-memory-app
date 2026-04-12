@@ -9,7 +9,7 @@
 ## Current Stack
 - React Native + Expo
 - TypeScript
-- WatermelonDB on top of SQLite
+- Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
 - Expo Camera, expo-file-system, expo-media-library, and related native modules
 
@@ -28,9 +28,11 @@
 
 ## Runtime Assumptions
 - App data lives primarily on the device.
-- Cloud use is optional and should be treated as a fallback path, not the default path.
+- Captured photos should be copied to an app-local stable path before the meal record is stored.
+- Cloud use is optional and should be treated as a future fallback path, not the default path.
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
+- Search, records, and stats should refresh when a tab regains focus so the capture flow never leaves stale data on screen.
 
 ## Security and Privacy Defaults
 - Prefer local storage and local processing unless a feature clearly needs external transfer.
@@ -55,3 +57,4 @@
 - Camera is the main entry point for the app.
 - Search and stats exist as first-class tabs rather than hidden tools.
 - The project keeps a strong privacy and local-storage bias.
+- The current MVP does not ship cloud backup, export, or external AI transfer behavior.

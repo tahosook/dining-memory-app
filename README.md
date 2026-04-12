@@ -1,353 +1,86 @@
 # Dining Memory App
 
-## 📝 プロジェクト概要
+食事やお酒の写真を撮影し、記録として端末内に保存するモバイルアプリです。  
+撮った写真を料理名、場所、メモとあわせて残し、あとから一覧・検索・統計で振り返ることを目指しています。
 
-食事やお酒の写真を撮影し、記録として端末内に保存するネイティブアプリです。
-撮った写真を料理名、場所、メモとあわせて残し、あとから検索や一覧で振り返ることを目指しています。
-40代後半男性をターゲットに、シンプルで実用的なUI設計を採用しています。
+## 今できること
+- カメラで撮影し、内容を確認してから保存する
+- 記録を一覧で見返し、編集・削除する
+- テキスト検索、場所フィルター、自炊フィルターで探す
+- 保存済み記録の件数や傾向を簡単な統計で確認する
 
-### 🎯 解決する課題
-- **写真の活用不足**: 撮った料理写真を見返す機会が少ない
-- **記憶の散逸**: 美味しかった料理やお店を思い出せない
-- **行動パターンの気づき**: 自身の食事傾向やルーティンを把握できない
-- **プライバシーの懸念**: クラウドストレージの容量圧迫とデータ管理の不安
+## ドキュメント案内
 
-## ✨ 主な機能
+### あなた向けドキュメント
+- [プロダクト概要](docs/product/overview.md): 何を作りたいか、誰のためのものか、将来どうしたいか
+- [実装進捗](docs/product/progress.md): 今どこまでできているか、何が未実装か
 
-### 📸 コア機能（MVP時点）
-- **撮影から保存までの記録フロー**: カメラ撮影後に内容を確認して保存
-- **記録管理**: 料理名、場所、メモの保存・編集削除
-- **タイムライン表示**: 日付別グループ表示、サムネイル付カード
-- **基本検索**: テキスト検索 + 基本フィルター
+### 実装向けドキュメント
+- [技術仕様](docs/architecture/tech-spec.md): current implementation と runtime assumptions
+- [画面設計](docs/ux/screen-designs.md): current screen behavior
+- [ユーザーフロー](docs/ux/user-flows.md): current implemented flows
+- [DB設計](docs/domain/database-design.md): current schema and storage rules
+- [実装規約](docs/engineering/coding-standards.md): coding rules
+- [Codex 作業ルール](docs/engineering/codex-workflow.md): review and verification workflow
 
-### 🧠 インサイト・発見機能（将来予定）
-- **自炊分析**: 時短料理/日常料理/本格料理の分類と傾向
-- **行動パターン**: 隠れたルーティン・曜日別傾向の発見
-- **「そういえば」機能**: 忘れかけているメニューの再発見
-- **変化の可視化**: 期間比較での食事傾向の変化分析
+### ドキュメント入口
+- [docs/index.md](docs/index.md): 誰がどの文書を読むかの案内板
+- [AGENTS.md](AGENTS.md): Codex の入口と文書作成ルール
 
-### 🔍 高度な検索機能（将来予定）
-- **複合条件検索**: テキスト + 期間 + 場所 + 評価の組み合わせ
-- **セマンティック検索**: 意味ベースの検索（ベクトル検索）
-- **検索候補**: 入力補助・検索履歴の活用
+## プロジェクト構成
 
-### 📊 統計・振り返り機能（将来予定）
-- **月次サマリー**: 記録数、自宅vs外食比率
-- **場所別分析**: お気に入りの店ランキング・リピート間隔
-- **レパートリー分析**: 作る料理の傾向・忘れかけメニュー
-- **相関分析**: 天気・曜日との食事パターンの関連性
-
-### ⚙️ データ管理機能（将来予定）
-- **クラウドバックアップ**: iCloud/Google Drive連携
-- **データエクスポート**: JSON/CSV形式での出力
-- **プライバシー重視**: 全データ端末内優先保存
-
-## 🛠️ 技術スタック
-
-### 🚀 端末リソース最大活用設計
-- **フレームワーク**: React Native + Expo（iOS/Android対応）
-- **プログラミング言語**: TypeScript（厳密な型安全）
-- **データベース**: SQLite + WatermelonDB（完全オフライン）
-- **AI解析**: TensorFlow Lite（端末内無料）+ Gemini API（補完用）
-- **画像処理**: React Native Image Resizer（端末内処理）
-- **ストレージ**: 端末内蔵ストレージ + OS標準バックアップ
-
-### 💰 完全無料運用設計
-- **AI解析コスト**: ローカル解析無制限 + クラウドAPI月3-5回程度
-- **データベース**: SQLite（完全に無料）
-- **バックアップ**: iCloud/Google Drive（既存ユーザー容量）
-- **配布**: App Store/Google Play（個人開発者プログラム無料枠）
-
-## 📁 プロジェクト構成
-
-```
+```text
 dining-memory-app/
-├── AGENTS.md                  # 🤖 Codex の最初の参照先
-├── docs/                        # 📋 設計ドキュメント群
-│   ├── index.md                 # 入口
-│   ├── product/                 # プロダクト定義
-│   ├── architecture/            # 技術仕様
-│   ├── domain/                  # データ設計
-│   ├── ux/                      # 画面設計・ユーザーフロー
-│   ├── engineering/             # 実装規約・Codex ワークフロー
-│   └── notes/                   # 技術ノート・問題解決記録
-├── src/                         # 🔧 ソースコード
-│   ├── screens/                 # 📱 画面コンポーネント
-│   │   ├── CameraScreen/        # 撮影・AI解析画面
-│   │   ├── RecordsScreen/       # 記録一覧画面
-│   │   ├── SearchScreen/        # 検索画面
-│   │   ├── StatsScreen/         # 統計画面
-│   │   └── SettingsScreen/      # 設定画面
-│   ├── components/              # 🎨 共通UIコンポーネント
-│   ├── constants/               # 🔧 アプリ定数定義
-│   ├── database/                # 💾 DBスキーマ・モデル
-│   ├── hooks/                   # 🎣 カスタムフック
-│   ├── navigation/              # 🧭 ナビゲーション設定
-│   ├── types/                   # 🎯 TypeScript型定義
-│   ├── utils/                   # 🔨 ユーティリティ関数
-│   └── contexts/                # 🌐 React Context
-├── assets/                      # 🖼️ 画像・アイコン・アセット
-├── tests/                       # 🧪 テストコード
-└── README.md                    # 📖 このファイル
+├── AGENTS.md
+├── docs/
+│   ├── index.md
+│   ├── product/
+│   ├── architecture/
+│   ├── domain/
+│   ├── ux/
+│   ├── engineering/
+│   └── notes/
+├── src/
+├── assets/
+├── tests/
+└── README.md
 ```
 
-## 📊 開発状況
+## 開発環境セットアップ
 
-### ✅ 完了したフェーズ
+### システム要件
+- Node.js 18.x 以上
+- Expo CLI 54.x 以上
+- iOS 開発: Xcode
+- Android 開発: Android Studio（任意）
 
-#### 設計フェーズ（100%完了）
-- [x] **プロジェクト企画・要件定義**（2025/9月）
-  - 40代男性向けUX/UI設計の策定（シンプル・実用的）
-  - MVPスコープの明確化（撮影・記録・閲覧を中心に）
-- [x] **技術選定とアーキテクチャ設計**（2025/9月）
-  - React Native + Expo採用（クロスプラットフォーム）
-  - WatermelonDB + SQLite採用（オフライン中心）
-  - 段階的AI解析（ローカル→クラウドフォールバック）
-
-#### 基盤実装フェーズ（100%完了）
-- [x] **開発環境構築**（2025/10/13）
-  - Node.js 18.x + Expo SDK 54環境構築
-  - TypeScript厳格設定 + ESLint + Prettier統合
-- [x] **データベース基盤**（2025/10/13）
-  - WatermelonDBスキーマ定義（10テーブル）
-  - モデルクラス実装（Meal, Ingredient等）
-  - FTS5全文検索最適化インデックス設定
-- [x] **基本ナビゲーション**（2025/10/13）
-  - React Navigationタブナビゲーション実装
-  - 5画面プレースホルダー設定
-
-#### コア機能実装フェーズ（80%完了）
-- [x] **データアクセス層**（2025/10/13）
-  - ローカル DB を主データ源にした MealService CRUD 操作
-  - 検索・基本集計 API 実装
-  - DatabaseProvider React コンテキスト統合
-- [x] **CameraScreen実装**（2025/10/15 - 2025/10/28）
-  - Expo Camera完全統合・権限管理機能
-  - 撮影後の確認・手動編集・保存フロー
-  - プラットフォーム固有UI調整（iOS/Android）
-  - Presentational/Containerパターンの適用
-  - 保存完了メッセージUIとボタン機能（OK/記録タブ遷移）
-  - 自動テスト実装
-  - TypeScript型安全性の徹底強化
-- [x] **RecordsScreen実装**（2025/10/13）
-  - 日付別グループ表示・サムネイル対応
-  - CRUD操作（作成・読み取り・更新・削除）
-  - 40代男性向けUI（大きくて見やすい）
-  - プルリフレッシュ・詳細ポップアップ
-
-### 🚧 進行中のフェーズ
-
-#### 現在の実装範囲
-- [x] **SearchScreen**（テキスト検索・場所フィルター・自炊フィルター）
-- [x] **StatsScreen**（総記録数、自炊/外食比率、頻出ジャンル・場所）
-- [x] **SettingsScreen**（プライバシー説明、ローカルデータ削除、アプリ情報）
-
-#### AI統合フェーズ（0%開始）
-- [ ] **TensorFlow Lite統合**（ローカルAI解析）
-- [ ] **Gemini API統合**（解析補完機能）
-- [ ] **セマンティック検索**（ベクトル検索実装）
-
-### 🔮 リリース予定の追加機能
-- [ ] 栄養情報推定機能
-- [ ] レシピ管理・提案機能
-- [ ] 家族・友人共有機能
-- [ ] 高度な行動パターン分析
-
-## 🚀 開発環境セットアップ
-
-### 📋 システム要件
-- **Node.js**: 18.x以上（推奨: v18.20.7）
-- **Expo CLI**: v54.x以上
-- **iOS開発**: Xcode（macOSのみ）
-- **Android開発**: Android Studio（オプション）
-
-### 🛠️ 初期セットアップ
+### 初期セットアップ
 ```bash
-# 1. リポジトリをクローン
 git clone https://github.com/tahosook/dining-memory-app.git
 cd dining-memory-app
-
-# 2. Node.jsバージョン確認
-node --version  # 18.x以上であることを確認
-
-# 3. 依存関係をインストール
+node --version
 npm install
-
-# 4. Expo CLIのインストール（未インストールの場合）
 npm install -g @expo/cli
-
-# 5. 環境変数ファイルの作成
 cp .env.example .env.local
-
-# 6. 開発サーバー起動
 npx expo start
 ```
 
-### 🔧 環境変数の設定
-`.env.local`ファイルに以下の必須項目を設定：
-
+### 環境変数
 ```env
-# AI解析用APIキー（将来的な機能拡張用）
+# 将来的な機能拡張用 API キー
 GEMINI_API_KEY=your_gemini_api_key
 
-# アプリ基本情報
 EXPO_PUBLIC_APP_NAME=Dining Memory
 EXPO_PUBLIC_APP_VERSION=1.0.0
 ```
 
-### 🔍 動作確認
-開発サーバー起動後：
-1. 物理デバイスでExpo Goアプリを使用
-2. カメラタブから写真撮影後、料理名などを入力して保存
-3. 記録タブと検索タブで保存されたデータを確認
+### 動作確認
+1. 物理デバイスで Expo Go を開く
+2. カメラタブから写真を撮影し、料理名などを入力して保存する
+3. 記録タブと検索タブで保存結果を確認する
 
-## 📚 開発ドキュメント
-
-### 🎯 設計原則
-- **単一責任の原則**: 各コンポーネントは1つの役割のみ
-- **オフライン優先**: ネット接続なしでも基本機能使える
-- **プライバシー重視**: 全データ端末内管理
-- **パフォーマンス重視**: React Native最適化を実施
-- **保守性重視**: TypeScript厳密型付け + テスト充実
-
-### 📋 主なドキュメント
-- **[`AGENTS.md`](AGENTS.md)** - Codex の入口と文書作成ルール
-- **[`docs/index.md`](docs/index.md)** - ドキュメントの案内板
-- **[`docs/product/overview.md`](docs/product/overview.md)** - プロダクト概要
-- **[`docs/architecture/tech-spec.md`](docs/architecture/tech-spec.md)** - 技術仕様
-- **[`docs/domain/database-design.md`](docs/domain/database-design.md)** - DB 設計
-- **[`docs/ux/screen-designs.md`](docs/ux/screen-designs.md)** - 画面設計
-- **[`docs/ux/user-flows.md`](docs/ux/user-flows.md)** - ユーザーフロー
-- **[`docs/engineering/coding-standards.md`](docs/engineering/coding-standards.md)** - 実装規約
-- **[`docs/engineering/codex-workflow.md`](docs/engineering/codex-workflow.md)** - Codex の作業ルール
-- **[`docs/notes/`](docs/notes/)** - 技術ノート・問題解決記録
-
-### 🧪 テスト戦略
-- **ユニットテスト**: データベース操作・個別関数
-- **統合テスト**: 撮影→保存→表示の一連フロー
-- **自動テスト**: Jest + React Native Testing Library
-- **実機テスト**: iOS/Android両プラットフォーム
-
-## 👥 対象ユーザー
-
-### 🎯 ペルソナ
-**「40代後半男性・技術リテラシーが高いビジネスマン」**
-- **属性**: ビジネスパーソン、グルメ好き、ダイエット意識あり
-- **価値観**: 実用性・効率性を重視、データ安全性・プライバシーを重視
-- **使用頻度**: 日常的に食事記録、デイリー/ウィークリーで振り返り
-- **技術レベル**: 最新技術に強い、複雑な操作は避ける
-
-### 🎨 UXデザイン指針
-#### 視認性・操作性
-- **大きなタップエリア**: 最小44pt、メインボタン80pt以上
-- **高コントラスト**: 明確な色分け・読みやすいフォントサイズ
-- **直感的なUI**: アイコン + テキストで理解しやすく
-
-#### 実用性・効率性
-- **ワンタップ操作**: 撮影から保存まで最小ステップ
-- **自動化機能**: GPS・時刻・AI解析の自動処理
-- **学習機能**: よく使う機能の優先表示
-
-#### 信頼性・安心感
-- **データ透明性**: 保存場所・処理内容の明示表示
-- **段階的フォールバック**: 失敗時の代替手段の自動提示
-- **プライバシー重視**: 端末内処理を優先
-
-## 🎪 開発・AI活用戦略
-
-### 📅 開発アプローチ
-```
-Phase 1 (2-3週間): 基本機能完成（撮影・記録・閲覧）
-├─ CameraScreen + RecordsScreenの完成度向上
-├─ テスト全カバレッジの達成
-└─ パフォーマンス最適化
-
-Phase 2 (2-3週間): 検索・統計機能実装
-├─ SearchScreen + StatsScreenの実装
-├─ データ分析・可視化機能
-└─ UX/UIのブラッシュアップ
-
-Phase 3 (2-3週間): AI統合・最終調整
-├─ TensorFlow Lite統合
-├─ Gemini API補完機能実装
-└─ リリース準備（審査対応・ドキュメント整備）
-```
-
-### 🤖 AI開発支援
-- **設計支援**: Codex での仕様把握・差分整理
-- **実装支援**: Cursor IDEでのリアルタイムコード生成
-- **デバッグ支援**: GitHub Copilotでの効率化
-- **品質管理**: AI支援でのコードレビュー・改善提案
-
-## 📈 パフォーマンス・セキュリティ
-
-### ⚡ パフォーマンス最適化
-- **GPU活用**: TensorFlow Liteでの高速AI推論
-- **メモリ効率**: 仮想スクロール・画像遅延読み込み
-- **ストレージ効率**: WebP圧縮・サムネイル自動生成
-
-### 🔐 セキュリティ・プライバシー
-- **ローカル完結**: AI解析も基本的に端末内処理
-- **最小外部通信**: 月数回のクラウドAPI利用のみ
-- **データ主権**: ユーザーが全データを制御可能
-
-## 📝 ライセンス
-
-MIT License - 個人・商用問わず自由に利用・改変・配布可能
-
-## 👨‍💻 開発者向け情報
-
-### 🌟 開発参加
-現在は個人開発プロジェクトですが、フィードバック大歓迎！
-- [Issues](../../issues) でバグ報告・機能要望
-- [Discussions](../../discussions) で技術的議論
-
-### 🔥 推奨開発フロー
-1. **ブランチ作成**: `feature/`プレフィックスで新しいブランチ
-2. **実装・テスト**: 変更を実装しテストコード追加
-3. **コードレビュー**: 自己レビュー後プルリクエスト作成
-4. **マージ**: mainブランチに安全に統合
-
-### 🧪 品質基準
-- **テストカバレッジ**: 全主要機能80%以上
-- **TypeScript厳格**: `no-any`ポリシー遵守
-- **パフォーマンス**: 起動時間3秒以内・メモリ使用量適正
-- **アクセシビリティ**: iOS/Android全ユーザーに配慮
-
----
-
-**🍽️ Dining Memory - あなたの食生活を、スマートに振り返る**
-
-開発開始: 2025年9月 | 技術スタック: React Native + Expo + SQLite + AI
-想い: 端末リソースの最大活用 + プライバシー保護 + 実用性優先
-
-## 🧰 package.json スクリプト一覧（推奨）
-
-- npm run start
-  - 通常の開発サーバー起動 (expo start)
-
-- npm run start:clear
-  - Metro キャッシュをクリアして起動 (expo start -c)。キャッシュ絡みの不具合時に使用。
-
-- npm run android / npm run ios / npm run web
-  - 各プラットフォーム向け起動（expo run:android / expo run:ios / expo start --web）
-
-- npm run clean
-  - node_modules と lockfile を削除（ローカル環境のリセット用）。実行前に注意。
-
-- npm run install:fresh
-  - clean の後に再インストール（問題再現環境を作るときに便利）。
-
-- npm run check:deps
-  - depcheck を実行して未使用パッケージの候補を洗い出す。
-
-- npm run check:react-versions
-  - react と react-native-renderer のバージョン一致をチェックする簡易スクリプト。
-
-レビュー時によく使うコマンド:
-`npm run lint`, `npm run type-check`, `npm test`, `npm run check:deps`
-
-メンテナンスのコツ:
-1. 依存バージョンを変えるときはまず `npm run check:react-versions` を実行して不一致を検出する。  
-2. 大きな依存更新やビルド失敗時は `npm run install:fresh` を試す。  
-3. ESLint / Prettier を導入するなら `lint` / `format` スクリプトを追加して CI に組み込むと安全。
+## 検証の考え方
+- ユニットテスト: 個別ロジックやサービス
+- 統合テスト: 撮影から保存、表示までの一連フロー
+- 自動テスト: Jest + React Native Testing Library
+- 詳細な検証ルールは [docs/engineering/codex-workflow.md](docs/engineering/codex-workflow.md) を参照

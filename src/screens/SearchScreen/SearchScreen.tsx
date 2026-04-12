@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Switch, TouchableOpacity, FlatList } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
@@ -27,9 +28,11 @@ export const SearchScreen: React.FC = () => {
     }
   }, [homemadeOnly, locationFilter, searchQuery]);
 
-  useEffect(() => {
-    runSearch();
-  }, [runSearch]);
+  useFocusEffect(
+    useCallback(() => {
+      runSearch();
+    }, [runSearch])
+  );
 
   return (
     <View style={GlobalStyles.screen}>

@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as MediaLibrary from 'expo-media-library';
-import { deleteAsync } from 'expo-file-system/legacy';
+import { copyAsync, deleteAsync, documentDirectory } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
 import { CameraCaptureMock } from './useCameraCaptureMock';
@@ -54,6 +54,23 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       console.warn('Media library save failed:', mediaError instanceof Error ? mediaError.message : mediaError);
       return false;
     }
+  }, []);
+
+  const persistPhotoLocally = useCallback(async (photoUri: string): Promise<string> => {
+    if (!documentDirectory) {
+      throw new Error('Document directory is not available');
+    }
+
+    const extensionMatch = photoUri.match(/\.[a-zA-Z0-9]+(?=$|[?#])/);
+    const extension = extensionMatch?.[0] ?? '.jpg';
+    const destination = `${documentDirectory}meal-${Date.now()}${extension}`;
+
+    await copyAsync({
+      from: photoUri,
+      to: destination,
+    });
+
+    return destination;
   }, []);
 
   // テンポラリファイルのクリーンアップ
@@ -180,31 +197,42 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       return;
     }
 
+    let stablePhotoUri: string | null = null;
+
     try {
+      const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
+      stablePhotoUri = isWebWithoutPermissions
+        ? captureReview.photoUri
+        : await persistPhotoLocally(captureReview.photoUri);
+
       await MealService.createMeal({
         meal_name: captureReview.mealName.trim(),
         notes: captureReview.notes.trim() || undefined,
         location_name: captureReview.locationName.trim() || undefined,
         is_homemade: captureReview.isHomemade,
-        photo_path: captureReview.photoUri,
+        photo_path: stablePhotoUri,
         meal_datetime: new Date(),
       });
 
-      const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
       if (!isWebWithoutPermissions) {
-        const saveSuccess = await savePhotoToMediaLibrary(captureReview.photoUri);
+        const saveSuccess = await savePhotoToMediaLibrary(stablePhotoUri);
         if (!saveSuccess) {
-          await cleanupTempFile(captureReview.photoUri);
+          console.warn('Media library save skipped, but local record is preserved.');
         }
+
+        await cleanupTempFile(captureReview.photoUri);
       }
 
       setCaptureReview(null);
       showSaveSuccessMessage(captureReview.mealName.trim());
     } catch (error) {
+      if (stablePhotoUri && stablePhotoUri !== captureReview.photoUri) {
+        await cleanupTempFile(stablePhotoUri);
+      }
       console.error('記録保存エラー:', error);
       Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
     }
-  }, [cameraPermission, captureReview, cleanupTempFile, savePhotoToMediaLibrary, showSaveSuccessMessage]);
+  }, [cameraPermission, captureReview, cleanupTempFile, persistPhotoLocally, savePhotoToMediaLibrary, showSaveSuccessMessage]);
 
   return {
     // State
