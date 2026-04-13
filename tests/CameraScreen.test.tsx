@@ -173,6 +173,40 @@ const mockCameraPermissionsDenied = {
   expires: 'never',
 };
 
+const mockCameraPermissionsUndetermined = {
+  granted: false,
+  status: 'undetermined',
+  canAskAgain: true,
+  expires: 'never',
+};
+
+type MockPermissionState = {
+  permission:
+    | typeof mockCameraPermissionsGranted
+    | typeof mockCameraPermissionsDenied
+    | typeof mockCameraPermissionsUndetermined
+    | null;
+  uiState: 'checking' | 'needs_request' | 'denied' | 'granted';
+  requestPermissions: jest.Mock;
+  openAppSettings: jest.Mock;
+};
+
+function createPermissionState(overrides: Partial<MockPermissionState> = {}) {
+  return {
+    ...basePermissionState(),
+    ...overrides,
+  };
+}
+
+function basePermissionState(): MockPermissionState {
+  return {
+    permission: mockCameraPermissionsGranted,
+    uiState: 'granted' as const,
+    requestPermissions: jest.fn(),
+    openAppSettings: jest.fn(),
+  };
+}
+
 describe('CameraScreen Normal Flow Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -193,16 +227,49 @@ describe('CameraScreen Normal Flow Tests', () => {
       onCaptureReviewCancel: jest.fn(),
       onCaptureReviewSave: jest.fn(),
     });
+    (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState());
   });
 
   describe('Permission Flow', () => {
     test('should render permission screen initially', () => {
-      (Camera.useCameraPermissions as jest.Mock).mockReturnValue([null, jest.fn()]);
-      (useCameraPermission as jest.Mock).mockReturnValue(null);
+      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
+        permission: null,
+        uiState: 'checking',
+      }));
 
       const { getByText } = render(<CameraScreen />);
 
       expect(getByText('カメラ権限を確認中...')).toBeTruthy();
+    });
+
+    test('should render permission request view before requesting access', async () => {
+      const requestPermissions = jest.fn().mockResolvedValue(undefined);
+      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
+        permission: mockCameraPermissionsUndetermined,
+        uiState: 'needs_request',
+        requestPermissions,
+      }));
+
+      const { findByText, findByTestId } = render(<CameraScreen />);
+
+      expect(await findByText('撮影を始めるにはカメラ権限が必要です')).toBeTruthy();
+      fireEvent.press(await findByTestId('request-camera-permission-button'));
+      expect(requestPermissions).toHaveBeenCalled();
+    });
+
+    test('should render recovery view when permission is denied', async () => {
+      const openAppSettings = jest.fn().mockResolvedValue(undefined);
+      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
+        permission: mockCameraPermissionsDenied,
+        uiState: 'denied',
+        openAppSettings,
+      }));
+
+      const { findByText, findByTestId } = render(<CameraScreen />);
+
+      expect(await findByText('カメラ権限がオフになっています')).toBeTruthy();
+      fireEvent.press(await findByTestId('open-camera-settings-button'));
+      expect(openAppSettings).toHaveBeenCalled();
     });
 
     test('should allow camera access when permission granted', async () => {
@@ -211,13 +278,17 @@ describe('CameraScreen Normal Flow Tests', () => {
         mockCameraPermissionsGranted,
         mockRequestPermission
       ]);
-      (useCameraPermission as jest.Mock).mockReturnValue(mockCameraPermissionsGranted);
+      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
+        permission: mockCameraPermissionsGranted,
+        uiState: 'granted',
+      }));
 
       const { queryByText } = render(<CameraScreen />);
 
       await waitFor(() => {
         expect(queryByText('カメラ権限を確認中...')).toBeNull();
-        expect(queryByText('カメラ権限がありません')).toBeNull();
+        expect(queryByText('撮影を始めるにはカメラ権限が必要です')).toBeNull();
+        expect(queryByText('カメラ権限がオフになっています')).toBeNull();
       });
     });
   });
@@ -658,6 +729,10 @@ describe('CameraScreen Web Mode Mock Tests', () => {
         mockCameraPermissionsDenied,
         jest.fn().mockResolvedValue(mockCameraPermissionsDenied)
       ]);
+      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
+        permission: mockCameraPermissionsDenied,
+        uiState: 'denied',
+      }));
       (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(
         mockMediaLibraryPermissionsGranted
       );

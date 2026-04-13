@@ -16,6 +16,8 @@
 - Top area: close and camera-flip actions.
 - Bottom area: shutter and capture guidance.
 - States to support: permission denied, taking photo, capture review, success message, capture error, and web/mock fallback.
+- Before the first permission request, show a short explanation card and ask for permission only from an explicit CTA.
+- If permission is denied, show a recovery card with a direct path to the system settings screen.
 - Capture review should let the user set meal name, cuisine type, location, note, and homemade flag before saving.
 
 ## Records Screen

@@ -13,7 +13,7 @@ import { useCameraCapture, useCameraPermission } from '../../hooks/cameraCapture
  */
 const CameraScreenContainer: React.FC = () => {
   // Application層のHooksから全てのロジックを取得
-  const cameraPermission = useCameraPermission();
+  const cameraPermissionState = useCameraPermission();
   const {
     takingPhoto,
     facing,
@@ -28,20 +28,23 @@ const CameraScreenContainer: React.FC = () => {
     onCaptureReviewChange,
     onCaptureReviewCancel,
     onCaptureReviewSave,
-  } = useCameraCapture(cameraPermission);
+  } = useCameraCapture(cameraPermissionState.permission);
 
   // Presentational層にデータを渡すのみ
   return (
     <CameraView
       takingPhoto={takingPhoto}
       facing={facing}
-      cameraPermission={cameraPermission}
+      cameraPermission={cameraPermissionState.permission}
+      permissionUiState={cameraPermissionState.uiState}
       cameraRef={cameraRef}
       successMessage={successMessage}
       captureReview={captureReview}
       onTakePicture={takePicture}
       onFlipCamera={flipCamera}
       onClose={showCloseConfirmDialog}
+      onRequestPermission={cameraPermissionState.requestPermissions}
+      onOpenSettings={cameraPermissionState.openAppSettings}
       onSuccessMessageOk={onSuccessMessageOk}
       onSuccessMessageGoToRecords={onSuccessMessageGoToRecords}
       onCaptureReviewChange={onCaptureReviewChange}

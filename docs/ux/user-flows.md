@@ -37,15 +37,15 @@
 2. Review privacy guidance, current feature scope, and app info.
 3. Optionally delete local data.
 
-## Onboarding Flow
-1. First launch shows a short welcome and the app's basic value.
-2. Explain camera permission before requesting it.
-3. Explain that location is optional and can be enabled later.
-4. Keep the initial tutorial short, skippable, and centered on capture, review, and revisit.
-5. End onboarding by guiding the user into the first capture action.
+## Camera Permission Flow
+1. Open the Camera tab.
+2. If camera permission is still undetermined, show a short explanation before requesting it.
+3. Request camera permission only after the user taps the explicit CTA.
+4. If permission is denied, explain that the user can recover through the system settings screen.
+5. Once permission is granted, return directly to the normal capture flow.
 
 ## Exception Flows
-- Permission denied: explain why the permission is needed and give a way forward.
+- Permission denied: explain why the permission is needed and provide a recovery path through system settings.
 - Capture failure: let the user retry or return to the camera.
 - Local persistence failure: do not create the meal record and show a retry path.
 - Delete action: confirm destructive changes before applying them.
@@ -54,5 +54,5 @@
 - Keep capture and save fast.
 - Prefer clear recovery options over dead ends.
 - Do not hide the path back to the main capture loop.
-- Make onboarding, help, and recovery guidance available without forcing a long tutorial.
+- Keep permission, help, and recovery guidance available without forcing a long tutorial.
 - Keep accessibility support aligned with the main flow, including clear labels, large tap targets, and support for assistive technologies.

@@ -5,3 +5,4 @@
 
 export { useCameraCapture } from './useCameraCapture';
 export { useCameraPermission } from './useCameraPermission';
+export type { CameraPermissionState, CameraPermissionUiState } from './useCameraPermission';

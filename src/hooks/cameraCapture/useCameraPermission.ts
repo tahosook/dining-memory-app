@@ -1,16 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Alert } from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { Alert, Linking } from 'react-native';
 import { PermissionResponse, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
-import { CAMERA_CONSTANTS } from '../../constants/CameraConstants';
+
+export type CameraPermissionUiState = 'checking' | 'needs_request' | 'denied' | 'granted';
+
+export type CameraPermissionState = {
+  permission: PermissionResponse | null;
+  uiState: CameraPermissionUiState;
+  requestPermissions: () => Promise<void>;
+  openAppSettings: () => Promise<void>;
+};
 
 /**
  * カメラ権限管理のHook
  * Application層の権限ロジックをカプセル化
  */
-export const useCameraPermission = (): PermissionResponse | null => {
+export const useCameraPermission = (): CameraPermissionState => {
   const [permission, requestPermission] = useCameraPermissions();
-  const [hasRequested, setHasRequested] = useState(false);
 
   const requestMediaLibraryPermission = useCallback(async (): Promise<void> => {
     try {
@@ -34,7 +41,7 @@ export const useCameraPermission = (): PermissionResponse | null => {
   }, []);
 
   const requestPermissions = useCallback(async (): Promise<void> => {
-    if (hasRequested || permission?.status === 'granted' || permission?.status === 'denied') {
+    if (permission?.granted) {
       return;
     }
 
@@ -42,39 +49,43 @@ export const useCameraPermission = (): PermissionResponse | null => {
       console.log('Requesting camera permission...');
       const permissionResult = await requestPermission();
 
-      if (!permissionResult.granted) {
-        Alert.alert(
-          'カメラ権限が必要です',
-          '写真撮影するためにカメラへのアクセス権限を許可してください。',
-          [
-            { text: '設定を開く', style: 'default' },
-            { text: 'キャンセル', style: 'cancel' }
-          ]
-        );
-        return;
+      if (permissionResult.granted) {
+        await requestMediaLibraryPermission();
       }
-
-      await requestMediaLibraryPermission();
     } catch (error) {
       handlePermissionError(error);
-    } finally {
-      setHasRequested(true);
     }
-  }, [handlePermissionError, hasRequested, permission, requestMediaLibraryPermission, requestPermission]);
+  }, [handlePermissionError, permission, requestMediaLibraryPermission, requestPermission]);
 
-  useEffect(() => {
-    if (!hasRequested && permission?.status !== 'granted' && permission?.status !== 'denied') {
-      const timeoutId = setTimeout(() => {
-        console.log('Permission request timed out, trying again...');
-        requestPermissions();
-      }, CAMERA_CONSTANTS.PERMISSION_TIMEOUT_MS);
-
-      requestPermissions().finally(() => {
-        clearTimeout(timeoutId);
-        console.log('Permission request completed');
-      });
+  const openAppSettings = useCallback(async (): Promise<void> => {
+    try {
+      await Linking.openSettings();
+    } catch (error) {
+      console.error('Open settings error:', error);
+      Alert.alert('設定を開けませんでした', 'アプリの設定画面からカメラ権限を許可してください。');
     }
-  }, [permission, requestPermission, hasRequested, requestPermissions]);
+  }, []);
 
-  return permission;
+  const uiState = useMemo<CameraPermissionUiState>(() => {
+    if (permission === null) {
+      return 'checking';
+    }
+
+    if (permission.granted) {
+      return 'granted';
+    }
+
+    if (permission.status === 'denied' || permission.canAskAgain === false) {
+      return 'denied';
+    }
+
+    return 'needs_request';
+  }, [permission]);
+
+  return {
+    permission,
+    uiState,
+    requestPermissions,
+    openAppSettings,
+  };
 };

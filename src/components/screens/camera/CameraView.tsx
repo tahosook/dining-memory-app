@@ -9,6 +9,7 @@ import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 import { CuisineTypeSelector } from '../../../components/common/CuisineTypeSelector';
 import { Platform } from 'react-native';
 import { PermissionResponse, CameraView as CameraViewType } from 'expo-camera';
+import type { CameraPermissionUiState } from '../../../hooks/cameraCapture';
 import type { CaptureReviewState } from '../../../hooks/cameraCapture/useCameraCapture';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -34,10 +35,13 @@ type CameraOperations = {
   onTakePicture: () => Promise<void>;
   onFlipCamera: () => void;
   onClose: () => void;
+  onRequestPermission: () => Promise<void>;
+  onOpenSettings: () => Promise<void>;
 };
 
 type CameraPermissionState = {
   cameraPermission: PermissionResponse | null;
+  permissionUiState: CameraPermissionUiState;
 };
 
 type CameraSuccessState = {
@@ -57,8 +61,8 @@ type CameraSuccessOperations = {
 };
 
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
-  Pick<CameraOperations, 'onTakePicture' | 'onFlipCamera' | 'onClose'> &
-  Pick<CameraPermissionState, 'cameraPermission'> &
+  Pick<CameraOperations, 'onTakePicture' | 'onFlipCamera' | 'onClose' | 'onRequestPermission' | 'onOpenSettings'> &
+  Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
   Pick<CameraSuccessState, 'successMessage' | 'captureReview'> &
   Pick<
     CameraSuccessOperations,
@@ -72,14 +76,31 @@ const PermissionLoadingView: React.FC = () => (
   </View>
 );
 
-const PermissionDeniedView: React.FC = () => (
-  <View style={styles.container}>
-    <Text style={styles.permissionText}>
-      カメラまたは写真ライブラリへのアクセス権限がありません。
-    </Text>
-    <Text style={styles.permissionSubText}>
-      設定アプリから権限を許可してください。
-    </Text>
+const PermissionRequestView: React.FC<{ onRequestPermission: () => Promise<void> }> = ({ onRequestPermission }) => (
+  <View style={styles.permissionScreen}>
+    <View style={styles.permissionCard}>
+      <Text style={styles.permissionTitle}>撮影を始めるにはカメラ権限が必要です</Text>
+      <Text style={styles.permissionText}>
+        食事の写真は端末内に保存します。位置情報は今は不要で、許可するとすぐ撮影を始められます。
+      </Text>
+      <TouchableOpacity style={styles.permissionButton} onPress={onRequestPermission} testID="request-camera-permission-button">
+        <Text style={styles.permissionButtonText}>カメラを許可する</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+const PermissionDeniedView: React.FC<{ onOpenSettings: () => Promise<void> }> = ({ onOpenSettings }) => (
+  <View style={styles.permissionScreen}>
+    <View style={styles.permissionCard}>
+      <Text style={styles.permissionTitle}>カメラ権限がオフになっています</Text>
+      <Text style={styles.permissionText}>
+        設定アプリからカメラ権限を許可すると、撮影を再開できます。写真は引き続き端末内保存です。
+      </Text>
+      <TouchableOpacity style={styles.permissionButton} onPress={onOpenSettings} testID="open-camera-settings-button">
+        <Text style={styles.permissionButtonText}>設定を開く</Text>
+      </TouchableOpacity>
+    </View>
   </View>
 );
 
@@ -206,12 +227,15 @@ const CameraView: React.FC<CameraViewProps> = ({
   takingPhoto,
   facing,
   cameraPermission,
+  permissionUiState,
   cameraRef,
   successMessage,
   captureReview,
   onClose,
   onTakePicture,
   onFlipCamera,
+  onRequestPermission,
+  onOpenSettings,
   onSuccessMessageOk,
   onSuccessMessageGoToRecords,
   onCaptureReviewChange,
@@ -222,12 +246,16 @@ const CameraView: React.FC<CameraViewProps> = ({
   // webモードで権限がない場合はモックモードで表示
   const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
 
-  if (cameraPermission === null && !isWebWithoutPermissions) {
+  if (permissionUiState === 'checking' && !isWebWithoutPermissions) {
     return <PermissionLoadingView />;
   }
 
-  if (!cameraPermission?.granted && !isWebWithoutPermissions) {
-    return <PermissionDeniedView />;
+  if (permissionUiState === 'needs_request' && !isWebWithoutPermissions) {
+    return <PermissionRequestView onRequestPermission={onRequestPermission} />;
+  }
+
+  if (permissionUiState === 'denied' && !isWebWithoutPermissions) {
+    return <PermissionDeniedView onOpenSettings={onOpenSettings} />;
   }
 
   return (
@@ -280,17 +308,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.black,
   },
+  permissionScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    backgroundColor: Colors.black,
+  },
+  permissionCard: {
+    backgroundColor: 'rgba(0,0,0,0.88)',
+    borderRadius: 16,
+    padding: 20,
+    gap: 14,
+  },
+  permissionTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.white,
+    textAlign: 'center',
+  },
   permissionText: {
     ...GlobalStyles.body,
     color: Colors.white,
     textAlign: 'center',
-    textAlignVertical: 'center',
   },
   permissionSubText: {
     ...GlobalStyles.body,
     color: Colors.gray,
     textAlign: 'center',
     marginBottom: 50,
+  },
+  permissionButton: {
+    backgroundColor: Colors.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  permissionButtonText: {
+    color: Colors.white,
+    fontSize: 16,
+    fontWeight: '700',
   },
   camera: {
     flex: 1,
