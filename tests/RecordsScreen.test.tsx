@@ -1,5 +1,6 @@
 import React from 'react';
-import { act, render } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const focusCallbacks: Array<() => void> = [];
 
@@ -39,6 +40,11 @@ describe('RecordsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     focusCallbacks.length = 0;
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   test('renders empty state when there are no records', async () => {
@@ -97,5 +103,47 @@ describe('RecordsScreen', () => {
     await triggerLatestFocus();
 
     expect(MealService.getRecentMeals).toHaveBeenCalledTimes(2);
+  });
+
+  test('updates cuisine type from the edit modal', async () => {
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
+      {
+        id: '1',
+        uuid: '1',
+        meal_name: 'ラーメン',
+        meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
+        is_homemade: false,
+        photo_path: 'file:///ramen.jpg',
+      },
+    ]);
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      id: '1',
+      uuid: '1',
+      meal_name: 'ラーメン',
+      cuisine_type: '和食',
+    });
+
+    const { findByTestId, getByText } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(await findByTestId('meal-card-1'));
+
+    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
+    const editButton = buttons.find((button: { text: string; onPress?: () => void }) => button.text === '編集');
+    act(() => {
+      editButton.onPress?.();
+    });
+
+    fireEvent.press(await findByTestId('edit-cuisine-和食'));
+    fireEvent.press(getByText('保存'));
+
+    await waitFor(() => {
+      expect(MealService.updateMeal).toHaveBeenCalledWith(
+        '1',
+        expect.objectContaining({
+          cuisine_type: '和食',
+        })
+      );
+    });
   });
 });

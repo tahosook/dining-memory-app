@@ -90,4 +90,22 @@ describe('SearchScreen', () => {
       expect((MealService.searchMeals as jest.Mock).mock.calls.length).toBeGreaterThan(callsAfterTyping);
     });
   });
+
+  test('passes cuisine type filter to the search service', async () => {
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
+
+    const { findByTestId, getByText } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(await findByTestId('search-cuisine-和食'));
+    fireEvent.press(getByText('検索する'));
+
+    await waitFor(() => {
+      expect(MealService.searchMeals).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          cuisine_type: '和食',
+        })
+      );
+    });
+  });
 });

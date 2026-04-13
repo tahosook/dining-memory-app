@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
+import { CuisineTypeSelector } from '../../components/common/CuisineTypeSelector';
 
 interface MealRecord {
   id: string;
@@ -75,7 +76,7 @@ const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
   const imageUri = getDisplayImageUri(item.photo_thumbnail_path ?? item.photo_path);
 
   return (
-    <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)}>
+    <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)} testID={`meal-card-${item.id}`}>
       <View style={styles.mealImageContainer}>
         {imageUri ? (
           <Image
@@ -199,6 +200,7 @@ export const RecordsScreen: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [editingMeal, setEditingMeal] = useState<MealRecord | null>(null);
   const [editMealName, setEditMealName] = useState('');
+  const [editCuisineType, setEditCuisineType] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [editHomemade, setEditHomemade] = useState(true);
@@ -253,6 +255,7 @@ export const RecordsScreen: React.FC = () => {
   const handleEditMeal = (meal: MealRecord) => {
     setEditingMeal(meal);
     setEditMealName(meal.meal_name);
+    setEditCuisineType(meal.cuisine_type ?? '');
     setEditLocation(meal.location_name ?? '');
     setEditNotes(meal.notes ?? '');
     setEditHomemade(meal.is_homemade);
@@ -289,13 +292,14 @@ export const RecordsScreen: React.FC = () => {
 
     await MealService.updateMeal(editingMeal.id, {
       meal_name: editMealName,
+      cuisine_type: editCuisineType || undefined,
       location_name: editLocation || undefined,
       notes: editNotes || undefined,
       is_homemade: editHomemade,
     });
     setEditingMeal(null);
     loadMeals();
-  }, [editHomemade, editLocation, editMealName, editNotes, editingMeal, loadMeals]);
+  }, [editCuisineType, editHomemade, editLocation, editMealName, editNotes, editingMeal, loadMeals]);
 
   if (loading) {
     return (
@@ -347,6 +351,7 @@ export const RecordsScreen: React.FC = () => {
             <Text style={styles.modalTitle}>記録を編集</Text>
             <TextInput style={styles.modalInput} value={editMealName} onChangeText={setEditMealName} placeholder="料理名" />
             <TextInput style={styles.modalInput} value={editLocation} onChangeText={setEditLocation} placeholder="場所" />
+            <CuisineTypeSelector value={editCuisineType} onChange={setEditCuisineType} testIDPrefix="edit-cuisine" />
             <TextInput
               style={[styles.modalInput, styles.modalNotes]}
               value={editNotes}

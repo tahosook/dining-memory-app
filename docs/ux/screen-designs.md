@@ -16,17 +16,19 @@
 - Top area: close and camera-flip actions.
 - Bottom area: shutter and capture guidance.
 - States to support: permission denied, taking photo, capture review, success message, capture error, and web/mock fallback.
+- Capture review should let the user set meal name, cuisine type, location, note, and homemade flag before saving.
 
 ## Records Screen
 - Shows meal records grouped by date.
 - Card layout should keep the meal name, time, location, and note visible at a glance.
 - If a thumbnail is missing, fall back to the saved photo path instead of showing an empty placeholder.
 - Must support editing and deletion entry points.
+- Edit entry should allow updating cuisine type in the same modal as the other core fields.
 
 ## Search Screen
 - Search bar and filter area should be the first things the user sees.
 - Results should remain scannable and support quick refinement.
-- The current filters are text, location, and homemade-only.
+- The current filters are text, cuisine type, location, and homemade-only.
 
 ## Stats Screen
 - Use summaries and compact cards instead of dense dashboards.

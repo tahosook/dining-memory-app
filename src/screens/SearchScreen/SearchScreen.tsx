@@ -5,10 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
+import { CuisineTypeSelector } from '../../components/common/CuisineTypeSelector';
 import type { Meal } from '../../types/MealTypes';
 
 export const SearchScreen: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [cuisineFilter, setCuisineFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [homemadeOnly, setHomemadeOnly] = useState(false);
   const [results, setResults] = useState<Meal[]>([]);
@@ -19,6 +21,7 @@ export const SearchScreen: React.FC = () => {
     try {
       const meals = await MealService.searchMeals({
         text: searchQuery.trim() || undefined,
+        cuisine_type: cuisineFilter || undefined,
         location_name: locationFilter.trim() || undefined,
         is_homemade: homemadeOnly || undefined,
       });
@@ -26,7 +29,7 @@ export const SearchScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [homemadeOnly, locationFilter, searchQuery]);
+  }, [cuisineFilter, homemadeOnly, locationFilter, searchQuery]);
 
   useFocusEffect(
     useCallback(() => {
@@ -48,6 +51,7 @@ export const SearchScreen: React.FC = () => {
       </View>
 
       <View style={styles.filtersCard}>
+        <CuisineTypeSelector value={cuisineFilter} onChange={setCuisineFilter} testIDPrefix="search-cuisine" />
         <TextInput
           style={styles.filterInput}
           placeholder="場所フィルター"

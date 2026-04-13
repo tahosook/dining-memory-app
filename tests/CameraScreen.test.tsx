@@ -519,6 +519,7 @@ describe('CameraScreen Normal Flow Tests', () => {
           width: 800,
           height: 600,
           mealName: '',
+          cuisineType: '',
           notes: '',
           locationName: '',
           isHomemade: true,
@@ -536,8 +537,44 @@ describe('CameraScreen Normal Flow Tests', () => {
       const { findByText, findByTestId } = render(<CameraScreen />);
 
       expect(await findByText('撮影内容を確認')).toBeTruthy();
+      expect(await findByText('料理ジャンル')).toBeTruthy();
       expect(await findByTestId('meal-name-input')).toBeTruthy();
       expect(await findByTestId('save-meal-button')).toBeTruthy();
+    });
+
+    test('should call cuisine type change handler when a cuisine option is pressed', async () => {
+      const mockOnCaptureReviewChange = jest.fn();
+
+      (useCameraCapture as jest.Mock).mockReturnValue({
+        takingPhoto: false,
+        facing: 'back',
+        cameraRef: mockCameraRef,
+        successMessage: '',
+        captureReview: {
+          photoUri: '/mock/photo.jpg',
+          width: 800,
+          height: 600,
+          mealName: '',
+          cuisineType: '',
+          notes: '',
+          locationName: '',
+          isHomemade: true,
+        },
+        takePicture: jest.fn(),
+        flipCamera: jest.fn(),
+        showCloseConfirmDialog: jest.fn(),
+        onSuccessMessageOk: jest.fn(),
+        onSuccessMessageGoToRecords: jest.fn(),
+        onCaptureReviewChange: mockOnCaptureReviewChange,
+        onCaptureReviewCancel: jest.fn(),
+        onCaptureReviewSave: jest.fn(),
+      });
+
+      const { findByTestId } = render(<CameraScreen />);
+
+      fireEvent.press(await findByTestId('capture-review-cuisine-和食'));
+
+      expect(mockOnCaptureReviewChange).toHaveBeenCalledWith('cuisineType', '和食');
     });
   });
 });

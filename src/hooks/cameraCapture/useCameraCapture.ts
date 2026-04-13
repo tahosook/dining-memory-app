@@ -7,12 +7,14 @@ import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-came
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
 import { CameraCaptureMock } from './useCameraCaptureMock';
 import { MealService } from '../../database/services/MealService';
+import type { CuisineTypeOption } from '../../constants/MealOptions';
 
 export interface CaptureReviewState {
   photoUri: string;
   width: number;
   height: number;
   mealName: string;
+  cuisineType: CuisineTypeOption | '';
   notes: string;
   locationName: string;
   isHomemade: boolean;
@@ -108,6 +110,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       width: photo.width,
       height: photo.height,
       mealName: '',
+      cuisineType: '',
       notes: '',
       locationName: '',
       isHomemade: true,
@@ -207,6 +210,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
       await MealService.createMeal({
         meal_name: captureReview.mealName.trim(),
+        cuisine_type: captureReview.cuisineType || undefined,
         notes: captureReview.notes.trim() || undefined,
         location_name: captureReview.locationName.trim() || undefined,
         is_homemade: captureReview.isHomemade,

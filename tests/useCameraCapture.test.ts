@@ -127,6 +127,7 @@ describe('useCameraCapture', () => {
 
     act(() => {
       result.current.onCaptureReviewChange('mealName', 'パスタ');
+      result.current.onCaptureReviewChange('cuisineType', '洋食');
     });
 
     await act(async () => {
@@ -137,6 +138,7 @@ describe('useCameraCapture', () => {
       expect(MealService.createMeal).toHaveBeenCalledWith(
         expect.objectContaining({
           meal_name: 'パスタ',
+          cuisine_type: '洋食',
           photo_path: expect.stringMatching(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/),
         })
       );

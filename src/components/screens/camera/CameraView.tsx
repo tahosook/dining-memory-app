@@ -6,6 +6,7 @@ import { Colors } from '../../../constants/Colors';
 import { GlobalStyles } from '../../../constants/Styles';
 import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
+import { CuisineTypeSelector } from '../../../components/common/CuisineTypeSelector';
 import { Platform } from 'react-native';
 import { PermissionResponse, CameraView as CameraViewType } from 'expo-camera';
 import type { CaptureReviewState } from '../../../hooks/cameraCapture/useCameraCapture';
@@ -147,6 +148,13 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({ captureReview, onChange, 
         placeholder="場所"
         value={captureReview.locationName}
         onChangeText={(value) => onChange('locationName', value)}
+      />
+      <CuisineTypeSelector
+        label="料理ジャンル"
+        value={captureReview.cuisineType}
+        onChange={(value) => onChange('cuisineType', value)}
+        testIDPrefix="capture-review-cuisine"
+        labelColor={Colors.white}
       />
       <TextInput
         style={[styles.reviewInput, styles.reviewNotes]}
