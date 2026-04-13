@@ -146,4 +146,37 @@ describe('RecordsScreen', () => {
       );
     });
   });
+
+  test('shows an error alert and keeps the modal open when save fails', async () => {
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
+      {
+        id: '1',
+        uuid: '1',
+        meal_name: 'ラーメン',
+        meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
+        is_homemade: false,
+        photo_path: 'file:///ramen.jpg',
+      },
+    ]);
+    (MealService.updateMeal as jest.Mock).mockRejectedValue(new Error('save failed'));
+
+    const { findByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(await findByTestId('meal-card-1'));
+
+    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
+    const editButton = buttons.find((button: { text: string; onPress?: () => void }) => button.text === '編集');
+    act(() => {
+      editButton.onPress?.();
+    });
+
+    fireEvent.press(await findByTestId('edit-save-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '更新に失敗しました。');
+    });
+
+    expect(await findByTestId('edit-meal-name-input')).toBeTruthy();
+  });
 });

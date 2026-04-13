@@ -31,11 +31,14 @@
 - Search bar and filter area should be the first things the user sees.
 - Results should remain scannable and support quick refinement.
 - The current filters are text, cuisine type, location, and homemade-only.
+- Result cards should open the same record actions used in Records, including edit and delete.
+- Use explicit loading, error, and zero-result states, and keep the previous results visible if only a refresh fails.
 
 ## Stats Screen
 - Use summaries and compact cards instead of dense dashboards.
 - Keep insights readable and practical, not decorative.
 - The current MVP only shows totals, homemade ratio, favorite cuisine, and favorite location.
+- Show explicit loading and retryable error states, while keeping the previous summary visible during refresh failures.
 
 ## Settings Screen
 - Prioritize privacy, current scope, local data deletion, and app information.

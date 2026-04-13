@@ -25,12 +25,14 @@
 1. Open Search.
 2. Enter text or select filters.
 3. Review the result list, which reruns with the current query when the tab regains focus.
-4. Open a record or refine the search.
+4. Open a result card to review the saved details.
+5. Edit or delete the record, or refine the search and try again.
 
 ## Stats Flow
 1. Open Stats.
 2. Review the latest saved summary cards.
 3. Revisit the tab to see refreshed totals after new captures or edits.
+4. If refresh fails, retry without losing the previous summary when it is already available.
 
 ## Settings Flow
 1. Open Settings.
@@ -48,6 +50,8 @@
 - Permission denied: explain why the permission is needed and provide a recovery path through system settings.
 - Capture failure: let the user retry or return to the camera.
 - Local persistence failure: do not create the meal record and show a retry path.
+- Search refresh failure: keep the last successful results when possible and show a retry action.
+- Stats refresh failure: keep the last successful summary when possible and show a retry action.
 - Delete action: confirm destructive changes before applying them.
 
 ## UX Rules

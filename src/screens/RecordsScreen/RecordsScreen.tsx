@@ -8,16 +8,13 @@ import {
   Alert,
   Image,
   ActivityIndicator,
-  Modal,
-  TextInput,
-  Switch
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
-import { Colors } from '../../constants/Colors';
-import { CuisineTypeSelector } from '../../components/common/CuisineTypeSelector';
+import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
+import { formatMealDetailMessage } from '../../utils/mealDetails';
 
 interface MealRecord {
   id: string;
@@ -38,6 +35,24 @@ interface MealGroup {
   date: string;
   dateLabel: string;
   meals: MealRecord[];
+}
+
+const emptyEditDraft: MealEditDraft = {
+  mealName: '',
+  cuisineType: '',
+  location: '',
+  notes: '',
+  isHomemade: true,
+};
+
+function createMealEditDraft(meal: MealRecord): MealEditDraft {
+  return {
+    mealName: meal.meal_name,
+    cuisineType: meal.cuisine_type ?? '',
+    location: meal.location_name ?? '',
+    notes: meal.notes ?? '',
+    isHomemade: meal.is_homemade,
+  };
 }
 
 type MealItemProps = {
@@ -199,11 +214,8 @@ export const RecordsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editingMeal, setEditingMeal] = useState<MealRecord | null>(null);
-  const [editMealName, setEditMealName] = useState('');
-  const [editCuisineType, setEditCuisineType] = useState('');
-  const [editLocation, setEditLocation] = useState('');
-  const [editNotes, setEditNotes] = useState('');
-  const [editHomemade, setEditHomemade] = useState(true);
+  const [editDraft, setEditDraft] = useState<MealEditDraft>(emptyEditDraft);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Load meal records
   const loadMeals = useCallback(async () => {
@@ -234,31 +246,17 @@ export const RecordsScreen: React.FC = () => {
 
   // Handle meal press
   const handleMealPress = (meal: MealRecord) => {
-    Alert.alert(
-      meal.meal_name,
-      `撮影日時: ${new Date(meal.meal_datetime).toLocaleString('ja-JP')}\n${
-        meal.location_name ? `場所: ${meal.location_name}\n` : ''
-      }${
-        meal.cuisine_type ? `料理種別: ${meal.cuisine_type}\n` : ''
-      }${meal.is_homemade ? '自家製' : '外食'}${
-        meal.notes ? `\nメモ: ${meal.notes}` : ''
-      }`,
-      [
-        { text: '編集', onPress: () => handleEditMeal(meal) },
-        { text: '削除', onPress: () => handleDeleteMeal(meal), style: 'destructive' },
-        { text: '閉じる', style: 'cancel' }
-      ]
-    );
+    Alert.alert(meal.meal_name, formatMealDetailMessage(meal), [
+      { text: '編集', onPress: () => handleEditMeal(meal) },
+      { text: '削除', onPress: () => handleDeleteMeal(meal), style: 'destructive' },
+      { text: '閉じる', style: 'cancel' }
+    ]);
   };
 
   // Handle edit meal
   const handleEditMeal = (meal: MealRecord) => {
     setEditingMeal(meal);
-    setEditMealName(meal.meal_name);
-    setEditCuisineType(meal.cuisine_type ?? '');
-    setEditLocation(meal.location_name ?? '');
-    setEditNotes(meal.notes ?? '');
-    setEditHomemade(meal.is_homemade);
+    setEditDraft(createMealEditDraft(meal));
   };
 
   // Handle delete meal
@@ -290,16 +288,25 @@ export const RecordsScreen: React.FC = () => {
       return;
     }
 
-    await MealService.updateMeal(editingMeal.id, {
-      meal_name: editMealName,
-      cuisine_type: editCuisineType || undefined,
-      location_name: editLocation || undefined,
-      notes: editNotes || undefined,
-      is_homemade: editHomemade,
-    });
-    setEditingMeal(null);
-    loadMeals();
-  }, [editCuisineType, editHomemade, editLocation, editMealName, editNotes, editingMeal, loadMeals]);
+    setSavingEdit(true);
+
+    try {
+      await MealService.updateMeal(editingMeal.id, {
+        meal_name: editDraft.mealName,
+        cuisine_type: editDraft.cuisineType || undefined,
+        location_name: editDraft.location || undefined,
+        notes: editDraft.notes || undefined,
+        is_homemade: editDraft.isHomemade,
+      });
+      setEditingMeal(null);
+      await loadMeals();
+    } catch (error) {
+      console.error('Failed to update meal:', error);
+      Alert.alert('エラー', '更新に失敗しました。');
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [editDraft, editingMeal, loadMeals]);
 
   if (loading) {
     return (
@@ -345,35 +352,15 @@ export const RecordsScreen: React.FC = () => {
         )}
       </View>
 
-      <Modal visible={Boolean(editingMeal)} transparent animationType="slide" onRequestClose={() => setEditingMeal(null)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>記録を編集</Text>
-            <TextInput style={styles.modalInput} value={editMealName} onChangeText={setEditMealName} placeholder="料理名" />
-            <TextInput style={styles.modalInput} value={editLocation} onChangeText={setEditLocation} placeholder="場所" />
-            <CuisineTypeSelector value={editCuisineType} onChange={setEditCuisineType} testIDPrefix="edit-cuisine" />
-            <TextInput
-              style={[styles.modalInput, styles.modalNotes]}
-              value={editNotes}
-              onChangeText={setEditNotes}
-              placeholder="メモ"
-              multiline
-            />
-            <View style={styles.modalSwitchRow}>
-              <Text style={styles.modalSwitchLabel}>自炊として記録</Text>
-              <Switch value={editHomemade} onValueChange={setEditHomemade} />
-            </View>
-            <View style={styles.modalButtonRow}>
-              <TouchableOpacity style={styles.modalCancelButton} onPress={() => setEditingMeal(null)}>
-                <Text style={styles.modalCancelText}>閉じる</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveButton} onPress={saveEdit}>
-                <Text style={styles.modalSaveText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <MealEditModal
+        visible={Boolean(editingMeal)}
+        draft={editDraft}
+        onChange={setEditDraft}
+        onSave={saveEdit}
+        onClose={() => setEditingMeal(null)}
+        saving={savingEdit}
+        testIDPrefix="edit"
+      />
     </SafeAreaView>
   );
 }
@@ -382,70 +369,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
-  },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    padding: 20,
-  },
-  modalCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 14,
-    padding: 16,
-    gap: 12,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-  },
-  modalNotes: {
-    minHeight: 90,
-    textAlignVertical: 'top',
-  },
-  modalSwitchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  modalSwitchLabel: {
-    fontSize: 15,
-    color: Colors.text,
-  },
-  modalButtonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalCancelButton: {
-    flex: 1,
-    backgroundColor: Colors.lightGray,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalSaveButton: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  modalSaveText: {
-    color: Colors.white,
-    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

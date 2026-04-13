@@ -14,13 +14,6 @@ import StatsScreen from '../src/screens/StatsScreen/StatsScreen';
 import SettingsScreen from '../src/screens/SettingsScreen/SettingsScreen';
 import { MealService } from '../src/database/services/MealService';
 
-async function triggerLatestFocus() {
-  await act(async () => {
-    focusCallbacks[focusCallbacks.length - 1]?.();
-    await Promise.resolve();
-  });
-}
-
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     getStatistics: jest.fn(),
@@ -28,26 +21,93 @@ jest.mock('../src/database/services/MealService', () => ({
   },
 }));
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+async function triggerLatestFocus() {
+  await act(async () => {
+    focusCallbacks[focusCallbacks.length - 1]?.();
+    await Promise.resolve();
+  });
+}
+
 describe('StatsScreen', () => {
   beforeEach(() => {
     focusCallbacks.length = 0;
     jest.clearAllMocks();
   });
 
-  test('renders statistics summary from service data', async () => {
-    (MealService.getStatistics as jest.Mock).mockResolvedValue({
-      totalMeals: 5,
-      homemadeMeals: 3,
-      takeoutMeals: 2,
-      favoriteCuisine: '和食',
-      favoriteLocation: '自宅',
-    });
+  test('shows loading state on the initial render', async () => {
+    const deferred = createDeferred<{
+      totalMeals: number;
+      homemadeMeals: number;
+      takeoutMeals: number;
+    }>();
+    (MealService.getStatistics as jest.Mock).mockReturnValue(deferred.promise);
 
-    const { findByText } = render(<StatsScreen />);
+    const { getByTestId } = render(<StatsScreen />);
+    await triggerLatestFocus();
+
+    expect(getByTestId('stats-loading')).toBeTruthy();
+
+    await act(async () => {
+      deferred.resolve({
+        totalMeals: 0,
+        homemadeMeals: 0,
+        takeoutMeals: 0,
+      });
+      await Promise.resolve();
+    });
+  });
+
+  test('shows an error card with retry when the initial load fails', async () => {
+    (MealService.getStatistics as jest.Mock)
+      .mockRejectedValueOnce(new Error('stats failed'))
+      .mockResolvedValueOnce({
+        totalMeals: 0,
+        homemadeMeals: 0,
+        takeoutMeals: 0,
+      });
+
+    const { findByTestId } = render(<StatsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByTestId('stats-error')).toBeTruthy();
+
+    fireEvent.press(await findByTestId('stats-error-action'));
+
+    await waitFor(() => {
+      expect(MealService.getStatistics).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test('keeps previous summary visible when a refresh fails', async () => {
+    (MealService.getStatistics as jest.Mock)
+      .mockResolvedValueOnce({
+        totalMeals: 5,
+        homemadeMeals: 3,
+        takeoutMeals: 2,
+        favoriteCuisine: '和食',
+        favoriteLocation: '自宅',
+      })
+      .mockRejectedValueOnce(new Error('refresh failed'));
+
+    const { findByText, findByTestId } = render(<StatsScreen />);
     await triggerLatestFocus();
 
     expect(await findByText('5件')).toBeTruthy();
-    expect(await findByText('料理ジャンル: 和食')).toBeTruthy();
+
+    await triggerLatestFocus();
+
+    expect(await findByTestId('stats-error')).toBeTruthy();
+    expect(await findByText('5件')).toBeTruthy();
   });
 
   test('reloads statistics when focus is regained', async () => {
