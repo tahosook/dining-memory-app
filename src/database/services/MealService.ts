@@ -81,6 +81,55 @@ function generateSearchText(data: Partial<CreateMealData>): string {
     .toLowerCase();
 }
 
+function getMealNameByTime(date: Date): string {
+  const hour = date.getHours();
+
+  if (hour >= 5 && hour < 10) {
+    return '朝食';
+  } else if (hour >= 10 && hour < 14) {
+    return '昼食';
+  } else if (hour >= 14 && hour < 18) {
+    return '午後の軽食';
+  } else if (hour >= 18 && hour < 22) {
+    return '夕食';
+  } else {
+    return '深夜の食事';
+  }
+}
+
+function resolveDefaultMealName(data: CreateMealData, rows: PersistedMealRow[]): string {
+  if (data.meal_name.trim()) {
+    return data.meal_name.trim();
+  }
+
+  const timeBasedName = getMealNameByTime(data.meal_datetime);
+
+  // 過去一週間以内、同じ場所のレコードを探す
+  if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const origin = { latitude: data.latitude, longitude: data.longitude };
+
+    const recentNearbyRow = rows.find((row) => {
+      if (!row.location_name
+        || typeof row.latitude !== 'number'
+        || typeof row.longitude !== 'number'
+        || row.is_deleted
+        || row.meal_datetime < oneWeekAgo
+      ) {
+        return false;
+      }
+
+      return getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) <= SAME_LOCATION_THRESHOLD_METERS;
+    });
+
+    if (recentNearbyRow?.location_name) {
+      return `${recentNearbyRow.location_name} の ${timeBasedName}`;
+    }
+  }
+
+  return timeBasedName;
+}
+
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
 }
@@ -244,6 +293,7 @@ export class MealService {
     const rows = await getAllRows();
     const row = normalizeRow({
       ...data,
+      meal_name: resolveDefaultMealName(data, rows),
       location_name: resolveNearbyLocationName(rows, data),
     });
     await upsertRow(row);

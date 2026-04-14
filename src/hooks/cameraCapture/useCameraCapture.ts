@@ -270,11 +270,6 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       return;
     }
 
-    if (!captureReview.mealName.trim()) {
-      Alert.alert('入力が必要です', '料理名を入力してください。');
-      return;
-    }
-
     let stablePhotoUri: string | null = null;
 
     try {

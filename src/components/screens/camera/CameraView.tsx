@@ -221,7 +221,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({ captureReview, onChange, 
 
           <TextInput
             style={styles.reviewInput}
-            placeholder="料理名"
+            placeholder="料理名（入力しない場合は自動で名前が付きます）"
             placeholderTextColor={Colors.gray}
             value={captureReview.mealName}
             onChangeText={(value) => onChange('mealName', value)}
