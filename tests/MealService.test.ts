@@ -108,4 +108,27 @@ describe('MealService', () => {
     expect(stats.takeoutMeals).toBe(1);
     expect(stats.favoriteLocation).toBeDefined();
   });
+
+  test('reuses a nearby saved location name when a new meal is within 100m and location text is empty', async () => {
+    await MealService.createMeal({
+      meal_name: '寿司',
+      is_homemade: false,
+      photo_path: 'file:///sushi.jpg',
+      meal_datetime: new Date('2026-04-07T19:00:00+09:00'),
+      location_name: '神田駅前',
+      latitude: 35.6917,
+      longitude: 139.7709,
+    });
+
+    const nearbyMeal = await MealService.createMeal({
+      meal_name: '天丼',
+      is_homemade: false,
+      photo_path: 'file:///tendon.jpg',
+      meal_datetime: new Date('2026-04-07T20:00:00+09:00'),
+      latitude: 35.69175,
+      longitude: 139.77095,
+    });
+
+    expect(nearbyMeal.location_name).toBe('神田駅前');
+  });
 });

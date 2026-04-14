@@ -39,6 +39,7 @@ export interface StatisticsSummary {
 }
 
 type MealUpdateData = Partial<CreateMealData>;
+const SAME_LOCATION_THRESHOLD_METERS = 100;
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
@@ -78,6 +79,54 @@ function generateSearchText(data: Partial<CreateMealData>): string {
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
+}
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function getDistanceMeters(
+  first: { latitude: number; longitude: number },
+  second: { latitude: number; longitude: number }
+) {
+  const earthRadiusMeters = 6371000;
+  const latitudeDelta = toRadians(second.latitude - first.latitude);
+  const longitudeDelta = toRadians(second.longitude - first.longitude);
+  const startLatitude = toRadians(first.latitude);
+  const endLatitude = toRadians(second.latitude);
+  const haversine =
+    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2)
+    + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) * Math.sin(longitudeDelta / 2);
+
+  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+}
+
+function resolveNearbyLocationName(rows: PersistedMealRow[], data: CreateMealData) {
+  if (
+    data.location_name?.trim()
+    || typeof data.latitude !== 'number'
+    || typeof data.longitude !== 'number'
+  ) {
+    return data.location_name;
+  }
+
+  const origin = {
+    latitude: data.latitude,
+    longitude: data.longitude,
+  };
+
+  const nearbyRow = rows.find((row) => {
+    if (!row.location_name || typeof row.latitude !== 'number' || typeof row.longitude !== 'number' || row.is_deleted) {
+      return false;
+    }
+
+    return getDistanceMeters(
+      origin,
+      { latitude: row.latitude, longitude: row.longitude }
+    ) <= SAME_LOCATION_THRESHOLD_METERS;
+  });
+
+  return nearbyRow?.location_name ?? data.location_name;
 }
 
 async function getAllRows(): Promise<PersistedMealRow[]> {
@@ -192,7 +241,11 @@ function applyFilters(rows: PersistedMealRow[], filters: SearchFilters): Persist
 
 export class MealService {
   static async createMeal(data: CreateMealData): Promise<Meal> {
-    const row = normalizeRow(data);
+    const rows = await getAllRows();
+    const row = normalizeRow({
+      ...data,
+      location_name: resolveNearbyLocationName(rows, data),
+    });
     await upsertRow(row);
     return mapRowToMeal(row);
   }

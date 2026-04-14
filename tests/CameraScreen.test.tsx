@@ -26,6 +26,10 @@ jest.mock('@react-navigation/native', () => ({
   }),
 }));
 
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: () => null,
+}));
+
 // Mock useCameraCapture
 jest.mock('../src/hooks/cameraCapture', () => ({
   useCameraPermission: jest.fn(),
@@ -54,18 +58,9 @@ jest.mock('expo-camera', () => ({
   useCameraPermissions: jest.fn(),
 }));
 
-// Mock useRef to control camera ref
 let mockCameraRef: { current: unknown } = {
   current: null,
 };
-
-jest.mock('react', () => ({
-  ...jest.requireActual('react'),
-  useRef: jest.fn((initialValue) => {
-    mockCameraRef = { current: initialValue };
-    return mockCameraRef;
-  }),
-}));
 
 jest.mock('expo-media-library', () => ({
   createAssetAsync: jest.fn(),
@@ -116,6 +111,7 @@ jest.mock('react-native', () => ({
   Image: 'Image',
   TextInput: 'TextInput',
   Switch: 'Switch',
+  ScrollView: 'ScrollView',
   // Mock DevMenu and related modules that cause issues in tests
   DevMenu: {
     show: jest.fn(),
@@ -605,12 +601,17 @@ describe('CameraScreen Normal Flow Tests', () => {
         onCaptureReviewSave: jest.fn(),
       });
 
-      const { findByText, findByTestId } = render(<CameraScreen />);
+      const { findByText, findByTestId, queryByText } = render(<CameraScreen />);
 
       expect(await findByText('撮影内容を確認')).toBeTruthy();
-      expect(await findByText('料理ジャンル')).toBeTruthy();
+      expect(await findByTestId('capture-review-cuisine-和食')).toBeTruthy();
+      expect(await findByText('料理名やメニュー名を入れておくと、あとで探しやすくなります。')).toBeTruthy();
+      expect(await findByText('店名・施設名・自宅など、食べた場所を記録できます。')).toBeTruthy();
       expect(await findByTestId('meal-name-input')).toBeTruthy();
+      expect(await findByTestId('location-field-toggle')).toBeTruthy();
+      expect(await findByTestId('notes-field-toggle')).toBeTruthy();
       expect(await findByTestId('save-meal-button')).toBeTruthy();
+      expect(queryByText('ボタンをタップして撮影')).toBeNull();
     });
 
     test('should call cuisine type change handler when a cuisine option is pressed', async () => {
@@ -646,6 +647,44 @@ describe('CameraScreen Normal Flow Tests', () => {
       fireEvent.press(await findByTestId('capture-review-cuisine-和食'));
 
       expect(mockOnCaptureReviewChange).toHaveBeenCalledWith('cuisineType', '和食');
+    });
+
+    test('should expand location and notes inputs only after tapping each row', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue({
+        takingPhoto: false,
+        facing: 'back',
+        cameraRef: mockCameraRef,
+        successMessage: '',
+        captureReview: {
+          photoUri: '/mock/photo.jpg',
+          width: 800,
+          height: 600,
+          mealName: '',
+          cuisineType: '',
+          notes: '',
+          locationName: '',
+          isHomemade: true,
+        },
+        takePicture: jest.fn(),
+        flipCamera: jest.fn(),
+        showCloseConfirmDialog: jest.fn(),
+        onSuccessMessageOk: jest.fn(),
+        onSuccessMessageGoToRecords: jest.fn(),
+        onCaptureReviewChange: jest.fn(),
+        onCaptureReviewCancel: jest.fn(),
+        onCaptureReviewSave: jest.fn(),
+      });
+
+      const { findByTestId, queryByTestId } = render(<CameraScreen />);
+
+      expect(queryByTestId('location-field-toggle-input')).toBeNull();
+      expect(queryByTestId('notes-field-toggle-input')).toBeNull();
+
+      fireEvent.press(await findByTestId('location-field-toggle'));
+      expect(await findByTestId('location-field-toggle-input')).toBeTruthy();
+
+      fireEvent.press(await findByTestId('notes-field-toggle'));
+      expect(await findByTestId('notes-field-toggle-input')).toBeTruthy();
     });
   });
 });

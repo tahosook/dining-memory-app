@@ -50,6 +50,7 @@
 - Permission denied: explain why the permission is needed and provide a recovery path through system settings.
 - Capture failure: let the user retry or return to the camera.
 - Local persistence failure: do not create the meal record and show a retry path.
+- Android photo-save permission denied during capture review: do not create the meal record, keep the review inputs intact, and offer a direct path to the system settings screen.
 - Search refresh failure: keep the last successful results when possible and show a retry action.
 - Stats refresh failure: keep the last successful summary when possible and show a retry action.
 - Delete action: confirm destructive changes before applying them.

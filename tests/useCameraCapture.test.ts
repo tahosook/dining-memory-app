@@ -1,10 +1,12 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { Alert, Platform } from 'react-native';
+import { Alert, Linking, Platform } from 'react-native';
 import type { PermissionResponse } from 'expo-camera';
 import { useCameraCapture } from '../src/hooks/cameraCapture/useCameraCapture';
 import { MealService } from '../src/database/services/MealService';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as Location from 'expo-location';
+import ImageResizer from 'react-native-image-resizer';
+import { persistPhotoToStablePath } from '../src/hooks/cameraCapture/photoStorage';
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -20,12 +22,28 @@ jest.mock('../src/database/services/MealService', () => ({
 
 jest.mock('expo-media-library', () => ({
   createAssetAsync: jest.fn(),
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
 }));
 
-jest.mock('expo-file-system/legacy', () => ({
-  copyAsync: jest.fn(),
-  deleteAsync: jest.fn(),
-  documentDirectory: 'file:///mock-documents/',
+jest.mock('expo-location', () => ({
+  requestForegroundPermissionsAsync: jest.fn(),
+  getLastKnownPositionAsync: jest.fn(),
+  getCurrentPositionAsync: jest.fn(),
+  Accuracy: {
+    Balanced: 'balanced',
+  },
+}));
+
+jest.mock('../src/hooks/cameraCapture/photoStorage', () => ({
+  persistPhotoToStablePath: jest.fn(),
+}));
+
+jest.mock('react-native-image-resizer', () => ({
+  __esModule: true,
+  default: {
+    createResizedImage: jest.fn(),
+  },
 }));
 
 describe('useCameraCapture', () => {
@@ -38,21 +56,53 @@ describe('useCameraCapture', () => {
   let consoleLogSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
   let consoleErrorSpy: jest.SpyInstance;
+  let openSettingsSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     Platform.OS = 'ios';
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    openSettingsSpy = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
     consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(jest.fn());
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
-    (FileSystem.copyAsync as jest.Mock).mockResolvedValue(undefined);
-    (FileSystem.deleteAsync as jest.Mock).mockResolvedValue(undefined);
     (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({ id: 'asset-1' });
+    (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue({
+      granted: true,
+      canAskAgain: true,
+      status: 'granted',
+      accessPrivileges: 'all',
+    });
+    (MediaLibrary.requestPermissionsAsync as jest.Mock).mockResolvedValue({
+      granted: true,
+      canAskAgain: true,
+      status: 'granted',
+      accessPrivileges: 'all',
+    });
     (MealService.createMeal as jest.Mock).mockResolvedValue({ id: 'meal-1' });
+    (persistPhotoToStablePath as jest.Mock).mockResolvedValue({
+      stablePhotoUri: 'file:///mock-documents/meal-123.jpg',
+      savedToMediaLibrary: false,
+    });
+    (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
+    (Location.getLastKnownPositionAsync as jest.Mock).mockResolvedValue({
+      coords: { latitude: 35.6895, longitude: 139.6917 },
+    });
+    (Location.getCurrentPositionAsync as jest.Mock).mockResolvedValue({
+      coords: { latitude: 35.6895, longitude: 139.6917 },
+    });
+    (ImageResizer.createResizedImage as jest.Mock).mockResolvedValue({
+      path: '/tmp/resized-photo.jpg',
+      uri: 'file:///tmp/resized-photo.jpg',
+      size: 123456,
+      name: 'resized-photo.jpg',
+      width: 1600,
+      height: 1200,
+    });
   });
 
   afterEach(() => {
+    openSettingsSpy.mockRestore();
     consoleLogSpy.mockRestore();
     consoleWarnSpy.mockRestore();
     consoleErrorSpy.mockRestore();
@@ -83,7 +133,7 @@ describe('useCameraCapture', () => {
   });
 
   test('does not create a meal when local persistence fails', async () => {
-    (FileSystem.copyAsync as jest.Mock).mockRejectedValue(new Error('copy failed'));
+    (persistPhotoToStablePath as jest.Mock).mockRejectedValue(new Error('copy failed'));
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
 
     result.current.cameraRef.current = {
@@ -139,12 +189,155 @@ describe('useCameraCapture', () => {
         expect.objectContaining({
           meal_name: 'パスタ',
           cuisine_type: '洋食',
-          photo_path: expect.stringMatching(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/),
+          latitude: 35.6895,
+          longitude: 139.6917,
+          photo_path: 'file:///mock-documents/meal-123.jpg',
         })
       );
     });
 
-    expect(FileSystem.copyAsync).toHaveBeenCalled();
+    expect(persistPhotoToStablePath).toHaveBeenCalledWith('file:///tmp/resized-photo.jpg');
+    expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
+      'file:///tmp/photo.jpg',
+      1600,
+      1200,
+      'JPEG',
+      75,
+      0,
+      undefined,
+      true,
+      {
+        mode: 'contain',
+        onlyScaleDown: true,
+      }
+    );
     expect(result.current.successMessage).toContain('パスタ を記録しました');
+  });
+
+  test('requests Android photo save permission before saving', async () => {
+    Platform.OS = 'android';
+    (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue({
+      granted: false,
+      canAskAgain: true,
+      status: 'undetermined',
+      accessPrivileges: 'none',
+    });
+    (MediaLibrary.requestPermissionsAsync as jest.Mock).mockResolvedValue({
+      granted: true,
+      canAskAgain: true,
+      status: 'granted',
+      accessPrivileges: 'all',
+    });
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    act(() => {
+      result.current.onCaptureReviewChange('mealName', 'チャーハン');
+    });
+
+    await act(async () => {
+      await result.current.onCaptureReviewSave();
+    });
+
+    expect(MediaLibrary.getPermissionsAsync).toHaveBeenCalledWith(false, ['photo']);
+    expect(MediaLibrary.requestPermissionsAsync).toHaveBeenCalledWith(false, ['photo']);
+    expect(persistPhotoToStablePath).toHaveBeenCalled();
+    expect(MealService.createMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meal_name: 'チャーハン',
+      })
+    );
+  });
+
+  test('continues saving when location permission is denied', async () => {
+    (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ granted: false });
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    act(() => {
+      result.current.onCaptureReviewChange('mealName', '海鮮丼');
+    });
+
+    await act(async () => {
+      await result.current.onCaptureReviewSave();
+    });
+
+    expect(MealService.createMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meal_name: '海鮮丼',
+        latitude: undefined,
+        longitude: undefined,
+      })
+    );
+  });
+
+  test('shows settings guidance and keeps review open when Android photo permission is denied', async () => {
+    Platform.OS = 'android';
+    (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue({
+      granted: false,
+      canAskAgain: false,
+      status: 'denied',
+      accessPrivileges: 'none',
+    });
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    act(() => {
+      result.current.onCaptureReviewChange('mealName', '海老天丼');
+    });
+
+    await act(async () => {
+      await result.current.onCaptureReviewSave();
+    });
+
+    expect(MealService.createMeal).not.toHaveBeenCalled();
+    expect(persistPhotoToStablePath).not.toHaveBeenCalled();
+    expect(result.current.captureReview?.mealName).toBe('海老天丼');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '写真の保存権限が必要です',
+      'Dining Memory アルバムへ写真を保存するには、アプリ設定で写真の保存権限を許可してください。',
+      expect.any(Array)
+    );
+
+    const alertButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
+    const settingsButton = alertButtons.find((button) => button.text === '設定を開く');
+    await act(async () => {
+      settingsButton?.onPress?.();
+    });
+
+    expect(Linking.openSettings).toHaveBeenCalled();
   });
 });

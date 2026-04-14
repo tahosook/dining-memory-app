@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../../constants/Colors';
-import { GlobalStyles } from '../../../constants/Styles';
-import { PLATFORM_CONFIGS } from '../../../constants/CameraConstants';
-import { Platform } from 'react-native';
 
 /**
  * カメラ画面のトップバーコンポーネント
@@ -16,12 +15,10 @@ interface TopBarProps {
 }
 
 const TopBar: React.FC<TopBarProps> = ({ onClosePress, onFlipPress }) => {
-  // Platform-specific configurations using centralized constants
-  const platformConfig = PLATFORM_CONFIGS[Platform.OS as keyof typeof PLATFORM_CONFIGS] || PLATFORM_CONFIGS.default;
-  const topBarMarginTop = platformConfig.topBarMarginTop;
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.topBar, { marginTop: topBarMarginTop }]}>
+    <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
       <TouchableOpacity
         style={styles.closeButton}
         onPress={onClosePress}
@@ -40,7 +37,7 @@ const TopBar: React.FC<TopBarProps> = ({ onClosePress, onFlipPress }) => {
         accessibilityHint="フロントカメラとバックカメラを切り替えます"
         accessibilityRole="button"
       >
-        <Text style={styles.buttonText}>🔄</Text>
+        <Ionicons name="camera-reverse-outline" size={22} color={Colors.white} />
       </TouchableOpacity>
     </View>
   );
@@ -67,6 +64,7 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 20,
     fontWeight: 'bold',
+    lineHeight: 20,
   },
   flipButton: {
     width: 44,
@@ -75,10 +73,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  buttonText: {
-    ...GlobalStyles.body,
-    color: Colors.white,
   },
 });
 

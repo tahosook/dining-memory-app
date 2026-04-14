@@ -18,7 +18,12 @@
 - States to support: permission denied, taking photo, capture review, success message, capture error, and web/mock fallback.
 - Before the first permission request, show a short explanation card and ask for permission only from an explicit CTA.
 - If permission is denied, show a recovery card with a direct path to the system settings screen.
-- Capture review should let the user set meal name, cuisine type, location, note, and homemade flag before saving.
+- Capture review should be vertically scrollable and sit slightly above center so the top controls and captured photo still feel connected.
+- Capture review should show the fields in this order: meal name, cuisine type, homemade flag, location, note.
+- Each review field should include a short helper line in muted text so the user understands what to enter without opening another help surface.
+- Location and note should default to compact closed rows and expand inline only after the user taps them.
+- Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
+- If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
 
 ## Records Screen
 - Shows meal records grouped by date.

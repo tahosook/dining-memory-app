@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   },
   focusSquare: {
     width: screenWidth * CAMERA_CONSTANTS.FOCUS_AREA_RATIO,
-    height: screenWidth * CAMERA_CONSTANTS.FOCUS_AREA_RATIO,
+    height: (screenWidth * CAMERA_CONSTANTS.FOCUS_AREA_RATIO) / CAMERA_CONSTANTS.FOCUS_AREA_ASPECT_RATIO,
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.8)',
     borderStyle: 'dashed',

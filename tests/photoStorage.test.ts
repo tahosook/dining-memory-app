@@ -1,0 +1,73 @@
+import { Platform } from 'react-native';
+import * as MediaLibrary from 'expo-media-library';
+import { copyAsync } from 'expo-file-system/legacy';
+import { ANDROID_PHOTO_ALBUM_NAME, persistPhotoToStablePath } from '../src/hooks/cameraCapture/photoStorage';
+
+jest.mock('expo-media-library', () => ({
+  createAssetAsync: jest.fn(),
+  getAlbumAsync: jest.fn(),
+  createAlbumAsync: jest.fn(),
+  addAssetsToAlbumAsync: jest.fn(),
+}));
+
+jest.mock('expo-file-system/legacy', () => ({
+  copyAsync: jest.fn(),
+  documentDirectory: 'file:///mock-documents/',
+}));
+
+describe('photoStorage', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('stores Android photos in the dedicated Dining Memory album', async () => {
+    Platform.OS = 'android';
+    (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({ id: 'asset-1', uri: 'file:///asset.jpg' });
+    (MediaLibrary.getAlbumAsync as jest.Mock).mockResolvedValue({ id: 'album-1' });
+
+    const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg');
+
+    expect(copyAsync).toHaveBeenCalledWith({
+      from: 'file:///tmp/resized-photo.jpg',
+      to: expect.stringMatching(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/),
+    });
+    expect(MediaLibrary.getAlbumAsync).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
+    expect(MediaLibrary.addAssetsToAlbumAsync).toHaveBeenCalledWith(
+      { id: 'asset-1', uri: 'file:///asset.jpg' },
+      { id: 'album-1' },
+      false
+    );
+    expect(result.stablePhotoUri).toMatch(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/);
+    expect(result.savedToMediaLibrary).toBe(true);
+  });
+
+  test('keeps the local stable copy even if album registration fails on Android', async () => {
+    Platform.OS = 'android';
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+    (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({ id: 'asset-1', uri: 'content://media/external/images/media/123' });
+    (MediaLibrary.getAlbumAsync as jest.Mock).mockResolvedValue({ id: 'album-1' });
+    (MediaLibrary.addAssetsToAlbumAsync as jest.Mock).mockRejectedValue(new Error('album failed'));
+
+    const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg');
+
+    expect(result.stablePhotoUri).toMatch(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/);
+    expect(result.savedToMediaLibrary).toBe(true);
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'Android album save failed, but local photo copy is preserved:',
+      expect.any(Error)
+    );
+    consoleWarnSpy.mockRestore();
+  });
+
+  test('stores iOS photos in the document directory', async () => {
+    Platform.OS = 'ios';
+
+    const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg');
+
+    expect(copyAsync).toHaveBeenCalledWith({
+      from: 'file:///tmp/resized-photo.jpg',
+      to: expect.stringMatching(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/),
+    });
+    expect(result.savedToMediaLibrary).toBe(false);
+  });
+});

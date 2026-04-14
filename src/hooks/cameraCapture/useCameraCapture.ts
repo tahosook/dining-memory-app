@@ -2,12 +2,16 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as MediaLibrary from 'expo-media-library';
-import { copyAsync, deleteAsync, documentDirectory } from 'expo-file-system/legacy';
+import { deleteAsync } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
+import * as Location from 'expo-location';
+import ImageResizer from 'react-native-image-resizer';
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
 import { CameraCaptureMock } from './useCameraCaptureMock';
 import { MealService } from '../../database/services/MealService';
 import type { CuisineTypeOption } from '../../constants/MealOptions';
+import { persistPhotoToStablePath } from './photoStorage';
+import { openAppSettings } from '../../utils/openAppSettings';
 
 export interface CaptureReviewState {
   photoUri: string;
@@ -19,6 +23,8 @@ export interface CaptureReviewState {
   locationName: string;
   isHomemade: boolean;
 }
+
+const PHOTO_PERMISSION_SCOPE: MediaLibrary.GranularPermission[] = ['photo'];
 
 /**
  * カメラキャプチャ機能のHook
@@ -58,23 +64,6 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     }
   }, []);
 
-  const persistPhotoLocally = useCallback(async (photoUri: string): Promise<string> => {
-    if (!documentDirectory) {
-      throw new Error('Document directory is not available');
-    }
-
-    const extensionMatch = photoUri.match(/\.[a-zA-Z0-9]+(?=$|[?#])/);
-    const extension = extensionMatch?.[0] ?? '.jpg';
-    const destination = `${documentDirectory}meal-${Date.now()}${extension}`;
-
-    await copyAsync({
-      from: photoUri,
-      to: destination,
-    });
-
-    return destination;
-  }, []);
-
   // テンポラリファイルのクリーンアップ
   const cleanupTempFile = useCallback(async (photoUri: string) => {
     try {
@@ -82,6 +71,107 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       console.log('Temp file cleaned up');
     } catch (cleanupError: unknown) {
       console.warn('Cleanup failed:', cleanupError instanceof Error ? cleanupError.message : cleanupError);
+    }
+  }, []);
+
+  const persistPhotoLocally = useCallback(async (photoUri: string) => {
+    const resizedPhoto = await ImageResizer.createResizedImage(
+      photoUri,
+      CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH,
+      CAMERA_CONSTANTS.SAVED_PHOTO_MAX_HEIGHT,
+      'JPEG',
+      CAMERA_CONSTANTS.SAVED_PHOTO_QUALITY_PERCENT,
+      0,
+      undefined,
+      true,
+      {
+        mode: 'contain',
+        onlyScaleDown: true,
+      }
+    );
+
+    try {
+      return await persistPhotoToStablePath(resizedPhoto.uri);
+    } finally {
+      if (resizedPhoto.uri !== photoUri) {
+        await cleanupTempFile(resizedPhoto.uri);
+      }
+    }
+  }, [cleanupTempFile]);
+
+  const openPhotoSettings = useCallback(async () => {
+    await openAppSettings({
+      errorLogLabel: 'Open photo settings error',
+      alertMessage: 'アプリの設定画面から写真の保存権限を許可してください。',
+    });
+  }, []);
+
+  const promptForPhotoSavePermission = useCallback(() => {
+    Alert.alert(
+      '写真の保存権限が必要です',
+      'Dining Memory アルバムへ写真を保存するには、アプリ設定で写真の保存権限を許可してください。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '設定を開く',
+          onPress: () => {
+            void openPhotoSettings();
+          },
+        },
+      ]
+    );
+  }, [openPhotoSettings]);
+
+  const ensurePhotoSavePermission = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+
+    const currentPermission = await MediaLibrary.getPermissionsAsync(false, PHOTO_PERMISSION_SCOPE);
+    if (currentPermission.granted) {
+      return true;
+    }
+
+    const nextPermission = currentPermission.canAskAgain === false
+      ? currentPermission
+      : await MediaLibrary.requestPermissionsAsync(false, PHOTO_PERMISSION_SCOPE);
+
+    if (nextPermission.granted) {
+      return true;
+    }
+
+    promptForPhotoSavePermission();
+    return false;
+  }, [promptForPhotoSavePermission]);
+
+  const getCurrentCoordinates = useCallback(async (): Promise<{ latitude?: number; longitude?: number }> => {
+    if (Platform.OS === 'web') {
+      return {};
+    }
+
+    try {
+      const permission = await Location.requestForegroundPermissionsAsync();
+      if (!permission.granted) {
+        return {};
+      }
+
+      const lastKnownPosition = await Location.getLastKnownPositionAsync({
+        maxAge: 1000 * 60 * 5,
+        requiredAccuracy: 200,
+      });
+
+      const currentPosition = lastKnownPosition
+        ?? await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+      return {
+        latitude: currentPosition.coords.latitude,
+        longitude: currentPosition.coords.longitude,
+      };
+    } catch (locationError: unknown) {
+      console.warn('Location lookup skipped:', locationError instanceof Error ? locationError.message : locationError);
+      return {};
     }
   }, []);
 
@@ -204,26 +294,39 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
     try {
       const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
-      stablePhotoUri = isWebWithoutPermissions
-        ? captureReview.photoUri
+      if (!isWebWithoutPermissions) {
+        const hasPhotoSavePermission = await ensurePhotoSavePermission();
+        if (!hasPhotoSavePermission) {
+          return;
+        }
+      }
+
+      const locationSnapshot = await getCurrentCoordinates();
+      const persistedPhoto = isWebWithoutPermissions
+        ? { stablePhotoUri: captureReview.photoUri, savedToMediaLibrary: false }
         : await persistPhotoLocally(captureReview.photoUri);
+      stablePhotoUri = persistedPhoto.stablePhotoUri;
 
       await MealService.createMeal({
         meal_name: captureReview.mealName.trim(),
         cuisine_type: captureReview.cuisineType || undefined,
         notes: captureReview.notes.trim() || undefined,
         location_name: captureReview.locationName.trim() || undefined,
+        latitude: locationSnapshot.latitude,
+        longitude: locationSnapshot.longitude,
         is_homemade: captureReview.isHomemade,
         photo_path: stablePhotoUri,
         meal_datetime: new Date(),
       });
 
-      if (!isWebWithoutPermissions) {
+      if (!isWebWithoutPermissions && !persistedPhoto.savedToMediaLibrary) {
         const saveSuccess = await savePhotoToMediaLibrary(stablePhotoUri);
         if (!saveSuccess) {
           console.warn('Media library save skipped, but local record is preserved.');
         }
+      }
 
+      if (!isWebWithoutPermissions && stablePhotoUri !== captureReview.photoUri) {
         await cleanupTempFile(captureReview.photoUri);
       }
 
@@ -236,7 +339,16 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       console.error('記録保存エラー:', error);
       Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
     }
-  }, [cameraPermission, captureReview, cleanupTempFile, persistPhotoLocally, savePhotoToMediaLibrary, showSaveSuccessMessage]);
+  }, [
+    cameraPermission,
+    captureReview,
+    cleanupTempFile,
+    ensurePhotoSavePermission,
+    getCurrentCoordinates,
+    persistPhotoLocally,
+    savePhotoToMediaLibrary,
+    showSaveSuccessMessage,
+  ]);
 
   return {
     // State

@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert } from 'react-native';
 import { PermissionResponse, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
+import { openAppSettings as openSystemSettings } from '../../utils/openAppSettings';
 
 export type CameraPermissionUiState = 'checking' | 'needs_request' | 'denied' | 'granted';
 
@@ -58,12 +59,10 @@ export const useCameraPermission = (): CameraPermissionState => {
   }, [handlePermissionError, permission, requestMediaLibraryPermission, requestPermission]);
 
   const openAppSettings = useCallback(async (): Promise<void> => {
-    try {
-      await Linking.openSettings();
-    } catch (error) {
-      console.error('Open settings error:', error);
-      Alert.alert('設定を開けませんでした', 'アプリの設定画面からカメラ権限を許可してください。');
-    }
+    await openSystemSettings({
+      errorLogLabel: 'Open settings error',
+      alertMessage: 'アプリの設定画面からカメラ権限を許可してください。',
+    });
   }, []);
 
   const uiState = useMemo<CameraPermissionUiState>(() => {

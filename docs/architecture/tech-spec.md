@@ -11,7 +11,7 @@
 - TypeScript 6
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
-- Expo Camera, expo-file-system, expo-media-library, and related native modules
+- Expo Camera, expo-file-system, expo-location, expo-media-library, and related native modules
 
 ## Architecture Principles
 - Offline-first by default.
@@ -30,7 +30,10 @@
 - Local development uses Node.js 20.19+.
 - Expo SDK 55 keeps the New Architecture enabled at all times.
 - App data lives primarily on the device.
-- Captured photos should be copied to an app-local stable path before the meal record is stored.
+- Captured photos should be resized before save.
+- On Android, captured photos should keep an app-local stable file for in-app display and also be added to a dedicated `Pictures / Dining Memory` album so future backup targeting stays possible without mixing unrelated media.
+- On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
+- On iOS and web, saved photos can continue using app-local stable paths.
 - Cloud use is optional and should be treated as a future fallback path, not the default path.
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
@@ -39,7 +42,7 @@
 ## Security and Privacy Defaults
 - Prefer local storage and local processing unless a feature clearly needs external transfer.
 - Request only the minimum camera, photo, and location access needed for the active feature.
-- Do not request Android storage or location permissions when the current feature set only needs camera access and media-library save access.
+- Request foreground location only at save time, and keep meal saving available even if location permission is denied.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
 - Keep secrets out of source control and out of runtime logs.
