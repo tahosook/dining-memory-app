@@ -7,7 +7,6 @@ jest.mock('expo-media-library', () => ({
   createAssetAsync: jest.fn(),
   getAlbumAsync: jest.fn(),
   createAlbumAsync: jest.fn(),
-  addAssetsToAlbumAsync: jest.fn(),
 }));
 
 jest.mock('expo-file-system/legacy', () => ({
@@ -32,10 +31,25 @@ describe('photoStorage', () => {
       to: expect.stringMatching(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/),
     });
     expect(MediaLibrary.getAlbumAsync).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
-    expect(MediaLibrary.addAssetsToAlbumAsync).toHaveBeenCalledWith(
-      { id: 'asset-1', uri: 'file:///asset.jpg' },
+    expect(MediaLibrary.createAssetAsync).toHaveBeenCalledWith(
+      expect.stringMatching(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/),
       { id: 'album-1' },
-      false
+    );
+    expect(result.stablePhotoUri).toMatch(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/);
+    expect(result.savedToMediaLibrary).toBe(true);
+  });
+
+  test('creates the dedicated album directly from the local file when it does not exist on Android', async () => {
+    Platform.OS = 'android';
+    (MediaLibrary.getAlbumAsync as jest.Mock).mockResolvedValue(null);
+
+    const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg');
+
+    expect(MediaLibrary.createAlbumAsync).toHaveBeenCalledWith(
+      ANDROID_PHOTO_ALBUM_NAME,
+      undefined,
+      undefined,
+      expect.stringMatching(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/)
     );
     expect(result.stablePhotoUri).toMatch(/^file:\/\/\/mock-documents\/meal-\d+\.jpg$/);
     expect(result.savedToMediaLibrary).toBe(true);
@@ -44,9 +58,8 @@ describe('photoStorage', () => {
   test('keeps the local stable copy even if album registration fails on Android', async () => {
     Platform.OS = 'android';
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
-    (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({ id: 'asset-1', uri: 'content://media/external/images/media/123' });
     (MediaLibrary.getAlbumAsync as jest.Mock).mockResolvedValue({ id: 'album-1' });
-    (MediaLibrary.addAssetsToAlbumAsync as jest.Mock).mockRejectedValue(new Error('album failed'));
+    (MediaLibrary.createAssetAsync as jest.Mock).mockRejectedValue(new Error('album failed'));
 
     const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg');
 

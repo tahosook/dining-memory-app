@@ -30,14 +30,6 @@ const platformConfig = PLATFORM_CONFIGS[Platform.OS as keyof typeof PLATFORM_CON
 const safeAreaEdges = platformConfig.safeAreaEdges as ('top' | 'bottom' | 'left' | 'right')[];
 const bottomBarMarginBottom = platformConfig.bottomBarMarginBottom;
 
-const REVIEW_HELP_TEXT = {
-  mealName: '料理名やメニュー名を入れておくと、あとで探しやすくなります。',
-  cuisineType: '和食・洋食など、あとで振り返りやすい分類を選びます。',
-  isHomemade: '自宅で作った料理ならオンのままにしてください。',
-  location: '店名・施設名・自宅など、食べた場所を記録できます。',
-  notes: '味や量、その日のことなど自由に残せます。',
-} as const;
-
 type CameraLogicState = {
   takingPhoto: boolean;
   facing: 'front' | 'back';
@@ -57,14 +49,11 @@ type CameraPermissionState = {
   permissionUiState: CameraPermissionUiState;
 };
 
-type CameraSuccessState = {
-  successMessage: string;
+type CameraReviewState = {
   captureReview: CaptureReviewState | null;
 };
 
-type CameraSuccessOperations = {
-  onSuccessMessageOk: () => void;
-  onSuccessMessageGoToRecords: () => void;
+type CameraReviewOperations = {
   onCaptureReviewChange: (
     field: keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>,
     value: string | boolean
@@ -76,28 +65,15 @@ type CameraSuccessOperations = {
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
   Pick<CameraOperations, 'onTakePicture' | 'onFlipCamera' | 'onClose' | 'onRequestPermission' | 'onOpenSettings'> &
   Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
-  Pick<CameraSuccessState, 'successMessage' | 'captureReview'> &
-  Pick<
-    CameraSuccessOperations,
-    'onSuccessMessageOk' | 'onSuccessMessageGoToRecords' | 'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'
-  >;
+  Pick<CameraReviewState, 'captureReview'> &
+  Pick<CameraReviewOperations, 'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'>;
 
-type ExpandableField = 'location' | 'notes' | null;
-
-interface ReviewSectionProps {
-  label: string;
-  helpText: string;
-  children: React.ReactNode;
-}
-
-interface ExpandableReviewFieldProps {
-  field: Exclude<ExpandableField, null>;
-  label: string;
-  helpText: string;
+interface RevealableReviewFieldProps {
   placeholder: string;
+  triggerLabel: string;
   value: string;
-  expandedField: ExpandableField;
-  onPress: (field: Exclude<ExpandableField, null>) => void;
+  visible: boolean;
+  onPress: () => void;
   onChange: (value: string) => void;
   onLayout: (event: LayoutChangeEvent) => void;
   multiline?: boolean;
@@ -138,34 +114,6 @@ const PermissionDeniedView: React.FC<{ onOpenSettings: () => Promise<void> }> = 
   </View>
 );
 
-interface SuccessMessageProps {
-  message: string;
-  onOk: () => void;
-  onGoToRecords: () => void;
-}
-
-const SuccessMessage: React.FC<SuccessMessageProps> = ({ message, onOk, onGoToRecords }) => {
-  if (!message) return null;
-
-  return (
-    <View style={styles.successContainer}>
-      <View style={styles.successContent}>
-        <Text style={styles.successText} accessibilityLabel="撮影成功メッセージ">
-          {message}
-        </Text>
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity style={[styles.successButton, styles.okButton]} onPress={onOk}>
-            <Text style={styles.buttonText}>OK</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.successButton, styles.recordsButton]} onPress={onGoToRecords}>
-            <Text style={styles.buttonText}>記録タブで確認</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-};
-
 const FocusArea: React.FC = () => (
   <View style={styles.focusArea}>
     <View style={styles.focusSquare} accessibilityLabel="撮影範囲">
@@ -176,56 +124,35 @@ const FocusArea: React.FC = () => (
   </View>
 );
 
-const ReviewSection: React.FC<ReviewSectionProps> = ({ label, helpText, children }) => (
-  <View style={styles.reviewSection}>
-    <Text style={styles.reviewSectionLabel}>{label}</Text>
-    <Text style={styles.reviewHelpText}>{helpText}</Text>
-    {children}
-  </View>
-);
-
-const ExpandableReviewField: React.FC<ExpandableReviewFieldProps> = ({
-  field,
-  label,
-  helpText,
+const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
   placeholder,
+  triggerLabel,
   value,
-  expandedField,
+  visible,
   onPress,
   onChange,
   onLayout,
   multiline = false,
   testID,
-}) => {
-  const isExpanded = expandedField === field;
-  const summary = value.trim() || placeholder;
-
-  return (
-    <View onLayout={onLayout} style={styles.reviewSection}>
-      <Text style={styles.reviewSectionLabel}>{label}</Text>
-      <Text style={styles.reviewHelpText}>{helpText}</Text>
-      <TouchableOpacity
-        style={[styles.expandableField, isExpanded && styles.expandableFieldActive]}
-        onPress={() => onPress(field)}
+}) => (
+  <View onLayout={onLayout}>
+    {visible ? (
+      <TextInput
+        style={[styles.reviewInput, multiline && styles.reviewNotes]}
+        placeholder={placeholder}
+        placeholderTextColor={Colors.gray}
+        value={value}
+        onChangeText={onChange}
+        multiline={multiline}
         testID={testID}
-      >
-        <Text style={[styles.expandableFieldText, !value.trim() && styles.expandableFieldPlaceholder]}>{summary}</Text>
-        <Text style={styles.expandableFieldAction}>{isExpanded ? '閉じる' : '入力する'}</Text>
+      />
+    ) : (
+      <TouchableOpacity style={styles.reviewCompactButton} onPress={onPress} testID={`${testID}-trigger`}>
+        <Text style={styles.reviewCompactButtonText}>{triggerLabel}</Text>
       </TouchableOpacity>
-      {isExpanded ? (
-        <TextInput
-          style={[styles.reviewInput, multiline && styles.reviewNotes]}
-          placeholder={placeholder}
-          placeholderTextColor={Colors.gray}
-          value={value}
-          onChangeText={onChange}
-          multiline={multiline}
-          testID={`${testID}-input`}
-        />
-      ) : null}
-    </View>
-  );
-};
+    )}
+  </View>
+);
 
 interface CaptureReviewProps {
   captureReview: CaptureReviewState;
@@ -238,25 +165,41 @@ interface CaptureReviewProps {
 }
 
 const CaptureReview: React.FC<CaptureReviewProps> = ({ captureReview, onChange, onCancel, onSave }) => {
-  const [expandedField, setExpandedField] = React.useState<ExpandableField>(null);
-  const [reviewScrollView, setReviewScrollView] = React.useState<ScrollView | null>(null);
+  const [showLocationInput, setShowLocationInput] = React.useState(Boolean(captureReview.locationName.trim()));
+  const [showNotesInput, setShowNotesInput] = React.useState(Boolean(captureReview.notes.trim()));
+  const reviewScrollViewRef = React.useRef<ScrollView | null>(null);
   const [sectionOffsets, setSectionOffsets] = React.useState({ location: 0, notes: 0 });
 
-  const openField = React.useCallback(
-    (field: Exclude<ExpandableField, null>) => {
-      setExpandedField((current) => current === field ? null : field);
+  React.useEffect(() => {
+    if (captureReview.locationName.trim()) {
+      setShowLocationInput(true);
+    }
+
+    if (captureReview.notes.trim()) {
+      setShowNotesInput(true);
+    }
+  }, [captureReview.locationName, captureReview.notes]);
+
+  const revealField = React.useCallback(
+    (field: 'location' | 'notes') => {
+      if (field === 'location') {
+        setShowLocationInput(true);
+      } else {
+        setShowNotesInput(true);
+      }
+
       setTimeout(() => {
-        reviewScrollView?.scrollTo({
+        reviewScrollViewRef.current?.scrollTo({
           y: Math.max(sectionOffsets[field] - 24, 0),
           animated: true,
         });
       }, 0);
     },
-    [reviewScrollView, sectionOffsets]
+    [sectionOffsets]
   );
 
   const updateSectionOffset = React.useCallback(
-    (field: Exclude<ExpandableField, null>, event: LayoutChangeEvent) => {
+    (field: 'location' | 'notes', event: LayoutChangeEvent) => {
       const nextY = event.nativeEvent.layout.y;
       setSectionOffsets((current) => current[field] === nextY ? current : { ...current, [field]: nextY });
     },
@@ -264,10 +207,10 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({ captureReview, onChange, 
   );
 
   return (
-    <View style={styles.reviewContainer}>
+    <View style={styles.reviewContainer} testID="capture-review-container">
       <View style={styles.reviewCard}>
         <ScrollView
-          ref={setReviewScrollView}
+          ref={reviewScrollViewRef}
           style={styles.reviewScroll}
           contentContainerStyle={styles.reviewScrollContent}
           keyboardShouldPersistTaps="handled"
@@ -276,59 +219,49 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({ captureReview, onChange, 
           <Text style={styles.reviewTitle}>撮影内容を確認</Text>
           <Image source={{ uri: captureReview.photoUri }} style={styles.reviewImage} resizeMode="cover" />
 
-          <ReviewSection label="料理名" helpText={REVIEW_HELP_TEXT.mealName}>
-            <TextInput
-              style={styles.reviewInput}
-              placeholder="例: 親子丼 / マルゲリータ"
-              placeholderTextColor={Colors.gray}
-              value={captureReview.mealName}
-              onChangeText={(value) => onChange('mealName', value)}
-              testID="meal-name-input"
-            />
-          </ReviewSection>
-
-          <ReviewSection label="料理ジャンル" helpText={REVIEW_HELP_TEXT.cuisineType}>
-            <CuisineTypeSelector
-              label="料理ジャンル"
-              value={captureReview.cuisineType}
-              onChange={(value) => onChange('cuisineType', value)}
-              testIDPrefix="capture-review-cuisine"
-              labelColor={Colors.white}
-            />
-          </ReviewSection>
-
-          <ReviewSection label="自炊" helpText={REVIEW_HELP_TEXT.isHomemade}>
-            <View style={styles.reviewSwitchRow}>
-              <Text style={styles.reviewSwitchLabel}>{captureReview.isHomemade ? '自炊として記録する' : '外食・購入品として記録する'}</Text>
-              <Switch value={captureReview.isHomemade} onValueChange={(value) => onChange('isHomemade', value)} />
-            </View>
-          </ReviewSection>
-
-          <ExpandableReviewField
-            field="location"
-            label="場所"
-            helpText={REVIEW_HELP_TEXT.location}
-            placeholder="例: 自宅 / 渋谷ヒカリエ / 〇〇食堂"
-            value={captureReview.locationName}
-            expandedField={expandedField}
-            onPress={openField}
-            onChange={(value) => onChange('locationName', value)}
-            onLayout={(event) => updateSectionOffset('location', event)}
-            testID="location-field-toggle"
+          <TextInput
+            style={styles.reviewInput}
+            placeholder="料理名"
+            placeholderTextColor={Colors.gray}
+            value={captureReview.mealName}
+            onChangeText={(value) => onChange('mealName', value)}
+            testID="meal-name-input"
           />
 
-          <ExpandableReviewField
-            field="notes"
-            label="メモ"
-            helpText={REVIEW_HELP_TEXT.notes}
-            placeholder="例: 少し辛め / 友人と夕食 / また食べたい"
+          <CuisineTypeSelector
+            value={captureReview.cuisineType}
+            onChange={(value) => onChange('cuisineType', value)}
+            testIDPrefix="capture-review-cuisine"
+            labelColor={Colors.white}
+            showLabel={false}
+          />
+
+          <View style={styles.reviewSwitchRow}>
+            <Text style={styles.reviewSwitchLabel}>自炊</Text>
+            <Switch value={captureReview.isHomemade} onValueChange={(value) => onChange('isHomemade', value)} />
+          </View>
+
+          <RevealableReviewField
+            placeholder="場所"
+            triggerLabel="場所を追加"
+            value={captureReview.locationName}
+            visible={showLocationInput}
+            onPress={() => revealField('location')}
+            onChange={(value) => onChange('locationName', value)}
+            onLayout={(event) => updateSectionOffset('location', event)}
+            testID="location-input"
+          />
+
+          <RevealableReviewField
+            placeholder="メモ"
+            triggerLabel="メモを追加"
             value={captureReview.notes}
-            expandedField={expandedField}
-            onPress={openField}
+            visible={showNotesInput}
+            onPress={() => revealField('notes')}
             onChange={(value) => onChange('notes', value)}
             onLayout={(event) => updateSectionOffset('notes', event)}
             multiline
-            testID="notes-field-toggle"
+            testID="notes-input"
           />
         </ScrollView>
 
@@ -367,15 +300,12 @@ const CameraView: React.FC<CameraViewProps> = ({
   cameraPermission,
   permissionUiState,
   cameraRef,
-  successMessage,
   captureReview,
   onClose,
   onTakePicture,
   onFlipCamera,
   onRequestPermission,
   onOpenSettings,
-  onSuccessMessageOk,
-  onSuccessMessageGoToRecords,
   onCaptureReviewChange,
   onCaptureReviewCancel,
   onCaptureReviewSave,
@@ -409,15 +339,11 @@ const CameraView: React.FC<CameraViewProps> = ({
               onCancel={onCaptureReviewCancel}
               onSave={onCaptureReviewSave}
             />
-          ) : successMessage ? (
-            <SuccessMessage message={successMessage} onOk={onSuccessMessageOk} onGoToRecords={onSuccessMessageGoToRecords} />
           ) : (
             <FocusArea />
           )}
 
-          {!captureReview ? (
-            <BottomControls takingPhoto={takingPhoto} onTakePicture={onTakePicture} />
-          ) : null}
+          {!captureReview ? <BottomControls takingPhoto={takingPhoto} onTakePicture={onTakePicture} /> : null}
         </View>
       </SafeAreaView>
     </ErrorBoundary>
@@ -508,48 +434,10 @@ const styles = StyleSheet.create({
     ...GlobalStyles.body,
     color: Colors.white,
   },
-  successContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  successContent: {
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    padding: 20,
-    borderRadius: 8,
-    margin: 20,
-  },
-  successText: {
-    ...GlobalStyles.body,
-    color: Colors.white,
-    textAlign: 'center',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
-  },
-  successButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  okButton: {
-    backgroundColor: Colors.white,
-  },
-  recordsButton: {
-    backgroundColor: Colors.primary,
-  },
-  buttonText: {
-    ...GlobalStyles.body,
-    color: Colors.black,
-    fontWeight: 'bold',
-  },
   reviewContainer: {
     flex: 1,
-    paddingTop: 72,
+    justifyContent: 'flex-start',
+    paddingTop: 12,
     paddingBottom: 16,
     paddingHorizontal: 16,
   },
@@ -577,18 +465,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: Colors.gray,
   },
-  reviewSection: {
-    gap: 8,
-  },
-  reviewSectionLabel: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  reviewHelpText: {
-    ...GlobalStyles.body,
-    color: '#b5bbc2',
-  },
   reviewInput: {
     backgroundColor: Colors.white,
     borderRadius: 10,
@@ -601,28 +477,16 @@ const styles = StyleSheet.create({
     minHeight: 84,
     textAlignVertical: 'top',
   },
-  expandableField: {
+  reviewCompactButton: {
     backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
+    paddingVertical: 14,
   },
-  expandableFieldActive: {
-    borderColor: 'rgba(255,255,255,0.32)',
-  },
-  expandableFieldText: {
+  reviewCompactButtonText: {
     ...GlobalStyles.body,
-    color: Colors.white,
-  },
-  expandableFieldPlaceholder: {
-    color: '#b5bbc2',
-  },
-  expandableFieldAction: {
-    fontSize: 13,
-    fontWeight: '600',
     color: '#d7dce1',
   },
   reviewSwitchRow: {
@@ -637,8 +501,7 @@ const styles = StyleSheet.create({
   reviewSwitchLabel: {
     color: Colors.white,
     fontSize: 15,
-    flex: 1,
-    marginRight: 12,
+    fontWeight: '600',
   },
   reviewButtonRow: {
     flexDirection: 'row',

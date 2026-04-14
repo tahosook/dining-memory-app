@@ -35,7 +35,6 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   const cameraRef = useRef<CameraView>(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
-  const [successMessage, setSuccessMessage] = useState<string>('');
   const [captureReview, setCaptureReview] = useState<CaptureReviewState | null>(null);
 
   // 撮影中の状態管理
@@ -181,19 +180,6 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     navigation.navigate(ROUTE_NAMES.RECORDS);
   }, [navigation]);
 
-  // 成功メッセージのクリア（OKボタン操作用）
-  const clearSuccessMessage = useCallback(() => {
-    setSuccessMessage('');
-  }, []);
-
-  const showSaveSuccessMessage = useCallback((mealName: string) => {
-    const message = `✅ ${mealName} を記録しました
-
-続けて撮影するか、記録タブで確認できます。`;
-
-    setSuccessMessage(message);
-  }, []);
-
   const beginReview = useCallback((photo: CameraCapturedPicture) => {
     setCaptureReview({
       photoUri: photo.uri,
@@ -236,7 +222,6 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       console.log('Photo captured successfully:', photo.uri);
       console.log('Photo details:', { width: photo.width, height: photo.height });
 
-      setSuccessMessage('');
       beginReview(photo);
 
     } catch (error) {
@@ -331,7 +316,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       }
 
       setCaptureReview(null);
-      showSaveSuccessMessage(captureReview.mealName.trim());
+      navigateToRecords();
     } catch (error) {
       if (stablePhotoUri && stablePhotoUri !== captureReview.photoUri) {
         await cleanupTempFile(stablePhotoUri);
@@ -345,9 +330,9 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     cleanupTempFile,
     ensurePhotoSavePermission,
     getCurrentCoordinates,
+    navigateToRecords,
     persistPhotoLocally,
     savePhotoToMediaLibrary,
-    showSaveSuccessMessage,
   ]);
 
   return {
@@ -355,15 +340,12 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     takingPhoto: isTakingPhoto,
     facing,
     cameraRef,
-    successMessage,
     captureReview,
 
     // Actions
     takePicture,
     flipCamera,
     showCloseConfirmDialog,
-    onSuccessMessageOk: clearSuccessMessage,
-    onSuccessMessageGoToRecords: navigateToRecords,
     onCaptureReviewChange: updateCaptureReview,
     onCaptureReviewCancel: cancelReview,
     onCaptureReviewSave: saveCapture,

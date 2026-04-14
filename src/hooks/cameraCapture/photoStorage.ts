@@ -21,15 +21,13 @@ export async function persistPhotoToStablePath(photoUri: string): Promise<Persis
   });
 
   if (Platform.OS === 'android') {
-    const asset = await MediaLibrary.createAssetAsync(destination);
-
     try {
       const album = await MediaLibrary.getAlbumAsync(ANDROID_PHOTO_ALBUM_NAME);
 
       if (album) {
-        await MediaLibrary.addAssetsToAlbumAsync(asset, album, false);
+        await MediaLibrary.createAssetAsync(destination, album);
       } else {
-        await MediaLibrary.createAlbumAsync(ANDROID_PHOTO_ALBUM_NAME, asset, false);
+        await MediaLibrary.createAlbumAsync(ANDROID_PHOTO_ALBUM_NAME, undefined, undefined, destination);
       }
     } catch (albumError: unknown) {
       console.warn('Android album save failed, but local photo copy is preserved:', albumError);

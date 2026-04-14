@@ -11,9 +11,9 @@
 2. Land on Camera.
 3. Capture a photo.
 4. Review the captured image and enter meal details.
-5. Edit the meal details if needed.
+5. Add location or note only when needed by tapping each compact row once.
 6. Save the record only after the image is persisted locally.
-7. Optionally continue capturing or jump to Records.
+7. Move directly to Records after save completes.
 
 ## Browse Flow
 1. Open Records.

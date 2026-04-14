@@ -21,10 +21,7 @@ const CameraScreenContainer: React.FC = () => {
     takePicture,
     flipCamera,
     showCloseConfirmDialog,
-    successMessage,
     captureReview,
-    onSuccessMessageOk,
-    onSuccessMessageGoToRecords,
     onCaptureReviewChange,
     onCaptureReviewCancel,
     onCaptureReviewSave,
@@ -38,15 +35,12 @@ const CameraScreenContainer: React.FC = () => {
       cameraPermission={cameraPermissionState.permission}
       permissionUiState={cameraPermissionState.uiState}
       cameraRef={cameraRef}
-      successMessage={successMessage}
       captureReview={captureReview}
       onTakePicture={takePicture}
       onFlipCamera={flipCamera}
       onClose={showCloseConfirmDialog}
       onRequestPermission={cameraPermissionState.requestPermissions}
       onOpenSettings={cameraPermissionState.openAppSettings}
-      onSuccessMessageOk={onSuccessMessageOk}
-      onSuccessMessageGoToRecords={onSuccessMessageGoToRecords}
       onCaptureReviewChange={onCaptureReviewChange}
       onCaptureReviewCancel={onCaptureReviewCancel}
       onCaptureReviewSave={onCaptureReviewSave}

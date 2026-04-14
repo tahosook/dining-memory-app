@@ -15,15 +15,18 @@
 - Main area: live camera preview.
 - Top area: close and camera-flip actions.
 - Bottom area: shutter and capture guidance.
-- States to support: permission denied, taking photo, capture review, success message, capture error, and web/mock fallback.
+- States to support: permission denied, taking photo, capture review, capture error, and web/mock fallback.
 - Before the first permission request, show a short explanation card and ask for permission only from an explicit CTA.
 - If permission is denied, show a recovery card with a direct path to the system settings screen.
-- Capture review should be vertically scrollable and sit slightly above center so the top controls and captured photo still feel connected.
+- Capture review should be vertically scrollable and start closer to the top bar so the captured photo and editing area feel like one surface.
 - Capture review should show the fields in this order: meal name, cuisine type, homemade flag, location, note.
-- Each review field should include a short helper line in muted text so the user understands what to enter without opening another help surface.
-- Location and note should default to compact closed rows and expand inline only after the user taps them.
+- Meal name should use a placeholder-only text input labeled `料理名` instead of a separate section label or helper copy.
+- Cuisine type should stay visible, but the selector should hide its label inside capture review.
+- Homemade should remain visible as a short inline toggle row.
+- Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
 - If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
+- After a successful save, close capture review and move directly to Records instead of showing a success modal.
 
 ## Records Screen
 - Shows meal records grouped by date.

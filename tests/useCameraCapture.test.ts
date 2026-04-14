@@ -8,9 +8,11 @@ import * as Location from 'expo-location';
 import ImageResizer from 'react-native-image-resizer';
 import { persistPhotoToStablePath } from '../src/hooks/cameraCapture/photoStorage';
 
+const mockNavigate = jest.fn();
+
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
-    navigate: jest.fn(),
+    navigate: mockNavigate,
   }),
 }));
 
@@ -60,6 +62,7 @@ describe('useCameraCapture', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockNavigate.mockClear();
     Platform.OS = 'ios';
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     openSettingsSpy = jest.spyOn(Linking, 'openSettings').mockResolvedValue();
@@ -160,7 +163,7 @@ describe('useCameraCapture', () => {
     expect(Alert.alert).toHaveBeenCalledWith('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
   });
 
-  test('creates a meal and shows success only after local persistence succeeds', async () => {
+  test('creates a meal and navigates to records only after local persistence succeeds', async () => {
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
 
     result.current.cameraRef.current = {
@@ -211,7 +214,8 @@ describe('useCameraCapture', () => {
         onlyScaleDown: true,
       }
     );
-    expect(result.current.successMessage).toContain('パスタ を記録しました');
+    expect(result.current.captureReview).toBeNull();
+    expect(mockNavigate).toHaveBeenCalledWith('Records');
   });
 
   test('requests Android photo save permission before saving', async () => {

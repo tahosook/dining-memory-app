@@ -9,6 +9,7 @@ type CuisineTypeSelectorProps = {
   onChange: (value: CuisineTypeOption | '') => void;
   testIDPrefix?: string;
   labelColor?: string;
+  showLabel?: boolean;
 };
 
 export function CuisineTypeSelector({
@@ -17,10 +18,11 @@ export function CuisineTypeSelector({
   onChange,
   testIDPrefix = 'cuisine-type',
   labelColor = Colors.text,
+  showLabel = true,
 }: CuisineTypeSelectorProps) {
   return (
     <View style={styles.container}>
-      <Text style={[styles.label, { color: labelColor }]}>{label}</Text>
+      {showLabel ? <Text style={[styles.label, { color: labelColor }]}>{label}</Text> : null}
       <View style={styles.optionsRow}>
         {CUISINE_TYPE_OPTIONS.map((option) => {
           const isSelected = value === option;
