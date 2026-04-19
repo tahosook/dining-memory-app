@@ -19,11 +19,13 @@
 - Before the first permission request, show a short explanation card and ask for permission only from an explicit CTA.
 - If permission is denied, show a recovery card with a direct path to the system settings screen.
 - Capture review should be vertically scrollable and start closer to the top bar so the captured photo and editing area feel like one surface.
-- Capture review should show the fields in this order: meal name, cuisine type, homemade flag, location, note.
+- Capture review should show the photo first, then an optional AI suggestion section, then the fields in this order: meal name, cuisine type, homemade flag, location, note.
 - Meal name should use a placeholder-only text input labeled `料理名` instead of a separate section label or helper copy.
 - Cuisine type should stay visible, but the selector should hide its label inside capture review.
 - Homemade should remain visible as a short inline toggle row.
 - Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
+- AI suggestion section should show `未実行 / 解析中 / 成功 / 失敗 / 無効` and keep the save and cancel actions available in every state.
+- AI candidates should appear as tappable chips for meal name, cuisine type, and homemade / takeout only, and should update a field only when the user taps a candidate.
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
 - If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
 - After a successful save, close capture review and move directly to Records instead of showing a success modal.

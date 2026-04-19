@@ -197,6 +197,8 @@ describe('useCameraCapture', () => {
         expect.objectContaining({
           meal_name: 'パスタ',
           cuisine_type: '洋食',
+          ai_confidence: undefined,
+          ai_source: undefined,
           latitude: 35.6895,
           longitude: 139.6917,
           photo_path: 'file:///mock-documents/meal-123.jpg',
@@ -221,6 +223,44 @@ describe('useCameraCapture', () => {
     );
     expect(result.current.captureReview).toBeNull();
     expect(mockNavigate).toHaveBeenCalledWith('Records');
+  });
+
+  test('passes AI metadata to meal creation only when a suggestion was adopted', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    act(() => {
+      result.current.onCaptureReviewChange('mealName', '海鮮丼');
+    });
+
+    await act(async () => {
+      await result.current.onCaptureReviewSave({
+        aiMetadata: {
+          aiSource: 'mock-local',
+          aiConfidence: 0.93,
+          appliedFields: ['mealName'],
+        },
+      });
+    });
+
+    expect(MealService.createMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meal_name: '海鮮丼',
+        ai_source: 'mock-local',
+        ai_confidence: 0.93,
+      })
+    );
   });
 
   test('requests Android photo save permission before saving', async () => {

@@ -11,9 +11,10 @@
 2. Land on Camera.
 3. Capture a photo.
 4. Review the captured image and enter meal details.
-5. Add location or note only when needed by tapping each compact row once.
-6. Save the record only after the image is persisted locally.
-7. Move directly to Records after save completes.
+5. Optionally request AI suggestions and tap only the candidates the user wants to adopt.
+6. Add location or note only when needed by tapping each compact row once.
+7. Save the record only after the image is persisted locally.
+8. Move directly to Records after save completes.
 
 ## Browse Flow
 1. Open Records.
@@ -52,6 +53,7 @@
 - Capture failure: let the user retry or return to the camera.
 - Local persistence failure: do not create the meal record and show a retry path.
 - Android photo-save permission denied during capture review: do not create the meal record, keep the review inputs intact, and offer a direct path to the system settings screen.
+- AI suggestion failure during capture review: keep manual input and save available, explain the failure briefly, and offer a retry path without resetting the review.
 - Share handoff failure: keep the current record visible, show a retryable error, and let the user reopen the share sheet.
 - Search refresh failure: keep the last successful results when possible and show a retry action.
 - Stats refresh failure: keep the last successful summary when possible and show a retry action.

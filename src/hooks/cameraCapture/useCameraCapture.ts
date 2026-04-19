@@ -13,6 +13,7 @@ import type { CuisineTypeOption } from '../../constants/MealOptions';
 import { persistPhotoToStablePath } from './photoStorage';
 import { openAppSettings } from '../../utils/openAppSettings';
 import type { RootTabParamList } from '../../navigation/types';
+import type { AppliedMealInputAssistMetadata } from '../../ai/mealInputAssist';
 
 export interface CaptureReviewState {
   photoUri: string;
@@ -23,6 +24,10 @@ export interface CaptureReviewState {
   notes: string;
   locationName: string;
   isHomemade: boolean;
+}
+
+interface SaveCaptureOptions {
+  aiMetadata?: AppliedMealInputAssistMetadata | null;
 }
 
 const PHOTO_PERMISSION_SCOPE: MediaLibrary.GranularPermission[] = ['photo'];
@@ -261,7 +266,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     setCaptureReview(null);
   }, []);
 
-  const saveCapture = useCallback(async () => {
+  const saveCapture = useCallback(async (options?: SaveCaptureOptions) => {
     if (!captureReview) {
       return;
     }
@@ -286,6 +291,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       await MealService.createMeal({
         meal_name: captureReview.mealName.trim(),
         cuisine_type: captureReview.cuisineType || undefined,
+        ai_confidence: options?.aiMetadata?.aiConfidence,
+        ai_source: options?.aiMetadata?.aiSource,
         notes: captureReview.notes.trim() || undefined,
         location_name: captureReview.locationName.trim() || undefined,
         latitude: locationSnapshot.latitude,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { CameraView } from '../../components/screens/camera';
-import { useCameraCapture, useCameraPermission } from '../../hooks/cameraCapture';
+import { useCameraCapture, useCameraPermission, useMealInputAssist } from '../../hooks/cameraCapture';
 
 /**
  * カメラ画面コンテナコンポーネント
@@ -26,6 +26,15 @@ const CameraScreenContainer: React.FC = () => {
     onCaptureReviewCancel,
     onCaptureReviewSave,
   } = useCameraCapture(cameraPermissionState.permission);
+  const mealInputAssist = useMealInputAssist({
+    captureReview,
+    onCaptureReviewChange,
+  });
+
+  const handleCaptureReviewSave = React.useCallback(
+    () => onCaptureReviewSave({ aiMetadata: mealInputAssist.appliedMetadata }),
+    [mealInputAssist.appliedMetadata, onCaptureReviewSave]
+  );
 
   // Presentational層にデータを渡すのみ
   return (
@@ -43,7 +52,15 @@ const CameraScreenContainer: React.FC = () => {
       onOpenSettings={cameraPermissionState.openAppSettings}
       onCaptureReviewChange={onCaptureReviewChange}
       onCaptureReviewCancel={onCaptureReviewCancel}
-      onCaptureReviewSave={onCaptureReviewSave}
+      onCaptureReviewSave={handleCaptureReviewSave}
+      aiAssistStatus={mealInputAssist.status}
+      aiAssistSuggestions={mealInputAssist.suggestions}
+      aiAssistErrorMessage={mealInputAssist.errorMessage}
+      aiAssistDisabledReason={mealInputAssist.disabledReason}
+      onRequestAiSuggestions={mealInputAssist.requestSuggestions}
+      onApplyMealNameSuggestion={mealInputAssist.applyMealNameSuggestion}
+      onApplyCuisineSuggestion={mealInputAssist.applyCuisineSuggestion}
+      onApplyHomemadeSuggestion={mealInputAssist.applyHomemadeSuggestion}
     />
   );
 };

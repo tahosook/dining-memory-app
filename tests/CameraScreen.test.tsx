@@ -4,7 +4,7 @@ import * as ReactNative from 'react-native';
 import { Alert } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as Camera from 'expo-camera';
-import { useCameraPermission, useCameraCapture } from '../src/hooks/cameraCapture';
+import { useCameraPermission, useCameraCapture, useMealInputAssist } from '../src/hooks/cameraCapture';
 import CameraScreen from '../src/screens/CameraScreen/CameraScreen';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -30,6 +30,7 @@ jest.mock('@expo/vector-icons', () => ({
 jest.mock('../src/hooks/cameraCapture', () => ({
   useCameraPermission: jest.fn(),
   useCameraCapture: jest.fn(),
+  useMealInputAssist: jest.fn(),
 }));
 
 jest.mock('expo-camera', () => ({
@@ -186,6 +187,27 @@ type MockCaptureState = {
   onCaptureReviewSave: jest.Mock;
 };
 
+type MockAiAssistState = {
+  status: 'idle' | 'running' | 'success' | 'error' | 'disabled';
+  suggestions: {
+    source: string;
+    mealNames: Array<{ value: string; label: string; confidence?: number; source: string }>;
+    cuisineTypes: Array<{ value: string; label: string; confidence?: number; source: string }>;
+    homemade: Array<{ value: boolean; label: '自炊' | '外食'; confidence?: number; source: string }>;
+  };
+  errorMessage: string | null;
+  disabledReason: string | null;
+  requestSuggestions: jest.Mock;
+  applyMealNameSuggestion: jest.Mock;
+  applyCuisineSuggestion: jest.Mock;
+  applyHomemadeSuggestion: jest.Mock;
+  appliedMetadata: {
+    aiSource: string;
+    aiConfidence?: number;
+    appliedFields: string[];
+  } | null;
+};
+
 function createPermissionState(overrides: Partial<MockPermissionState> = {}) {
   return {
     permission: mockCameraPermissionsGranted,
@@ -226,6 +248,26 @@ function createCaptureState(overrides: Partial<MockCaptureState> = {}): MockCapt
   };
 }
 
+function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAiAssistState {
+  return {
+    status: 'idle',
+    suggestions: {
+      source: 'mock-local',
+      mealNames: [],
+      cuisineTypes: [],
+      homemade: [],
+    },
+    errorMessage: null,
+    disabledReason: null,
+    requestSuggestions: jest.fn(),
+    applyMealNameSuggestion: jest.fn(),
+    applyCuisineSuggestion: jest.fn(),
+    applyHomemadeSuggestion: jest.fn(),
+    appliedMetadata: null,
+    ...overrides,
+  };
+}
+
 describe('CameraScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -233,6 +275,7 @@ describe('CameraScreen', () => {
     mockCameraRef.current = null;
     (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState());
     (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState());
+    (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState());
   });
 
   describe('Permission Flow', () => {
@@ -363,6 +406,9 @@ describe('CameraScreen', () => {
 
       expect(await findByText('撮影内容を確認')).toBeTruthy();
       expect(reviewContainer.props.style.paddingTop).toBe(12);
+      expect(await findByTestId('ai-input-assist-section')).toBeTruthy();
+      expect((await findByTestId('ai-input-assist-status')).props.children).toBe('未実行');
+      expect(await findByTestId('ai-input-assist-button')).toBeTruthy();
       expect(mealNameInput.props.placeholder).toBe('料理名（入力しない場合は自動で名前が付きます）');
       expect(await findByTestId('capture-review-cuisine-和食')).toBeTruthy();
       expect(await findByText('自炊')).toBeTruthy();
@@ -404,6 +450,110 @@ describe('CameraScreen', () => {
 
       expect((await findByTestId('location-input')).props.placeholder).toBe('場所');
       expect((await findByTestId('notes-input')).props.placeholder).toBe('メモ');
+    });
+
+    test('requests AI suggestions when the assist button is pressed', async () => {
+      const requestSuggestions = jest.fn().mockResolvedValue(undefined);
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview(),
+      }));
+      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
+        requestSuggestions,
+      }));
+
+      const { findByTestId } = render(<CameraScreen />);
+
+      fireEvent.press(await findByTestId('ai-input-assist-button'));
+
+      expect(requestSuggestions).toHaveBeenCalled();
+    });
+
+    test('calls the AI suggestion handlers when suggestion chips are tapped', async () => {
+      const applyMealNameSuggestion = jest.fn();
+      const applyCuisineSuggestion = jest.fn();
+      const applyHomemadeSuggestion = jest.fn();
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview(),
+      }));
+      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
+        status: 'success',
+        suggestions: {
+          source: 'mock-local',
+          mealNames: [{ value: '海鮮丼', label: '海鮮丼', confidence: 0.91, source: 'mock-local' }],
+          cuisineTypes: [{ value: '和食', label: '和食', confidence: 0.8, source: 'mock-local' }],
+          homemade: [{ value: false, label: '外食', confidence: 0.66, source: 'mock-local' }],
+        },
+        applyMealNameSuggestion,
+        applyCuisineSuggestion,
+        applyHomemadeSuggestion,
+      }));
+
+      const { findByTestId } = render(<CameraScreen />);
+
+      fireEvent.press(await findByTestId('ai-meal-name-suggestion-0'));
+      fireEvent.press(await findByTestId('ai-cuisine-suggestion-0'));
+      fireEvent.press(await findByTestId('ai-homemade-suggestion-0'));
+
+      expect(applyMealNameSuggestion).toHaveBeenCalledWith({
+        value: '海鮮丼',
+        label: '海鮮丼',
+        confidence: 0.91,
+        source: 'mock-local',
+      });
+      expect(applyCuisineSuggestion).toHaveBeenCalledWith({
+        value: '和食',
+        label: '和食',
+        confidence: 0.8,
+        source: 'mock-local',
+      });
+      expect(applyHomemadeSuggestion).toHaveBeenCalledWith({
+        value: false,
+        label: '外食',
+        confidence: 0.66,
+        source: 'mock-local',
+      });
+    });
+
+    test('keeps the save button available when AI suggestion loading fails', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview(),
+      }));
+      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
+        status: 'error',
+        errorMessage: '候補を取得できませんでした。もう一度お試しください。',
+      }));
+
+      const { findByTestId, findByText } = render(<CameraScreen />);
+
+      expect(await findByText('候補を取得できませんでした。もう一度お試しください。')).toBeTruthy();
+      expect(await findByTestId('save-meal-button')).toBeTruthy();
+    });
+
+    test('passes applied AI metadata when the user saves the review', async () => {
+      const onCaptureReviewSave = jest.fn().mockResolvedValue(undefined);
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview(),
+        onCaptureReviewSave,
+      }));
+      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
+        appliedMetadata: {
+          aiSource: 'mock-local',
+          aiConfidence: 0.93,
+          appliedFields: ['mealName'],
+        },
+      }));
+
+      const { findByTestId } = render(<CameraScreen />);
+
+      fireEvent.press(await findByTestId('save-meal-button'));
+
+      expect(onCaptureReviewSave).toHaveBeenCalledWith({
+        aiMetadata: {
+          aiSource: 'mock-local',
+          aiConfidence: 0.93,
+          appliedFields: ['mealName'],
+        },
+      });
     });
   });
 });

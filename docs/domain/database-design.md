@@ -27,6 +27,7 @@
 - Store images as files and keep file paths in the database.
 - Use indexed columns for high-frequency lookups such as meal date, meal name, location, and deletion state.
 - Keep optional fields optional; do not force data where the user did not provide it.
+- Phase 1 の AI 入力補助は、ユーザーが候補を採用したときだけ `meals.ai_source` と `meals.ai_confidence` を保存し、生レスポンスや候補一覧は保存しない。
 - Preserve latitude and longitude when available, and allow service-layer logic to reuse an existing place name when a new record is captured within roughly 100 meters of a known location.
 
 ## Search and Analytics Intent

@@ -34,6 +34,7 @@
 - On Android, captured photos should keep an app-local stable file for in-app display and also be added to a dedicated `Pictures / Dining Memory` album so future backup targeting stays possible without mixing unrelated media.
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
+- Phase 1 の AI 入力補助は capture review 上の明示的なユーザー操作でのみ実行し、local mock provider を使って UI 統合を確認する。
 - Cloud use is optional and should be treated as a future fallback path, not the default path.
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
@@ -46,6 +47,7 @@
 - Request foreground location only at save time, and keep meal saving available even if location permission is denied.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
+- Phase 1 の AI 入力補助では写真やメモを外部送信せず、候補採用時だけ最小限の AI metadata を meal record に残す。
 - Records detail may hand off the current meal to the OS share sheet, but should not store posting state or send data automatically.
 - Keep secrets out of source control and out of runtime logs.
 
@@ -66,3 +68,4 @@
 - Search and stats exist as first-class tabs rather than hidden tools.
 - The project keeps a strong privacy and local-storage bias.
 - The current MVP does not ship cloud backup, export, or external AI transfer behavior.
+- Phase 1 の AI 入力補助は save flow の外側に置き、失敗時でも手入力保存を妨げない。
