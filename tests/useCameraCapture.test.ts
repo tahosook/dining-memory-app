@@ -112,7 +112,7 @@ describe('useCameraCapture', () => {
     jest.restoreAllMocks();
   });
 
-  test('does not save when meal name is empty', async () => {
+  test('creates a meal with an auto-generated name when meal name is empty', async () => {
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
 
     result.current.cameraRef.current = {
@@ -131,8 +131,13 @@ describe('useCameraCapture', () => {
       await result.current.onCaptureReviewSave();
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith('入力が必要です', '料理名を入力してください。');
-    expect(MealService.createMeal).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(MealService.createMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meal_name: '',
+      })
+    );
+    expect(mockNavigate).toHaveBeenCalledWith('Records');
   });
 
   test('does not create a meal when local persistence fails', async () => {

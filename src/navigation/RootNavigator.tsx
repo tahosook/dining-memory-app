@@ -1,17 +1,21 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 
 // Screen imports
 import CameraScreen from '../screens/CameraScreen/CameraScreen';
 import { RecordsScreen } from '../screens/RecordsScreen/RecordsScreen';
+import { MealDetailScreen } from '../screens/RecordsScreen/MealDetailScreen';
 import { SearchScreen } from '../screens/SearchScreen/SearchScreen';
 import StatsScreen from '../screens/StatsScreen/StatsScreen';
 import SettingsScreen from '../screens/SettingsScreen/SettingsScreen';
+import type { RootTabParamList, RecordsStackParamList } from './types';
 
 // Tab navigator
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<RootTabParamList>();
+const RecordsStack = createNativeStackNavigator<RecordsStackParamList>();
 
 // Colors for 40+ male target user - clean, high contrast
 const COLORS = {
@@ -41,6 +45,23 @@ function renderTabIcon(routeName: string, focused: boolean) {
   return <Ionicons name={iconName} size={24} color={focused ? COLORS.activeTint : COLORS.inactiveTint} />;
 }
 
+function RecordsNavigator() {
+  return (
+    <RecordsStack.Navigator>
+      <RecordsStack.Screen
+        name="RecordsList"
+        component={RecordsScreen}
+        options={{ headerShown: false }}
+      />
+      <RecordsStack.Screen
+        name="MealDetail"
+        component={MealDetailScreen}
+        options={{ title: '記録詳細' }}
+      />
+    </RecordsStack.Navigator>
+  );
+}
+
 export default function RootNavigator() {
   return (
     <NavigationContainer>
@@ -53,7 +74,7 @@ export default function RootNavigator() {
             backgroundColor: COLORS.tabBar,
             height: 70,
           },
-          headerShown: route.name === 'Camera' ? false : true,
+          headerShown: route.name !== 'Camera' && route.name !== 'Records',
         })}
       >
         <Tab.Screen
@@ -63,7 +84,7 @@ export default function RootNavigator() {
         />
         <Tab.Screen
           name="Records"
-          component={RecordsScreen}
+          component={RecordsNavigator}
           options={{ title: '記録' }}
         />
         <Tab.Screen

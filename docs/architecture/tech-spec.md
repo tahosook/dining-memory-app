@@ -41,10 +41,12 @@
 
 ## Security and Privacy Defaults
 - Prefer local storage and local processing unless a feature clearly needs external transfer.
+- Allow external handoff only from an explicit user action, such as opening the OS share sheet from a saved record detail.
 - Request only the minimum camera, photo, and location access needed for the active feature.
 - Request foreground location only at save time, and keep meal saving available even if location permission is denied.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
+- Records detail may hand off the current meal to the OS share sheet, but should not store posting state or send data automatically.
 - Keep secrets out of source control and out of runtime logs.
 
 ## Quality and Delivery Defaults

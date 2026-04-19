@@ -5,7 +5,8 @@
 
 ## 今できること
 - カメラで撮影し、内容を確認してから保存する
-- 記録を一覧で見返し、編集・削除する
+- 記録を一覧で見返し、詳細画面で大きい写真を確認する
+- 記録詳細から編集・削除し、必要な写真だけ X 投稿に進める
 - テキスト検索、場所フィルター、自炊フィルターで探す
 - 保存済み記録の件数や傾向を簡単な統計で確認する
 
@@ -22,6 +23,7 @@
 - [DB設計](docs/domain/database-design.md): current schema and storage rules
 - [実装規約](docs/engineering/coding-standards.md): coding rules
 - [Codex 作業ルール](docs/engineering/codex-workflow.md): review and verification workflow
+- [即時改善提案](docs/engineering/immediate-improvements.md): 今すぐ入れるべき改善案の整理
 
 ### ドキュメント入口
 - [docs/index.md](docs/index.md): 誰がどの文書を読むかの案内板
@@ -61,7 +63,7 @@ git clone https://github.com/tahosook/dining-memory-app.git
 cd dining-memory-app
 node --version
 npm install
-cp .env.example .env.local
+cp .env.example .env
 npx expo start
 ```
 
@@ -73,11 +75,13 @@ npx expo start
 ### 環境変数
 ```env
 # 将来的な機能拡張用 API キー
-GEMINI_API_KEY=your_gemini_api_key
+EXPO_PUBLIC_GEMINI_API_KEY=your_gemini_api_key
 
 EXPO_PUBLIC_APP_NAME=Dining Memory
 EXPO_PUBLIC_APP_VERSION=1.0.0
 ```
+
+`.env.example` をテンプレートとして使い、`.env` はローカル専用ファイルとして扱います。
 
 ### 動作確認
 1. 物理デバイスで Expo Go を開く
@@ -89,3 +93,22 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 - 統合テスト: 撮影から保存、表示までの一連フロー
 - 自動テスト: Jest + React Native Testing Library
 - 詳細な検証ルールは [docs/engineering/codex-workflow.md](docs/engineering/codex-workflow.md) を参照
+
+## APK ビルド
+### 🔹 開発用デバッグAPK
+```bash
+cd android
+./gradlew assembleDebug
+```
+出力先: `./android/app/build/outputs/apk/debug/app-debug.apk`
+
+### 🔹 本番用リリースAPK（推奨）
+```bash
+cd android
+./gradlew assembleRelease
+```
+出力先: `./android/app/build/outputs/apk/release/app-release.apk`
+
+✅ どちらも一度端末にインストールすればUSBケーブル不要で単体で動作します。開発サーバーなしでも全機能が利用可能です。
+
+💡 リリース版は最適化が有効で起動が速く、ファイルサイズも小さくなります。実際に使う場合はこちらを推奨します。

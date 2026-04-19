@@ -7,7 +7,7 @@
 - Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
 
 ## Source of Truth
-- The active schema lives in `src/database/models/schema.ts`.
+- The active schema lives in `src/database/services/localDatabase.ts`.
 - This document explains the intent and responsibilities of that schema.
 
 ## Current Tables

@@ -22,7 +22,8 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Section title="プライバシー">
         <Text style={styles.bodyText}>このアプリは、記録データを端末内に保存する前提で動作します。</Text>
-        <Text style={styles.bodyText}>外部送信が必要な AI 解析、クラウドバックアップ、データエクスポートは現在の実装には含めていません。</Text>
+        <Text style={styles.bodyText}>自動的な外部送信は行わず、Records 詳細からユーザーが明示的に開く共有シートだけを例外として扱います。</Text>
+        <Text style={styles.bodyText}>AI 解析、クラウドバックアップ、データエクスポートは現在の実装には含めていません。</Text>
         <Text style={styles.bodyText}>Android の写真は `Pictures / Dining Memory` の専用アルバムに保存し、将来バックアップ対象として扱いやすい前提を維持します。</Text>
       </Section>
 

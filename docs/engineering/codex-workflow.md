@@ -50,6 +50,7 @@
 
 ## Review Gate
 - Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test`.
+- The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
 - Add `npm run check:deps` when dependencies are added, removed, or significantly reorganized.
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
 - Add a security review pass when changes touch permissions, file storage, location, export, backup, or external AI calls.

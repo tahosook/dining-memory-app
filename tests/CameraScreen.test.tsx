@@ -37,7 +37,7 @@ jest.mock('expo-camera', () => ({
   useCameraPermissions: jest.fn(),
 }));
 
-let mockCameraRef: { current: unknown } = {
+const mockCameraRef: { current: unknown } = {
   current: null,
 };
 
@@ -180,7 +180,7 @@ type MockCaptureState = {
   captureReview: MockCaptureReview | null;
   takePicture: jest.Mock;
   flipCamera: jest.Mock;
-  showCloseConfirmDialog: jest.Mock;
+  closeCamera: jest.Mock;
   onCaptureReviewChange: jest.Mock;
   onCaptureReviewCancel: jest.Mock;
   onCaptureReviewSave: jest.Mock;
@@ -218,7 +218,7 @@ function createCaptureState(overrides: Partial<MockCaptureState> = {}): MockCapt
     captureReview: null,
     takePicture: jest.fn(),
     flipCamera: jest.fn(),
-    showCloseConfirmDialog: jest.fn(),
+    closeCamera: jest.fn(),
     onCaptureReviewChange: jest.fn(),
     onCaptureReviewCancel: jest.fn(),
     onCaptureReviewSave: jest.fn(),
@@ -325,51 +325,21 @@ describe('CameraScreen', () => {
         jest.fn().mockResolvedValue(mockCameraPermissionsGranted),
       ]);
       (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(mockMediaLibraryPermissionsGranted);
+      const closeCamera = jest.fn(() => {
+        mockNavigate('Records');
+      });
       (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        showCloseConfirmDialog: jest.fn(() => {
-          Alert.alert('確認', '撮影を終了して記録タブに移動しますか？', [
-            { text: 'キャンセル', style: 'cancel' },
-            { text: '撮影を終了しました', onPress: () => mockNavigate('Records') },
-          ]);
-        }),
+        closeCamera,
       }));
     });
 
-    test('navigates to Records when the exit action is confirmed', async () => {
+    test('navigates to Records immediately when the close button is pressed', async () => {
       const { findByTestId } = render(<CameraScreen />);
 
       fireEvent.press(await findByTestId('close-button'));
-
-      expect(Alert.alert).toHaveBeenCalledWith(
-        '確認',
-        '撮影を終了して記録タブに移動しますか？',
-        [
-          expect.objectContaining({
-            text: 'キャンセル',
-            style: 'cancel',
-          }),
-          expect.objectContaining({
-            text: '撮影を終了しました',
-            onPress: expect.any(Function),
-          }),
-        ]
-      );
-
-      const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as { text: string; onPress?: () => void }[];
-      buttons.find((button) => button.text === '撮影を終了しました')?.onPress?.();
 
       expect(mockNavigate).toHaveBeenCalledWith('Records');
-    });
-
-    test('does not navigate when close dialog is cancelled', async () => {
-      const { findByTestId } = render(<CameraScreen />);
-
-      fireEvent.press(await findByTestId('close-button'));
-
-      const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as { text: string; onPress?: () => void }[];
-      buttons.find((button) => button.text === 'キャンセル')?.onPress?.();
-
-      expect(mockNavigate).not.toHaveBeenCalled();
+      expect(Alert.alert).not.toHaveBeenCalled();
     });
   });
 
@@ -393,7 +363,7 @@ describe('CameraScreen', () => {
 
       expect(await findByText('撮影内容を確認')).toBeTruthy();
       expect(reviewContainer.props.style.paddingTop).toBe(12);
-      expect(mealNameInput.props.placeholder).toBe('料理名');
+      expect(mealNameInput.props.placeholder).toBe('料理名（入力しない場合は自動で名前が付きます）');
       expect(await findByTestId('capture-review-cuisine-和食')).toBeTruthy();
       expect(await findByText('自炊')).toBeTruthy();
       expect(await findByTestId('location-input-trigger')).toBeTruthy();

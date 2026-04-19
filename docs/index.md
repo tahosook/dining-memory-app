@@ -47,6 +47,7 @@
 ### Engineering
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Codex Workflow](./engineering/codex-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
+- [Immediate Improvements](./engineering/immediate-improvements.md): 今すぐ入れるべき具体的な改善案と優先度.
 
 ### Notes
 - [notes/](./notes/): temporary investigations, incident follow-ups, and one-off fixes.

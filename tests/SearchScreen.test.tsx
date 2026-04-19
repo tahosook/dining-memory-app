@@ -1,13 +1,16 @@
 import React from 'react';
-import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const focusCallbacks: Array<() => void> = [];
+const mockNavigate = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: () => void) => {
     focusCallbacks.push(callback);
   },
+  useNavigation: () => ({
+    navigate: mockNavigate,
+  }),
 }));
 
 jest.mock('@expo/vector-icons', () => ({
@@ -17,8 +20,6 @@ jest.mock('@expo/vector-icons', () => ({
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     searchMeals: jest.fn(),
-    updateMeal: jest.fn(),
-    softDeleteMeal: jest.fn(),
   },
 }));
 
@@ -62,11 +63,6 @@ describe('SearchScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     focusCallbacks.length = 0;
-    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
   });
 
   test('shows loading state during the first search', async () => {
@@ -127,69 +123,20 @@ describe('SearchScreen', () => {
     expect(await findByText('ラーメン')).toBeTruthy();
   });
 
-  test('opens a result and saves edits through the shared modal', async () => {
-    (MealService.searchMeals as jest.Mock)
-      .mockResolvedValueOnce([createMeal()])
-      .mockResolvedValueOnce([createMeal({ cuisine_type: '和食' })]);
-    (MealService.updateMeal as jest.Mock).mockResolvedValue(createMeal({ cuisine_type: '和食' }));
+  test('opens a result in the shared detail screen', async () => {
+    const meal = createMeal();
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([meal]);
 
     const { findByTestId } = render(<SearchScreen />);
     await triggerLatestFocus();
 
     fireEvent.press(await findByTestId('search-result-1'));
 
-    const actionButtons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    const editButton = actionButtons.find((button: { text: string; onPress?: () => void }) => button.text === '編集');
-    act(() => {
-      editButton.onPress?.();
-    });
-
-    fireEvent.press(await findByTestId('search-edit-cuisine-和食'));
-    fireEvent.press(await findByTestId('search-edit-save-button'));
-
-    await waitFor(() => {
-      expect(MealService.updateMeal).toHaveBeenCalledWith(
-        '1',
-        expect.objectContaining({
-          cuisine_type: '和食',
-        })
-      );
-    });
-
-    await waitFor(() => {
-      expect(MealService.searchMeals).toHaveBeenCalledTimes(2);
-    });
-  });
-
-  test('deletes a result after confirmation and reruns the search', async () => {
-    (MealService.searchMeals as jest.Mock)
-      .mockResolvedValueOnce([createMeal()])
-      .mockResolvedValueOnce([]);
-    (MealService.softDeleteMeal as jest.Mock).mockResolvedValue(undefined);
-
-    const { findByTestId } = render(<SearchScreen />);
-    await triggerLatestFocus();
-
-    fireEvent.press(await findByTestId('search-result-1'));
-
-    const actionButtons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    const deleteButton = actionButtons.find((button: { text: string; onPress?: () => void }) => button.text === '削除');
-    act(() => {
-      deleteButton.onPress?.();
-    });
-
-    const confirmButtons = (Alert.alert as jest.Mock).mock.calls[1][2];
-    const confirmDeleteButton = confirmButtons.find((button: { text: string; onPress?: () => void }) => button.text === '削除');
-    await act(async () => {
-      await confirmDeleteButton.onPress?.();
-    });
-
-    await waitFor(() => {
-      expect(MealService.softDeleteMeal).toHaveBeenCalledWith('1');
-    });
-
-    await waitFor(() => {
-      expect(MealService.searchMeals).toHaveBeenCalledTimes(2);
+    expect(mockNavigate).toHaveBeenCalledWith('Records', {
+      screen: 'MealDetail',
+      params: {
+        meal,
+      },
     });
   });
 

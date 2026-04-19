@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { Alert, Platform } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import * as MediaLibrary from 'expo-media-library';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
@@ -12,6 +12,7 @@ import { MealService } from '../../database/services/MealService';
 import type { CuisineTypeOption } from '../../constants/MealOptions';
 import { persistPhotoToStablePath } from './photoStorage';
 import { openAppSettings } from '../../utils/openAppSettings';
+import type { RootTabParamList } from '../../navigation/types';
 
 export interface CaptureReviewState {
   photoUri: string;
@@ -31,7 +32,7 @@ const PHOTO_PERMISSION_SCOPE: MediaLibrary.GranularPermission[] = ['photo'];
  * Application層のビジネスロジックをカプセル化
  */
 export const useCameraCapture = (cameraPermission: PermissionResponse | null) => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<RootTabParamList>>();
   const cameraRef = useRef<CameraView>(null);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
@@ -113,8 +114,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         { text: 'キャンセル', style: 'cancel' },
         {
           text: '設定を開く',
-          onPress: () => {
-            void openPhotoSettings();
+          onPress: async () => {
+            await openPhotoSettings();
           },
         },
       ]
@@ -176,7 +177,6 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
   // レコード画面への遷移
   const navigateToRecords = useCallback(() => {
-    // @ts-expect-error Navigation type inference issue
     navigation.navigate(ROUTE_NAMES.RECORDS);
   }, [navigation]);
 
@@ -237,12 +237,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     setFacing(current => current === 'back' ? 'front' : 'back');
   }, []);
 
-  // 閉じる時の確認ダイアログ
-  const showCloseConfirmDialog = useCallback(() => {
-    Alert.alert('確認', '撮影を終了して記録タブに移動しますか？', [
-      { text: 'キャンセル', style: 'cancel' },
-      { text: '撮影を終了しました', onPress: navigateToRecords }
-    ]);
+  const closeCamera = useCallback(() => {
+    navigateToRecords();
   }, [navigateToRecords]);
 
   const updateCaptureReview = useCallback(
@@ -340,7 +336,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     // Actions
     takePicture,
     flipCamera,
-    showCloseConfirmDialog,
+    closeCamera,
     onCaptureReviewChange: updateCaptureReview,
     onCaptureReviewCancel: cancelReview,
     onCaptureReviewSave: saveCapture,

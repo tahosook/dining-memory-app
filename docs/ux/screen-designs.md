@@ -32,14 +32,16 @@
 - Shows meal records grouped by date.
 - Card layout should keep the meal name, time, location, and note visible at a glance.
 - If a thumbnail is missing, fall back to the saved photo path instead of showing an empty placeholder.
-- Must support editing and deletion entry points.
-- Edit entry should allow updating cuisine type in the same modal as the other core fields.
+- Tapping a record card should move directly to a dedicated detail screen instead of opening an alert.
+- The detail screen should show a visibly larger photo than the list card, preferring `photo_path` over `photo_thumbnail_path`.
+- Edit and delete entry points should live on the detail screen.
+- The detail screen should also provide an explicit user-triggered share path for posting to X through the OS share sheet.
 
 ## Search Screen
 - Search bar and filter area should be the first things the user sees.
 - Results should remain scannable and support quick refinement.
 - The current filters are text, cuisine type, location, and homemade-only.
-- Result cards should open the same record actions used in Records, including edit and delete.
+- Result cards should open the same saved-record detail screen used from Records.
 - Use explicit loading, error, and zero-result states, and keep the previous results visible if only a refresh fails.
 
 ## Stats Screen

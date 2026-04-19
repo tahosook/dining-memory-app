@@ -1,13 +1,17 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
 
 const focusCallbacks: Array<() => void> = [];
+const mockNavigate = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: (callback: () => void) => {
     focusCallbacks.push(callback);
   },
+  useNavigation: () => ({
+    navigate: mockNavigate,
+  }),
 }));
 
 jest.mock('expo-status-bar', () => ({
@@ -21,8 +25,6 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     getRecentMeals: jest.fn(),
-    updateMeal: jest.fn(),
-    softDeleteMeal: jest.fn(),
   },
 }));
 
@@ -65,6 +67,9 @@ describe('RecordsScreen', () => {
         meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
         is_homemade: false,
         photo_path: 'file:///ramen.jpg',
+        is_deleted: false,
+        created_at: 1,
+        updated_at: 1,
       },
     ]);
 
@@ -83,6 +88,9 @@ describe('RecordsScreen', () => {
         meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
         is_homemade: true,
         photo_path: 'file:///curry.jpg',
+        is_deleted: false,
+        created_at: 1,
+        updated_at: 1,
       },
     ]);
 
@@ -105,78 +113,26 @@ describe('RecordsScreen', () => {
     expect(MealService.getRecentMeals).toHaveBeenCalledTimes(2);
   });
 
-  test('updates cuisine type from the edit modal', async () => {
-    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
-      {
-        id: '1',
-        uuid: '1',
-        meal_name: 'ラーメン',
-        meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
-        is_homemade: false,
-        photo_path: 'file:///ramen.jpg',
-      },
-    ]);
-    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+  test('navigates to detail screen instead of opening an alert when a meal is tapped', async () => {
+    const meal = {
       id: '1',
       uuid: '1',
       meal_name: 'ラーメン',
-      cuisine_type: '和食',
-    });
-
-    const { findByTestId, getByText } = render(<RecordsScreen />);
-    await triggerLatestFocus();
-
-    fireEvent.press(await findByTestId('meal-card-1'));
-
-    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    const editButton = buttons.find((button: { text: string; onPress?: () => void }) => button.text === '編集');
-    act(() => {
-      editButton.onPress?.();
-    });
-
-    fireEvent.press(await findByTestId('edit-cuisine-和食'));
-    fireEvent.press(getByText('保存'));
-
-    await waitFor(() => {
-      expect(MealService.updateMeal).toHaveBeenCalledWith(
-        '1',
-        expect.objectContaining({
-          cuisine_type: '和食',
-        })
-      );
-    });
-  });
-
-  test('shows an error alert and keeps the modal open when save fails', async () => {
-    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
-      {
-        id: '1',
-        uuid: '1',
-        meal_name: 'ラーメン',
-        meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
-        is_homemade: false,
-        photo_path: 'file:///ramen.jpg',
-      },
-    ]);
-    (MealService.updateMeal as jest.Mock).mockRejectedValue(new Error('save failed'));
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
+      is_homemade: false,
+      photo_path: 'file:///ramen.jpg',
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    };
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([meal]);
 
     const { findByTestId } = render(<RecordsScreen />);
     await triggerLatestFocus();
 
     fireEvent.press(await findByTestId('meal-card-1'));
 
-    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2];
-    const editButton = buttons.find((button: { text: string; onPress?: () => void }) => button.text === '編集');
-    act(() => {
-      editButton.onPress?.();
-    });
-
-    fireEvent.press(await findByTestId('edit-save-button'));
-
-    await waitFor(() => {
-      expect(Alert.alert).toHaveBeenCalledWith('エラー', '更新に失敗しました。');
-    });
-
-    expect(await findByTestId('edit-meal-name-input')).toBeTruthy();
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', { meal });
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });

@@ -19,14 +19,15 @@
 1. Open Records.
 2. Browse the grouped list, which refreshes when the tab becomes active again.
 3. Open a record card.
-4. Edit or delete the record.
+4. Review the larger photo and saved details on the dedicated detail screen.
+5. Edit or delete the record, or open the explicit X share path.
 
 ## Search Flow
 1. Open Search.
 2. Enter text or select filters.
 3. Review the result list, which reruns with the current query when the tab regains focus.
-4. Open a result card to review the saved details.
-5. Edit or delete the record, or refine the search and try again.
+4. Open a result card to move to the shared saved-record detail screen.
+5. Edit or delete the record there, or refine the search and try again.
 
 ## Stats Flow
 1. Open Stats.
@@ -51,6 +52,7 @@
 - Capture failure: let the user retry or return to the camera.
 - Local persistence failure: do not create the meal record and show a retry path.
 - Android photo-save permission denied during capture review: do not create the meal record, keep the review inputs intact, and offer a direct path to the system settings screen.
+- Share handoff failure: keep the current record visible, show a retryable error, and let the user reopen the share sheet.
 - Search refresh failure: keep the last successful results when possible and show a retry action.
 - Stats refresh failure: keep the last successful summary when possible and show a retry action.
 - Delete action: confirm destructive changes before applying them.

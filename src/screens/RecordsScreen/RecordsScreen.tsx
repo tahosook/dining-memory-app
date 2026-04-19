@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -9,60 +9,31 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
-import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
-import { formatMealDetailMessage } from '../../utils/mealDetails';
-
-interface MealRecord {
-  id: string;
-  uuid: string;
-  meal_name: string;
-  meal_type?: string;
-  cuisine_type?: string;
-  is_homemade: boolean;
-  photo_path?: string;
-  photo_thumbnail_path?: string;
-  location_name?: string;
-  meal_datetime: number;
-  notes?: string;
-  cooking_level?: string;
-}
+import type { Meal } from '../../types/MealTypes';
+import type { RecordsStackParamList } from '../../navigation/types';
+import { getMealListImageUri } from '../../utils/mealImage';
 
 interface MealGroup {
   date: string;
   dateLabel: string;
-  meals: MealRecord[];
+  meals: Meal[];
 }
 
-const emptyEditDraft: MealEditDraft = {
-  mealName: '',
-  cuisineType: '',
-  location: '',
-  notes: '',
-  isHomemade: true,
-};
-
-function createMealEditDraft(meal: MealRecord): MealEditDraft {
-  return {
-    mealName: meal.meal_name,
-    cuisineType: meal.cuisine_type ?? '',
-    location: meal.location_name ?? '',
-    notes: meal.notes ?? '',
-    isHomemade: meal.is_homemade,
-  };
-}
+type RecordsNavigationProp = NativeStackNavigationProp<RecordsStackParamList, 'RecordsList'>;
 
 type MealItemProps = {
-  item: MealRecord;
-  onPress: (meal: MealRecord) => void;
+  item: Meal;
+  onPress: (meal: Meal) => void;
 };
 
 type MealGroupSectionProps = {
   item: MealGroup;
-  onMealPress: (meal: MealRecord) => void;
+  onMealPress: (meal: Meal) => void;
 };
 
 const Separator = () => <View style={styles.separator} />;
@@ -75,20 +46,8 @@ const MealGroupHeader: React.FC<{ item: MealGroup }> = ({ item }) => (
   </View>
 );
 
-function getDisplayImageUri(path?: string): string | undefined {
-  if (!path) {
-    return undefined;
-  }
-
-  if (path.startsWith('file://') || path.startsWith('content://') || path.startsWith('ph://') || path.startsWith('http')) {
-    return path;
-  }
-
-  return `file://${path}`;
-}
-
 const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
-  const imageUri = getDisplayImageUri(item.photo_thumbnail_path ?? item.photo_path);
+  const imageUri = getMealListImageUri(item);
 
   return (
     <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)} testID={`meal-card-${item.id}`}>
@@ -116,23 +75,23 @@ const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
           <Text style={styles.mealTime}>
             {new Date(item.meal_datetime).toLocaleTimeString('ja-JP', {
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
             })}
           </Text>
 
-          {item.location_name && (
+          {item.location_name ? (
             <Text style={styles.mealLocation} numberOfLines={1}>
               {item.location_name}
             </Text>
-          )}
+          ) : null}
         </View>
 
         <View style={styles.mealTags}>
-          {item.cuisine_type && (
+          {item.cuisine_type ? (
             <View style={styles.tag}>
               <Text style={styles.tagText}>{item.cuisine_type}</Text>
             </View>
-          )}
+          ) : null}
 
           <View style={[styles.tag, item.is_homemade ? styles.homemadeTag : styles.takeoutTag]}>
             <Text style={styles.tagText}>
@@ -140,11 +99,11 @@ const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
             </Text>
           </View>
 
-          {item.cooking_level && (
+          {item.cooking_level ? (
             <View style={[styles.tag, styles.cookingLevelTag]}>
               <Text style={styles.tagText}>{item.cooking_level}</Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
     </TouchableOpacity>
@@ -180,8 +139,8 @@ function formatDateLabel(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-function groupMealsByDate(records: MealRecord[]): MealGroup[] {
-  const groups: Record<string, MealRecord[]> = {};
+function groupMealsByDate(records: Meal[]): MealGroup[] {
+  const groups: Record<string, Meal[]> = {};
 
   records.forEach((meal) => {
     const dateKey = new Date(meal.meal_datetime).toDateString();
@@ -200,29 +159,16 @@ function groupMealsByDate(records: MealRecord[]): MealGroup[] {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
-/**
- * 食事記録一覧画面コンポーネント
- *
- * ユーザーが撮影した食事記録の一覧を表示し、
- * 日付ごとにグルーピングして最新順に表示する。
- *
- * @component
- * @returns {JSX.Element} 食事記録一覧画面
- */
 export const RecordsScreen: React.FC = () => {
+  const navigation = useNavigation<RecordsNavigationProp>();
   const [mealGroups, setMealGroups] = useState<MealGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [editingMeal, setEditingMeal] = useState<MealRecord | null>(null);
-  const [editDraft, setEditDraft] = useState<MealEditDraft>(emptyEditDraft);
-  const [savingEdit, setSavingEdit] = useState(false);
 
-  // Load meal records
   const loadMeals = useCallback(async () => {
     try {
-      const meals = await MealService.getRecentMeals(100); // Get last 100 meals
-      const groupedMeals = groupMealsByDate(meals as MealRecord[]);
-      setMealGroups(groupedMeals);
+      const meals = await MealService.getRecentMeals(100);
+      setMealGroups(groupMealsByDate(meals));
     } catch (error) {
       console.error('Failed to load meals:', error);
       Alert.alert('エラー', '食事記録の読み込みに失敗しました。');
@@ -238,75 +184,14 @@ export const RecordsScreen: React.FC = () => {
     }, [loadMeals])
   );
 
-  // Handle refresh
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadMeals();
   }, [loadMeals]);
 
-  // Handle meal press
-  const handleMealPress = (meal: MealRecord) => {
-    Alert.alert(meal.meal_name, formatMealDetailMessage(meal), [
-      { text: '編集', onPress: () => handleEditMeal(meal) },
-      { text: '削除', onPress: () => handleDeleteMeal(meal), style: 'destructive' },
-      { text: '閉じる', style: 'cancel' }
-    ]);
-  };
-
-  // Handle edit meal
-  const handleEditMeal = (meal: MealRecord) => {
-    setEditingMeal(meal);
-    setEditDraft(createMealEditDraft(meal));
-  };
-
-  // Handle delete meal
-  const handleDeleteMeal = (meal: MealRecord) => {
-    Alert.alert(
-      '削除確認',
-      `${meal.meal_name} を削除してもよろしいですか？`,
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await MealService.softDeleteMeal(meal.id);
-              loadMeals(); // Refresh the list
-            } catch (error) {
-              console.error('Failed to delete meal:', error);
-              Alert.alert('エラー', '削除に失敗しました。');
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  const saveEdit = useCallback(async () => {
-    if (!editingMeal) {
-      return;
-    }
-
-    setSavingEdit(true);
-
-    try {
-      await MealService.updateMeal(editingMeal.id, {
-        meal_name: editDraft.mealName,
-        cuisine_type: editDraft.cuisineType || undefined,
-        location_name: editDraft.location || undefined,
-        notes: editDraft.notes || undefined,
-        is_homemade: editDraft.isHomemade,
-      });
-      setEditingMeal(null);
-      await loadMeals();
-    } catch (error) {
-      console.error('Failed to update meal:', error);
-      Alert.alert('エラー', '更新に失敗しました。');
-    } finally {
-      setSavingEdit(false);
-    }
-  }, [editDraft, editingMeal, loadMeals]);
+  const handleMealPress = useCallback((meal: Meal) => {
+    navigation.navigate('MealDetail', { meal });
+  }, [navigation]);
 
   if (loading) {
     return (
@@ -321,7 +206,6 @@ export const RecordsScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar style="auto" />
 
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>食事記録</Text>
         <TouchableOpacity style={styles.settingsButton}>
@@ -329,7 +213,6 @@ export const RecordsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Content */}
       <View style={styles.content}>
         {mealGroups.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -351,19 +234,9 @@ export const RecordsScreen: React.FC = () => {
           />
         )}
       </View>
-
-      <MealEditModal
-        visible={Boolean(editingMeal)}
-        draft={editDraft}
-        onChange={setEditDraft}
-        onSave={saveEdit}
-        onClose={() => setEditingMeal(null)}
-        saving={savingEdit}
-        testIDPrefix="edit"
-      />
     </SafeAreaView>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -527,7 +400,7 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: '#e9ecef',
-    marginLeft: 96, // Align with text (80 + 16 padding)
+    marginLeft: 96,
   },
   groupSeparator: {
     height: 12,

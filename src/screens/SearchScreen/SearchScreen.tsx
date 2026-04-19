@@ -1,35 +1,17 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, FlatList, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { FlatList, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { CuisineTypeSelector } from '../../components/common/CuisineTypeSelector';
-import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
 import { ScreenStateCard } from '../../components/common/ScreenStateCard';
 import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
 import { MealService } from '../../database/services/MealService';
 import type { Meal } from '../../types/MealTypes';
-import { formatMealDetailMessage } from '../../utils/mealDetails';
-
-const emptyEditDraft: MealEditDraft = {
-  mealName: '',
-  cuisineType: '',
-  location: '',
-  notes: '',
-  isHomemade: true,
-};
-
-function createMealEditDraft(meal: Meal): MealEditDraft {
-  return {
-    mealName: meal.meal_name,
-    cuisineType: meal.cuisine_type ?? '',
-    location: meal.location_name ?? '',
-    notes: meal.notes ?? '',
-    isHomemade: meal.is_homemade,
-  };
-}
+import type { RootTabParamList } from '../../navigation/types';
 
 export const SearchScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp<RootTabParamList>>();
   const [searchQuery, setSearchQuery] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
@@ -38,9 +20,6 @@ export const SearchScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
-  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
-  const [editDraft, setEditDraft] = useState<MealEditDraft>(emptyEditDraft);
-  const [savingEdit, setSavingEdit] = useState(false);
 
   const runSearch = useCallback(async () => {
     setLoading(true);
@@ -69,72 +48,14 @@ export const SearchScreen: React.FC = () => {
     }, [runSearch])
   );
 
-  const handleEditMeal = useCallback((meal: Meal) => {
-    setEditingMeal(meal);
-    setEditDraft(createMealEditDraft(meal));
-  }, []);
-
-  const handleDeleteMeal = useCallback(
-    (meal: Meal) => {
-      Alert.alert(
-        '削除確認',
-        `${meal.meal_name} を削除してもよろしいですか？`,
-        [
-          { text: 'キャンセル', style: 'cancel' },
-          {
-            text: '削除',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                await MealService.softDeleteMeal(meal.id);
-                await runSearch();
-              } catch (error) {
-                console.error('Failed to delete meal from search:', error);
-                Alert.alert('エラー', '削除に失敗しました。');
-              }
-            },
-          },
-        ]
-      );
-    },
-    [runSearch]
-  );
-
-  const handleMealPress = useCallback(
-    (meal: Meal) => {
-      Alert.alert(meal.meal_name, formatMealDetailMessage(meal), [
-        { text: '編集', onPress: () => handleEditMeal(meal) },
-        { text: '削除', onPress: () => handleDeleteMeal(meal), style: 'destructive' },
-        { text: '閉じる', style: 'cancel' },
-      ]);
-    },
-    [handleDeleteMeal, handleEditMeal]
-  );
-
-  const saveEdit = useCallback(async () => {
-    if (!editingMeal) {
-      return;
-    }
-
-    setSavingEdit(true);
-
-    try {
-      await MealService.updateMeal(editingMeal.id, {
-        meal_name: editDraft.mealName,
-        cuisine_type: editDraft.cuisineType || undefined,
-        location_name: editDraft.location || undefined,
-        notes: editDraft.notes || undefined,
-        is_homemade: editDraft.isHomemade,
-      });
-      setEditingMeal(null);
-      await runSearch();
-    } catch (error) {
-      console.error('Failed to update meal from search:', error);
-      Alert.alert('エラー', '更新に失敗しました。');
-    } finally {
-      setSavingEdit(false);
-    }
-  }, [editDraft, editingMeal, runSearch]);
+  const handleMealPress = useCallback((meal: Meal) => {
+    navigation.navigate('Records', {
+      screen: 'MealDetail',
+      params: {
+        meal,
+      },
+    });
+  }, [navigation]);
 
   const showLoadingState = loading && results.length === 0;
   const showErrorState = Boolean(errorMessage) && results.length === 0;
@@ -247,16 +168,6 @@ export const SearchScreen: React.FC = () => {
           )}
         />
       ) : null}
-
-      <MealEditModal
-        visible={Boolean(editingMeal)}
-        draft={editDraft}
-        onChange={setEditDraft}
-        onSave={saveEdit}
-        onClose={() => setEditingMeal(null)}
-        saving={savingEdit}
-        testIDPrefix="search-edit"
-      />
     </View>
   );
 };
@@ -344,11 +255,11 @@ const styles = StyleSheet.create({
   resultCard: {
     backgroundColor: Colors.white,
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     gap: 6,
   },
   resultName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
   },
@@ -358,6 +269,7 @@ const styles = StyleSheet.create({
   },
   resultNotes: {
     fontSize: 14,
+    lineHeight: 20,
     color: Colors.text,
   },
   resultType: {

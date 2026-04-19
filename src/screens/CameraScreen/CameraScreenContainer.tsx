@@ -20,7 +20,7 @@ const CameraScreenContainer: React.FC = () => {
     cameraRef,
     takePicture,
     flipCamera,
-    showCloseConfirmDialog,
+    closeCamera,
     captureReview,
     onCaptureReviewChange,
     onCaptureReviewCancel,
@@ -38,7 +38,7 @@ const CameraScreenContainer: React.FC = () => {
       captureReview={captureReview}
       onTakePicture={takePicture}
       onFlipCamera={flipCamera}
-      onClose={showCloseConfirmDialog}
+      onClose={closeCamera}
       onRequestPermission={cameraPermissionState.requestPermissions}
       onOpenSettings={cameraPermissionState.openAppSettings}
       onCaptureReviewChange={onCaptureReviewChange}
