@@ -35,6 +35,7 @@
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
 - Phase 1 の AI 入力補助は capture review 上の明示的なユーザー操作でのみ実行し、local mock provider を使って UI 統合を確認する。
+- 次の local AI spike では、Settings の明示許可と `app_settings` 永続化を追加し、default provider mode を `local-runtime-prototype` に向ける。
 - Cloud use is optional and should be treated as a future fallback path, not the default path.
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
@@ -48,6 +49,7 @@
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
 - Phase 1 の AI 入力補助では写真やメモを外部送信せず、候補採用時だけ最小限の AI metadata を meal record に残す。
+- local AI spike でも写真やメモの外部送信は行わず、Settings の user opt-in がない限り AI 入力補助を無効にする。
 - Records detail may hand off the current meal to the OS share sheet, but should not store posting state or send data automatically.
 - Keep secrets out of source control and out of runtime logs.
 
@@ -69,3 +71,4 @@
 - The project keeps a strong privacy and local-storage bias.
 - The current MVP does not ship cloud backup, export, or external AI transfer behavior.
 - Phase 1 の AI 入力補助は save flow の外側に置き、失敗時でも手入力保存を妨げない。
+- local AI runtime が未組み込みの build では、review に disabled reason を出し、mock 候補で自動的に置き換えない。

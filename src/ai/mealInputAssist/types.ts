@@ -68,6 +68,24 @@ export interface MealInputAssistProvider {
   suggest: (request: MealInputAssistRequest) => Promise<MealInputAssistProviderResult>;
 }
 
+export type MealInputAssistProviderMode = 'mock' | 'local-runtime-prototype' | 'override';
+
+export type MealInputAssistRuntimeUnavailableCode = 'runtime_unavailable' | 'model_unavailable';
+
+export type MealInputAssistRuntimeAvailability =
+  | {
+    kind: 'ready';
+    mode: MealInputAssistProviderMode;
+    description: string;
+    provider: MealInputAssistProvider;
+  }
+  | {
+    kind: 'unavailable';
+    mode: 'local-runtime-prototype';
+    code: MealInputAssistRuntimeUnavailableCode;
+    reason: string;
+  };
+
 export type MealInputAssistPolicy = (request: MealInputAssistRequest) => MealInputAssistAvailability;
 
 export const EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS: MealInputAssistSuggestions = {

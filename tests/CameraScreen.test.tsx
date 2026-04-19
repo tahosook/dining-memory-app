@@ -529,6 +529,21 @@ describe('CameraScreen', () => {
       expect(await findByTestId('save-meal-button')).toBeTruthy();
     });
 
+    test('shows the disabled reason when AI input assist is unavailable', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview(),
+      }));
+      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
+        status: 'disabled',
+        disabledReason: '設定画面でAI入力補助をオンにすると利用できます。',
+      }));
+
+      const { findByText, findByTestId } = render(<CameraScreen />);
+
+      expect(await findByText('設定画面でAI入力補助をオンにすると利用できます。')).toBeTruthy();
+      expect(await findByTestId('save-meal-button')).toBeTruthy();
+    });
+
     test('passes applied AI metadata when the user saves the review', async () => {
       const onCaptureReviewSave = jest.fn().mockResolvedValue(undefined);
       (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({

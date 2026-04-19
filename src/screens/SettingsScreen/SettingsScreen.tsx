@@ -1,9 +1,46 @@
-import React, { useCallback } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
+import { AppSettingsService } from '../../database/services/AppSettingsService';
 
 export default function SettingsScreen() {
+  const [aiInputAssistEnabled, setAiInputAssistEnabled] = useState(false);
+  const [aiInputAssistLoading, setAiInputAssistLoading] = useState(true);
+
+  const loadAiInputAssistSetting = useCallback(async () => {
+    setAiInputAssistLoading(true);
+
+    try {
+      const nextEnabled = await AppSettingsService.getAiInputAssistEnabled();
+      setAiInputAssistEnabled(nextEnabled);
+    } catch (error) {
+      console.error('Failed to load AI input assist setting:', error);
+      setAiInputAssistEnabled(false);
+    } finally {
+      setAiInputAssistLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAiInputAssistSetting().catch(() => undefined);
+    }, [loadAiInputAssistSetting])
+  );
+
+  const handleAiInputAssistToggle = useCallback(async (nextValue: boolean) => {
+    setAiInputAssistEnabled(nextValue);
+
+    try {
+      await AppSettingsService.setAiInputAssistEnabled(nextValue);
+    } catch (error) {
+      console.error('Failed to save AI input assist setting:', error);
+      setAiInputAssistEnabled((current) => !current);
+      Alert.alert('設定を保存できませんでした', 'AI入力補助の設定を保存できませんでした。もう一度お試しください。');
+    }
+  }, []);
+
   const handleDeleteAllData = useCallback(() => {
     Alert.alert('ローカルデータ削除', '端末内の食事記録をすべて削除します。', [
       { text: 'キャンセル', style: 'cancel' },
@@ -23,8 +60,28 @@ export default function SettingsScreen() {
       <Section title="プライバシー">
         <Text style={styles.bodyText}>このアプリは、記録データを端末内に保存する前提で動作します。</Text>
         <Text style={styles.bodyText}>自動的な外部送信は行わず、Records 詳細からユーザーが明示的に開く共有シートだけを例外として扱います。</Text>
-        <Text style={styles.bodyText}>AI 解析、クラウドバックアップ、データエクスポートは現在の実装には含めていません。</Text>
+        <Text style={styles.bodyText}>AI 入力補助は設定でオンにした場合だけ扱い、現在の spike では外部送信を行いません。</Text>
         <Text style={styles.bodyText}>Android の写真は `Pictures / Dining Memory` の専用アルバムに保存し、将来バックアップ対象として扱いやすい前提を維持します。</Text>
+      </Section>
+
+      <Section title="AI入力補助">
+        <View style={styles.settingRow}>
+          <View style={styles.settingTextBlock}>
+            <Text style={styles.settingTitle}>端末内 AI 入力補助を有効にする</Text>
+            <Text style={styles.settingDescription}>
+              review 画面で写真を端末内だけで解析し、料理名やジャンル候補を提案します。外部送信は行いません。
+            </Text>
+            <Text style={styles.settingHint}>
+              現在の spike では runtime 未組み込みのため、有効化しても review 側で未対応表示になることがあります。
+            </Text>
+          </View>
+          <Switch
+            value={aiInputAssistEnabled}
+            onValueChange={handleAiInputAssistToggle}
+            disabled={aiInputAssistLoading}
+            testID="ai-input-assist-toggle"
+          />
+        </View>
       </Section>
 
       <Section title="現在の機能範囲">
@@ -96,6 +153,31 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 14,
+    color: Colors.gray,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  settingTextBlock: {
+    flex: 1,
+    gap: 6,
+  },
+  settingTitle: {
+    fontSize: 15,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  settingDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.text,
+  },
+  settingHint: {
+    fontSize: 13,
+    lineHeight: 19,
     color: Colors.gray,
   },
   disabledItem: {

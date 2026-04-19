@@ -26,8 +26,15 @@ export interface PersistedMealRow {
   updated_at: number;
 }
 
+export interface PersistedAppSettingRow {
+  key: string;
+  value?: string | null;
+  updated_at: number;
+}
+
 type InMemoryState = {
   meals: PersistedMealRow[];
+  appSettings: Record<string, string>;
 };
 
 const DB_NAME = 'DiningMemory.db';
@@ -36,6 +43,7 @@ let nativeDb: SQLiteDatabase | null = null;
 let initialized = false;
 const memoryState: InMemoryState = {
   meals: [],
+  appSettings: {},
 };
 
 const MEALS_TABLE_SQL = `
@@ -68,6 +76,15 @@ const MEALS_TABLE_SQL = `
   CREATE INDEX IF NOT EXISTS idx_meals_search_text ON meals(search_text);
 `;
 
+const APP_SETTINGS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_app_settings_updated_at ON app_settings(updated_at);
+`;
+
 function isNativeRuntime() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
@@ -78,7 +95,7 @@ function ensureNativeDatabase(): SQLiteDatabase {
   }
 
   if (!initialized) {
-    nativeDb.execSync(MEALS_TABLE_SQL);
+    nativeDb.execSync(`${MEALS_TABLE_SQL}\n${APP_SETTINGS_TABLE_SQL}`);
     initialized = true;
   }
 
@@ -113,8 +130,17 @@ export function setInMemoryMeals(nextMeals: PersistedMealRow[]) {
   memoryState.meals = [...nextMeals];
 }
 
+export function getInMemoryAppSettings(): Record<string, string> {
+  return { ...memoryState.appSettings };
+}
+
+export function setInMemoryAppSettings(nextAppSettings: Record<string, string>) {
+  memoryState.appSettings = { ...nextAppSettings };
+}
+
 export function resetInMemoryDatabase() {
   memoryState.meals = [];
+  memoryState.appSettings = {};
 }
 
 export function mapRowToMeal(row: PersistedMealRow): Meal {

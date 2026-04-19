@@ -26,6 +26,7 @@
 - Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
 - AI suggestion section should show `未実行 / 解析中 / 成功 / 失敗 / 無効` and keep the save and cancel actions available in every state.
 - AI candidates should appear as tappable chips for meal name, cuisine type, and homemade / takeout only, and should update a field only when the user taps a candidate.
+- AI suggestion section の `無効` 理由は、少なくとも `設定で未許可` `この build では未対応` `model 未準備` を区別できるようにする。
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
 - If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
 - After a successful save, close capture review and move directly to Records instead of showing a success modal.
@@ -54,6 +55,7 @@
 
 ## Settings Screen
 - Prioritize privacy, current scope, local data deletion, and app information.
+- AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。
 - Keep destructive actions visually separated.
 
 ## Shared States

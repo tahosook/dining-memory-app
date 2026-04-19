@@ -1,6 +1,8 @@
 export { defaultMealInputAssistProvider, MockMealInputAssistProvider } from './provider';
 export { normalizeMealInputAssistResult } from './normalizer';
-export { defaultMealInputAssistPolicy } from './policy';
+export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
+export { LocalRuntimePrototypeMealInputAssistProvider, getLocalRuntimePrototypeAvailability } from './localRuntimePrototype';
+export { createOverrideRuntimeAvailability, loadMealInputAssistRuntimeAvailability } from './runtime';
 export type {
   AppliedMealInputAssistMetadata,
   MealInputAssistAvailability,
@@ -10,8 +12,11 @@ export type {
   MealInputAssistHomemadeProviderCandidate,
   MealInputAssistPolicy,
   MealInputAssistProvider,
+  MealInputAssistProviderMode,
   MealInputAssistProviderResult,
   MealInputAssistRequest,
+  MealInputAssistRuntimeAvailability,
+  MealInputAssistRuntimeUnavailableCode,
   MealInputAssistStatus,
   MealInputAssistSuggestions,
   MealInputAssistTextProviderCandidate,

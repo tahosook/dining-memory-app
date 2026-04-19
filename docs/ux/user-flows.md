@@ -38,8 +38,9 @@
 
 ## Settings Flow
 1. Open Settings.
-2. Review privacy guidance, current feature scope, and app info.
-3. Optionally delete local data.
+2. Review privacy guidance and the AI 入力補助の端末内利用許可.
+3. Optionally change the AI setting, then optionally delete local data.
+4. Review the remaining feature scope and app info.
 
 ## Camera Permission Flow
 1. Open the Camera tab.
@@ -54,6 +55,7 @@
 - Local persistence failure: do not create the meal record and show a retry path.
 - Android photo-save permission denied during capture review: do not create the meal record, keep the review inputs intact, and offer a direct path to the system settings screen.
 - AI suggestion failure during capture review: keep manual input and save available, explain the failure briefly, and offer a retry path without resetting the review.
+- AI input assist disabled by setting or runtime blocker: keep manual input and save available, explain why AI is unavailable, and do not silently fall back to an external or mock provider.
 - Share handoff failure: keep the current record visible, show a retryable error, and let the user reopen the share sheet.
 - Search refresh failure: keep the last successful results when possible and show a retry action.
 - Stats refresh failure: keep the last successful summary when possible and show a retry action.

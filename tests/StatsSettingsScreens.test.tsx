@@ -13,11 +13,19 @@ jest.mock('@react-navigation/native', () => ({
 import StatsScreen from '../src/screens/StatsScreen/StatsScreen';
 import SettingsScreen from '../src/screens/SettingsScreen/SettingsScreen';
 import { MealService } from '../src/database/services/MealService';
+import { AppSettingsService } from '../src/database/services/AppSettingsService';
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     getStatistics: jest.fn(),
     clearAllMeals: jest.fn(),
+  },
+}));
+
+jest.mock('../src/database/services/AppSettingsService', () => ({
+  AppSettingsService: {
+    getAiInputAssistEnabled: jest.fn(),
+    setAiInputAssistEnabled: jest.fn(),
   },
 }));
 
@@ -133,15 +141,23 @@ describe('StatsScreen', () => {
 describe('SettingsScreen', () => {
   beforeEach(() => {
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
+    (AppSettingsService.setAiInputAssistEnabled as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  test('shows disabled feature labels and delete entry point', async () => {
-    const { getByText } = render(<SettingsScreen />);
+  test('shows AI toggle, disabled feature labels, and delete entry point', async () => {
+    const { getByText, getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
 
+    expect(getByText('端末内 AI 入力補助を有効にする')).toBeTruthy();
+    fireEvent(getByTestId('ai-input-assist-toggle'), 'valueChange', true);
+    await waitFor(() => {
+      expect(AppSettingsService.setAiInputAssistEnabled).toHaveBeenCalledWith(true);
+    });
     expect(getByText('クラウドバックアップ')).toBeTruthy();
     fireEvent.press(getByText('ローカルデータを削除'));
 
