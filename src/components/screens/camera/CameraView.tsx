@@ -24,6 +24,7 @@ import type { CaptureReviewState } from '../../../hooks/cameraCapture/useCameraC
 import type {
   MealInputAssistCuisineSuggestion,
   MealInputAssistHomemadeSuggestion,
+  MealInputAssistProgress,
   MealInputAssistStatus,
   MealInputAssistSuggestions,
   MealInputAssistTextSuggestion,
@@ -73,6 +74,7 @@ type CameraAiAssistState = {
   aiAssistStatus: MealInputAssistStatus;
   aiAssistSuggestions: MealInputAssistSuggestions;
   aiAssistErrorMessage: string | null;
+  aiAssistProgress: MealInputAssistProgress | null;
   aiAssistDisabledReason: string | null;
 };
 
@@ -88,7 +90,7 @@ export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 
   Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
   Pick<CameraReviewState, 'captureReview'> &
   Pick<CameraReviewOperations, 'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'> &
-  Pick<CameraAiAssistState, 'aiAssistStatus' | 'aiAssistSuggestions' | 'aiAssistErrorMessage' | 'aiAssistDisabledReason'> &
+  Pick<CameraAiAssistState, 'aiAssistStatus' | 'aiAssistSuggestions' | 'aiAssistErrorMessage' | 'aiAssistProgress' | 'aiAssistDisabledReason'> &
   Pick<CameraAiAssistOperations, 'onRequestAiSuggestions' | 'onApplyMealNameSuggestion' | 'onApplyCuisineSuggestion' | 'onApplyHomemadeSuggestion'>;
 
 const AI_ASSIST_STATUS_LABELS: Record<MealInputAssistStatus, string> = {
@@ -196,6 +198,7 @@ interface CaptureReviewProps {
   aiAssistStatus: MealInputAssistStatus;
   aiAssistSuggestions: MealInputAssistSuggestions;
   aiAssistErrorMessage: string | null;
+  aiAssistProgress: MealInputAssistProgress | null;
   aiAssistDisabledReason: string | null;
   onRequestAiSuggestions: () => Promise<void>;
   onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
@@ -253,6 +256,7 @@ interface AiAssistSectionProps {
   status: MealInputAssistStatus;
   suggestions: MealInputAssistSuggestions;
   errorMessage: string | null;
+  progress: MealInputAssistProgress | null;
   disabledReason: string | null;
   onRequestSuggestions: () => Promise<void>;
   onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
@@ -260,10 +264,26 @@ interface AiAssistSectionProps {
   onApplyHomemadeSuggestion: (suggestion: MealInputAssistHomemadeSuggestion) => void;
 }
 
+function formatAiAssistDuration(durationMs: number | null | undefined) {
+  if (typeof durationMs !== 'number' || Number.isNaN(durationMs) || durationMs < 0) {
+    return null;
+  }
+
+  const totalSeconds = Math.max(Math.round(durationMs / 1000), 0);
+  if (totalSeconds < 60) {
+    return `${totalSeconds}秒`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds > 0 ? `${minutes}分${seconds}秒` : `${minutes}分`;
+}
+
 const AiAssistSection: React.FC<AiAssistSectionProps> = ({
   status,
   suggestions,
   errorMessage,
+  progress,
   disabledReason,
   onRequestSuggestions,
   onApplyMealNameSuggestion,
@@ -284,10 +304,15 @@ const AiAssistSection: React.FC<AiAssistSectionProps> = ({
     : status === 'error'
       ? errorMessage ?? '候補を取得できませんでした。もう一度お試しください。'
       : status === 'running'
-        ? '写真をもとに候補を整理しています。保存はいつでも行えます。'
+        ? progress?.message ?? '写真をもとに候補を整理しています。保存はいつでも行えます。'
         : status === 'success' && !hasAnySuggestions
           ? '候補が見つかりませんでした。手入力のまま保存できます。'
           : '候補をタップしたときだけ、対応する入力欄へ反映されます。';
+  const progressLabel = typeof progress?.progress === 'number'
+    ? `${Math.round(progress.progress * 100)}%`
+    : null;
+  const elapsedLabel = formatAiAssistDuration(progress?.elapsedMs ?? null);
+  const remainingLabel = formatAiAssistDuration(progress?.estimatedRemainingMs ?? null);
 
   return (
     <View style={styles.aiAssistSection} testID="ai-input-assist-section">
@@ -308,6 +333,25 @@ const AiAssistSection: React.FC<AiAssistSectionProps> = ({
       </View>
 
       <Text style={styles.aiAssistHelperText}>{helperMessage}</Text>
+
+      {status === 'running' ? (
+        <View style={styles.aiAssistProgressCard} testID="ai-input-assist-progress">
+          <View style={styles.aiAssistProgressTrack}>
+            <View
+              style={[
+                styles.aiAssistProgressFill,
+                { width: `${Math.round((progress?.progress ?? 0.08) * 100)}%` },
+              ]}
+            />
+          </View>
+          {progressLabel ? <Text style={styles.aiAssistProgressMeta}>進捗の目安: {progressLabel}</Text> : null}
+          {elapsedLabel ? <Text style={styles.aiAssistProgressMeta}>経過: {elapsedLabel}</Text> : null}
+          {remainingLabel ? <Text style={styles.aiAssistProgressMeta}>残り目安: 約{remainingLabel}</Text> : null}
+          <Text style={styles.aiAssistProgressHint}>
+            保存は待たずに行えます。初回の model 読み込みは長めです。
+          </Text>
+        </View>
+      ) : null}
 
       <TouchableOpacity
         style={[
@@ -351,6 +395,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
   aiAssistStatus,
   aiAssistSuggestions,
   aiAssistErrorMessage,
+  aiAssistProgress,
   aiAssistDisabledReason,
   onRequestAiSuggestions,
   onApplyMealNameSuggestion,
@@ -415,6 +460,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             status={aiAssistStatus}
             suggestions={aiAssistSuggestions}
             errorMessage={aiAssistErrorMessage}
+            progress={aiAssistProgress}
             disabledReason={aiAssistDisabledReason}
             onRequestSuggestions={onRequestAiSuggestions}
             onApplyMealNameSuggestion={onApplyMealNameSuggestion}
@@ -515,6 +561,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   aiAssistStatus,
   aiAssistSuggestions,
   aiAssistErrorMessage,
+  aiAssistProgress,
   aiAssistDisabledReason,
   onRequestAiSuggestions,
   onApplyMealNameSuggestion,
@@ -538,7 +585,11 @@ const CameraView: React.FC<CameraViewProps> = ({
   return (
     <ErrorBoundary>
       <SafeAreaView style={styles.container} edges={safeAreaEdges}>
-        <ExpoCameraView style={styles.camera} facing={facing} mode="picture" ratio="16:9" ref={cameraRef} />
+        {!captureReview ? (
+          <ExpoCameraView style={styles.camera} facing={facing} mode="picture" ratio="16:9" ref={cameraRef} />
+        ) : (
+          <View style={styles.cameraReviewBackdrop} />
+        )}
 
         <View style={styles.overlay}>
           <TopBar onClosePress={onClose} onFlipPress={onFlipCamera} />
@@ -552,6 +603,7 @@ const CameraView: React.FC<CameraViewProps> = ({
               aiAssistStatus={aiAssistStatus}
               aiAssistSuggestions={aiAssistSuggestions}
               aiAssistErrorMessage={aiAssistErrorMessage}
+              aiAssistProgress={aiAssistProgress}
               aiAssistDisabledReason={aiAssistDisabledReason}
               onRequestAiSuggestions={onRequestAiSuggestions}
               onApplyMealNameSuggestion={onApplyMealNameSuggestion}
@@ -610,6 +662,10 @@ const styles = StyleSheet.create({
   },
   camera: {
     flex: 1,
+  },
+  cameraReviewBackdrop: {
+    flex: 1,
+    backgroundColor: Colors.black,
   },
   overlay: {
     position: 'absolute',
@@ -741,6 +797,31 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '700',
     fontSize: 15,
+  },
+  aiAssistProgressCard: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 10,
+    padding: 10,
+    gap: 6,
+  },
+  aiAssistProgressTrack: {
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    overflow: 'hidden',
+  },
+  aiAssistProgressFill: {
+    height: '100%',
+    backgroundColor: Colors.info,
+  },
+  aiAssistProgressMeta: {
+    color: Colors.white,
+    fontSize: 13,
+  },
+  aiAssistProgressHint: {
+    color: '#c7d4dd',
+    fontSize: 12,
+    lineHeight: 18,
   },
   aiSuggestionGroup: {
     gap: 8,

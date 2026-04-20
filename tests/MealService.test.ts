@@ -1,28 +1,8 @@
 import { MealService } from '../src/database/services/MealService';
-import { MealEmbeddingService } from '../src/database/services/MealEmbeddingService';
-import { SemanticSearchService } from '../src/database/services/SemanticSearchService';
-
-jest.mock('../src/ai/runtime', () => ({
-  getLocalLlamaTextEmbeddingAvailability: jest.fn(async () => ({
-    kind: 'unavailable',
-    capability: 'text-embedding',
-    mode: 'local-runtime-prototype',
-    code: 'runtime_unavailable',
-    reason: 'test unavailable',
-  })),
-}));
-
-jest.mock('../src/database/services/SemanticSearchService', () => ({
-  SemanticSearchService: {
-    scoreMeals: jest.fn(async () => []),
-  },
-}));
 
 jest.mock('../src/database/services/localDatabase', () => {
   type MockMealRow = Record<string, unknown>;
-  type MockSearchVectorRow = Record<string, unknown>;
   let meals: MockMealRow[] = [];
-  let searchVectors: MockSearchVectorRow[] = [];
 
   return {
     initializeDatabase: jest.fn(async () => {}),
@@ -32,13 +12,8 @@ jest.mock('../src/database/services/localDatabase', () => {
     setInMemoryMeals: jest.fn((nextMeals) => {
       meals = [...nextMeals];
     }),
-    getInMemorySearchVectors: jest.fn(() => [...searchVectors]),
-    setInMemorySearchVectors: jest.fn((nextSearchVectors) => {
-      searchVectors = [...nextSearchVectors];
-    }),
     resetInMemoryDatabase: jest.fn(() => {
       meals = [];
-      searchVectors = [];
     }),
     mapRowToMeal: jest.fn((row) => ({
       ...row,
@@ -63,7 +38,6 @@ jest.mock('../src/database/services/localDatabase', () => {
 describe('MealService', () => {
   beforeEach(async () => {
     jest.restoreAllMocks();
-    (SemanticSearchService.scoreMeals as jest.Mock).mockResolvedValue([]);
     await MealService.clearAllMeals();
   });
 
@@ -110,63 +84,28 @@ describe('MealService', () => {
     expect(meals[0].meal_name).toBe('醤油ラーメン');
   });
 
-  test('keeps lexical matches ahead of semantic-only matches', async () => {
-    const ramen = await MealService.createMeal({
+  test('keeps lexical search strictly text/filter-only', async () => {
+    await MealService.createMeal({
       meal_name: '醤油ラーメン',
       is_homemade: false,
-      photo_path: 'file:///ramen-hybrid.jpg',
+      photo_path: 'file:///ramen-lexical.jpg',
       meal_datetime: new Date('2026-04-17T19:00:00+09:00'),
       location_name: '神田',
     });
-    const curry = await MealService.createMeal({
+    await MealService.createMeal({
       meal_name: 'チキンカレー',
       is_homemade: true,
-      photo_path: 'file:///curry-hybrid.jpg',
+      photo_path: 'file:///curry-lexical.jpg',
       meal_datetime: new Date('2026-04-16T19:00:00+09:00'),
       location_name: '自宅',
+      notes: 'スパイス',
     });
-    (SemanticSearchService.scoreMeals as jest.Mock).mockResolvedValue([
-      { mealId: curry.id, score: 0.95 },
-      { mealId: ramen.id, score: 0.4 },
-    ]);
 
     const meals = await MealService.searchMeals({
       text: 'ラーメン',
     });
 
-    expect(meals.map((meal) => meal.id)).toEqual([ramen.id, curry.id]);
-  });
-
-  test('keeps non-text filters in front of semantic matches', async () => {
-    const homeMeal = await MealService.createMeal({
-      meal_name: '海鮮丼',
-      is_homemade: true,
-      photo_path: 'file:///kaisen-home.jpg',
-      meal_datetime: new Date('2026-04-18T19:00:00+09:00'),
-      location_name: '自宅',
-    });
-    const officeMeal = await MealService.createMeal({
-      meal_name: 'サラダ',
-      is_homemade: false,
-      photo_path: 'file:///salad-office.jpg',
-      meal_datetime: new Date('2026-04-18T12:00:00+09:00'),
-      location_name: '会社',
-    });
-    (SemanticSearchService.scoreMeals as jest.Mock).mockResolvedValue([
-      { mealId: officeMeal.id, score: 0.99 },
-      { mealId: homeMeal.id, score: 0.75 },
-    ]);
-
-    const meals = await MealService.searchMeals({
-      text: '魚料理',
-      location_name: '自宅',
-    });
-
-    expect(meals.map((meal) => meal.id)).toEqual([homeMeal.id]);
-    expect(SemanticSearchService.scoreMeals).toHaveBeenCalledWith(
-      '魚料理',
-      [expect.objectContaining({ id: homeMeal.id })]
-    );
+    expect(meals.map((meal) => meal.meal_name)).toEqual(['醤油ラーメン']);
   });
 
   test('aggregates summary statistics', async () => {
@@ -218,30 +157,7 @@ describe('MealService', () => {
     expect(nearbyMeal.location_name).toBe('神田駅前');
   });
 
-  test('createMeal does not wait for the embedding refresh promise', async () => {
-    const refreshSpy = jest
-      .spyOn(MealEmbeddingService, 'refreshEmbeddingForMeal')
-      .mockImplementation(() => new Promise(() => {}));
-
-    const result = await Promise.race([
-      MealService.createMeal({
-        meal_name: 'うどん',
-        is_homemade: true,
-        photo_path: 'file:///udon.jpg',
-        meal_datetime: new Date('2026-04-13T12:00:00+09:00'),
-      }).then((meal) => meal.meal_name),
-      new Promise((resolve) => setTimeout(() => resolve('timeout'), 20)),
-    ]);
-
-    expect(result).toBe('うどん');
-    expect(refreshSpy).toHaveBeenCalledTimes(1);
-  });
-
-  test('updateMeal refreshes embeddings with the saved fields', async () => {
-    const refreshSpy = jest
-      .spyOn(MealEmbeddingService, 'refreshEmbeddingForMeal')
-      .mockResolvedValue(null);
-
+  test('updates meals without any semantic-search side work', async () => {
     const created = await MealService.createMeal({
       meal_name: 'カレー',
       cuisine_type: '洋食',
@@ -250,49 +166,12 @@ describe('MealService', () => {
       meal_datetime: new Date('2026-04-14T19:00:00+09:00'),
       notes: '初回',
     });
-    refreshSpy.mockClear();
-
     const updated = await MealService.updateMeal(created.id, {
       notes: '更新後',
       tags: 'スパイス',
     });
 
     expect(updated?.notes).toBe('更新後');
-    expect(refreshSpy).toHaveBeenCalledWith(expect.objectContaining({
-      id: created.id,
-      meal_name: 'カレー',
-      cuisine_type: '洋食',
-      notes: '更新後',
-      tags: 'スパイス',
-    }));
-  });
-
-  test('backfillMissingEmbeddings only targets non-deleted meals', async () => {
-    const backfillSpy = jest
-      .spyOn(MealEmbeddingService, 'backfillMissingEmbeddings')
-      .mockResolvedValue();
-
-    const first = await MealService.createMeal({
-      meal_name: '寿司',
-      is_homemade: false,
-      photo_path: 'file:///sushi-backfill.jpg',
-      meal_datetime: new Date('2026-04-15T19:00:00+09:00'),
-    });
-    await MealService.createMeal({
-      meal_name: 'パスタ',
-      is_homemade: true,
-      photo_path: 'file:///pasta-backfill.jpg',
-      meal_datetime: new Date('2026-04-16T19:00:00+09:00'),
-    });
-    await MealService.softDeleteMeal(first.id);
-    backfillSpy.mockClear();
-
-    await MealService.backfillMissingEmbeddings();
-
-    expect(backfillSpy).toHaveBeenCalledWith([
-      expect.objectContaining({
-        meal_name: 'パスタ',
-      }),
-    ]);
+    expect(updated?.tags).toBe('スパイス');
   });
 });

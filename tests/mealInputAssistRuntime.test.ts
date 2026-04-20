@@ -83,11 +83,15 @@ describe('meal input assist runtime availability', () => {
 
     expect(fakeContext.initMultimodal).toHaveBeenCalledWith({
       path: 'file:///documents/ai-models/meal-input-assist.mmproj',
-      image_max_tokens: 384,
+      image_max_tokens: 224,
     });
-    expect(fakeContext.completion).toHaveBeenCalledWith(expect.objectContaining({
-      media_paths: ['/tmp/mock-meal.jpg'],
-    }));
+    expect(fakeContext.completion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        media_paths: ['/tmp/mock-meal.jpg'],
+        n_predict: 96,
+      }),
+      expect.any(Function)
+    );
     expect(normalized.source).toBe('local-meal-input-assist');
     expect(normalized.mealNames[0]?.value).toBe('海鮮丼');
     expect(normalized.cuisineTypes[0]?.value).toBe('和食');

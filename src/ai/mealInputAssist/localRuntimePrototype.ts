@@ -1,15 +1,33 @@
-import { documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
+import { getInfoAsync } from 'expo-file-system/legacy';
 import { initLlama, type LlamaContext } from 'llama.rn';
 import { NativeModules, Platform } from 'react-native';
 import { CUISINE_TYPE_OPTIONS } from '../../constants/MealOptions';
+import {
+  resolveMealInputAssistModelPath,
+  resolveMealInputAssistProjectorPath,
+} from './modelConfig';
 import { createUnavailableRuntimeAvailability } from './runtimeAvailability';
-import type { MealInputAssistProvider, MealInputAssistProviderResult, MealInputAssistRequest, MealInputAssistRuntimeAvailability } from './types';
+import type {
+  MealInputAssistProgressUpdate,
+  MealInputAssistProvider,
+  MealInputAssistProviderResult,
+  MealInputAssistRequest,
+  MealInputAssistRuntimeAvailability,
+  MealInputAssistSuggestOptions,
+} from './types';
 
-const LOCAL_MODEL_DIRECTORY = 'ai-models';
-const MEAL_INPUT_ASSIST_MODEL_FILENAME = 'meal-input-assist.gguf';
-const MEAL_INPUT_ASSIST_PROJECTOR_FILENAME = 'meal-input-assist.mmproj';
+export {
+  resolveMealInputAssistModelPath,
+  resolveMealInputAssistProjectorPath,
+} from './modelConfig';
+
 const LOCAL_MEAL_INPUT_ASSIST_SOURCE = 'local-meal-input-assist';
 const SUPPORTED_ANDROID_ABIS = new Set(['arm64-v8a', 'x86_64']);
+const LOCAL_RUNTIME_CONTEXT_SIZE = 1024;
+const LOCAL_RUNTIME_BATCH_SIZE = 128;
+const LOCAL_RUNTIME_IMAGE_MAX_TOKENS = 224;
+const LOCAL_RUNTIME_MAX_PREDICT = 96;
+const LOCAL_RUNTIME_EXPECTED_TOKEN_COUNT = 48;
 
 type PlatformConstantsWithSupportedAbis = {
   SupportedAbis?: string[];
@@ -163,25 +181,64 @@ function parseMealInputAssistResponse(text: string): MealInputAssistProviderResu
   };
 }
 
+function clampProgress(progress: number | null) {
+  if (progress === null || Number.isNaN(progress)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(1, progress));
+}
+
+function reportSuggestProgress(
+  onProgress: ((progress: MealInputAssistProgressUpdate) => void) | undefined,
+  progress: MealInputAssistProgressUpdate
+) {
+  onProgress?.({
+    ...progress,
+    progress: clampProgress(progress.progress),
+  });
+}
+
 class LlamaMultimodalContextLoader {
   private contextPromise: Promise<LlamaContext> | null = null;
+  private isContextReady = false;
 
   constructor(
     private readonly modelPath: string,
     private readonly projectorPath: string
   ) {}
 
-  private async createContext() {
-    const context = await initLlama({
-      model: this.modelPath,
-      n_ctx: 2048,
-      n_batch: 512,
-      use_mmap: true,
+  private async createContext(onProgress?: (progress: MealInputAssistProgressUpdate) => void) {
+    reportSuggestProgress(onProgress, {
+      stage: 'loading_model',
+      message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+      progress: 0.08,
+      estimatedRemainingMs: 45000,
     });
 
+    const context = await initLlama({
+      model: this.modelPath,
+      n_ctx: LOCAL_RUNTIME_CONTEXT_SIZE,
+      n_batch: LOCAL_RUNTIME_BATCH_SIZE,
+      use_mmap: true,
+    }, (progress) => {
+      reportSuggestProgress(onProgress, {
+        stage: 'loading_model',
+        message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+        progress: 0.08 + (progress / 100) * 0.42,
+        estimatedRemainingMs: Math.max(5000, Math.round(((100 - progress) / 100) * 45000)),
+      });
+    });
+
+    reportSuggestProgress(onProgress, {
+      stage: 'initializing_multimodal',
+      message: '画像解析の準備をしています。',
+      progress: 0.54,
+      estimatedRemainingMs: 20000,
+    });
     const initialized = await context.initMultimodal({
       path: this.projectorPath,
-      image_max_tokens: 384,
+      image_max_tokens: LOCAL_RUNTIME_IMAGE_MAX_TOKENS,
     });
     if (!initialized) {
       throw new Error('Multimodal projector could not be initialized.');
@@ -192,32 +249,24 @@ class LlamaMultimodalContextLoader {
       throw new Error('Vision input is not supported by the configured multimodal runtime.');
     }
 
+    this.isContextReady = true;
     return context;
   }
 
-  async load() {
+  async load(onProgress?: (progress: MealInputAssistProgressUpdate) => void) {
     if (!this.contextPromise) {
-      this.contextPromise = this.createContext();
+      this.contextPromise = this.createContext(onProgress);
+    } else if (this.isContextReady) {
+      reportSuggestProgress(onProgress, {
+        stage: 'analyzing_photo',
+        message: 'AI model の準備は完了しています。写真を解析します。',
+        progress: 0.64,
+        estimatedRemainingMs: 12000,
+      });
     }
 
     return this.contextPromise;
   }
-}
-
-export function resolveMealInputAssistModelPath() {
-  if (!documentDirectory) {
-    return null;
-  }
-
-  return `${documentDirectory}${LOCAL_MODEL_DIRECTORY}/${MEAL_INPUT_ASSIST_MODEL_FILENAME}`;
-}
-
-export function resolveMealInputAssistProjectorPath() {
-  if (!documentDirectory) {
-    return null;
-  }
-
-  return `${documentDirectory}${LOCAL_MODEL_DIRECTORY}/${MEAL_INPUT_ASSIST_PROJECTOR_FILENAME}`;
 }
 
 export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAssistProvider {
@@ -227,16 +276,42 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
     this.contextLoader = new LlamaMultimodalContextLoader(modelPath, projectorPath);
   }
 
-  async suggest(request: MealInputAssistRequest): Promise<MealInputAssistProviderResult> {
-    const context = await this.contextLoader.load();
+  async suggest(
+    request: MealInputAssistRequest,
+    options?: MealInputAssistSuggestOptions
+  ): Promise<MealInputAssistProviderResult> {
+    const context = await this.contextLoader.load(options?.onProgress);
+    reportSuggestProgress(options?.onProgress, {
+      stage: 'analyzing_photo',
+      message: '写真を解析しています。',
+      progress: 0.7,
+      estimatedRemainingMs: 12000,
+    });
     await context.clearCache();
 
+    let emittedTokens = 0;
     const completion = await context.completion({
       prompt: buildMealInputAssistPrompt(request),
       media_paths: [stripFileScheme(request.photoUri)],
       response_format: MEAL_INPUT_ASSIST_RESPONSE_FORMAT,
       temperature: 0.2,
-      n_predict: 192,
+      n_predict: LOCAL_RUNTIME_MAX_PREDICT,
+    }, () => {
+      emittedTokens += 1;
+      const tokenProgress = Math.min(emittedTokens / LOCAL_RUNTIME_EXPECTED_TOKEN_COUNT, 1);
+      reportSuggestProgress(options?.onProgress, {
+        stage: 'generating_response',
+        message: '候補を整理しています。',
+        progress: 0.8 + tokenProgress * 0.16,
+        estimatedRemainingMs: Math.max(1000, Math.round((1 - tokenProgress) * 10000)),
+      });
+    });
+
+    reportSuggestProgress(options?.onProgress, {
+      stage: 'finalizing',
+      message: '候補を整形しています。',
+      progress: 0.98,
+      estimatedRemainingMs: 1000,
     });
 
     return parseMealInputAssistResponse(completion.text || completion.content);

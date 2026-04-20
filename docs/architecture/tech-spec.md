@@ -36,17 +36,16 @@
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
 - Phase 1 の AI 入力補助は capture review 上の明示的なユーザー操作でのみ実行し、local mock provider を使って UI 統合を確認する。
-- 次の local AI spike では、Settings の明示許可と `app_settings` 永続化を追加し、default provider mode を `local-runtime-prototype` に向ける。
-- `src/ai/runtime/` は capability-aware な最小 runtime availability helper を持ち、`meal input assist` などの feature 固有ロジックは各 feature 配下に残す。
+- `src/ai/runtime/` は meal input assist 向けの最小 runtime status helper を持ち、feature 固有ロジックは `src/ai/mealInputAssist/` 配下に残す。
 - ready な runtime と unavailable / noop helper は明確に分け、production path の default fallback に noop provider を使わない。
-- current local runtime の narrow path は `llama.rn` を使う text-first integration で、まず embeddings / rerank capability だけを `src/ai/runtime/` 配下に閉じ込める。
-- semantic search 用 model path は app-local な `documentDirectory/ai-models/semantic-search.gguf` を固定値として扱い、model 未配置時は `model_unavailable` を返す。
-- semantic search 用 embedding は `meal_name`、`cuisine_type`、`location_name`、`notes`、`tags` から組み立てた indexed text を使い、meal save 完了後に best-effort で更新する。
-- Search は current text/filter path を基準に保ち、local runtime と vectors が揃うときだけ semantic hit を additive に重ねる。
+- Search は current text/filter path だけを使い、semantic search は current scope に含めない。
 - meal input assist は `llama.rn` の multimodal path を使い、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
+- capture review では AI 解析中に live camera preview を止め、captured image と review overlay だけを残して余分な camera memory pressure を増やさない。
+- meal input assist の running state は `準備 / model 読み込み / 画像解析 / 候補整形` の近似 stage を UI に返し、進捗の目安と残り時間の目安を表示する。
 - meal input assist の real runtime 条件を満たさない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返し、review の disabled reason を維持する。
-- Settings は local AI runtime status を表示し、semantic search と meal input assist を capability ごとに `Ready` / `Unavailable`、reason、expected path 付きで確認できる。
-- local AI model の配布、download、document picker、user-configurable path は current scope に入れず、developer-populated な app-local fixed path だけを前提にする。
+- meal input assist model の配布は app bundle ではなく Settings からの明示ダウンロードとし、direct URL は TypeScript config で固定管理する。
+- Settings は meal input assist の model status と local AI runtime status を表示し、`未導入 / ダウンロード中 / 利用可能 / エラー`、reason、expected path を確認できる。
+- local AI model の document picker や user-configurable path は current scope に入れず、app-local fixed path だけを前提にする。
 - Android first で runtime readiness を詰めるが、shared code path の範囲では iOS でも同じ status 表示 contract を維持する。
 - Cloud use is optional and should be treated as a future fallback path, not the default path.
 - Database schema versioning should stay explicit and small.
@@ -85,4 +84,3 @@
 - The current MVP does not ship cloud backup, export, or external AI transfer behavior.
 - Phase 1 の AI 入力補助は save flow の外側に置き、失敗時でも手入力保存を妨げない。
 - local AI runtime が未組み込みの build では、review に disabled reason を出し、mock 候補で自動的に置き換えない。
-- semantic search support data の生成失敗は meal save を失敗扱いにせず、あとから backfill できる前提を保つ。

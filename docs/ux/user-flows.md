@@ -10,8 +10,8 @@
 1. Open the app.
 2. Land on Camera.
 3. Capture a photo.
-4. Review the captured image and enter meal details.
-5. Optionally request AI suggestions and tap only the candidates the user wants to adopt.
+4. Review the captured image and enter meal details. review 中は live camera preview を止める。
+5. Optionally request AI suggestions, then watch the current stage, progress estimate, and remaining-time estimate while the local runtime works.
 6. Add location or note only when needed by tapping each compact row once.
 7. Save the record only after the image is persisted locally.
 8. Move directly to Records after save completes.
@@ -39,9 +39,10 @@
 ## Settings Flow
 1. Open Settings.
 2. Review privacy guidance and the AI 入力補助の端末内利用許可.
-3. Review `Local AI Runtime Status` to confirm ready / unavailable and the expected app-local model paths.
-4. Optionally change the AI setting, then optionally delete local data.
-5. Review the remaining feature scope and app info.
+3. Review meal input assist model status, then download or re-download the model from Settings when needed.
+4. Review `Local AI Runtime Status` to confirm ready / unavailable and the expected app-local model paths.
+5. Optionally change the AI setting, optionally delete the model, then optionally delete local data.
+6. Review the remaining feature scope and app info.
 
 ## Camera Permission Flow
 1. Open the Camera tab.
@@ -55,11 +56,10 @@
 - Capture failure: let the user retry or return to the camera.
 - Local persistence failure: do not create the meal record and show a retry path.
 - Android photo-save permission denied during capture review: do not create the meal record, keep the review inputs intact, and offer a direct path to the system settings screen.
-- AI suggestion failure during capture review: keep manual input and save available, explain the failure briefly, and offer a retry path without resetting the review.
+- AI suggestion failure during capture review: keep manual input and save available, explain the failure briefly, show the last known running stage only while active, and offer a retry path without resetting the review.
 - AI input assist disabled by setting or runtime blocker: keep manual input and save available, explain why AI is unavailable, and do not silently fall back to an external or mock provider. Model / projector 未配置や unsupported ABI もこの系統で扱う。
 - Share handoff failure: keep the current record visible, show a retryable error, and let the user reopen the share sheet.
 - Search refresh failure: keep the last successful results when possible and show a retry action.
-- Semantic search unavailable or missing embeddings: keep current text/filter search working normally and do not show a dedicated blocking error.
 - Stats refresh failure: keep the last successful summary when possible and show a retry action.
 - Delete action: confirm destructive changes before applying them.
 

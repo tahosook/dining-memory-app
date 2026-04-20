@@ -25,8 +25,10 @@
 - Homemade should remain visible as a short inline toggle row.
 - Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
 - AI suggestion section should show `未実行 / 解析中 / 成功 / 失敗 / 無効` and keep the save and cancel actions available in every state.
+- AI suggestion section の `解析中` では、少なくとも current stage、進捗の目安、経過時間、残り時間の目安を表示する。
 - AI candidates should appear as tappable chips for meal name, cuisine type, and homemade / takeout only, and should update a field only when the user taps a candidate.
 - AI suggestion section の `無効` 理由は、少なくとも `設定で未許可` `この build では未対応` `model / projector 未準備` を区別できるようにする。
+- capture review を開いたら live camera preview は止め、review 中の端末負荷を抑える。
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
 - If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
 - After a successful save, close capture review and move directly to Records instead of showing a success modal.
@@ -44,7 +46,7 @@
 - Search bar and filter area should be the first things the user sees.
 - Results should remain scannable and support quick refinement.
 - The current filters are text, cuisine type, location, and homemade-only.
-- Search は current text/filter match を基準にし、local semantic runtime と vectors が使えるときだけ追加候補を混ぜる。
+- Search は current text/filter match だけを使い、semantic search は current scope に含めない。
 - Result cards should open the same saved-record detail screen used from Records.
 - Use explicit loading, error, and zero-result states, and keep the previous results visible if only a refresh fails.
 
@@ -57,7 +59,8 @@
 ## Settings Screen
 - Prioritize privacy, current scope, local data deletion, and app information.
 - AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。
-- `Local AI Runtime Status` で semantic search と AI 入力補助の ready / unavailable、reason、expected path を表示する。
+- meal input assist model の status を `未導入 / ダウンロード中 / 利用可能 / エラー` で表示し、`ダウンロード / 再ダウンロード / 削除` を提供する。
+- `Local AI Runtime Status` では AI 入力補助だけを表示し、ready / unavailable、reason、expected path を確認できる。
 - Keep destructive actions visually separated.
 
 ## Shared States

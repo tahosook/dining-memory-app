@@ -3,6 +3,15 @@ export { normalizeMealInputAssistResult } from './normalizer';
 export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
 export { LocalRuntimePrototypeMealInputAssistProvider, getLocalRuntimePrototypeAvailability } from './localRuntimePrototype';
 export {
+  getMealInputAssistManagedFiles,
+  getMealInputAssistExpectedPaths,
+  MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
+  MEAL_INPUT_ASSIST_MODEL_CONFIG,
+  resolveMealInputAssistModelDirectoryPath,
+  resolveMealInputAssistModelPath,
+  resolveMealInputAssistProjectorPath,
+} from './modelConfig';
+export {
   createNoopRuntimeAvailability,
   createOverrideRuntimeAvailability,
   createUnavailableRuntimeAvailability,
@@ -15,11 +24,20 @@ export type {
   MealInputAssistField,
   MealInputAssistHomemadeSuggestion,
   MealInputAssistHomemadeProviderCandidate,
+  MealInputAssistProgress,
+  MealInputAssistProgressStage,
+  MealInputAssistProgressUpdate,
+  MealInputAssistModelDownloadProgress,
+  MealInputAssistModelFileKey,
+  MealInputAssistModelInstallerOptions,
+  MealInputAssistModelStatus,
+  MealInputAssistModelStatusKind,
   MealInputAssistPolicy,
   MealInputAssistProvider,
   MealInputAssistProviderMode,
   MealInputAssistProviderResult,
   MealInputAssistRequest,
+  MealInputAssistSuggestOptions,
   MealInputAssistRuntimeAvailability,
   MealInputAssistRuntimeUnavailableCode,
   MealInputAssistStatus,

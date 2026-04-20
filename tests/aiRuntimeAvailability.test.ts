@@ -12,12 +12,12 @@ describe('ai runtime availability helpers', () => {
 
   test('creates override-ready availability', () => {
     expect(
-      createOverrideAiCapabilityAvailability('text-embedding', provider, 'Injected embedding provider')
+      createOverrideAiCapabilityAvailability('meal-input-assist', provider, 'Injected provider')
     ).toEqual({
       kind: 'ready',
-      capability: 'text-embedding',
+      capability: 'meal-input-assist',
       mode: 'override',
-      description: 'Injected embedding provider',
+      description: 'Injected provider',
       provider,
     });
   });
@@ -25,13 +25,13 @@ describe('ai runtime availability helpers', () => {
   test('creates explicit unavailable availability', () => {
     expect(
       createUnavailableAiCapabilityAvailability(
-        'text-rerank',
+        'meal-input-assist',
         'model_unavailable',
         'Model file is missing.'
       )
     ).toEqual({
       kind: 'unavailable',
-      capability: 'text-rerank',
+      capability: 'meal-input-assist',
       mode: 'local-runtime-prototype',
       code: 'model_unavailable',
       reason: 'Model file is missing.',
@@ -51,12 +51,12 @@ describe('ai runtime availability helpers', () => {
 
     expect(
       createUnsupportedArchitectureAiCapabilityAvailability(
-        'text-embedding',
+        'meal-input-assist',
         'This device architecture is not supported.'
       )
     ).toEqual({
       kind: 'unavailable',
-      capability: 'text-embedding',
+      capability: 'meal-input-assist',
       mode: 'local-runtime-prototype',
       code: 'unsupported_architecture',
       reason: 'This device architecture is not supported.',

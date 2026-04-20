@@ -192,6 +192,33 @@ describe('useMealInputAssist', () => {
     expect(provider.suggest).not.toHaveBeenCalled();
   });
 
+  test('returns disabled when the model is not installed yet', async () => {
+    const provider = {
+      suggest: jest.fn(),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => ({
+      kind: 'unavailable' as const,
+      mode: 'local-runtime-prototype' as const,
+      code: 'model_unavailable' as const,
+      reason: 'meal input assist model が見つかりません: file:///documents/ai-models/meal-input-assist.gguf',
+    });
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange: jest.fn(),
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('disabled');
+      expect(result.current.disabledReason).toContain('meal input assist model が見つかりません');
+    });
+  });
+
   test('prevents duplicate execution while a request is already running', async () => {
     const deferred = createDeferred<MealInputAssistProviderResult>();
     const provider = {
@@ -217,6 +244,65 @@ describe('useMealInputAssist', () => {
     await waitFor(() => {
       expect(provider.suggest).toHaveBeenCalledTimes(1);
     });
+  });
+
+  test('exposes analysis progress while the provider is running and clears it after success', async () => {
+    const deferred = createDeferred<MealInputAssistProviderResult>();
+    const provider = {
+      suggest: jest.fn((_request, options?: {
+        onProgress?: (progress: {
+          stage: 'loading_model';
+          message: string;
+          progress: number;
+          estimatedRemainingMs: number;
+        }) => void;
+      }) => {
+        options?.onProgress?.({
+          stage: 'loading_model',
+          message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+          progress: 0.4,
+          estimatedRemainingMs: 25000,
+        });
+        return deferred.promise;
+      }),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange: jest.fn(),
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    let pendingRequest!: Promise<void>;
+    act(() => {
+      pendingRequest = result.current.requestSuggestions();
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('running');
+      expect(result.current.progress).toMatchObject({
+        stage: 'loading_model',
+        message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+      });
+    });
+
+    await act(async () => {
+      deferred.resolve({
+        source: 'mock-local',
+        mealNames: [{ value: '海鮮丼', confidence: 0.9 }],
+        cuisineTypes: [],
+        homemade: [],
+      });
+      await pendingRequest;
+    });
+
+    expect(result.current.status).toBe('success');
+    expect(result.current.progress).toBeNull();
   });
 
   test('creates save metadata only after a suggestion is adopted', async () => {

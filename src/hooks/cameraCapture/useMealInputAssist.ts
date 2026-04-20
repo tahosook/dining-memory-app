@@ -10,6 +10,8 @@ import {
   type MealInputAssistCuisineSuggestion,
   type MealInputAssistHomemadeSuggestion,
   type MealInputAssistPolicy,
+  type MealInputAssistProgress,
+  type MealInputAssistProgressUpdate,
   type MealInputAssistProvider,
   type MealInputAssistRuntimeAvailability,
   type MealInputAssistStatus,
@@ -64,6 +66,24 @@ function mergeAppliedMetadata(
   };
 }
 
+function toProgressSnapshot(
+  update: MealInputAssistProgressUpdate,
+  startedAt: number,
+  updatedAt: number
+): MealInputAssistProgress {
+  const now = Date.now();
+  const elapsedMs = Math.max(now - startedAt, 0);
+  const estimatedRemainingMs = update.estimatedRemainingMs === null
+    ? null
+    : Math.max(update.estimatedRemainingMs - (now - updatedAt), 0);
+
+  return {
+    ...update,
+    elapsedMs,
+    estimatedRemainingMs,
+  };
+}
+
 export function useMealInputAssist({
   captureReview,
   onCaptureReviewChange,
@@ -75,6 +95,7 @@ export function useMealInputAssist({
   const [status, setStatus] = useState<Exclude<MealInputAssistStatus, 'disabled'>>('idle');
   const [suggestions, setSuggestions] = useState<MealInputAssistSuggestions>(EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [progress, setProgress] = useState<MealInputAssistProgress | null>(null);
   const [appliedMetadata, setAppliedMetadata] = useState<AppliedMealInputAssistMetadata | null>(null);
   const [isAiInputAssistEnabled, setIsAiInputAssistEnabled] = useState<boolean | null>(provider || policy ? true : null);
   const [runtimeAvailability, setRuntimeAvailability] = useState<MealInputAssistRuntimeAvailability | null>(
@@ -82,6 +103,9 @@ export function useMealInputAssist({
   );
   const requestIdRef = useRef(0);
   const isRunningRef = useRef(false);
+  const requestStartedAtRef = useRef<number | null>(null);
+  const progressUpdatedAtRef = useRef<number | null>(null);
+  const latestProgressUpdateRef = useRef<MealInputAssistProgressUpdate | null>(null);
 
   const reviewKey = captureReview?.photoUri ?? null;
 
@@ -103,10 +127,51 @@ export function useMealInputAssist({
     setStatus('idle');
     setSuggestions(EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS);
     setErrorMessage(null);
+    setProgress(null);
     setAppliedMetadata(null);
     requestIdRef.current += 1;
     isRunningRef.current = false;
+    requestStartedAtRef.current = null;
+    progressUpdatedAtRef.current = null;
+    latestProgressUpdateRef.current = null;
   }, [reviewKey]);
+
+  const setProgressState = useCallback((update: MealInputAssistProgressUpdate | null) => {
+    if (!update) {
+      requestStartedAtRef.current = null;
+      progressUpdatedAtRef.current = null;
+      latestProgressUpdateRef.current = null;
+      setProgress(null);
+      return;
+    }
+
+    const now = Date.now();
+    const startedAt = requestStartedAtRef.current ?? now;
+    requestStartedAtRef.current = startedAt;
+    progressUpdatedAtRef.current = now;
+    latestProgressUpdateRef.current = update;
+    setProgress(toProgressSnapshot(update, startedAt, now));
+  }, []);
+
+  useEffect(() => {
+    if (status !== 'running') {
+      return undefined;
+    }
+
+    const timer = setInterval(() => {
+      const startedAt = requestStartedAtRef.current;
+      const updatedAt = progressUpdatedAtRef.current;
+      const latestUpdate = latestProgressUpdateRef.current;
+
+      if (!startedAt || !updatedAt || !latestUpdate) {
+        return;
+      }
+
+      setProgress(toProgressSnapshot(latestUpdate, startedAt, updatedAt));
+    }, 500);
+
+    return () => clearInterval(timer);
+  }, [status]);
 
   const loadEnvironment = useCallback(async () => {
     try {
@@ -178,6 +243,13 @@ export function useMealInputAssist({
     }
 
     isRunningRef.current = true;
+    requestStartedAtRef.current = Date.now();
+    setProgressState({
+      stage: 'preparing',
+      message: 'AI 入力補助の準備をしています。',
+      progress: 0.02,
+      estimatedRemainingMs: 60000,
+    });
     const environment = await loadEnvironment();
     const nextPolicy = policy ?? createMealInputAssistPolicy({
       isEnabled: environment.isAiInputAssistEnabled,
@@ -189,6 +261,7 @@ export function useMealInputAssist({
       isRunningRef.current = false;
       setStatus('idle');
       setErrorMessage(null);
+      setProgressState(null);
       return;
     }
 
@@ -198,6 +271,7 @@ export function useMealInputAssist({
     if (!activeProvider) {
       isRunningRef.current = false;
       setStatus('error');
+      setProgressState(null);
       setErrorMessage('AI provider を初期化できませんでした。');
       return;
     }
@@ -206,14 +280,23 @@ export function useMealInputAssist({
     requestIdRef.current = requestId;
     setStatus('running');
     setErrorMessage(null);
+    setProgressState({
+      stage: 'loading_model',
+      message: 'AI model の状態を確認しています。',
+      progress: 0.08,
+      estimatedRemainingMs: 45000,
+    });
 
     try {
-      const rawResult = await activeProvider.suggest(request);
+      const rawResult = await activeProvider.suggest(request, {
+        onProgress: setProgressState,
+      });
       isRunningRef.current = false;
       if (requestIdRef.current !== requestId) {
         return;
       }
 
+      setProgressState(null);
       setSuggestions(normalizeMealInputAssistResult(rawResult));
       setStatus('success');
     } catch (error) {
@@ -223,10 +306,11 @@ export function useMealInputAssist({
       }
 
       console.error('Meal input assist failed:', error);
+      setProgressState(null);
       setStatus('error');
       setErrorMessage('端末内解析に失敗しました。もう一度お試しください。');
     }
-  }, [loadEnvironment, policy, request]);
+  }, [loadEnvironment, policy, request, setProgressState]);
 
   const applyMealNameSuggestion = useCallback((suggestion: MealInputAssistTextSuggestion) => {
     onCaptureReviewChange('mealName', suggestion.value);
@@ -247,6 +331,7 @@ export function useMealInputAssist({
     status: effectiveStatus,
     suggestions,
     errorMessage,
+    progress,
     disabledReason: availability.kind === 'disabled' ? availability.reason : null,
     hasAnySuggestions,
     requestSuggestions,

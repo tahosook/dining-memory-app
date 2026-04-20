@@ -30,13 +30,6 @@ describe('local AI runtime status snapshot', () => {
     const snapshot = await getLocalAiRuntimeStatusSnapshot();
 
     expect(snapshot).toEqual({
-      semanticSearch: {
-        capability: 'semantic-search',
-        kind: 'ready',
-        mode: 'local-runtime-prototype',
-        reason: '端末内 semantic search runtime を利用できます。',
-        expectedPaths: ['file:///documents/ai-models/semantic-search.gguf'],
-      },
       mealInputAssist: {
         capability: 'meal-input-assist',
         kind: 'ready',
@@ -48,27 +41,6 @@ describe('local AI runtime status snapshot', () => {
         ],
       },
     });
-  });
-
-  test('returns semantic model_unavailable while keeping expected paths', async () => {
-    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
-      exists: !path.endsWith('semantic-search.gguf'),
-    }));
-
-    const snapshot = await getLocalAiRuntimeStatusSnapshot();
-
-    expect(snapshot.semanticSearch).toEqual({
-      capability: 'semantic-search',
-      kind: 'unavailable',
-      mode: 'local-runtime-prototype',
-      code: 'model_unavailable',
-      reason: 'semantic search model が見つかりません: file:///documents/ai-models/semantic-search.gguf',
-      expectedPaths: ['file:///documents/ai-models/semantic-search.gguf'],
-    });
-    expect(snapshot.mealInputAssist.expectedPaths).toEqual([
-      'file:///documents/ai-models/meal-input-assist.gguf',
-      'file:///documents/ai-models/meal-input-assist.mmproj',
-    ]);
   });
 
   test('returns meal input assist model_unavailable when the projector file is missing', async () => {
@@ -91,19 +63,11 @@ describe('local AI runtime status snapshot', () => {
     });
   });
 
-  test('returns runtime_unavailable for both entries when the native module is not linked', async () => {
+  test('returns runtime_unavailable when the native module is not linked', async () => {
     NativeModules.RNLlama = undefined;
 
     const snapshot = await getLocalAiRuntimeStatusSnapshot();
 
-    expect(snapshot.semanticSearch).toEqual({
-      capability: 'semantic-search',
-      kind: 'unavailable',
-      mode: 'local-runtime-prototype',
-      code: 'runtime_unavailable',
-      reason: 'この build には端末内 AI runtime がまだ組み込まれていません。',
-      expectedPaths: ['file:///documents/ai-models/semantic-search.gguf'],
-    });
     expect(snapshot.mealInputAssist).toEqual({
       capability: 'meal-input-assist',
       kind: 'unavailable',
@@ -128,7 +92,6 @@ describe('local AI runtime status snapshot', () => {
 
     const snapshot = await getLocalAiRuntimeStatusSnapshot();
 
-    expect(snapshot.semanticSearch.code).toBe('unsupported_architecture');
     expect(snapshot.mealInputAssist.code).toBe('unsupported_architecture');
   });
 });

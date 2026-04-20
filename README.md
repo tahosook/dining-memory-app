@@ -75,12 +75,15 @@ npx expo start --dev-client
 
 ### Local AI Runtime
 - local AI model は repo や app bundle に含めません
-- download、document picker、設定画面からの path 上書きは現在サポートしません
+- local AI の current scope は meal input assist のみです
+- model / projector は Settings 画面からユーザーが明示操作でダウンロードします
+- document picker や設定画面からの path 上書きは現在サポートしません
 - app-local の固定 path に必要な file がある場合だけ runtime が `Ready` になります
-- semantic search model: `documentDirectory/ai-models/semantic-search.gguf`
+- review 画面の AI 入力補助は current stage、進捗の目安、残り時間の目安を表示します
+- capture review 中は live camera preview を止め、AI 解析時の端末負荷を下げます
 - meal input assist model: `documentDirectory/ai-models/meal-input-assist.gguf`
 - meal input assist projector: `documentDirectory/ai-models/meal-input-assist.mmproj`
-- readiness と blocker reason は Settings 画面の `Local AI Runtime Status` で確認します
+- model の導入状態、readiness、blocker reason は Settings 画面で確認します
 
 ### 環境変数
 ```env
@@ -95,7 +98,7 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 
 ### 動作確認
 1. dev build か native build を物理デバイスに入れて起動する
-2. Settings 画面で `Local AI Runtime Status` を開き、必要な model path と ready / unavailable reason を確認する
+2. Settings 画面で meal input assist model をダウンロードし、`Local AI Runtime Status` の ready / unavailable reason を確認する
 3. カメラタブから写真を撮影し、料理名などを入力して保存する
 4. 記録タブと検索タブで保存結果を確認する
 

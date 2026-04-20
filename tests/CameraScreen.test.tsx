@@ -196,6 +196,13 @@ type MockAiAssistState = {
     homemade: Array<{ value: boolean; label: '自炊' | '外食'; confidence?: number; source: string }>;
   };
   errorMessage: string | null;
+  progress: {
+    stage: 'preparing' | 'loading_model' | 'initializing_multimodal' | 'analyzing_photo' | 'generating_response' | 'finalizing';
+    message: string;
+    progress: number | null;
+    elapsedMs: number;
+    estimatedRemainingMs: number | null;
+  } | null;
   disabledReason: string | null;
   requestSuggestions: jest.Mock;
   applyMealNameSuggestion: jest.Mock;
@@ -258,6 +265,7 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
       homemade: [],
     },
     errorMessage: null,
+    progress: null,
     disabledReason: null,
     requestSuggestions: jest.fn(),
     applyMealNameSuggestion: jest.fn(),
@@ -400,7 +408,7 @@ describe('CameraScreen', () => {
         captureReview: createCaptureReview(),
       }));
 
-      const { findByText, findByTestId, queryByText } = render(<CameraScreen />);
+      const { findByText, findByTestId, queryByTestId, queryByText } = render(<CameraScreen />);
       const reviewContainer = await findByTestId('capture-review-container');
       const mealNameInput = await findByTestId('meal-name-input');
 
@@ -419,6 +427,7 @@ describe('CameraScreen', () => {
       expect(queryByText('料理名やメニュー名を入れておくと、あとで探しやすくなります。')).toBeNull();
       expect(queryByText('店名・施設名・自宅など、食べた場所を記録できます。')).toBeNull();
       expect(queryByText('ボタンをタップして撮影')).toBeNull();
+      expect(queryByTestId('camera-view')).toBeNull();
     });
 
     test('calls cuisine type change handler when a cuisine option is pressed', async () => {
@@ -527,6 +536,30 @@ describe('CameraScreen', () => {
 
       expect(await findByText('候補を取得できませんでした。もう一度お試しください。')).toBeTruthy();
       expect(await findByTestId('save-meal-button')).toBeTruthy();
+    });
+
+    test('shows AI analysis progress and ETA while running', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview(),
+      }));
+      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
+        status: 'running',
+        progress: {
+          stage: 'loading_model',
+          message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+          progress: 0.42,
+          elapsedMs: 9000,
+          estimatedRemainingMs: 24000,
+        },
+      }));
+
+      const { findByText, findByTestId } = render(<CameraScreen />);
+
+      expect(await findByText('AI model を読み込んでいます。初回は時間がかかることがあります。')).toBeTruthy();
+      expect(await findByText('進捗の目安: 42%')).toBeTruthy();
+      expect(await findByText('経過: 9秒')).toBeTruthy();
+      expect(await findByText('残り目安: 約24秒')).toBeTruthy();
+      expect(await findByTestId('ai-input-assist-progress')).toBeTruthy();
     });
 
     test('shows the disabled reason when AI input assist is unavailable', async () => {

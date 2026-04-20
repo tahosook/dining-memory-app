@@ -65,8 +65,67 @@ export interface AppliedMealInputAssistMetadata {
   appliedFields: MealInputAssistField[];
 }
 
+export type MealInputAssistProgressStage =
+  | 'preparing'
+  | 'loading_model'
+  | 'initializing_multimodal'
+  | 'analyzing_photo'
+  | 'generating_response'
+  | 'finalizing';
+
+export interface MealInputAssistProgressUpdate {
+  stage: MealInputAssistProgressStage;
+  message: string;
+  progress: number | null;
+  estimatedRemainingMs: number | null;
+}
+
+export interface MealInputAssistProgress extends MealInputAssistProgressUpdate {
+  elapsedMs: number;
+}
+
+export interface MealInputAssistSuggestOptions {
+  onProgress?: (progress: MealInputAssistProgressUpdate) => void;
+}
+
 export interface MealInputAssistProvider {
-  suggest: (request: MealInputAssistRequest) => Promise<MealInputAssistProviderResult>;
+  suggest: (
+    request: MealInputAssistRequest,
+    options?: MealInputAssistSuggestOptions
+  ) => Promise<MealInputAssistProviderResult>;
+}
+
+export type MealInputAssistModelFileKey = 'model' | 'projector';
+export type MealInputAssistModelStatusKind = 'not_installed' | 'ready' | 'error';
+
+export interface MealInputAssistModelStatus {
+  kind: MealInputAssistModelStatusKind;
+  version: string | null;
+  downloadedAt: number | null;
+  errorMessage: string | null;
+  expectedPaths: string[];
+  files: {
+    modelExists: boolean;
+    projectorExists: boolean;
+  };
+}
+
+export interface MealInputAssistModelDownloadProgress {
+  phase: 'preparing' | 'downloading' | 'installing';
+  completedFiles: number;
+  totalFiles: number;
+  overallProgress: number;
+  currentFileKey: MealInputAssistModelFileKey | null;
+  currentFileLabel: string | null;
+  currentFileFileName: string | null;
+  currentFileSourceFileName: string | null;
+  currentFileBytesWritten: number;
+  currentFileBytesExpected: number | null;
+  currentFileProgress: number | null;
+}
+
+export interface MealInputAssistModelInstallerOptions {
+  onProgress?: (progress: MealInputAssistModelDownloadProgress) => void;
 }
 
 export type MealInputAssistProviderMode = 'mock' | 'local-runtime-prototype' | 'override';

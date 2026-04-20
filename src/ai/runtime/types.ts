@@ -1,10 +1,10 @@
-export type AiCapability = 'meal-input-assist' | 'text-embedding' | 'text-rerank';
+export type AiCapability = 'meal-input-assist';
 
 export type AiRuntimeMode = 'local-runtime-prototype' | 'override';
 
 export type AiRuntimeUnavailableCode = 'runtime_unavailable' | 'model_unavailable' | 'unsupported_architecture';
 
-export type LocalAiRuntimeStatusCapability = 'semantic-search' | 'meal-input-assist';
+export type LocalAiRuntimeStatusCapability = 'meal-input-assist';
 
 export interface AiReadyCapabilityAvailability<TProvider> {
   kind: 'ready';
@@ -26,28 +26,6 @@ export type AiCapabilityAvailability<TProvider> =
   | AiReadyCapabilityAvailability<TProvider>
   | AiUnavailableCapabilityAvailability;
 
-export interface AiTextEmbeddingResult {
-  vector: number[];
-  modelId: string;
-  dimension: number;
-}
-
-export interface AiTextEmbeddingProvider {
-  modelId: string;
-  generateEmbedding: (text: string) => Promise<AiTextEmbeddingResult>;
-}
-
-export interface AiTextRerankResult {
-  index: number;
-  score: number;
-  document?: string;
-}
-
-export interface AiTextRerankProvider {
-  modelId: string;
-  rerank: (query: string, documents: string[]) => Promise<AiTextRerankResult[]>;
-}
-
 export interface LocalAiRuntimeStatusEntry {
   capability: LocalAiRuntimeStatusCapability;
   kind: 'ready' | 'unavailable';
@@ -58,6 +36,5 @@ export interface LocalAiRuntimeStatusEntry {
 }
 
 export interface LocalAiRuntimeStatusSnapshot {
-  semanticSearch: LocalAiRuntimeStatusEntry;
   mealInputAssist: LocalAiRuntimeStatusEntry;
 }

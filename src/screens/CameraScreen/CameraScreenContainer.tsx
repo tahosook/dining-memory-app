@@ -56,6 +56,7 @@ const CameraScreenContainer: React.FC = () => {
       aiAssistStatus={mealInputAssist.status}
       aiAssistSuggestions={mealInputAssist.suggestions}
       aiAssistErrorMessage={mealInputAssist.errorMessage}
+      aiAssistProgress={mealInputAssist.progress}
       aiAssistDisabledReason={mealInputAssist.disabledReason}
       onRequestAiSuggestions={mealInputAssist.requestSuggestions}
       onApplyMealNameSuggestion={mealInputAssist.applyMealNameSuggestion}

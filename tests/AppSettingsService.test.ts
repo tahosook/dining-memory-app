@@ -35,4 +35,30 @@ describe('AppSettingsService', () => {
 
     await expect(AppSettingsService.getAiInputAssistEnabled()).resolves.toBe(false);
   });
+
+  test('persists meal input assist model settings in the in-memory fallback', async () => {
+    await AppSettingsService.setMealInputAssistModelVersion('v-test');
+    await AppSettingsService.setMealInputAssistModelStatus('ready');
+    await AppSettingsService.setMealInputAssistModelDownloadedAt(12345);
+    await AppSettingsService.setMealInputAssistModelErrorMessage('none');
+
+    await expect(AppSettingsService.getMealInputAssistModelVersion()).resolves.toBe('v-test');
+    await expect(AppSettingsService.getMealInputAssistModelStatus()).resolves.toBe('ready');
+    await expect(AppSettingsService.getMealInputAssistModelDownloadedAt()).resolves.toBe(12345);
+    await expect(AppSettingsService.getMealInputAssistModelErrorMessage()).resolves.toBe('none');
+  });
+
+  test('clears nullable meal input assist model settings', async () => {
+    await AppSettingsService.setMealInputAssistModelVersion('v-test');
+    await AppSettingsService.setMealInputAssistModelDownloadedAt(12345);
+    await AppSettingsService.setMealInputAssistModelErrorMessage('failed');
+
+    await AppSettingsService.setMealInputAssistModelVersion(null);
+    await AppSettingsService.setMealInputAssistModelDownloadedAt(null);
+    await AppSettingsService.setMealInputAssistModelErrorMessage(null);
+
+    await expect(AppSettingsService.getMealInputAssistModelVersion()).resolves.toBeNull();
+    await expect(AppSettingsService.getMealInputAssistModelDownloadedAt()).resolves.toBeNull();
+    await expect(AppSettingsService.getMealInputAssistModelErrorMessage()).resolves.toBeNull();
+  });
 });
