@@ -1,18 +1,8 @@
 import { getLocalRuntimePrototypeAvailability } from './localRuntimePrototype';
 import { MockMealInputAssistProvider } from './provider';
-import type { MealInputAssistProvider, MealInputAssistProviderMode, MealInputAssistRuntimeAvailability } from './types';
+import type { MealInputAssistProviderMode, MealInputAssistRuntimeAvailability } from './types';
 
-export function createOverrideRuntimeAvailability(
-  provider: MealInputAssistProvider,
-  description = 'Injected meal input assist provider'
-): MealInputAssistRuntimeAvailability {
-  return {
-    kind: 'ready',
-    mode: 'override',
-    description,
-    provider,
-  };
-}
+export { createNoopRuntimeAvailability, createOverrideRuntimeAvailability, createUnavailableRuntimeAvailability } from './runtimeAvailability';
 
 export async function loadMealInputAssistRuntimeAvailability(
   mode: MealInputAssistProviderMode

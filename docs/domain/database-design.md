@@ -11,16 +11,12 @@
 - This document explains the intent and responsibilities of that schema.
 
 ## Current Tables
-- `meals`: primary meal record with name, type, cuisine, AI metadata, notes, location, time, image paths, tags, and deletion flags.
-- `ingredients`: ingredient items linked to meals.
-- `locations`: reusable place records and visit statistics.
-- `meal_images`: original, thumbnail, and compressed image metadata.
-- `cooking_patterns`: analysis output for cooking behavior and timing.
-- `tags`: tag master data.
-- `meal_tags`: many-to-many relation between meals and tags.
-- `behavior_insights`: generated insights and user-dismissal state.
-- `search_vectors`: vector or keyword search support data.
-- `app_settings`: persistent app preferences.
+- `meals`: primary meal record with name, type, cuisine, minimal AI metadata, notes, location, time, image paths, derived `search_text`, tags, and deletion flags.
+- `app_settings`: persistent app preferences and local feature flags such as `ai_input_assist_enabled`.
+- `search_vectors`: additive semantic-search support table keyed by `meal_id`, storing vector JSON, model id, dimension, indexed text, and explicit `text_version`.
+
+## Planned Additive Tables
+- Additional analytics or support tables should stay additive and must not become the primary source of truth for meal history.
 
 ## Storage Rules
 - Keep the device-local database as the primary source of truth.
@@ -36,6 +32,18 @@
 - Analysis tables should stay additive and not block core capture and browse flows.
 - Generated insights should be separable from raw meal records.
 - Export and backup formats should stay versioned and preserve the relationships needed to rebuild meals, ingredients, images, settings, and generated insights.
+- `search_vectors.indexed_text` は `meal_name`、`cuisine_type`、`location_name`、`notes`、`tags` だけから組み立て、`search_text` の代替 source of truth にはしない。
+- `search_vectors.text_version` は indexed text の組み立てルールを明示し、再生成や backfill の判断に使う。
+
+## Current Implementation Notes
+- The active schema is intentionally small while capture, save, search, and settings behavior stabilizes.
+- `search_text` currently supports the existing text and filter search path and should not be treated as semantic-search storage.
+- Semantic search support is additive and should continue to evolve through dedicated tables and explicit migrations instead of widening `meals` with raw AI output or bulky generated fields.
+
+## Schema Versioning
+- `PRAGMA user_version = 1`: current legacy baseline with `meals` and `app_settings`.
+- `PRAGMA user_version = 2`: adds `search_vectors` as additive semantic-search support data.
+- Existing installs that still report `user_version = 0` should be migrated forward through the same additive statements instead of assuming a clean install.
 
 ## Design Notes
 - Favor small records and file paths over BLOB-heavy rows.

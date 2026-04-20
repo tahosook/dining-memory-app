@@ -1,4 +1,6 @@
 import { getDatabase, getInMemoryMeals, initializeDatabase, isUsingNativeDatabase, mapRowToMeal, setInMemoryMeals, type PersistedMealRow } from './localDatabase';
+import { MealEmbeddingService } from './MealEmbeddingService';
+import { SemanticSearchService } from './SemanticSearchService';
 import type { Meal } from '../../types/MealTypes';
 
 export interface CreateMealData {
@@ -201,6 +203,12 @@ async function saveRows(rows: PersistedMealRow[]) {
   setInMemoryMeals(rows);
 }
 
+function scheduleEmbeddingRefresh(meal: Meal) {
+  MealEmbeddingService.refreshEmbeddingForMeal(meal).catch(() => {
+    // Embedding refresh is additive support data and must not block save flows.
+  });
+}
+
 async function upsertRow(row: PersistedMealRow) {
   await initializeDatabase();
 
@@ -247,7 +255,7 @@ async function upsertRow(row: PersistedMealRow) {
   );
 }
 
-function applyFilters(rows: PersistedMealRow[], filters: SearchFilters): PersistedMealRow[] {
+function applyNonTextFilters(rows: PersistedMealRow[], filters: SearchFilters): PersistedMealRow[] {
   return rows.filter((row) => {
     if (row.is_deleted) {
       return false;
@@ -277,15 +285,17 @@ function applyFilters(rows: PersistedMealRow[], filters: SearchFilters): Persist
       return false;
     }
 
-    if (filters.text) {
-      const haystack = `${row.meal_name} ${row.location_name ?? ''} ${row.notes ?? ''} ${row.search_text ?? ''}`.toLowerCase();
-      if (!haystack.includes(filters.text.toLowerCase())) {
-        return false;
-      }
-    }
-
     return true;
   });
+}
+
+function matchesTextFilter(row: PersistedMealRow, text: string) {
+  const haystack = `${row.meal_name} ${row.location_name ?? ''} ${row.notes ?? ''} ${row.search_text ?? ''}`.toLowerCase();
+  return haystack.includes(text.toLowerCase());
+}
+
+function sortByRecency(left: PersistedMealRow, right: PersistedMealRow) {
+  return right.meal_datetime - left.meal_datetime;
 }
 
 export class MealService {
@@ -297,13 +307,52 @@ export class MealService {
       location_name: resolveNearbyLocationName(rows, data),
     });
     await upsertRow(row);
-    return mapRowToMeal(row);
+    const meal = mapRowToMeal(row);
+    scheduleEmbeddingRefresh(meal);
+    return meal;
   }
 
   static async searchMeals(filters: SearchFilters = {}): Promise<Meal[]> {
     const rows = await getAllRows();
-    return applyFilters(rows, filters)
-      .sort((a, b) => b.meal_datetime - a.meal_datetime)
+    const filteredRows = applyNonTextFilters(rows, filters);
+    const textQuery = filters.text?.trim();
+
+    if (!textQuery) {
+      return filteredRows
+        .sort(sortByRecency)
+        .map(mapRowToMeal);
+    }
+
+    const lexicalMatches = filteredRows.filter((row) => matchesTextFilter(row, textQuery));
+    const semanticMatches = await SemanticSearchService.scoreMeals(textQuery, filteredRows.map(mapRowToMeal));
+
+    if (semanticMatches.length === 0) {
+      return lexicalMatches
+        .sort(sortByRecency)
+        .map(mapRowToMeal);
+    }
+
+    const lexicalMatchIds = new Set(lexicalMatches.map((row) => row.id));
+    const semanticScores = new Map(semanticMatches.map((match) => [match.mealId, match.score]));
+
+    return filteredRows
+      .filter((row) => lexicalMatchIds.has(row.id) || semanticScores.has(row.id))
+      .sort((left, right) => {
+        const leftIsLexical = lexicalMatchIds.has(left.id);
+        const rightIsLexical = lexicalMatchIds.has(right.id);
+
+        if (leftIsLexical !== rightIsLexical) {
+          return leftIsLexical ? -1 : 1;
+        }
+
+        const semanticScoreDelta = (semanticScores.get(right.id) ?? Number.NEGATIVE_INFINITY)
+          - (semanticScores.get(left.id) ?? Number.NEGATIVE_INFINITY);
+        if (semanticScoreDelta !== 0) {
+          return semanticScoreDelta;
+        }
+
+        return sortByRecency(left, right);
+      })
       .map(mapRowToMeal);
   }
 
@@ -364,7 +413,9 @@ export class MealService {
 
     const nextRow = normalizeRow(merged, row);
     await upsertRow(nextRow);
-    return mapRowToMeal(nextRow);
+    const meal = mapRowToMeal(nextRow);
+    scheduleEmbeddingRefresh(meal);
+    return meal;
   }
 
   static async getStatistics(): Promise<StatisticsSummary> {
@@ -388,6 +439,7 @@ export class MealService {
 
     if (!isUsingNativeDatabase()) {
       await saveRows([]);
+      await MealEmbeddingService.clearAllEmbeddings().catch(() => {});
       return;
     }
 
@@ -397,6 +449,15 @@ export class MealService {
     }
 
     await db.runAsync('DELETE FROM meals');
+    await MealEmbeddingService.clearAllEmbeddings().catch(() => {});
+  }
+
+  static async backfillMissingEmbeddings(): Promise<void> {
+    const meals = (await getAllRows())
+      .filter((row) => !row.is_deleted)
+      .map(mapRowToMeal);
+
+    await MealEmbeddingService.backfillMissingEmbeddings(meals);
   }
 }
 

@@ -26,7 +26,7 @@
 ## Search Flow
 1. Open Search.
 2. Enter text or select filters.
-3. Review the result list, which reruns with the current query when the tab regains focus.
+3. Review the result list, which reruns with the current query when the tab regains focus and keeps text/filter search as the fallback baseline.
 4. Open a result card to move to the shared saved-record detail screen.
 5. Edit or delete the record there, or refine the search and try again.
 
@@ -55,9 +55,10 @@
 - Local persistence failure: do not create the meal record and show a retry path.
 - Android photo-save permission denied during capture review: do not create the meal record, keep the review inputs intact, and offer a direct path to the system settings screen.
 - AI suggestion failure during capture review: keep manual input and save available, explain the failure briefly, and offer a retry path without resetting the review.
-- AI input assist disabled by setting or runtime blocker: keep manual input and save available, explain why AI is unavailable, and do not silently fall back to an external or mock provider.
+- AI input assist disabled by setting or runtime blocker: keep manual input and save available, explain why AI is unavailable, and do not silently fall back to an external or mock provider. Model / projector 未配置や unsupported ABI もこの系統で扱う。
 - Share handoff failure: keep the current record visible, show a retryable error, and let the user reopen the share sheet.
 - Search refresh failure: keep the last successful results when possible and show a retry action.
+- Semantic search unavailable or missing embeddings: keep current text/filter search working normally and do not show a dedicated blocking error.
 - Stats refresh failure: keep the last successful summary when possible and show a retry action.
 - Delete action: confirm destructive changes before applying them.
 

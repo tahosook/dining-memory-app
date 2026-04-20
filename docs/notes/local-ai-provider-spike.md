@@ -8,13 +8,19 @@
 
 ## Summary
 このスパイクでは、AI 入力補助を Settings の明示許可にぶら下げ、provider 層を `mock` と `local-runtime-prototype` で切り替えられる形にした。  
-ただし current Expo SDK 55 / RN 0.83 の repo には、実際の on-device vision runtime と model asset がまだ入っていないため、`local-runtime-prototype` は現在 `unavailable` を返す。
+current Expo SDK 55 / RN 0.83 の repo では、`llama.rn` を使う real on-device vision path まで接続した。  
+ただし `local-runtime-prototype` は supported device/runtime と app-local model / projector が揃ったときだけ `ready` を返し、それ以外は `unavailable` を返す。
+text-first の narrow path としては `llama.rn` を導入し、semantic search 向け embeddings / rerank capability を `src/ai/runtime/` に追加した。  
+model asset は repo に含めず、app-local の `documentDirectory/ai-models/semantic-search.gguf` がある場合だけ ready と判定する。
 
 ## Current State
 - `app_settings` に `ai_input_assist_enabled` を保存する。
 - review 画面の AI 入力補助は、Settings が off の場合は `設定で未許可` として無効化する。
-- Settings が on でも、current build では `runtime_unavailable` を返し、review 側は `この build には端末内 AI runtime がまだ組み込まれていません。` を表示する。
+- Settings が on でも、supported device/runtime と app-local model / projector が揃わない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返す。
 - save flow、候補採用、`ai_source` / `ai_confidence` の保存ルールは Phase 1 と同じで維持する。
+- `llama.rn` は dependency と minimal native config に加えて、meal input assist 向けの multimodal provider まで接続した。
+- meal input assist の fixed path は `documentDirectory/ai-models/meal-input-assist.gguf` と `documentDirectory/ai-models/meal-input-assist.mmproj` を使う。
+- text embedding / rerank capability は `src/ai/runtime/` で availability 判定と provider の最小実装を持つ。
 
 ## Runtime Comparison
 - `mock`
@@ -22,7 +28,8 @@
   - 実 AI ではないため、本フェーズの最終 provider にはしない。
 - `local-runtime-prototype`
   - 目標の方向性に合う。
-  - current repo には runtime integration も bundled model もないため、現時点では blocker を返す。
+  - text-first path では `llama.rn` により embeddings / rerank の narrow path を持てる。
+  - vision input assist としても real provider を持つが、multimodal model / projector を app-local に置かない限り review 向けには blocker を返す。
 - 外部 API
   - 今回の local-first / no external send 方針に反するため、このスパイクでは対象外。
 
@@ -33,5 +40,5 @@
 - runtime blocker は mock fallback で隠さず、review 上の disabled reason と note に残す。
 
 ## Next Steps or Open Questions
-- Expo dev build 互換な on-device vision runtime を 1 つ選び、`runtime_unavailable` を `ready` に置き換える。
-- runtime 導入時に model asset の配布場所と起動コストを決め、`model_unavailable` の扱いを実装する。
+- rerank は hybrid search の品質不足が確認されるまで optional path に留める。
+- meal input assist 用 multimodal model / projector の配布・導入手順を repo 外でどう扱うかを決める。

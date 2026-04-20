@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS,
   createMealInputAssistPolicy,
+  createUnavailableRuntimeAvailability,
   createOverrideRuntimeAvailability,
   loadMealInputAssistRuntimeAvailability,
   normalizeMealInputAssistResult,
@@ -124,12 +125,10 @@ export function useMealInputAssist({
     } catch (error) {
       console.error('Failed to load AI input assist environment:', error);
 
-      const fallbackRuntimeAvailability = {
-        kind: 'unavailable' as const,
-        mode: 'local-runtime-prototype' as const,
-        code: 'runtime_unavailable' as const,
-        reason: 'この build には端末内 AI runtime がまだ組み込まれていません。',
-      };
+      const fallbackRuntimeAvailability = createUnavailableRuntimeAvailability(
+        'runtime_unavailable',
+        'この build には端末内 AI runtime がまだ組み込まれていません。'
+      );
 
       setIsAiInputAssistEnabled(false);
       setRuntimeAvailability(fallbackRuntimeAvailability);

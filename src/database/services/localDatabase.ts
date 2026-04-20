@@ -32,18 +32,32 @@ export interface PersistedAppSettingRow {
   updated_at: number;
 }
 
+export interface PersistedSearchVectorRow {
+  meal_id: string;
+  vector_data: string;
+  vector_model: string;
+  vector_dimension: number;
+  indexed_text: string;
+  text_version: number;
+  created_at: number;
+  updated_at: number;
+}
+
 type InMemoryState = {
   meals: PersistedMealRow[];
   appSettings: Record<string, string>;
+  searchVectors: PersistedSearchVectorRow[];
 };
 
 const DB_NAME = 'DiningMemory.db';
+export const DATABASE_SCHEMA_VERSION = 2;
 
 let nativeDb: SQLiteDatabase | null = null;
 let initialized = false;
 const memoryState: InMemoryState = {
   meals: [],
   appSettings: {},
+  searchVectors: [],
 };
 
 const MEALS_TABLE_SQL = `
@@ -85,8 +99,52 @@ const APP_SETTINGS_TABLE_SQL = `
   CREATE INDEX IF NOT EXISTS idx_app_settings_updated_at ON app_settings(updated_at);
 `;
 
+const SEARCH_VECTORS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS search_vectors (
+    meal_id TEXT PRIMARY KEY NOT NULL,
+    vector_data TEXT NOT NULL,
+    vector_model TEXT NOT NULL,
+    vector_dimension INTEGER NOT NULL,
+    indexed_text TEXT NOT NULL,
+    text_version INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_search_vectors_updated_at ON search_vectors(updated_at);
+`;
+
+const DATABASE_MIGRATIONS: Array<{ version: number; sql: string }> = [
+  {
+    version: 1,
+    sql: `${MEALS_TABLE_SQL}\n${APP_SETTINGS_TABLE_SQL}`,
+  },
+  {
+    version: 2,
+    sql: SEARCH_VECTORS_TABLE_SQL,
+  },
+];
+
 function isNativeRuntime() {
   return Platform.OS === 'ios' || Platform.OS === 'android';
+}
+
+function getNativeSchemaVersion(database: SQLiteDatabase) {
+  const result = database.getFirstSync<{ user_version: number }>('PRAGMA user_version');
+  return result?.user_version ?? 0;
+}
+
+function applyNativeMigrations(database: SQLiteDatabase) {
+  let currentVersion = getNativeSchemaVersion(database);
+
+  DATABASE_MIGRATIONS.forEach((migration) => {
+    if (currentVersion >= migration.version) {
+      return;
+    }
+
+    database.execSync(migration.sql);
+    database.execSync(`PRAGMA user_version = ${migration.version}`);
+    currentVersion = migration.version;
+  });
 }
 
 function ensureNativeDatabase(): SQLiteDatabase {
@@ -95,7 +153,7 @@ function ensureNativeDatabase(): SQLiteDatabase {
   }
 
   if (!initialized) {
-    nativeDb.execSync(`${MEALS_TABLE_SQL}\n${APP_SETTINGS_TABLE_SQL}`);
+    applyNativeMigrations(nativeDb);
     initialized = true;
   }
 
@@ -138,9 +196,33 @@ export function setInMemoryAppSettings(nextAppSettings: Record<string, string>) 
   memoryState.appSettings = { ...nextAppSettings };
 }
 
+export function getInMemorySearchVectors(): PersistedSearchVectorRow[] {
+  return [...memoryState.searchVectors];
+}
+
+export function setInMemorySearchVectors(nextSearchVectors: PersistedSearchVectorRow[]) {
+  memoryState.searchVectors = [...nextSearchVectors];
+}
+
 export function resetInMemoryDatabase() {
   memoryState.meals = [];
   memoryState.appSettings = {};
+  memoryState.searchVectors = [];
+}
+
+export async function getDatabaseSchemaVersion(): Promise<number> {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    return DATABASE_SCHEMA_VERSION;
+  }
+
+  const database = getDatabase();
+  if (!database) {
+    return 0;
+  }
+
+  return getNativeSchemaVersion(database);
 }
 
 export function mapRowToMeal(row: PersistedMealRow): Meal {

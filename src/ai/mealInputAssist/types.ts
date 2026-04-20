@@ -1,4 +1,5 @@
 import type { CuisineTypeOption } from '../../constants/MealOptions';
+import type { AiRuntimeUnavailableCode } from '../runtime';
 
 export type MealInputAssistStatus = 'idle' | 'running' | 'success' | 'error' | 'disabled';
 
@@ -70,7 +71,7 @@ export interface MealInputAssistProvider {
 
 export type MealInputAssistProviderMode = 'mock' | 'local-runtime-prototype' | 'override';
 
-export type MealInputAssistRuntimeUnavailableCode = 'runtime_unavailable' | 'model_unavailable';
+export type MealInputAssistRuntimeUnavailableCode = AiRuntimeUnavailableCode;
 
 export type MealInputAssistRuntimeAvailability =
   | {

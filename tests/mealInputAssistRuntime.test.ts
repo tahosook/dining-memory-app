@@ -1,24 +1,74 @@
+jest.mock('llama.rn', () => require('llama.rn/jest/mock'));
+
+jest.mock('expo-file-system/legacy', () => ({
+  documentDirectory: 'file:///documents/',
+  getInfoAsync: jest.fn(),
+}));
+
+import { NativeModules, Platform } from 'react-native';
+import { getInfoAsync } from 'expo-file-system/legacy';
+import * as llamaRn from 'llama.rn';
 import { loadMealInputAssistRuntimeAvailability, normalizeMealInputAssistResult } from '../src/ai/mealInputAssist';
+import {
+  resolveMealInputAssistModelPath,
+  resolveMealInputAssistProjectorPath,
+} from '../src/ai/mealInputAssist/localRuntimePrototype';
 
 describe('meal input assist runtime availability', () => {
-  test('reports the local runtime prototype as unavailable in the current build', async () => {
-    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+  beforeEach(() => {
+    jest.restoreAllMocks();
 
-    expect(availability).toEqual({
-      kind: 'unavailable',
-      mode: 'local-runtime-prototype',
-      code: 'runtime_unavailable',
-      reason: 'この build には端末内 AI runtime がまだ組み込まれていません。',
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'ios',
     });
+
+    NativeModules.RNLlama = {
+      install: jest.fn().mockResolvedValue(true),
+    };
+    NativeModules.PlatformConstants = {};
+
+    (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
   });
 
-  test('returns a ready mock provider that still maps through the existing normalizer', async () => {
-    const availability = await loadMealInputAssistRuntimeAvailability('mock');
+  test('resolves the fixed app-local meal input assist paths', () => {
+    expect(resolveMealInputAssistModelPath()).toBe('file:///documents/ai-models/meal-input-assist.gguf');
+    expect(resolveMealInputAssistProjectorPath()).toBe('file:///documents/ai-models/meal-input-assist.mmproj');
+  });
+
+  test('returns a ready local runtime provider when native runtime, model, and projector are available', async () => {
+    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+
+    expect(availability).toEqual(expect.objectContaining({
+      kind: 'ready',
+      mode: 'local-runtime-prototype',
+      description: 'Local multimodal meal input assist provider',
+    }));
+  });
+
+  test('parses real-runtime suggestion output through the existing normalizer', async () => {
+    const fakeContext = {
+      clearCache: jest.fn().mockResolvedValue(undefined),
+      initMultimodal: jest.fn().mockResolvedValue(true),
+      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
+      completion: jest.fn().mockResolvedValue({
+        text: JSON.stringify({
+          mealNames: [{ value: '海鮮丼', confidence: 0.91 }],
+          cuisineTypes: [{ value: '和食', confidence: 0.82 }],
+          homemade: [{ value: '外食', confidence: 0.76 }],
+        }),
+      }),
+    };
+    jest.spyOn(llamaRn, 'initLlama').mockResolvedValue(fakeContext as never);
+
+    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+
+    expect(availability.kind).toBe('ready');
 
     expect(availability.kind).toBe('ready');
 
     if (availability.kind !== 'ready') {
-      throw new Error('Expected mock runtime availability to be ready.');
+      throw new Error('Expected local runtime availability to be ready.');
     }
 
     const rawResult = await availability.provider.suggest({
@@ -31,7 +81,56 @@ describe('meal input assist runtime availability', () => {
     });
     const normalized = normalizeMealInputAssistResult(rawResult);
 
-    expect(normalized.source).toBe('mock-local');
-    expect(normalized.mealNames.length).toBeGreaterThan(0);
+    expect(fakeContext.initMultimodal).toHaveBeenCalledWith({
+      path: 'file:///documents/ai-models/meal-input-assist.mmproj',
+      image_max_tokens: 384,
+    });
+    expect(fakeContext.completion).toHaveBeenCalledWith(expect.objectContaining({
+      media_paths: ['/tmp/mock-meal.jpg'],
+    }));
+    expect(normalized.source).toBe('local-meal-input-assist');
+    expect(normalized.mealNames[0]?.value).toBe('海鮮丼');
+    expect(normalized.cuisineTypes[0]?.value).toBe('和食');
+  });
+
+  test('returns model_unavailable when the projector file is missing', async () => {
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: !path.endsWith('meal-input-assist.mmproj'),
+    }));
+
+    await expect(loadMealInputAssistRuntimeAvailability('local-runtime-prototype')).resolves.toEqual({
+      kind: 'unavailable',
+      mode: 'local-runtime-prototype',
+      code: 'model_unavailable',
+      reason: 'meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj',
+    });
+  });
+
+  test('returns runtime_unavailable when the native module is not linked', async () => {
+    NativeModules.RNLlama = undefined;
+
+    await expect(loadMealInputAssistRuntimeAvailability('local-runtime-prototype')).resolves.toEqual({
+      kind: 'unavailable',
+      mode: 'local-runtime-prototype',
+      code: 'runtime_unavailable',
+      reason: 'この build には端末内 AI runtime がまだ組み込まれていません。',
+    });
+  });
+
+  test('returns unsupported_architecture on Android when only unsupported ABIs are exposed', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    NativeModules.PlatformConstants = {
+      SupportedAbis: ['armeabi-v7a'],
+    };
+
+    await expect(loadMealInputAssistRuntimeAvailability('local-runtime-prototype')).resolves.toEqual({
+      kind: 'unavailable',
+      mode: 'local-runtime-prototype',
+      code: 'unsupported_architecture',
+      reason: 'この Android ABI では端末内 AI 入力補助を利用できません。',
+    });
   });
 });

@@ -122,13 +122,12 @@ export interface BehaviorInsight {
 }
 
 export interface SearchVector {
-  id: string;
   meal_id: string;
-  vector_data?: string;
-  vector_model?: string;
-  vector_dimension?: number;
-  indexed_text?: string;
-  keywords?: string;
+  vector_data: string;
+  vector_model: string;
+  vector_dimension: number;
+  indexed_text: string;
+  text_version: number;
   created_at: number;
   updated_at: number;
 }

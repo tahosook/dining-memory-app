@@ -2,7 +2,12 @@ export { defaultMealInputAssistProvider, MockMealInputAssistProvider } from './p
 export { normalizeMealInputAssistResult } from './normalizer';
 export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
 export { LocalRuntimePrototypeMealInputAssistProvider, getLocalRuntimePrototypeAvailability } from './localRuntimePrototype';
-export { createOverrideRuntimeAvailability, loadMealInputAssistRuntimeAvailability } from './runtime';
+export {
+  createNoopRuntimeAvailability,
+  createOverrideRuntimeAvailability,
+  createUnavailableRuntimeAvailability,
+  loadMealInputAssistRuntimeAvailability,
+} from './runtime';
 export type {
   AppliedMealInputAssistMetadata,
   MealInputAssistAvailability,

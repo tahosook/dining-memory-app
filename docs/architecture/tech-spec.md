@@ -18,6 +18,7 @@
 - Keep capture, storage, search, and presentation separated.
 - Prefer local processing and local persistence for user data.
 - Preserve clear boundaries between UI, hooks, navigation, and database services.
+- Keep AI runtime capability checks explicit so unavailable local runtimes stay visible instead of being hidden behind silent fallbacks.
 
 ## App Shape
 - `Camera` for capture and immediate save flow.
@@ -36,6 +37,14 @@
 - On iOS and web, saved photos can continue using app-local stable paths.
 - Phase 1 の AI 入力補助は capture review 上の明示的なユーザー操作でのみ実行し、local mock provider を使って UI 統合を確認する。
 - 次の local AI spike では、Settings の明示許可と `app_settings` 永続化を追加し、default provider mode を `local-runtime-prototype` に向ける。
+- `src/ai/runtime/` は capability-aware な最小 runtime availability helper を持ち、`meal input assist` などの feature 固有ロジックは各 feature 配下に残す。
+- ready な runtime と unavailable / noop helper は明確に分け、production path の default fallback に noop provider を使わない。
+- current local runtime の narrow path は `llama.rn` を使う text-first integration で、まず embeddings / rerank capability だけを `src/ai/runtime/` 配下に閉じ込める。
+- semantic search 用 model path は app-local な `documentDirectory/ai-models/semantic-search.gguf` を固定値として扱い、model 未配置時は `model_unavailable` を返す。
+- semantic search 用 embedding は `meal_name`、`cuisine_type`、`location_name`、`notes`、`tags` から組み立てた indexed text を使い、meal save 完了後に best-effort で更新する。
+- Search は current text/filter path を基準に保ち、local runtime と vectors が揃うときだけ semantic hit を additive に重ねる。
+- meal input assist は `llama.rn` の multimodal path を使い、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
+- meal input assist の real runtime 条件を満たさない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返し、review の disabled reason を維持する。
 - Cloud use is optional and should be treated as a future fallback path, not the default path.
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
@@ -72,3 +81,4 @@
 - The current MVP does not ship cloud backup, export, or external AI transfer behavior.
 - Phase 1 の AI 入力補助は save flow の外側に置き、失敗時でも手入力保存を妨げない。
 - local AI runtime が未組み込みの build では、review に disabled reason を出し、mock 候補で自動的に置き換えない。
+- semantic search support data の生成失敗は meal save を失敗扱いにせず、あとから backfill できる前提を保つ。
