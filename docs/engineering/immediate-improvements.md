@@ -40,10 +40,10 @@
 - 関連ファイル: [src/navigation/RootNavigator.tsx](../../src/navigation/RootNavigator.tsx), [src/screens/RecordsScreen/MealDetailScreen.tsx](../../src/screens/RecordsScreen/MealDetailScreen.tsx), [src/screens/SearchScreen/SearchScreen.tsx](../../src/screens/SearchScreen/SearchScreen.tsx)
 - 導入後の確認方法: Search から詳細を開いたあと、戻る操作と現在タブの変化が意図通りかを実機で確認します。
 
-### `react-native-image-resizer` の代替検討
-- 問題点: `react-native-image-resizer` は React Native Directory の metadata がなく、`expo-doctor` では継続的に注意対象になります。
-- リスク: 将来の Expo / New Architecture 更新時に互換性判断が難しくなります。
-- 推奨修正: 現状は doctor の targeted exclude で管理しつつ、今後は Expo 標準機能や metadata が揃った代替への移行可否を検討します。
+### image resizer 依存の継続監視
+- 問題点: 画像縮小には現在 `@bam.tech/react-native-image-resizer` を使っており、Expo 標準機能ではまだ置き換えていません。
+- リスク: 将来の Expo / New Architecture 更新時に、native module 側の互換性確認が必要になります。
+- 推奨修正: 現状は doctor の targeted exclude を scoped package 名に合わせて維持しつつ、今後は Expo 標準機能で同等処理に寄せられるかを継続確認します。
 - 関連ファイル: [package.json](../../package.json), [src/hooks/cameraCapture/useCameraCapture.ts](../../src/hooks/cameraCapture/useCameraCapture.ts)
 - 導入後の確認方法: `npx expo-doctor` が他の warning なしで通る状態を維持しつつ、代替候補で同等の画像縮小ができるかを別ブランチで試します。
 

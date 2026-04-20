@@ -57,6 +57,7 @@ Read this file first, then follow [docs/index.md](docs/index.md) to the relevant
 - Verify AI-generated code before trusting it.
 - Treat automated review as support, not as a replacement for human judgment.
 - Consider `npm run check:deps` whenever dependencies are added or reorganized.
+- When `package.json`, `package-lock.json`, or CI runtime assumptions change, verify `npm ci` and keep `README.md` and `.github/workflows/ci.yml` aligned in the same task.
 
 ## New Document Template
 Use this structure for new docs when practical:

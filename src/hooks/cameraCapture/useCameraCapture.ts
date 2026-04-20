@@ -5,7 +5,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
 import * as Location from 'expo-location';
-import ImageResizer from 'react-native-image-resizer';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
 import { CameraCaptureMock } from './useCameraCaptureMock';
 import { MealService } from '../../database/services/MealService';

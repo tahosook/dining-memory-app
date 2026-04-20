@@ -52,6 +52,8 @@
 - Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test`.
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
 - Add `npm run check:deps` when dependencies are added, removed, or significantly reorganized.
+- If `package.json`, `package-lock.json`, or `.github/workflows/ci.yml` changes, run `npm ci` before finishing the task.
+- If dependency install only passes on a different Node/npm version than CI, update the CI runtime and the setup docs in the same task or regenerate the lockfile for the existing CI version.
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
 - Add a security review pass when changes touch permissions, file storage, location, export, backup, or external AI calls.
 
@@ -60,6 +62,7 @@
 - Type or interface changes: run `npm run type-check`.
 - Behavior changes: run `npm test`, and run `npm run lint` if touched files include application code.
 - Dependency changes: run `npm run check:deps` and review the dependency choice directly.
+- Dependency or CI runtime changes: run `npm ci` and confirm `README.md` and `.github/workflows/ci.yml` still describe the same runtime expectation.
 - Permission, export, backup, location, file, or external-send changes: confirm what data is accessed, stored, logged, or sent.
 
 ## AI-specific Risks

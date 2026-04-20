@@ -5,7 +5,7 @@ import { useCameraCapture } from '../src/hooks/cameraCapture/useCameraCapture';
 import { MealService } from '../src/database/services/MealService';
 import * as MediaLibrary from 'expo-media-library';
 import * as Location from 'expo-location';
-import ImageResizer from 'react-native-image-resizer';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { persistPhotoToStablePath } from '../src/hooks/cameraCapture/photoStorage';
 
 const mockNavigate = jest.fn();
@@ -41,7 +41,7 @@ jest.mock('../src/hooks/cameraCapture/photoStorage', () => ({
   persistPhotoToStablePath: jest.fn(),
 }));
 
-jest.mock('react-native-image-resizer', () => ({
+jest.mock('@bam.tech/react-native-image-resizer', () => ({
   __esModule: true,
   default: {
     createResizedImage: jest.fn(),
