@@ -2,9 +2,8 @@ import {
   createNoopAiCapabilityAvailability,
   createOverrideAiCapabilityAvailability,
   createUnavailableAiCapabilityAvailability,
-  type AiCapabilityAvailability,
-  type AiRuntimeUnavailableCode,
-} from '../runtime';
+} from '../runtime/availability';
+import type { AiCapabilityAvailability, AiRuntimeUnavailableCode } from '../runtime/types';
 import type { MealInputAssistProvider, MealInputAssistRuntimeAvailability } from './types';
 
 const MEAL_INPUT_ASSIST_CAPABILITY = 'meal-input-assist' as const;

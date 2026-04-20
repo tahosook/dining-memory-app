@@ -45,6 +45,9 @@
 - Search は current text/filter path を基準に保ち、local runtime と vectors が揃うときだけ semantic hit を additive に重ねる。
 - meal input assist は `llama.rn` の multimodal path を使い、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
 - meal input assist の real runtime 条件を満たさない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返し、review の disabled reason を維持する。
+- Settings は local AI runtime status を表示し、semantic search と meal input assist を capability ごとに `Ready` / `Unavailable`、reason、expected path 付きで確認できる。
+- local AI model の配布、download、document picker、user-configurable path は current scope に入れず、developer-populated な app-local fixed path だけを前提にする。
+- Android first で runtime readiness を詰めるが、shared code path の範囲では iOS でも同じ status 表示 contract を維持する。
 - Cloud use is optional and should be treated as a future fallback path, not the default path.
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
@@ -59,6 +62,7 @@
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
 - Phase 1 の AI 入力補助では写真やメモを外部送信せず、候補採用時だけ最小限の AI metadata を meal record に残す。
 - local AI spike でも写真やメモの外部送信は行わず、Settings の user opt-in がない限り AI 入力補助を無効にする。
+- Settings の runtime status も外部照会を行わず、端末内で native module / supported ABI / app-local model path の存在だけを確認する。
 - Records detail may hand off the current meal to the OS share sheet, but should not store posting state or send data automatically.
 - Keep secrets out of source control and out of runtime logs.
 

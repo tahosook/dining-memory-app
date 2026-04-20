@@ -4,6 +4,8 @@ export type AiRuntimeMode = 'local-runtime-prototype' | 'override';
 
 export type AiRuntimeUnavailableCode = 'runtime_unavailable' | 'model_unavailable' | 'unsupported_architecture';
 
+export type LocalAiRuntimeStatusCapability = 'semantic-search' | 'meal-input-assist';
+
 export interface AiReadyCapabilityAvailability<TProvider> {
   kind: 'ready';
   capability: AiCapability;
@@ -44,4 +46,18 @@ export interface AiTextRerankResult {
 export interface AiTextRerankProvider {
   modelId: string;
   rerank: (query: string, documents: string[]) => Promise<AiTextRerankResult[]>;
+}
+
+export interface LocalAiRuntimeStatusEntry {
+  capability: LocalAiRuntimeStatusCapability;
+  kind: 'ready' | 'unavailable';
+  mode: 'local-runtime-prototype';
+  code?: AiRuntimeUnavailableCode;
+  reason: string;
+  expectedPaths: string[];
+}
+
+export interface LocalAiRuntimeStatusSnapshot {
+  semanticSearch: LocalAiRuntimeStatusEntry;
+  mealInputAssist: LocalAiRuntimeStatusEntry;
 }

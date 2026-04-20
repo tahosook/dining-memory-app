@@ -17,10 +17,12 @@ model asset は repo に含めず、app-local の `documentDirectory/ai-models/s
 - `app_settings` に `ai_input_assist_enabled` を保存する。
 - review 画面の AI 入力補助は、Settings が off の場合は `設定で未許可` として無効化する。
 - Settings が on でも、supported device/runtime と app-local model / projector が揃わない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返す。
+- Settings は `Local AI Runtime Status` で semantic search と meal input assist の ready / unavailable、reason、expected path を表示する。
 - save flow、候補採用、`ai_source` / `ai_confidence` の保存ルールは Phase 1 と同じで維持する。
 - `llama.rn` は dependency と minimal native config に加えて、meal input assist 向けの multimodal provider まで接続した。
 - meal input assist の fixed path は `documentDirectory/ai-models/meal-input-assist.gguf` と `documentDirectory/ai-models/meal-input-assist.mmproj` を使う。
 - text embedding / rerank capability は `src/ai/runtime/` で availability 判定と provider の最小実装を持つ。
+- model asset は developer が app-local path に置く前提で、repo 同梱、app 内 download、path 上書き UI は current scope に入れない。
 
 ## Runtime Comparison
 - `mock`
@@ -38,6 +40,7 @@ model asset は repo に含めず、app-local の `documentDirectory/ai-models/s
 - `local-runtime-prototype` が `ready` でない限り、review から provider を実行しない。
 - raw model output や model metadata は保存しない。
 - runtime blocker は mock fallback で隠さず、review 上の disabled reason と note に残す。
+- Android 実機での運用確認は、まず Settings の status 表示で expected path と blocker を確認してから行う。
 
 ## Next Steps or Open Questions
 - rerank は hybrid search の品質不足が確認されるまで optional path に留める。

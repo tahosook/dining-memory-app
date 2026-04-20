@@ -57,6 +57,7 @@
 ## Settings Screen
 - Prioritize privacy, current scope, local data deletion, and app information.
 - AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。
+- `Local AI Runtime Status` で semantic search と AI 入力補助の ready / unavailable、reason、expected path を表示する。
 - Keep destructive actions visually separated.
 
 ## Shared States

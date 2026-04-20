@@ -1,5 +1,5 @@
 import type { CuisineTypeOption } from '../../constants/MealOptions';
-import type { AiRuntimeUnavailableCode } from '../runtime';
+import type { AiRuntimeUnavailableCode } from '../runtime/types';
 
 export type MealInputAssistStatus = 'idle' | 'running' | 'success' | 'error' | 'disabled';
 

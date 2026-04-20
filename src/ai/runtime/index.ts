@@ -10,6 +10,7 @@ export {
   getLocalLlamaTextRerankAvailability,
   resolveSemanticSearchModelPath,
 } from './localLlama';
+export { getLocalAiRuntimeStatusSnapshot } from './status';
 export type {
   AiCapability,
   AiCapabilityAvailability,
@@ -19,6 +20,9 @@ export type {
   AiTextEmbeddingResult,
   AiTextRerankProvider,
   AiTextRerankResult,
+  LocalAiRuntimeStatusCapability,
+  LocalAiRuntimeStatusEntry,
+  LocalAiRuntimeStatusSnapshot,
   AiRuntimeUnavailableCode,
   AiUnavailableCapabilityAvailability,
 } from './types';

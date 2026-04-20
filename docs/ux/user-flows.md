@@ -39,8 +39,9 @@
 ## Settings Flow
 1. Open Settings.
 2. Review privacy guidance and the AI 入力補助の端末内利用許可.
-3. Optionally change the AI setting, then optionally delete local data.
-4. Review the remaining feature scope and app info.
+3. Review `Local AI Runtime Status` to confirm ready / unavailable and the expected app-local model paths.
+4. Optionally change the AI setting, then optionally delete local data.
+5. Review the remaining feature scope and app info.
 
 ## Camera Permission Flow
 1. Open the Camera tab.

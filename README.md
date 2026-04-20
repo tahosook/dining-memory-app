@@ -64,13 +64,23 @@ cd dining-memory-app
 node --version
 npm install
 cp .env.example .env
-npx expo start
+npx expo start --dev-client
 ```
 
 ### 実行時前提
 - React Native 0.83 系 / React 19.2 系を前提としています
 - Expo SDK 55 以降のため New Architecture は常時有効です
 - Android の写真保存権限は `expo-media-library` プラグインで管理します
+- `llama.rn` を使う local AI runtime は Expo Go ではなく dev build / native build 前提です
+
+### Local AI Runtime
+- local AI model は repo や app bundle に含めません
+- download、document picker、設定画面からの path 上書きは現在サポートしません
+- app-local の固定 path に必要な file がある場合だけ runtime が `Ready` になります
+- semantic search model: `documentDirectory/ai-models/semantic-search.gguf`
+- meal input assist model: `documentDirectory/ai-models/meal-input-assist.gguf`
+- meal input assist projector: `documentDirectory/ai-models/meal-input-assist.mmproj`
+- readiness と blocker reason は Settings 画面の `Local AI Runtime Status` で確認します
 
 ### 環境変数
 ```env
@@ -84,9 +94,10 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 `.env.example` をテンプレートとして使い、`.env` はローカル専用ファイルとして扱います。
 
 ### 動作確認
-1. 物理デバイスで Expo Go を開く
-2. カメラタブから写真を撮影し、料理名などを入力して保存する
-3. 記録タブと検索タブで保存結果を確認する
+1. dev build か native build を物理デバイスに入れて起動する
+2. Settings 画面で `Local AI Runtime Status` を開き、必要な model path と ready / unavailable reason を確認する
+3. カメラタブから写真を撮影し、料理名などを入力して保存する
+4. 記録タブと検索タブで保存結果を確認する
 
 ## 検証の考え方
 - ユニットテスト: 個別ロジックやサービス

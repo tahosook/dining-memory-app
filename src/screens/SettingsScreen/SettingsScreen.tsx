@@ -4,10 +4,13 @@ import { useFocusEffect } from '@react-navigation/native';
 import { MealService } from '../../database/services/MealService';
 import { Colors } from '../../constants/Colors';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
+import { getLocalAiRuntimeStatusSnapshot, type LocalAiRuntimeStatusEntry, type LocalAiRuntimeStatusSnapshot } from '../../ai/runtime';
 
 export default function SettingsScreen() {
   const [aiInputAssistEnabled, setAiInputAssistEnabled] = useState(false);
   const [aiInputAssistLoading, setAiInputAssistLoading] = useState(true);
+  const [localAiRuntimeStatus, setLocalAiRuntimeStatus] = useState<LocalAiRuntimeStatusSnapshot | null>(null);
+  const [localAiRuntimeStatusLoading, setLocalAiRuntimeStatusLoading] = useState(true);
 
   const loadAiInputAssistSetting = useCallback(async () => {
     setAiInputAssistLoading(true);
@@ -23,10 +26,25 @@ export default function SettingsScreen() {
     }
   }, []);
 
+  const loadLocalAiRuntimeStatus = useCallback(async () => {
+    setLocalAiRuntimeStatusLoading(true);
+
+    try {
+      const snapshot = await getLocalAiRuntimeStatusSnapshot();
+      setLocalAiRuntimeStatus(snapshot);
+    } catch (error) {
+      console.error('Failed to load local AI runtime status:', error);
+      setLocalAiRuntimeStatus(null);
+    } finally {
+      setLocalAiRuntimeStatusLoading(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadAiInputAssistSetting().catch(() => undefined);
-    }, [loadAiInputAssistSetting])
+      loadLocalAiRuntimeStatus().catch(() => undefined);
+    }, [loadAiInputAssistSetting, loadLocalAiRuntimeStatus])
   );
 
   const handleAiInputAssistToggle = useCallback(async (nextValue: boolean) => {
@@ -72,7 +90,7 @@ export default function SettingsScreen() {
               review 画面で写真を端末内だけで解析し、料理名やジャンル候補を提案します。外部送信は行いません。
             </Text>
             <Text style={styles.settingHint}>
-              現在の spike では runtime 未組み込みのため、有効化しても review 側で未対応表示になることがあります。
+              下の runtime status で、ready / unavailable と必要な app-local file path を確認できます。
             </Text>
           </View>
           <Switch
@@ -82,6 +100,32 @@ export default function SettingsScreen() {
             testID="ai-input-assist-toggle"
           />
         </View>
+      </Section>
+
+      <Section title="Local AI Runtime Status">
+        <Text style={styles.bodyText}>
+          この app は model を配布・ダウンロードしません。dev build / native build 上で、app-local の固定 path に必要な file がある場合だけ local runtime が ready になります。
+        </Text>
+        {localAiRuntimeStatus ? (
+          <>
+            <RuntimeStatusCard
+              title="セマンティック検索"
+              entry={localAiRuntimeStatus.semanticSearch}
+              testID="semantic-search-runtime-status"
+            />
+            <RuntimeStatusCard
+              title="AI入力補助"
+              entry={localAiRuntimeStatus.mealInputAssist}
+              testID="meal-input-assist-runtime-status"
+            />
+          </>
+        ) : localAiRuntimeStatusLoading ? (
+          <Text style={styles.metaText} testID="local-ai-runtime-status-loading">local AI runtime status を確認しています...</Text>
+        ) : (
+          <Text style={styles.metaText} testID="local-ai-runtime-status-error">
+            local AI runtime status を確認できませんでした。もう一度画面を開き直してください。
+          </Text>
+        )}
       </Section>
 
       <Section title="現在の機能範囲">
@@ -119,6 +163,37 @@ function DisabledItem({ label, description }: { label: string; description: stri
     <View style={styles.disabledItem}>
       <Text style={styles.disabledLabel}>{label}</Text>
       <Text style={styles.disabledDescription}>{description}</Text>
+    </View>
+  );
+}
+
+function RuntimeStatusCard({
+  title,
+  entry,
+  testID,
+}: {
+  title: string;
+  entry: LocalAiRuntimeStatusEntry;
+  testID: string;
+}) {
+  return (
+    <View style={styles.runtimeStatusCard} testID={testID}>
+      <View style={styles.runtimeStatusHeader}>
+        <Text style={styles.disabledLabel}>{title}</Text>
+        <View style={[
+          styles.runtimeStatusBadge,
+          entry.kind === 'ready' ? styles.runtimeStatusBadgeReady : styles.runtimeStatusBadgeUnavailable,
+        ]}
+        >
+          <Text style={styles.runtimeStatusBadgeText}>{entry.kind === 'ready' ? 'Ready' : 'Unavailable'}</Text>
+        </View>
+      </View>
+      <Text style={styles.runtimeStatusReason}>{entry.reason}</Text>
+      <Text style={styles.runtimeStatusMode}>Mode: {entry.mode}</Text>
+      <Text style={styles.runtimeStatusPathsLabel}>Expected paths</Text>
+      {entry.expectedPaths.map((path) => (
+        <Text key={path} style={styles.runtimeStatusPath}>{path}</Text>
+      ))}
     </View>
   );
 }
@@ -194,6 +269,55 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.gray,
     marginTop: 4,
+  },
+  runtimeStatusCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#d7d7d7',
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+  },
+  runtimeStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  runtimeStatusBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  runtimeStatusBadgeReady: {
+    backgroundColor: '#dff4e4',
+  },
+  runtimeStatusBadgeUnavailable: {
+    backgroundColor: '#fde5e5',
+  },
+  runtimeStatusBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  runtimeStatusReason: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.text,
+  },
+  runtimeStatusMode: {
+    fontSize: 13,
+    color: Colors.gray,
+  },
+  runtimeStatusPathsLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.text,
+    marginTop: 2,
+  },
+  runtimeStatusPath: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: Colors.gray,
   },
   dangerButton: {
     backgroundColor: Colors.error,

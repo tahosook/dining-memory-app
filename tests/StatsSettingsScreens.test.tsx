@@ -14,6 +14,7 @@ import StatsScreen from '../src/screens/StatsScreen/StatsScreen';
 import SettingsScreen from '../src/screens/SettingsScreen/SettingsScreen';
 import { MealService } from '../src/database/services/MealService';
 import { AppSettingsService } from '../src/database/services/AppSettingsService';
+import { getLocalAiRuntimeStatusSnapshot } from '../src/ai/runtime';
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
@@ -27,6 +28,10 @@ jest.mock('../src/database/services/AppSettingsService', () => ({
     getAiInputAssistEnabled: jest.fn(),
     setAiInputAssistEnabled: jest.fn(),
   },
+}));
+
+jest.mock('../src/ai/runtime', () => ({
+  getLocalAiRuntimeStatusSnapshot: jest.fn(),
 }));
 
 function createDeferred<T>() {
@@ -140,20 +145,47 @@ describe('StatsScreen', () => {
 
 describe('SettingsScreen', () => {
   beforeEach(() => {
+    focusCallbacks.length = 0;
+    jest.clearAllMocks();
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
     (AppSettingsService.setAiInputAssistEnabled as jest.Mock).mockResolvedValue(undefined);
+    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue({
+      semanticSearch: {
+        capability: 'semantic-search',
+        kind: 'unavailable',
+        mode: 'local-runtime-prototype',
+        code: 'model_unavailable',
+        reason: 'semantic search model が見つかりません: file:///documents/ai-models/semantic-search.gguf',
+        expectedPaths: ['file:///documents/ai-models/semantic-search.gguf'],
+      },
+      mealInputAssist: {
+        capability: 'meal-input-assist',
+        kind: 'unavailable',
+        mode: 'local-runtime-prototype',
+        code: 'model_unavailable',
+        reason: 'meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj',
+        expectedPaths: [
+          'file:///documents/ai-models/meal-input-assist.gguf',
+          'file:///documents/ai-models/meal-input-assist.mmproj',
+        ],
+      },
+    });
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  test('shows AI toggle, disabled feature labels, and delete entry point', async () => {
-    const { getByText, getByTestId } = render(<SettingsScreen />);
+  test('shows AI toggle, live runtime status, disabled feature labels, and delete entry point', async () => {
+    const { getByText, getByTestId, findAllByText } = render(<SettingsScreen />);
     await triggerLatestFocus();
 
     expect(getByText('端末内 AI 入力補助を有効にする')).toBeTruthy();
+    expect(getByText('Local AI Runtime Status')).toBeTruthy();
+    expect((await findAllByText('Unavailable')).length).toBeGreaterThanOrEqual(2);
+    expect(getByText('semantic search model が見つかりません: file:///documents/ai-models/semantic-search.gguf')).toBeTruthy();
+    expect(getByText('file:///documents/ai-models/meal-input-assist.mmproj')).toBeTruthy();
     fireEvent(getByTestId('ai-input-assist-toggle'), 'valueChange', true);
     await waitFor(() => {
       expect(AppSettingsService.setAiInputAssistEnabled).toHaveBeenCalledWith(true);
@@ -164,5 +196,33 @@ describe('SettingsScreen', () => {
     await waitFor(() => {
       expect(Alert.alert).toHaveBeenCalled();
     });
+  });
+
+  test('shows ready runtime status when all required files are available', async () => {
+    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue({
+      semanticSearch: {
+        capability: 'semantic-search',
+        kind: 'ready',
+        mode: 'local-runtime-prototype',
+        reason: '端末内 semantic search runtime を利用できます。',
+        expectedPaths: ['file:///documents/ai-models/semantic-search.gguf'],
+      },
+      mealInputAssist: {
+        capability: 'meal-input-assist',
+        kind: 'ready',
+        mode: 'local-runtime-prototype',
+        reason: '端末内 AI 入力補助 runtime を利用できます。',
+        expectedPaths: [
+          'file:///documents/ai-models/meal-input-assist.gguf',
+          'file:///documents/ai-models/meal-input-assist.mmproj',
+        ],
+      },
+    });
+
+    const { findAllByText, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect((await findAllByText('Ready')).length).toBeGreaterThanOrEqual(2);
+    expect(await findByText('端末内 AI 入力補助 runtime を利用できます。')).toBeTruthy();
   });
 });
