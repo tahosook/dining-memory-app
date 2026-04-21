@@ -33,6 +33,10 @@ function normalizeTextCandidate(
     return null;
   }
 
+  if (typeof candidate.value !== 'string') {
+    return null;
+  }
+
   const value = candidate.value.trim();
   if (!value) {
     return null;
@@ -159,7 +163,9 @@ function normalizeHomemadeSuggestions(
 }
 
 export function normalizeMealInputAssistResult(result: MealInputAssistProviderResult): MealInputAssistSuggestions {
-  const source = result.source.trim() || 'mock-local';
+  const source = typeof result.source === 'string' && result.source.trim()
+    ? result.source.trim()
+    : 'mock-local';
 
   return {
     source,

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
+import { deleteAsync } from 'expo-file-system/legacy';
 import {
   EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS,
   createMealInputAssistPolicy,
@@ -18,6 +20,7 @@ import {
   type MealInputAssistSuggestions,
   type MealInputAssistTextSuggestion,
 } from '../../ai/mealInputAssist';
+import { CAMERA_CONSTANTS } from '../../constants/CameraConstants';
 import type { CaptureReviewState } from './useCameraCapture';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
 
@@ -30,6 +33,11 @@ interface UseMealInputAssistParams {
   policy?: MealInputAssistPolicy;
   loadAiInputAssistEnabled?: () => Promise<boolean>;
   resolveRuntimeAvailability?: () => Promise<MealInputAssistRuntimeAvailability>;
+}
+
+interface PreparedMealInputAssistRequest {
+  request: ReturnType<typeof buildMealInputAssistRequest>;
+  cleanup: () => Promise<void>;
 }
 
 function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
@@ -209,6 +217,45 @@ export function useMealInputAssist({
     loadEnvironment().catch(() => undefined);
   }, [loadEnvironment, reviewKey]);
 
+  const cleanupPreparedPhoto = useCallback(async (preparedPhotoUri: string, originalPhotoUri: string) => {
+    if (preparedPhotoUri === originalPhotoUri) {
+      return;
+    }
+
+    try {
+      await deleteAsync(preparedPhotoUri, { idempotent: true });
+    } catch (error) {
+      console.warn('Failed to clean up AI analysis photo:', error);
+    }
+  }, []);
+
+  const prepareRequestForSuggestion = useCallback(async (
+    currentRequest: ReturnType<typeof buildMealInputAssistRequest>
+  ): Promise<PreparedMealInputAssistRequest> => {
+    const resizedPhoto = await ImageResizer.createResizedImage(
+      currentRequest.photoUri,
+      CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_WIDTH,
+      CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_HEIGHT,
+      'JPEG',
+      CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_QUALITY_PERCENT,
+      0,
+      undefined,
+      true,
+      {
+        mode: 'contain',
+        onlyScaleDown: true,
+      }
+    );
+
+    return {
+      request: {
+        ...currentRequest,
+        photoUri: resizedPhoto.uri,
+      },
+      cleanup: async () => cleanupPreparedPhoto(resizedPhoto.uri, currentRequest.photoUri),
+    };
+  }, [cleanupPreparedPhoto]);
+
   const request = useMemo(
     () => (captureReview ? buildMealInputAssistRequest(captureReview) : null),
     [captureReview]
@@ -281,14 +328,26 @@ export function useMealInputAssist({
     setStatus('running');
     setErrorMessage(null);
     setProgressState({
-      stage: 'loading_model',
-      message: 'AI model の状態を確認しています。',
-      progress: 0.08,
-      estimatedRemainingMs: 45000,
+      stage: 'preparing',
+      message: 'AI 解析用に写真を縮小しています。',
+      progress: 0.06,
+      estimatedRemainingMs: 30000,
     });
 
+    let cleanupPreparedRequest = async () => {};
+
     try {
-      const rawResult = await activeProvider.suggest(request, {
+      const preparedRequest = await prepareRequestForSuggestion(request);
+      cleanupPreparedRequest = preparedRequest.cleanup;
+
+      setProgressState({
+        stage: 'loading_model',
+        message: 'AI model の状態を確認しています。',
+        progress: 0.08,
+        estimatedRemainingMs: 45000,
+      });
+
+      const rawResult = await activeProvider.suggest(preparedRequest.request, {
         onProgress: setProgressState,
       });
       isRunningRef.current = false;
@@ -305,12 +364,14 @@ export function useMealInputAssist({
         return;
       }
 
-      console.error('Meal input assist failed:', error);
+      console.warn('Meal input assist failed:', error);
       setProgressState(null);
       setStatus('error');
       setErrorMessage('端末内解析に失敗しました。もう一度お試しください。');
+    } finally {
+      await cleanupPreparedRequest();
     }
-  }, [loadEnvironment, policy, request, setProgressState]);
+  }, [loadEnvironment, policy, prepareRequestForSuggestion, request, setProgressState]);
 
   const applyMealNameSuggestion = useCallback((suggestion: MealInputAssistTextSuggestion) => {
     onCaptureReviewChange('mealName', suggestion.value);

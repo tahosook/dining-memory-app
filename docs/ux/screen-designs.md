@@ -29,6 +29,7 @@
 - AI candidates should appear as tappable chips for meal name, cuisine type, and homemade / takeout only, and should update a field only when the user taps a candidate.
 - AI suggestion section の `無効` 理由は、少なくとも `設定で未許可` `この build では未対応` `model / projector 未準備` を区別できるようにする。
 - capture review を開いたら live camera preview は止め、review 中の端末負荷を抑える。
+- AI 入力補助は captured original をそのまま解析せず、端末内で一時的に downsized image を作ってから推論し、終わったら一時 file を片付ける。
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
 - If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
 - After a successful save, close capture review and move directly to Records instead of showing a success modal.

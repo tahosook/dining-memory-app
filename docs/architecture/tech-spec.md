@@ -40,6 +40,7 @@
 - ready な runtime と unavailable / noop helper は明確に分け、production path の default fallback に noop provider を使わない。
 - Search は current text/filter path だけを使い、semantic search は current scope に含めない。
 - meal input assist は `llama.rn` の multimodal path を使い、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
+- meal input assist は captured original をそのまま渡さず、AI 解析前に一時的な downsized JPEG を作って推論へ渡し、終了後に削除して初回 token までの待ち時間と memory pressure を抑える。
 - capture review では AI 解析中に live camera preview を止め、captured image と review overlay だけを残して余分な camera memory pressure を増やさない。
 - meal input assist の running state は `準備 / model 読み込み / 画像解析 / 候補整形` の近似 stage を UI に返し、進捗の目安と残り時間の目安を表示する。
 - meal input assist の real runtime 条件を満たさない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返し、review の disabled reason を維持する。

@@ -23,7 +23,7 @@ export {
 
 const LOCAL_MEAL_INPUT_ASSIST_SOURCE = 'local-meal-input-assist';
 const SUPPORTED_ANDROID_ABIS = new Set(['arm64-v8a', 'x86_64']);
-const LOCAL_RUNTIME_CONTEXT_SIZE = 1024;
+const LOCAL_RUNTIME_CONTEXT_SIZE = 4096;
 const LOCAL_RUNTIME_BATCH_SIZE = 128;
 const LOCAL_RUNTIME_IMAGE_MAX_TOKENS = 224;
 const LOCAL_RUNTIME_MAX_PREDICT = 96;
@@ -33,62 +33,6 @@ type PlatformConstantsWithSupportedAbis = {
   SupportedAbis?: string[];
   supportedAbis?: string[];
 };
-
-const MEAL_INPUT_ASSIST_RESPONSE_FORMAT = {
-  type: 'json_schema' as const,
-  json_schema: {
-    strict: true,
-    schema: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        mealNames: {
-          type: 'array',
-          maxItems: 3,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              value: { type: 'string' },
-              confidence: { type: 'number' },
-            },
-            required: ['value'],
-          },
-        },
-        cuisineTypes: {
-          type: 'array',
-          maxItems: 2,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              value: { type: 'string', enum: [...CUISINE_TYPE_OPTIONS] },
-              confidence: { type: 'number' },
-            },
-            required: ['value'],
-          },
-        },
-        homemade: {
-          type: 'array',
-          maxItems: 2,
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              value: { type: 'string', enum: ['自炊', '外食'] },
-              confidence: { type: 'number' },
-            },
-            required: ['value'],
-          },
-        },
-      },
-    },
-  },
-};
-
-function stripFileScheme(path: string) {
-  return path.startsWith('file://') ? path.slice(7) : path;
-}
 
 function getSupportedAndroidAbis() {
   const constants = NativeModules.PlatformConstants as PlatformConstantsWithSupportedAbis | undefined;
@@ -116,7 +60,7 @@ function getUnsupportedRuntimeReason() {
   return 'この build には端末内 AI runtime がまだ組み込まれていません。';
 }
 
-function buildMealInputAssistPrompt(request: MealInputAssistRequest) {
+function buildMealInputAssistUserPrompt(request: MealInputAssistRequest) {
   const currentMealName = request.mealName?.trim() || '未入力';
   const currentCuisineType = request.cuisineType?.trim() || '未入力';
   const currentLocationName = request.locationName?.trim() || '未入力';
@@ -128,10 +72,13 @@ function buildMealInputAssistPrompt(request: MealInputAssistRequest) {
   return [
     'あなたは食事記録アプリの AI 入力補助です。',
     '写真を見て、保存候補だけを JSON で返してください。',
+    '説明文、前置き、コードブロックは禁止です。JSON オブジェクトだけを返してください。',
     '不明な項目は空配列にしてください。',
     `料理ジャンルは ${CUISINE_TYPE_OPTIONS.join(' / ')} のみを使ってください。`,
     '自炊判定は 自炊 または 外食 のみを使ってください。',
     '候補は短く自然な日本語にしてください。',
+    '返答フォーマット:',
+    '{"mealNames":[{"value":"料理名","confidence":0.0}],"cuisineTypes":[{"value":"和食","confidence":0.0}],"homemade":[{"value":"自炊","confidence":0.0}]}',
     '現在の入力:',
     `- 料理名: ${currentMealName}`,
     `- 料理ジャンル: ${currentCuisineType}`,
@@ -141,7 +88,35 @@ function buildMealInputAssistPrompt(request: MealInputAssistRequest) {
   ].join('\n');
 }
 
-function extractJsonText(text: string) {
+function buildMealInputAssistMessages(request: MealInputAssistRequest) {
+  return [
+    {
+      role: 'system' as const,
+      content: 'あなたは食事記録アプリの AI 入力補助です。返答は JSON オブジェクトだけにしてください。',
+    },
+    {
+      role: 'user' as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: buildMealInputAssistUserPrompt(request),
+        },
+        {
+          type: 'image_url' as const,
+          image_url: {
+            url: request.photoUri,
+          },
+        },
+      ],
+    },
+  ];
+}
+
+function extractJsonText(text: string | null | undefined) {
+  if (typeof text !== 'string') {
+    throw new Error('Meal input assist response was empty.');
+  }
+
   const trimmed = text.trim();
   const withoutFences = trimmed.startsWith('```')
     ? trimmed.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim()
@@ -156,7 +131,7 @@ function extractJsonText(text: string) {
   return withoutFences.slice(start, end + 1);
 }
 
-function parseMealInputAssistResponse(text: string): MealInputAssistProviderResult {
+function parseMealInputAssistResponse(text: string | null | undefined): MealInputAssistProviderResult {
   const parsed = JSON.parse(extractJsonText(text)) as {
     mealNames?: Array<{ value?: string; confidence?: number }>;
     cuisineTypes?: Array<{ value?: string; confidence?: number }>;
@@ -179,6 +154,42 @@ function parseMealInputAssistResponse(text: string): MealInputAssistProviderResu
     cuisineTypes,
     homemade,
   };
+}
+
+function getCompletionResponseText(completion: {
+  text?: string | null;
+  content?: string | null;
+  tokens_predicted?: number;
+  tokens_evaluated?: number;
+  stopped_eos?: boolean;
+  interrupted?: boolean;
+  context_full?: boolean;
+  truncated?: boolean;
+  stopped_limit?: number;
+  stopped_word?: string;
+  stopping_word?: string;
+}) {
+  const responseText = [completion.content, completion.text]
+    .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+
+  if (responseText) {
+    return responseText;
+  }
+
+  throw new Error(
+    [
+      'Meal input assist response was empty.',
+      `tokens_predicted=${completion.tokens_predicted ?? 'unknown'}`,
+      `tokens_evaluated=${completion.tokens_evaluated ?? 'unknown'}`,
+      `stopped_eos=${completion.stopped_eos ?? 'unknown'}`,
+      `interrupted=${completion.interrupted ?? 'unknown'}`,
+      `context_full=${completion.context_full ?? 'unknown'}`,
+      `truncated=${completion.truncated ?? 'unknown'}`,
+      `stopped_limit=${completion.stopped_limit ?? 'unknown'}`,
+      `stopped_word=${completion.stopped_word ?? 'unknown'}`,
+      `stopping_word=${completion.stopping_word ?? 'unknown'}`,
+    ].join(' ')
+  );
 }
 
 function clampProgress(progress: number | null) {
@@ -220,6 +231,7 @@ class LlamaMultimodalContextLoader {
       model: this.modelPath,
       n_ctx: LOCAL_RUNTIME_CONTEXT_SIZE,
       n_batch: LOCAL_RUNTIME_BATCH_SIZE,
+      ctx_shift: false,
       use_mmap: true,
     }, (progress) => {
       reportSuggestProgress(onProgress, {
@@ -255,7 +267,11 @@ class LlamaMultimodalContextLoader {
 
   async load(onProgress?: (progress: MealInputAssistProgressUpdate) => void) {
     if (!this.contextPromise) {
-      this.contextPromise = this.createContext(onProgress);
+      this.contextPromise = this.createContext(onProgress).catch((error) => {
+        this.contextPromise = null;
+        this.isContextReady = false;
+        throw error;
+      });
     } else if (this.isContextReady) {
       reportSuggestProgress(onProgress, {
         stage: 'analyzing_photo',
@@ -291,9 +307,7 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
 
     let emittedTokens = 0;
     const completion = await context.completion({
-      prompt: buildMealInputAssistPrompt(request),
-      media_paths: [stripFileScheme(request.photoUri)],
-      response_format: MEAL_INPUT_ASSIST_RESPONSE_FORMAT,
+      messages: buildMealInputAssistMessages(request),
       temperature: 0.2,
       n_predict: LOCAL_RUNTIME_MAX_PREDICT,
     }, () => {
@@ -314,7 +328,7 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
       estimatedRemainingMs: 1000,
     });
 
-    return parseMealInputAssistResponse(completion.text || completion.content);
+    return parseMealInputAssistResponse(getCompletionResponseText(completion));
   }
 }
 

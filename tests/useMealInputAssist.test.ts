@@ -1,4 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
+import { deleteAsync } from 'expo-file-system/legacy';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
 import type { MealInputAssistProviderResult, MealInputAssistRuntimeAvailability } from '../src/ai/mealInputAssist';
 
@@ -7,6 +9,17 @@ jest.mock('../src/database/services/AppSettingsService', () => ({
     getAiInputAssistEnabled: jest.fn().mockResolvedValue(false),
     setAiInputAssistEnabled: jest.fn().mockResolvedValue(undefined),
   },
+}));
+
+jest.mock('@bam.tech/react-native-image-resizer', () => ({
+  __esModule: true,
+  default: {
+    createResizedImage: jest.fn(),
+  },
+}));
+
+jest.mock('expo-file-system/legacy', () => ({
+  deleteAsync: jest.fn(),
 }));
 
 function createDeferred<T>() {
@@ -50,13 +63,25 @@ async function flushEffects() {
 
 describe('useMealInputAssist', () => {
   let consoleErrorSpy: jest.SpyInstance;
+  let consoleWarnSpy: jest.SpyInstance;
 
   beforeEach(() => {
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+    (ImageResizer.createResizedImage as jest.Mock).mockResolvedValue({
+      path: '/tmp/meal-photo-ai.jpg',
+      uri: 'file:///tmp/meal-photo-ai.jpg',
+      width: 576,
+      height: 1024,
+      name: 'meal-photo-ai.jpg',
+      size: 12345,
+    });
+    (deleteAsync as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    consoleWarnSpy.mockRestore();
   });
 
   test('moves from idle to running to success and keeps zero-result success valid', async () => {
@@ -100,6 +125,24 @@ describe('useMealInputAssist', () => {
     expect(result.current.status).toBe('success');
     expect(result.current.hasAnySuggestions).toBe(false);
     expect(result.current.suggestions.mealNames).toEqual([]);
+    expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
+      'file:///tmp/meal-photo.jpg',
+      1024,
+      1024,
+      'JPEG',
+      70,
+      0,
+      undefined,
+      true,
+      {
+        mode: 'contain',
+        onlyScaleDown: true,
+      }
+    );
+    expect(provider.suggest).toHaveBeenCalledWith(expect.objectContaining({
+      photoUri: 'file:///tmp/meal-photo-ai.jpg',
+    }), expect.any(Object));
+    expect(deleteAsync).toHaveBeenCalledWith('file:///tmp/meal-photo-ai.jpg', { idempotent: true });
   });
 
   test('moves to error when the provider rejects and preserves the retry path', async () => {
@@ -126,6 +169,7 @@ describe('useMealInputAssist', () => {
       expect(result.current.status).toBe('error');
       expect(result.current.errorMessage).toBe('端末内解析に失敗しました。もう一度お試しください。');
     });
+    expect(deleteAsync).toHaveBeenCalledWith('file:///tmp/meal-photo-ai.jpg', { idempotent: true });
   });
 
   test('returns disabled when settings keep AI input assist off', async () => {

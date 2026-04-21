@@ -54,4 +54,32 @@ describe('normalizeMealInputAssistResult', () => {
       homemade: [],
     });
   });
+
+  test('tolerates missing source and malformed object candidates', () => {
+    const normalized = normalizeMealInputAssistResult({
+      source: undefined as unknown as string,
+      mealNames: [{ value: undefined }, { value: '  カツ丼  ' }] as unknown as Array<{ value: string }>,
+      cuisineTypes: [{ value: undefined }, { value: '和食' }] as unknown as Array<{ value: string }>,
+      homemade: [],
+    });
+
+    expect(normalized).toEqual({
+      source: 'mock-local',
+      mealNames: [
+        {
+          value: 'カツ丼',
+          label: 'カツ丼',
+          source: 'mock-local',
+        },
+      ],
+      cuisineTypes: [
+        {
+          value: '和食',
+          label: '和食',
+          source: 'mock-local',
+        },
+      ],
+      homemade: [],
+    });
+  });
 });

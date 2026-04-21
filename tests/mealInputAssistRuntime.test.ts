@@ -85,16 +85,82 @@ describe('meal input assist runtime availability', () => {
       path: 'file:///documents/ai-models/meal-input-assist.mmproj',
       image_max_tokens: 224,
     });
+    expect(llamaRn.initLlama).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'file:///documents/ai-models/meal-input-assist.gguf',
+      n_ctx: 4096,
+      ctx_shift: false,
+      n_batch: 128,
+      use_mmap: true,
+    }), expect.any(Function));
     expect(fakeContext.completion).toHaveBeenCalledWith(
       expect.objectContaining({
-        media_paths: ['/tmp/mock-meal.jpg'],
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたは食事記録アプリの AI 入力補助です。返答は JSON オブジェクトだけにしてください。',
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: expect.stringContaining('写真を見て、保存候補だけを JSON で返してください。'),
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: 'file:///tmp/mock-meal.jpg',
+                },
+              },
+            ],
+          },
+        ],
         n_predict: 96,
       }),
       expect.any(Function)
     );
+    expect(fakeContext.completion.mock.calls[0]?.[0]?.response_format).toBeUndefined();
     expect(normalized.source).toBe('local-meal-input-assist');
     expect(normalized.mealNames[0]?.value).toBe('海鮮丼');
     expect(normalized.cuisineTypes[0]?.value).toBe('和食');
+  });
+
+  test('throws a descriptive error when the runtime returns no text payload', async () => {
+    const fakeContext = {
+      clearCache: jest.fn().mockResolvedValue(undefined),
+      initMultimodal: jest.fn().mockResolvedValue(true),
+      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
+      completion: jest.fn().mockResolvedValue({
+        text: '',
+        content: undefined,
+        tokens_predicted: 0,
+        tokens_evaluated: 488,
+        stopped_eos: true,
+        interrupted: false,
+        context_full: false,
+        truncated: false,
+        stopped_limit: 0,
+        stopped_word: '',
+        stopping_word: '',
+      }),
+    };
+    jest.spyOn(llamaRn, 'initLlama').mockResolvedValue(fakeContext as never);
+
+    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+    expect(availability.kind).toBe('ready');
+
+    if (availability.kind !== 'ready') {
+      throw new Error('Expected local runtime availability to be ready.');
+    }
+
+    await expect(availability.provider.suggest({
+      photoUri: 'file:///tmp/mock-meal.jpg',
+      mealName: '',
+      cuisineType: '',
+      notes: '',
+      locationName: '',
+      isHomemade: false,
+    })).rejects.toThrow('Meal input assist response was empty.');
   });
 
   test('returns model_unavailable when the projector file is missing', async () => {
