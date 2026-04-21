@@ -1,4 +1,5 @@
 import { getLocalRuntimePrototypeAvailability } from './localRuntimePrototype';
+import { getMediaPipeStaticImageAvailability } from './mediapipeStaticImageProvider';
 import { MockMealInputAssistProvider } from './provider';
 import type { MealInputAssistProviderMode, MealInputAssistRuntimeAvailability } from './types';
 
@@ -18,6 +19,10 @@ export async function loadMealInputAssistRuntimeAvailability(
 
   if (mode === 'override') {
     throw new Error('Override mode requires an injected provider.');
+  }
+
+  if (mode === 'mediapipe-static-image') {
+    return getMediaPipeStaticImageAvailability();
   }
 
   return getLocalRuntimePrototypeAvailability();

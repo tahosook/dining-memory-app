@@ -263,6 +263,44 @@ describe('useCameraCapture', () => {
     );
   });
 
+  test('passes only thin AI metadata for MediaPipe static-image suggestions', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    act(() => {
+      result.current.onCaptureReviewChange('mealName', '寿司');
+    });
+
+    await act(async () => {
+      await result.current.onCaptureReviewSave({
+        aiMetadata: {
+          aiSource: 'mediapipe-static-image',
+          aiConfidence: 0.87,
+          appliedFields: ['mealName'],
+        },
+      });
+    });
+
+    expect(MealService.createMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        meal_name: '寿司',
+        ai_source: 'mediapipe-static-image',
+        ai_confidence: 0.87,
+      })
+    );
+  });
+
   test('requests Android photo save permission before saving', async () => {
     Platform.OS = 'android';
     (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue({

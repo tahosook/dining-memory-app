@@ -6,13 +6,12 @@ import {
   resolveMealInputAssistModelPath,
   resolveMealInputAssistProjectorPath,
 } from './modelConfig';
-import { createUnavailableRuntimeAvailability } from './runtimeAvailability';
 import type {
   MealInputAssistProgressUpdate,
   MealInputAssistProvider,
   MealInputAssistProviderResult,
   MealInputAssistRequest,
-  MealInputAssistRuntimeAvailability,
+  MealInputAssistRuntimeUnavailableCode,
   MealInputAssistSuggestOptions,
 } from './types';
 
@@ -28,6 +27,32 @@ const LOCAL_RUNTIME_BATCH_SIZE = 128;
 const LOCAL_RUNTIME_IMAGE_MAX_TOKENS = 224;
 const LOCAL_RUNTIME_MAX_PREDICT = 96;
 const LOCAL_RUNTIME_EXPECTED_TOKEN_COUNT = 48;
+
+type LocalRuntimePrototypeAvailability =
+  | {
+    kind: 'ready';
+    mode: 'local-runtime-prototype';
+    description: string;
+    provider: MealInputAssistProvider;
+  }
+  | {
+    kind: 'unavailable';
+    mode: 'local-runtime-prototype';
+    code: MealInputAssistRuntimeUnavailableCode;
+    reason: string;
+  };
+
+function createLocalRuntimeUnavailableAvailability(
+  code: MealInputAssistRuntimeUnavailableCode,
+  reason: string
+): LocalRuntimePrototypeAvailability {
+  return {
+    kind: 'unavailable',
+    mode: 'local-runtime-prototype',
+    code,
+    reason,
+  };
+}
 
 type PlatformConstantsWithSupportedAbis = {
   SupportedAbis?: string[];
@@ -379,23 +404,23 @@ async function getRequiredPathAvailability(path: string | null, missingReason: s
   };
 }
 
-export async function getLocalRuntimePrototypeAvailability(): Promise<MealInputAssistRuntimeAvailability> {
+export async function getLocalRuntimePrototypeAvailability(): Promise<LocalRuntimePrototypeAvailability> {
   if (Platform.OS !== 'ios' && Platform.OS !== 'android') {
-    return createUnavailableRuntimeAvailability(
+    return createLocalRuntimeUnavailableAvailability(
       'runtime_unavailable',
       getUnsupportedRuntimeReason()
     );
   }
 
   if (!hasLlamaNativeModule()) {
-    return createUnavailableRuntimeAvailability(
+    return createLocalRuntimeUnavailableAvailability(
       'runtime_unavailable',
       getUnsupportedRuntimeReason()
     );
   }
 
   if (Platform.OS === 'android' && !hasSupportedAndroidAbi()) {
-    return createUnavailableRuntimeAvailability(
+    return createLocalRuntimeUnavailableAvailability(
       'unsupported_architecture',
       'この Android ABI では端末内 AI 入力補助を利用できません。'
     );
@@ -413,11 +438,11 @@ export async function getLocalRuntimePrototypeAvailability(): Promise<MealInputA
   ]);
 
   if (modelAvailability.kind === 'unavailable') {
-    return createUnavailableRuntimeAvailability('model_unavailable', modelAvailability.reason);
+    return createLocalRuntimeUnavailableAvailability('model_unavailable', modelAvailability.reason);
   }
 
   if (projectorAvailability.kind === 'unavailable') {
-    return createUnavailableRuntimeAvailability('model_unavailable', projectorAvailability.reason);
+    return createLocalRuntimeUnavailableAvailability('model_unavailable', projectorAvailability.reason);
   }
 
   return {

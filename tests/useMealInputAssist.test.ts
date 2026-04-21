@@ -483,4 +483,43 @@ describe('useMealInputAssist', () => {
       appliedFields: ['mealName', 'cuisineType'],
     });
   });
+
+  test('keeps applied metadata thin when MediaPipe static-image suggestions are adopted', async () => {
+    const provider = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mediapipe-static-image',
+        mealNames: [{ value: '寿司', confidence: 0.87 }],
+        cuisineTypes: [{ value: '和食', confidence: 0.79 }],
+      }),
+    };
+    const onCaptureReviewChange = jest.fn();
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange,
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    act(() => {
+      result.current.applyMealNameSuggestion(result.current.suggestions.mealNames[0]);
+      result.current.applyCuisineSuggestion(result.current.suggestions.cuisineTypes[0]);
+    });
+
+    expect(onCaptureReviewChange).toHaveBeenNthCalledWith(1, 'mealName', '寿司');
+    expect(onCaptureReviewChange).toHaveBeenNthCalledWith(2, 'cuisineType', '和食');
+    expect(result.current.appliedMetadata).toEqual({
+      aiSource: 'mediapipe-static-image',
+      aiConfidence: 0.87,
+      appliedFields: ['mealName', 'cuisineType'],
+    });
+  });
 });

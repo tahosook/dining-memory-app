@@ -1,7 +1,13 @@
 export { defaultMealInputAssistProvider, MockMealInputAssistProvider } from './provider';
 export { normalizeMealInputAssistResult } from './normalizer';
+export { MEDIAPIPE_STATIC_IMAGE_SOURCE, normalizeMediaPipeStaticImageResult } from './mediapipeStaticImageNormalizer';
 export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
 export { LocalRuntimePrototypeMealInputAssistProvider, getLocalRuntimePrototypeAvailability } from './localRuntimePrototype';
+export {
+  MediaPipeStaticImageMealInputAssistProvider,
+  MediaPipeStaticImageNativeModuleClassifier,
+  getMediaPipeStaticImageAvailability,
+} from './mediapipeStaticImageProvider';
 export {
   getMealInputAssistManagedFiles,
   getMealInputAssistExpectedPaths,
@@ -43,4 +49,11 @@ export type {
   MealInputAssistTextProviderCandidate,
   MealInputAssistTextSuggestion,
 } from './types';
+export type {
+  MediaPipeStaticImageCategory,
+  MediaPipeStaticImageClassifier,
+  MediaPipeStaticImageNormalizedMetadata,
+  MediaPipeStaticImageNormalizedResult,
+  MediaPipeStaticImageRawResult,
+} from './mediapipeStaticImageTypes';
 export { EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS } from './types';

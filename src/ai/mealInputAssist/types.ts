@@ -113,7 +113,11 @@ export interface MealInputAssistModelInstallerOptions {
   onProgress?: (progress: MealInputAssistModelDownloadProgress) => void;
 }
 
-export type MealInputAssistProviderMode = 'mock' | 'local-runtime-prototype' | 'override';
+export type MealInputAssistProviderMode =
+  | 'mock'
+  | 'local-runtime-prototype'
+  | 'mediapipe-static-image'
+  | 'override';
 
 export type MealInputAssistRuntimeUnavailableCode = AiRuntimeUnavailableCode;
 
@@ -126,7 +130,7 @@ export type MealInputAssistRuntimeAvailability =
   }
   | {
     kind: 'unavailable';
-    mode: 'local-runtime-prototype';
+    mode: 'local-runtime-prototype' | 'mediapipe-static-image';
     code: MealInputAssistRuntimeUnavailableCode;
     reason: string;
   };

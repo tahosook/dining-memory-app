@@ -248,6 +248,81 @@ describe('meal input assist runtime availability', () => {
     });
   });
 
+  test('returns runtime_unavailable for mediapipe static-image mode when the Android bridge is missing', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    NativeModules.MediaPipeMealInputAssist = undefined;
+
+    await expect(loadMealInputAssistRuntimeAvailability('mediapipe-static-image')).resolves.toEqual({
+      kind: 'unavailable',
+      mode: 'mediapipe-static-image',
+      code: 'runtime_unavailable',
+      reason: 'この build には MediaPipe static-image classifier bridge がまだ組み込まれていません。',
+    });
+  });
+
+  test('normalizes MediaPipe static-image raw results through the existing provider contract without leaking raw metadata', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    NativeModules.MediaPipeMealInputAssist = {
+      classifyStaticImage: jest.fn().mockResolvedValue({
+        photoUri: 'file:///tmp/mock-meal.jpg',
+        categories: [
+          { label: 'sushi', score: 0.87, index: 1, displayName: 'Sushi' },
+          { label: 'drink', score: 0.31, index: 2, displayName: 'Drink' },
+        ],
+        classifierName: 'food-classifier',
+        modelVersion: '2026.04',
+      }),
+    };
+
+    const availability = await loadMealInputAssistRuntimeAvailability('mediapipe-static-image');
+
+    expect(availability).toEqual(expect.objectContaining({
+      kind: 'ready',
+      mode: 'mediapipe-static-image',
+      description: 'MediaPipe static-image meal input assist provider',
+    }));
+
+    if (availability.kind !== 'ready') {
+      throw new Error('Expected MediaPipe static-image availability to be ready.');
+    }
+
+    const rawResult = await availability.provider.suggest({
+      photoUri: 'file:///tmp/mock-meal.jpg',
+      mealName: '',
+      cuisineType: '',
+      notes: '',
+      locationName: '',
+      isHomemade: false,
+    });
+    const normalized = normalizeMealInputAssistResult(rawResult);
+
+    expect(NativeModules.MediaPipeMealInputAssist.classifyStaticImage).toHaveBeenCalledWith('file:///tmp/mock-meal.jpg');
+    expect(rawResult).toEqual({
+      source: 'mediapipe-static-image',
+      mealNames: [
+        { value: '寿司', confidence: 0.87 },
+        { value: '飲み物', confidence: 0.31 },
+      ],
+      cuisineTypes: [
+        { value: '和食', confidence: 0.87 },
+      ],
+    });
+    expect(rawResult).not.toEqual(expect.objectContaining({
+      classifierName: expect.anything(),
+      modelVersion: expect.anything(),
+      categories: expect.anything(),
+    }));
+    expect(normalized.source).toBe('mediapipe-static-image');
+    expect(normalized.mealNames.map((candidate) => candidate.value)).toEqual(['寿司', '飲み物']);
+    expect(normalized.cuisineTypes.map((candidate) => candidate.value)).toEqual(['和食']);
+  });
+
   test('returns unsupported_architecture on Android when only unsupported ABIs are exposed', async () => {
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
