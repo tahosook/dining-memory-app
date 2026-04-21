@@ -14,6 +14,11 @@ export interface MediaPipeStaticImageRawResult {
   modelVersion?: string | null;
 }
 
+export interface MediaPipeStaticImageClassifierStatus {
+  kind: 'ready' | 'unavailable';
+  reason?: string;
+}
+
 export interface MediaPipeStaticImageNormalizedMetadata {
   categoryCount: number;
   matchedCategoryCount: number;

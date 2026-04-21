@@ -1,16 +1,23 @@
 import { NativeModules, Platform } from 'react-native';
 import { normalizeMediaPipeStaticImageResult } from './mediapipeStaticImageNormalizer';
-import type { MediaPipeStaticImageClassifier, MediaPipeStaticImageRawResult } from './mediapipeStaticImageTypes';
+import type {
+  MediaPipeStaticImageClassifier,
+  MediaPipeStaticImageClassifierStatus,
+  MediaPipeStaticImageRawResult,
+} from './mediapipeStaticImageTypes';
 import type {
   MealInputAssistProvider,
   MealInputAssistProviderResult,
   MealInputAssistRequest,
   MealInputAssistRuntimeAvailability,
+  MealInputAssistRuntimeUnavailableCode,
 } from './types';
 
 const MEDIAPIPE_STATIC_IMAGE_MODE = 'mediapipe-static-image' as const;
+const MEDIAPIPE_MODEL_MISSING_REASON_PREFIX = 'MediaPipe meal input assist model asset が見つかりません:';
 
 type MediaPipeMealInputAssistNativeModule = {
+  getClassifierStatus?: () => Promise<MediaPipeStaticImageClassifierStatus>;
   classifyStaticImage?: (photoUri: string) => Promise<MediaPipeStaticImageRawResult>;
 };
 
@@ -18,11 +25,14 @@ function getMediaPipeMealInputAssistNativeModule() {
   return NativeModules.MediaPipeMealInputAssist as MediaPipeMealInputAssistNativeModule | undefined;
 }
 
-function createUnavailableAvailability(reason: string): MealInputAssistRuntimeAvailability {
+function createUnavailableAvailability(
+  code: MealInputAssistRuntimeUnavailableCode,
+  reason: string
+): MealInputAssistRuntimeAvailability {
   return {
     kind: 'unavailable',
     mode: MEDIAPIPE_STATIC_IMAGE_MODE,
-    code: 'runtime_unavailable',
+    code,
     reason,
   };
 }
@@ -33,6 +43,14 @@ function getUnsupportedPlatformReason() {
 
 function getMissingBridgeReason() {
   return 'この build には MediaPipe static-image classifier bridge がまだ組み込まれていません。';
+}
+
+function getUnavailableCode(status: MediaPipeStaticImageClassifierStatus) {
+  if (status.reason?.startsWith(MEDIAPIPE_MODEL_MISSING_REASON_PREFIX)) {
+    return 'model_unavailable' as const;
+  }
+
+  return 'runtime_unavailable' as const;
 }
 
 export class MediaPipeStaticImageNativeModuleClassifier implements MediaPipeStaticImageClassifier {
@@ -55,12 +73,24 @@ export class MediaPipeStaticImageMealInputAssistProvider implements MealInputAss
 
 export async function getMediaPipeStaticImageAvailability(): Promise<MealInputAssistRuntimeAvailability> {
   if (Platform.OS !== 'android') {
-    return createUnavailableAvailability(getUnsupportedPlatformReason());
+    return createUnavailableAvailability('runtime_unavailable', getUnsupportedPlatformReason());
   }
 
   const nativeModule = getMediaPipeMealInputAssistNativeModule();
-  if (!nativeModule || typeof nativeModule.classifyStaticImage !== 'function') {
-    return createUnavailableAvailability(getMissingBridgeReason());
+  if (
+    !nativeModule
+    || typeof nativeModule.classifyStaticImage !== 'function'
+    || typeof nativeModule.getClassifierStatus !== 'function'
+  ) {
+    return createUnavailableAvailability('runtime_unavailable', getMissingBridgeReason());
+  }
+
+  const classifierStatus = await nativeModule.getClassifierStatus();
+  if (classifierStatus.kind === 'unavailable') {
+    return createUnavailableAvailability(
+      getUnavailableCode(classifierStatus),
+      classifierStatus.reason ?? getMissingBridgeReason()
+    );
   }
 
   return {

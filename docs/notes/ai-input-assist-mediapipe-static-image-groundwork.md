@@ -15,6 +15,8 @@
 - CameraX は使わず、連続フレーム処理や live camera pipeline への接続は current scope に含めない。
 - 既存の `llama.rn` ベース meal input assist path は active runtime のまま残し、MediaPipe static-image path は別 scaffold として共存させる。
 - rich runtime result や raw classifier categories は provider 内の in-memory only データとして扱い、review UI や save path にそのまま流さない。
+- Android では official MediaPipe `tasks-vision` dependency を使う native bridge を separate path として追加し、初期 model source は bundled asset に固定する。
+- 初期 bring-up の model asset は repo commit せず、`android/app/src/main/assets/mediapipe/meal-input-assist.task` への manual local drop-in を前提にする。
 
 ## Decisions / Rules
 - MediaPipe の coarse classifier label は `mealNames` / `cuisineTypes` に正規化してから既存 review UI へ渡す。
@@ -23,9 +25,9 @@
 - top-k 結果、model metadata、raw response、生の classifier result は DB に保存しない。
 - DB migration を入れない理由は、永続化 contract が増えず、`meals.ai_source` / `meals.ai_confidence` の既存列で今回の保存要件を満たせるため。
 - MediaPipe native bridge は次段階で差し込む前提とし、今回の provider scaffold は `photoUri -> classifier result` 契約を受けられる shape までに留める。
+- Android bridge 実装後も MediaPipe path は hidden path のままにし、default runtime や Settings の user-visible readiness source of truth は直ちに切り替えない。
 
 ## Next Steps or Open Questions
-- Android native module で `photoUri` を受けて MediaPipe classifier result を返す bridge 実装。
 - model packaging / distribution の方法整理。
 - Settings や runtime readiness 表示へ MediaPipe path をどう統合するかの wiring。
 - 実運用で使う label taxonomy と training data の見直し。

@@ -52,6 +52,7 @@ export type {
 export type {
   MediaPipeStaticImageCategory,
   MediaPipeStaticImageClassifier,
+  MediaPipeStaticImageClassifierStatus,
   MediaPipeStaticImageNormalizedMetadata,
   MediaPipeStaticImageNormalizedResult,
   MediaPipeStaticImageRawResult,

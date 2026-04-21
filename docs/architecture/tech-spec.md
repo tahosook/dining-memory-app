@@ -41,6 +41,7 @@
 - Search は current text/filter path だけを使い、semantic search は current scope に含めない。
 - meal input assist は `llama.rn` の multimodal path を使い、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
 - MediaPipe custom food classifier 向けの static-image groundwork は `src/ai/mealInputAssist/` 配下の separate path として追加してよく、current active runtime selection や Settings の readiness source of truth を直ちに置き換えない。
+- MediaPipe static-image path は Android native bridge で real inference まで持ってよいが、current default runtime は引き続き `llama.rn` path とし、hidden separate path として扱う。
 - MediaPipe static-image path が将来 rich classifier result を返しても、review UI へ渡す shape は既存の `mealNames` / `cuisineTypes` suggestions に正規化し、保存時の persistent AI metadata は引き続き thin に保つ。
 - meal input assist は captured original をそのまま渡さず、AI 解析前に一時的な downsized JPEG を作って推論へ渡し、終了後に削除して初回 token までの待ち時間と memory pressure を抑える。
 - capture review では AI 解析中に live camera preview を止め、captured image と review overlay だけを残して余分な camera memory pressure を増やさない。
