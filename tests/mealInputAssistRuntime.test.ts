@@ -55,7 +55,6 @@ describe('meal input assist runtime availability', () => {
         text: JSON.stringify({
           mealNames: [{ value: '海鮮丼', confidence: 0.91 }],
           cuisineTypes: [{ value: '和食', confidence: 0.82 }],
-          homemade: [{ value: '外食', confidence: 0.76 }],
         }),
       }),
     };
@@ -119,6 +118,15 @@ describe('meal input assist runtime availability', () => {
       }),
       expect.any(Function)
     );
+    expect(fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text).toEqual(
+      expect.stringContaining('mealNames には最も可能性が高い料理名を 1 件以上、推定で必ず入れてください。')
+    );
+    expect(fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text).toEqual(
+      expect.stringContaining('料理ジャンルを判断できない場合のみ cuisineTypes は空配列で構いません。')
+    );
+    expect(fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text).toEqual(
+      expect.stringContaining('イタリアン、フレンチ、韓国料理、タイ料理、ベトナム料理、カレー、ハンバーガー、麺類なども最も近い 4 分類へ丸めてください。')
+    );
     expect(fakeContext.completion.mock.calls[0]?.[0]?.response_format).toBeUndefined();
     expect(normalized.source).toBe('local-meal-input-assist');
     expect(normalized.mealNames[0]?.value).toBe('海鮮丼');
@@ -173,7 +181,6 @@ describe('meal input assist runtime availability', () => {
         text: JSON.stringify({
           mealNames: [],
           cuisineTypes: [],
-          homemade: [],
         }),
         tokens_predicted: 18,
         tokens_evaluated: 312,
@@ -199,7 +206,6 @@ describe('meal input assist runtime availability', () => {
       source: 'local-meal-input-assist',
       mealNames: [],
       cuisineTypes: [],
-      homemade: [],
     });
 
     expect(consoleInfoSpy).toHaveBeenCalledWith(
@@ -208,7 +214,6 @@ describe('meal input assist runtime availability', () => {
         candidateCounts: {
           mealNames: 0,
           cuisineTypes: 0,
-          homemade: 0,
         },
         tokensPredicted: 18,
         tokensEvaluated: 312,

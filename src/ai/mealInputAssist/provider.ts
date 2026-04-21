@@ -9,7 +9,6 @@ const MOCK_VARIANTS: MealInputAssistProviderResult[] = [
       { value: '刺身定食', confidence: 0.61 },
     ],
     cuisineTypes: [{ value: '和食', confidence: 0.88 }],
-    homemade: [{ value: '外食', confidence: 0.82 }],
   },
   {
     source: 'mock-local',
@@ -19,10 +18,6 @@ const MOCK_VARIANTS: MealInputAssistProviderResult[] = [
       { value: 'だし巻き定食', confidence: 0.51 },
     ],
     cuisineTypes: [{ value: '和食', confidence: 0.84 }],
-    homemade: [
-      { value: true, confidence: 0.58, label: '自炊' },
-      { value: false, confidence: 0.42, label: '外食' },
-    ],
   },
   {
     source: 'mock-local',
@@ -32,7 +27,6 @@ const MOCK_VARIANTS: MealInputAssistProviderResult[] = [
       { value: '味玉ラーメン', confidence: 0.62 },
     ],
     cuisineTypes: [{ value: '中華', confidence: 0.87 }],
-    homemade: [{ value: false, confidence: 0.79, label: '外食' }],
   },
   {
     source: 'mock-local',
@@ -42,10 +36,6 @@ const MOCK_VARIANTS: MealInputAssistProviderResult[] = [
       { value: 'ミートソース', confidence: 0.55 },
     ],
     cuisineTypes: [{ value: '洋食', confidence: 0.83 }],
-    homemade: [
-      { value: true, confidence: 0.66, label: '自炊' },
-      { value: false, confidence: 0.34, label: '外食' },
-    ],
   },
 ];
 

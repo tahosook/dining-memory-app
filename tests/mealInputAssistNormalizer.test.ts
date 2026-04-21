@@ -6,7 +6,6 @@ describe('normalizeMealInputAssistResult', () => {
       source: ' mock-local ',
       mealNames: [' 親子丼 ', '', { value: '親子丼', confidence: 0.3 }, null],
       cuisineTypes: ['和食', 'タイ料理', { value: '和食', confidence: 0.6 }, undefined],
-      homemade: [true, '自炊', { value: '外食', confidence: -1 }, { value: '外食', confidence: 0.4 }],
     });
 
     expect(normalized.source).toBe('mock-local');
@@ -24,19 +23,6 @@ describe('normalizeMealInputAssistResult', () => {
         source: 'mock-local',
       },
     ]);
-    expect(normalized.homemade).toEqual([
-      {
-        value: true,
-        label: '自炊',
-        source: 'mock-local',
-      },
-      {
-        value: false,
-        label: '外食',
-        confidence: 0,
-        source: 'mock-local',
-      },
-    ]);
   });
 
   test('returns empty suggestion groups for zero-result responses', () => {
@@ -44,14 +30,12 @@ describe('normalizeMealInputAssistResult', () => {
       source: '',
       mealNames: [],
       cuisineTypes: [],
-      homemade: [],
     });
 
     expect(normalized).toEqual({
       source: 'mock-local',
       mealNames: [],
       cuisineTypes: [],
-      homemade: [],
     });
   });
 
@@ -60,7 +44,6 @@ describe('normalizeMealInputAssistResult', () => {
       source: undefined as unknown as string,
       mealNames: [{ value: undefined }, { value: '  カツ丼  ' }] as unknown as Array<{ value: string }>,
       cuisineTypes: [{ value: undefined }, { value: '和食' }] as unknown as Array<{ value: string }>,
-      homemade: [],
     });
 
     expect(normalized).toEqual({
@@ -79,7 +62,6 @@ describe('normalizeMealInputAssistResult', () => {
           source: 'mock-local',
         },
       ],
-      homemade: [],
     });
   });
 });

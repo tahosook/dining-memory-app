@@ -23,7 +23,6 @@ import type { CameraPermissionUiState } from '../../../hooks/cameraCapture';
 import type { CaptureReviewState } from '../../../hooks/cameraCapture/useCameraCapture';
 import type {
   MealInputAssistCuisineSuggestion,
-  MealInputAssistHomemadeSuggestion,
   MealInputAssistProgress,
   MealInputAssistStatus,
   MealInputAssistSuggestions,
@@ -82,7 +81,6 @@ type CameraAiAssistOperations = {
   onRequestAiSuggestions: () => Promise<void>;
   onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
   onApplyCuisineSuggestion: (suggestion: MealInputAssistCuisineSuggestion) => void;
-  onApplyHomemadeSuggestion: (suggestion: MealInputAssistHomemadeSuggestion) => void;
 };
 
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
@@ -91,7 +89,7 @@ export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 
   Pick<CameraReviewState, 'captureReview'> &
   Pick<CameraReviewOperations, 'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'> &
   Pick<CameraAiAssistState, 'aiAssistStatus' | 'aiAssistSuggestions' | 'aiAssistErrorMessage' | 'aiAssistProgress' | 'aiAssistDisabledReason'> &
-  Pick<CameraAiAssistOperations, 'onRequestAiSuggestions' | 'onApplyMealNameSuggestion' | 'onApplyCuisineSuggestion' | 'onApplyHomemadeSuggestion'>;
+  Pick<CameraAiAssistOperations, 'onRequestAiSuggestions' | 'onApplyMealNameSuggestion' | 'onApplyCuisineSuggestion'>;
 
 const AI_ASSIST_STATUS_LABELS: Record<MealInputAssistStatus, string> = {
   idle: '未実行',
@@ -203,7 +201,6 @@ interface CaptureReviewProps {
   onRequestAiSuggestions: () => Promise<void>;
   onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
   onApplyCuisineSuggestion: (suggestion: MealInputAssistCuisineSuggestion) => void;
-  onApplyHomemadeSuggestion: (suggestion: MealInputAssistHomemadeSuggestion) => void;
 }
 
 type SuggestionChipProps = {
@@ -261,7 +258,6 @@ interface AiAssistSectionProps {
   onRequestSuggestions: () => Promise<void>;
   onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
   onApplyCuisineSuggestion: (suggestion: MealInputAssistCuisineSuggestion) => void;
-  onApplyHomemadeSuggestion: (suggestion: MealInputAssistHomemadeSuggestion) => void;
 }
 
 function formatAiAssistDuration(durationMs: number | null | undefined) {
@@ -288,11 +284,9 @@ const AiAssistSection: React.FC<AiAssistSectionProps> = ({
   onRequestSuggestions,
   onApplyMealNameSuggestion,
   onApplyCuisineSuggestion,
-  onApplyHomemadeSuggestion,
 }) => {
   const hasAnySuggestions = suggestions.mealNames.length > 0
-    || suggestions.cuisineTypes.length > 0
-    || suggestions.homemade.length > 0;
+    || suggestions.cuisineTypes.length > 0;
   const actionDisabled = status === 'running' || status === 'disabled';
   const actionLabel = status === 'running'
     ? '解析中...'
@@ -377,12 +371,6 @@ const AiAssistSection: React.FC<AiAssistSectionProps> = ({
         onPress={onApplyCuisineSuggestion}
         testIDPrefix="ai-cuisine-suggestion"
       />
-      <SuggestionGroup
-        title="自炊 / 外食候補"
-        suggestions={suggestions.homemade}
-        onPress={onApplyHomemadeSuggestion}
-        testIDPrefix="ai-homemade-suggestion"
-      />
     </View>
   );
 };
@@ -400,7 +388,6 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
   onRequestAiSuggestions,
   onApplyMealNameSuggestion,
   onApplyCuisineSuggestion,
-  onApplyHomemadeSuggestion,
 }) => {
   const [showLocationInput, setShowLocationInput] = React.useState(Boolean(captureReview.locationName.trim()));
   const [showNotesInput, setShowNotesInput] = React.useState(Boolean(captureReview.notes.trim()));
@@ -460,13 +447,12 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             status={aiAssistStatus}
             suggestions={aiAssistSuggestions}
             errorMessage={aiAssistErrorMessage}
-            progress={aiAssistProgress}
-            disabledReason={aiAssistDisabledReason}
-            onRequestSuggestions={onRequestAiSuggestions}
-            onApplyMealNameSuggestion={onApplyMealNameSuggestion}
-            onApplyCuisineSuggestion={onApplyCuisineSuggestion}
-            onApplyHomemadeSuggestion={onApplyHomemadeSuggestion}
-          />
+        progress={aiAssistProgress}
+        disabledReason={aiAssistDisabledReason}
+        onRequestSuggestions={onRequestAiSuggestions}
+        onApplyMealNameSuggestion={onApplyMealNameSuggestion}
+        onApplyCuisineSuggestion={onApplyCuisineSuggestion}
+      />
 
           <TextInput
             style={styles.reviewInput}
@@ -566,7 +552,6 @@ const CameraView: React.FC<CameraViewProps> = ({
   onRequestAiSuggestions,
   onApplyMealNameSuggestion,
   onApplyCuisineSuggestion,
-  onApplyHomemadeSuggestion,
 }) => {
   const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
 
@@ -608,7 +593,6 @@ const CameraView: React.FC<CameraViewProps> = ({
               onRequestAiSuggestions={onRequestAiSuggestions}
               onApplyMealNameSuggestion={onApplyMealNameSuggestion}
               onApplyCuisineSuggestion={onApplyCuisineSuggestion}
-              onApplyHomemadeSuggestion={onApplyHomemadeSuggestion}
             />
           ) : (
             <FocusArea />

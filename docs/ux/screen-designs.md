@@ -26,7 +26,7 @@
 - Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
 - AI suggestion section should show `未実行 / 解析中 / 成功 / 失敗 / 無効` and keep the save and cancel actions available in every state.
 - AI suggestion section の `解析中` では、少なくとも current stage、進捗の目安、経過時間、残り時間の目安を表示する。
-- AI candidates should appear as tappable chips for meal name, cuisine type, and homemade / takeout only, and should update a field only when the user taps a candidate.
+- AI candidates should appear as tappable chips for meal name and cuisine type only, and should update a field only when the user taps a candidate.
 - AI suggestion section の `無効` 理由は、少なくとも `設定で未許可` `この build では未対応` `model / projector 未準備` を区別できるようにする。
 - capture review を開いたら live camera preview は止め、review 中の端末負荷を抑える。
 - AI 入力補助は captured original をそのまま解析せず、端末内で一時的に downsized image を作ってから推論し、終わったら一時 file を片付ける。

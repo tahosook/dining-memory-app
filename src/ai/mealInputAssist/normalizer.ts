@@ -1,8 +1,6 @@
 import { CUISINE_TYPE_OPTIONS, type CuisineTypeOption } from '../../constants/MealOptions';
 import type {
   MealInputAssistCuisineSuggestion,
-  MealInputAssistHomemadeProviderCandidate,
-  MealInputAssistHomemadeSuggestion,
   MealInputAssistProviderResult,
   MealInputAssistSuggestions,
   MealInputAssistTextProviderCandidate,
@@ -101,67 +99,6 @@ function normalizeCuisineSuggestions(
     .slice(0, MAX_SUGGESTIONS_PER_GROUP);
 }
 
-function normalizeHomemadeValue(value: boolean | '自炊' | '外食') {
-  if (value === true || value === '自炊') {
-    return { value: true, label: '自炊' as const };
-  }
-
-  if (value === false || value === '外食') {
-    return { value: false, label: '外食' as const };
-  }
-
-  return null;
-}
-
-function normalizeHomemadeCandidate(
-  candidate: boolean | '自炊' | '外食' | MealInputAssistHomemadeProviderCandidate | null | undefined,
-  source: string
-): MealInputAssistHomemadeSuggestion | null {
-  if (typeof candidate === 'boolean' || candidate === '自炊' || candidate === '外食') {
-    const normalized = normalizeHomemadeValue(candidate);
-    return normalized ? { ...normalized, source } : null;
-  }
-
-  if (!candidate) {
-    return null;
-  }
-
-  const normalized = normalizeHomemadeValue(candidate.value);
-  if (!normalized) {
-    return null;
-  }
-
-  return {
-    ...normalized,
-    confidence: normalizeConfidence(candidate.confidence),
-    source,
-  };
-}
-
-function normalizeHomemadeSuggestions(
-  candidates: MealInputAssistProviderResult['homemade'],
-  source: string
-) {
-  const seen = new Set<string>();
-
-  return (candidates ?? [])
-    .map((candidate) => normalizeHomemadeCandidate(candidate, source))
-    .filter((candidate): candidate is MealInputAssistHomemadeSuggestion => {
-      if (!candidate) {
-        return false;
-      }
-
-      const key = String(candidate.value);
-      if (seen.has(key)) {
-        return false;
-      }
-
-      seen.add(key);
-      return true;
-    })
-    .slice(0, MAX_SUGGESTIONS_PER_GROUP);
-}
-
 export function normalizeMealInputAssistResult(result: MealInputAssistProviderResult): MealInputAssistSuggestions {
   const source = typeof result.source === 'string' && result.source.trim()
     ? result.source.trim()
@@ -171,6 +108,5 @@ export function normalizeMealInputAssistResult(result: MealInputAssistProviderRe
     source,
     mealNames: normalizeMealNameSuggestions(result.mealNames, source),
     cuisineTypes: normalizeCuisineSuggestions(result.cuisineTypes, source),
-    homemade: normalizeHomemadeSuggestions(result.homemade, source),
   };
 }

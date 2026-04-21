@@ -22,8 +22,6 @@ export type {
   MealInputAssistAvailability,
   MealInputAssistCuisineSuggestion,
   MealInputAssistField,
-  MealInputAssistHomemadeSuggestion,
-  MealInputAssistHomemadeProviderCandidate,
   MealInputAssistProgress,
   MealInputAssistProgressStage,
   MealInputAssistProgressUpdate,

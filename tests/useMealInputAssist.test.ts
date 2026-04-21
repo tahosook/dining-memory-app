@@ -120,7 +120,6 @@ describe('useMealInputAssist', () => {
         source: 'mock-local',
         mealNames: [],
         cuisineTypes: [],
-        homemade: [],
       });
       await pendingRequest;
     });
@@ -179,9 +178,8 @@ describe('useMealInputAssist', () => {
     const provider = {
       suggest: jest.fn().mockResolvedValue({
         source: 'mock-local',
-        mealNames: [],
+        mealNames: [{ value: ' ', confidence: 0.52 }],
         cuisineTypes: [{ value: 'イタリアン', confidence: 0.88 }],
-        homemade: [],
       }),
     };
     const loadAiInputAssistEnabled = async () => true;
@@ -206,19 +204,59 @@ describe('useMealInputAssist', () => {
       'Meal input assist normalized all provider candidates away.',
       expect.objectContaining({
         rawCandidateCounts: {
-          mealNames: 0,
+          mealNames: 1,
           cuisineTypes: 1,
-          homemade: 0,
         },
         normalizedCandidateCounts: {
           mealNames: 0,
           cuisineTypes: 0,
-          homemade: 0,
         },
         rawCandidatePreview: {
           mealNames: [],
           cuisineTypes: ['イタリアン'],
-          homemade: [],
+        },
+      })
+    );
+  });
+
+  test('logs a contract violation when the provider omits meal-name candidates', async () => {
+    const provider = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mock-local',
+        mealNames: [],
+        cuisineTypes: [{ value: '中華', confidence: 0.84 }],
+      }),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange: jest.fn(),
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    expect(result.current.status).toBe('success');
+    expect(result.current.suggestions.mealNames).toEqual([]);
+    expect(result.current.suggestions.cuisineTypes).toHaveLength(1);
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      'Meal input assist provider returned no meal-name candidates.',
+      expect.objectContaining({
+        providerSource: 'mock-local',
+        rawCandidateCounts: {
+          mealNames: 0,
+          cuisineTypes: 1,
+        },
+        rawCandidatePreview: {
+          mealNames: [],
+          cuisineTypes: ['中華'],
         },
       })
     );
@@ -392,7 +430,6 @@ describe('useMealInputAssist', () => {
         source: 'mock-local',
         mealNames: [{ value: '海鮮丼', confidence: 0.9 }],
         cuisineTypes: [],
-        homemade: [],
       });
       await pendingRequest;
     });
@@ -407,7 +444,6 @@ describe('useMealInputAssist', () => {
         source: 'mock-local',
         mealNames: [{ value: '海鮮丼', confidence: 0.91 }],
         cuisineTypes: [{ value: '和食', confidence: 0.72 }],
-        homemade: [{ value: false, confidence: 0.63 }],
       }),
     };
     const onCaptureReviewChange = jest.fn();

@@ -10,7 +10,6 @@ import {
   normalizeMealInputAssistResult,
   type AppliedMealInputAssistMetadata,
   type MealInputAssistCuisineSuggestion,
-  type MealInputAssistHomemadeSuggestion,
   type MealInputAssistPolicy,
   type MealInputAssistProgress,
   type MealInputAssistProgressUpdate,
@@ -54,15 +53,13 @@ function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
 
 function hasAnyMealInputAssistSuggestions(suggestions: MealInputAssistSuggestions) {
   return suggestions.mealNames.length > 0
-    || suggestions.cuisineTypes.length > 0
-    || suggestions.homemade.length > 0;
+    || suggestions.cuisineTypes.length > 0;
 }
 
 function countProviderResultCandidates(result: MealInputAssistProviderResult) {
   return {
     mealNames: result.mealNames?.length ?? 0,
     cuisineTypes: result.cuisineTypes?.length ?? 0,
-    homemade: result.homemade?.length ?? 0,
   };
 }
 
@@ -70,7 +67,6 @@ function countNormalizedSuggestions(suggestions: MealInputAssistSuggestions) {
   return {
     mealNames: suggestions.mealNames.length,
     cuisineTypes: suggestions.cuisineTypes.length,
-    homemade: suggestions.homemade.length,
   };
 }
 
@@ -108,10 +104,6 @@ function buildProviderResultPreview(result: MealInputAssistProviderResult) {
       .filter((candidate): candidate is string => Boolean(candidate))
       .slice(0, 3),
     cuisineTypes: (result.cuisineTypes ?? [])
-      .map((candidate) => summarizeProviderCandidate(candidate))
-      .filter((candidate): candidate is string => Boolean(candidate))
-      .slice(0, 3),
-    homemade: (result.homemade ?? [])
       .map((candidate) => summarizeProviderCandidate(candidate))
       .filter((candidate): candidate is string => Boolean(candidate))
       .slice(0, 3),
@@ -348,8 +340,7 @@ export function useMealInputAssist({
       : status;
 
   const hasAnySuggestions = suggestions.mealNames.length > 0
-    || suggestions.cuisineTypes.length > 0
-    || suggestions.homemade.length > 0;
+    || suggestions.cuisineTypes.length > 0;
 
   const requestSuggestions = useCallback(async () => {
     if (!request || isRunningRef.current) {
@@ -423,11 +414,18 @@ export function useMealInputAssist({
       }
 
       const normalizedSuggestions = normalizeMealInputAssistResult(rawResult);
+      const rawCandidateCounts = countProviderResultCandidates(rawResult);
+      if (rawCandidateCounts.mealNames === 0) {
+        console.info('Meal input assist provider returned no meal-name candidates.', {
+          providerSource: rawResult.source,
+          rawCandidateCounts,
+          rawCandidatePreview: buildProviderResultPreview(rawResult),
+        });
+      }
+
       if (!hasAnyMealInputAssistSuggestions(normalizedSuggestions)) {
-        const rawCandidateCounts = countProviderResultCandidates(rawResult);
         const rawCandidateTotal = rawCandidateCounts.mealNames
-          + rawCandidateCounts.cuisineTypes
-          + rawCandidateCounts.homemade;
+          + rawCandidateCounts.cuisineTypes;
 
         if (rawCandidateTotal > 0) {
           console.info('Meal input assist normalized all provider candidates away.', {
@@ -466,11 +464,6 @@ export function useMealInputAssist({
     setAppliedMetadata((current) => mergeAppliedMetadata(current, 'cuisineType', suggestion.source, suggestion.confidence));
   }, [onCaptureReviewChange]);
 
-  const applyHomemadeSuggestion = useCallback((suggestion: MealInputAssistHomemadeSuggestion) => {
-    onCaptureReviewChange('isHomemade', suggestion.value);
-    setAppliedMetadata((current) => mergeAppliedMetadata(current, 'isHomemade', suggestion.source, suggestion.confidence));
-  }, [onCaptureReviewChange]);
-
   return {
     status: effectiveStatus,
     suggestions,
@@ -481,7 +474,6 @@ export function useMealInputAssist({
     requestSuggestions,
     applyMealNameSuggestion,
     applyCuisineSuggestion,
-    applyHomemadeSuggestion,
     appliedMetadata,
   };
 }

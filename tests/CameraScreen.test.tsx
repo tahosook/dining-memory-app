@@ -193,7 +193,6 @@ type MockAiAssistState = {
     source: string;
     mealNames: Array<{ value: string; label: string; confidence?: number; source: string }>;
     cuisineTypes: Array<{ value: string; label: string; confidence?: number; source: string }>;
-    homemade: Array<{ value: boolean; label: '自炊' | '外食'; confidence?: number; source: string }>;
   };
   errorMessage: string | null;
   progress: {
@@ -207,7 +206,6 @@ type MockAiAssistState = {
   requestSuggestions: jest.Mock;
   applyMealNameSuggestion: jest.Mock;
   applyCuisineSuggestion: jest.Mock;
-  applyHomemadeSuggestion: jest.Mock;
   appliedMetadata: {
     aiSource: string;
     aiConfidence?: number;
@@ -262,7 +260,6 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
       source: 'mock-local',
       mealNames: [],
       cuisineTypes: [],
-      homemade: [],
     },
     errorMessage: null,
     progress: null,
@@ -270,7 +267,6 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
     requestSuggestions: jest.fn(),
     applyMealNameSuggestion: jest.fn(),
     applyCuisineSuggestion: jest.fn(),
-    applyHomemadeSuggestion: jest.fn(),
     appliedMetadata: null,
     ...overrides,
   };
@@ -480,7 +476,6 @@ describe('CameraScreen', () => {
     test('calls the AI suggestion handlers when suggestion chips are tapped', async () => {
       const applyMealNameSuggestion = jest.fn();
       const applyCuisineSuggestion = jest.fn();
-      const applyHomemadeSuggestion = jest.fn();
       (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
         captureReview: createCaptureReview(),
       }));
@@ -490,18 +485,15 @@ describe('CameraScreen', () => {
           source: 'mock-local',
           mealNames: [{ value: '海鮮丼', label: '海鮮丼', confidence: 0.91, source: 'mock-local' }],
           cuisineTypes: [{ value: '和食', label: '和食', confidence: 0.8, source: 'mock-local' }],
-          homemade: [{ value: false, label: '外食', confidence: 0.66, source: 'mock-local' }],
         },
         applyMealNameSuggestion,
         applyCuisineSuggestion,
-        applyHomemadeSuggestion,
       }));
 
-      const { findByTestId } = render(<CameraScreen />);
+      const { findByTestId, queryByTestId } = render(<CameraScreen />);
 
       fireEvent.press(await findByTestId('ai-meal-name-suggestion-0'));
       fireEvent.press(await findByTestId('ai-cuisine-suggestion-0'));
-      fireEvent.press(await findByTestId('ai-homemade-suggestion-0'));
 
       expect(applyMealNameSuggestion).toHaveBeenCalledWith({
         value: '海鮮丼',
@@ -515,12 +507,7 @@ describe('CameraScreen', () => {
         confidence: 0.8,
         source: 'mock-local',
       });
-      expect(applyHomemadeSuggestion).toHaveBeenCalledWith({
-        value: false,
-        label: '外食',
-        confidence: 0.66,
-        source: 'mock-local',
-      });
+      expect(queryByTestId('ai-homemade-suggestion-0')).toBeNull();
     });
 
     test('keeps the save button available when AI suggestion loading fails', async () => {

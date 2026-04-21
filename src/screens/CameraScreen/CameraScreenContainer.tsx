@@ -61,7 +61,6 @@ const CameraScreenContainer: React.FC = () => {
       onRequestAiSuggestions={mealInputAssist.requestSuggestions}
       onApplyMealNameSuggestion={mealInputAssist.applyMealNameSuggestion}
       onApplyCuisineSuggestion={mealInputAssist.applyCuisineSuggestion}
-      onApplyHomemadeSuggestion={mealInputAssist.applyHomemadeSuggestion}
     />
   );
 };

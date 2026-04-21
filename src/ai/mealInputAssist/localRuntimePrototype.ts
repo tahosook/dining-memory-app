@@ -65,26 +65,24 @@ function buildMealInputAssistUserPrompt(request: MealInputAssistRequest) {
   const currentCuisineType = request.cuisineType?.trim() || '未入力';
   const currentLocationName = request.locationName?.trim() || '未入力';
   const currentNotes = request.notes?.trim() || '未入力';
-  const currentHomemade = typeof request.isHomemade === 'boolean'
-    ? request.isHomemade ? '自炊' : '外食'
-    : '未入力';
 
   return [
     'あなたは食事記録アプリの AI 入力補助です。',
     '写真を見て、保存候補だけを JSON で返してください。',
     '説明文、前置き、コードブロックは禁止です。JSON オブジェクトだけを返してください。',
-    '不明な項目は空配列にしてください。',
-    `料理ジャンルは ${CUISINE_TYPE_OPTIONS.join(' / ')} のみを使ってください。`,
-    '自炊判定は 自炊 または 外食 のみを使ってください。',
+    'mealNames には最も可能性が高い料理名を 1 件以上、推定で必ず入れてください。',
+    '料理名は短く自然な日本語にしてください。',
+    `cuisineTypes は ${CUISINE_TYPE_OPTIONS.join(' / ')} のみを使ってください。`,
+    'イタリアン、フレンチ、韓国料理、タイ料理、ベトナム料理、カレー、ハンバーガー、麺類なども最も近い 4 分類へ丸めてください。',
+    '料理ジャンルを判断できない場合のみ cuisineTypes は空配列で構いません。',
     '候補は短く自然な日本語にしてください。',
     '返答フォーマット:',
-    '{"mealNames":[{"value":"料理名","confidence":0.0}],"cuisineTypes":[{"value":"和食","confidence":0.0}],"homemade":[{"value":"自炊","confidence":0.0}]}',
+    '{"mealNames":[{"value":"料理名","confidence":0.0}],"cuisineTypes":[{"value":"和食","confidence":0.0}]}',
     '現在の入力:',
     `- 料理名: ${currentMealName}`,
     `- 料理ジャンル: ${currentCuisineType}`,
     `- 場所: ${currentLocationName}`,
     `- メモ: ${currentNotes}`,
-    `- 自炊判定: ${currentHomemade}`,
   ].join('\n');
 }
 
@@ -135,7 +133,6 @@ function parseMealInputAssistResponse(text: string | null | undefined): MealInpu
   const parsed = JSON.parse(extractJsonText(text)) as {
     mealNames?: Array<{ value?: string; confidence?: number }>;
     cuisineTypes?: Array<{ value?: string; confidence?: number }>;
-    homemade?: Array<{ value?: '自炊' | '外食'; confidence?: number }>;
   };
   const mealNames = (parsed.mealNames ?? []).filter(
     (candidate): candidate is { value: string; confidence?: number } => typeof candidate.value === 'string'
@@ -143,16 +140,11 @@ function parseMealInputAssistResponse(text: string | null | undefined): MealInpu
   const cuisineTypes = (parsed.cuisineTypes ?? []).filter(
     (candidate): candidate is { value: string; confidence?: number } => typeof candidate.value === 'string'
   );
-  const homemade = (parsed.homemade ?? []).filter(
-    (candidate): candidate is { value: '自炊' | '外食'; confidence?: number } =>
-      candidate.value === '自炊' || candidate.value === '外食'
-  );
 
   return {
     source: LOCAL_MEAL_INPUT_ASSIST_SOURCE,
     mealNames,
     cuisineTypes,
-    homemade,
   };
 }
 
@@ -160,13 +152,12 @@ function countProviderCandidates(result: MealInputAssistProviderResult) {
   return {
     mealNames: result.mealNames?.length ?? 0,
     cuisineTypes: result.cuisineTypes?.length ?? 0,
-    homemade: result.homemade?.length ?? 0,
   };
 }
 
 function hasAnyProviderCandidates(result: MealInputAssistProviderResult) {
   const counts = countProviderCandidates(result);
-  return counts.mealNames > 0 || counts.cuisineTypes > 0 || counts.homemade > 0;
+  return counts.mealNames > 0 || counts.cuisineTypes > 0;
 }
 
 function buildResponsePreview(text: string, maxLength = 240) {
