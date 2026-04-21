@@ -133,6 +133,119 @@ describe('meal input assist runtime availability', () => {
     expect(normalized.cuisineTypes[0]?.value).toBe('和食');
   });
 
+  test('reports real runtime progress boundaries through multimodal setup, cache clear, completion submit, token generation, and finalizing', async () => {
+    const progressUpdates: Array<{
+      stage: string;
+      message: string;
+      progress: number | null;
+      estimatedRemainingMs: number | null;
+    }> = [];
+    const fakeContext = {
+      clearCache: jest.fn().mockResolvedValue(undefined),
+      initMultimodal: jest.fn().mockResolvedValue(true),
+      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
+      completion: jest.fn().mockImplementation(async (_options, onToken) => {
+        onToken?.();
+        onToken?.();
+        return {
+          text: JSON.stringify({
+            mealNames: [{ value: '海鮮丼', confidence: 0.91 }],
+            cuisineTypes: [{ value: '和食', confidence: 0.82 }],
+          }),
+        };
+      }),
+    };
+    jest.spyOn(llamaRn, 'initLlama').mockImplementation(async (_options, onProgress) => {
+      onProgress?.(25);
+      onProgress?.(100);
+      return fakeContext as never;
+    });
+
+    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+    expect(availability.kind).toBe('ready');
+
+    if (availability.kind !== 'ready') {
+      throw new Error('Expected local runtime availability to be ready.');
+    }
+
+    await availability.provider.suggest({
+      photoUri: 'file:///tmp/mock-meal.jpg',
+      mealName: '',
+      cuisineType: '',
+      notes: '',
+      locationName: '',
+      isHomemade: true,
+    }, {
+      onProgress: (update) => {
+        progressUpdates.push(update);
+      },
+    });
+
+    const stageSequence = progressUpdates
+      .map((update) => update.stage)
+      .filter((stage, index, stages) => index === 0 || stage !== stages[index - 1]);
+
+    expect(stageSequence).toEqual([
+      'loading_model',
+      'initializing_multimodal',
+      'analyzing_photo',
+      'generating_response',
+      'finalizing',
+    ]);
+
+    expect(progressUpdates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        stage: 'initializing_multimodal',
+        progress: 0.54,
+        estimatedRemainingMs: 55000,
+      }),
+      expect.objectContaining({
+        stage: 'initializing_multimodal',
+        progress: 0.6,
+        estimatedRemainingMs: 50000,
+      }),
+      expect.objectContaining({
+        stage: 'analyzing_photo',
+        message: '写真解析の前処理を始めています。',
+        progress: 0.64,
+        estimatedRemainingMs: 47000,
+      }),
+      expect.objectContaining({
+        stage: 'analyzing_photo',
+        message: '写真解析の前処理が完了しました。',
+        progress: 0.7,
+        estimatedRemainingMs: 45000,
+      }),
+      expect.objectContaining({
+        stage: 'analyzing_photo',
+        message: '写真を解析しています。候補生成を開始しました。',
+        progress: 0.74,
+        estimatedRemainingMs: 42000,
+      }),
+      expect.objectContaining({
+        stage: 'finalizing',
+        progress: 0.98,
+        estimatedRemainingMs: 1000,
+      }),
+    ]));
+
+    const firstGenerationUpdate = progressUpdates.find((update) => update.stage === 'generating_response');
+    expect(firstGenerationUpdate).toEqual(expect.objectContaining({
+      message: '候補を整理しています。',
+    }));
+    expect(firstGenerationUpdate?.progress).toBeGreaterThan(0.8);
+    expect(firstGenerationUpdate?.estimatedRemainingMs).toBeLessThanOrEqual(18000);
+
+    const numericProgressValues = progressUpdates
+      .map((update) => update.progress)
+      .filter((progress): progress is number => typeof progress === 'number');
+
+    expect(numericProgressValues.length).toBeGreaterThan(0);
+    for (let index = 1; index < numericProgressValues.length; index += 1) {
+      expect(numericProgressValues[index]).toBeGreaterThanOrEqual(numericProgressValues[index - 1]);
+    }
+  });
+
   test('throws a descriptive error when the runtime returns no text payload', async () => {
     const fakeContext = {
       clearCache: jest.fn().mockResolvedValue(undefined),

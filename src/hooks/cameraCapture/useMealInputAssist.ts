@@ -40,6 +40,16 @@ interface PreparedMealInputAssistRequest {
   cleanup: () => Promise<void>;
 }
 
+interface MealInputAssistEnvironment {
+  isAiInputAssistEnabled: boolean;
+  runtimeAvailability: MealInputAssistRuntimeAvailability;
+}
+
+interface MealInputAssistEnvironmentLoaderDependencies {
+  loadAiInputAssistEnabledSetting: () => Promise<boolean>;
+  loadRuntimeAvailability: () => Promise<MealInputAssistRuntimeAvailability>;
+}
+
 function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
   return {
     photoUri: captureReview.photoUri,
@@ -173,6 +183,8 @@ export function useMealInputAssist({
   const requestStartedAtRef = useRef<number | null>(null);
   const progressUpdatedAtRef = useRef<number | null>(null);
   const latestProgressUpdateRef = useRef<MealInputAssistProgressUpdate | null>(null);
+  const environmentPromiseRef = useRef<Promise<MealInputAssistEnvironment> | null>(null);
+  const environmentLoaderDependenciesRef = useRef<MealInputAssistEnvironmentLoaderDependencies | null>(null);
 
   const reviewKey = captureReview?.photoUri ?? null;
 
@@ -241,40 +253,80 @@ export function useMealInputAssist({
   }, [status]);
 
   const loadEnvironment = useCallback(async () => {
-    try {
-      const [nextAiInputAssistEnabled, nextRuntimeAvailability] = await Promise.all([
-        loadAiInputAssistEnabledSetting(),
-        loadRuntimeAvailability(),
-      ]);
+    const shouldReloadEnvironment = !environmentPromiseRef.current
+      || environmentLoaderDependenciesRef.current?.loadAiInputAssistEnabledSetting !== loadAiInputAssistEnabledSetting
+      || environmentLoaderDependenciesRef.current?.loadRuntimeAvailability !== loadRuntimeAvailability;
 
-      setIsAiInputAssistEnabled(nextAiInputAssistEnabled);
-      setRuntimeAvailability(nextRuntimeAvailability);
-
-      return {
-        isAiInputAssistEnabled: nextAiInputAssistEnabled,
-        runtimeAvailability: nextRuntimeAvailability,
+    if (shouldReloadEnvironment) {
+      environmentLoaderDependenciesRef.current = {
+        loadAiInputAssistEnabledSetting,
+        loadRuntimeAvailability,
       };
-    } catch (error) {
-      console.error('Failed to load AI input assist environment:', error);
+      environmentPromiseRef.current = (async () => {
+        try {
+          const [nextAiInputAssistEnabled, nextRuntimeAvailability] = await Promise.all([
+            loadAiInputAssistEnabledSetting(),
+            loadRuntimeAvailability(),
+          ]);
 
-      const fallbackRuntimeAvailability = createUnavailableRuntimeAvailability(
-        'runtime_unavailable',
-        'この build には端末内 AI runtime がまだ組み込まれていません。'
+          setIsAiInputAssistEnabled(nextAiInputAssistEnabled);
+          setRuntimeAvailability(nextRuntimeAvailability);
+
+          return {
+            isAiInputAssistEnabled: nextAiInputAssistEnabled,
+            runtimeAvailability: nextRuntimeAvailability,
+          };
+        } catch (error) {
+          console.error('Failed to load AI input assist environment:', error);
+
+          const fallbackRuntimeAvailability = createUnavailableRuntimeAvailability(
+            'runtime_unavailable',
+            'この build には端末内 AI runtime がまだ組み込まれていません。'
+          );
+
+          setIsAiInputAssistEnabled(false);
+          setRuntimeAvailability(fallbackRuntimeAvailability);
+
+          return {
+            isAiInputAssistEnabled: false,
+            runtimeAvailability: fallbackRuntimeAvailability,
+          };
+        }
+      })();
+    }
+
+    return environmentPromiseRef.current!;
+  }, [loadAiInputAssistEnabledSetting, loadRuntimeAvailability]);
+
+  const getRequestEnvironment = useCallback(async () => {
+    const hasMatchingEnvironmentDependencies = !environmentLoaderDependenciesRef.current
+      || (
+        environmentLoaderDependenciesRef.current.loadAiInputAssistEnabledSetting === loadAiInputAssistEnabledSetting
+        && environmentLoaderDependenciesRef.current.loadRuntimeAvailability === loadRuntimeAvailability
       );
+    const hasCurrentEnvironment = isAiInputAssistEnabled !== null
+      && runtimeAvailability !== null
+      && hasMatchingEnvironmentDependencies;
 
-      setIsAiInputAssistEnabled(false);
-      setRuntimeAvailability(fallbackRuntimeAvailability);
-
+    if (hasCurrentEnvironment) {
       return {
-        isAiInputAssistEnabled: false,
-        runtimeAvailability: fallbackRuntimeAvailability,
+        isAiInputAssistEnabled,
+        runtimeAvailability,
       };
     }
-  }, [loadAiInputAssistEnabledSetting, loadRuntimeAvailability]);
+
+    return loadEnvironment();
+  }, [
+    isAiInputAssistEnabled,
+    loadAiInputAssistEnabledSetting,
+    loadEnvironment,
+    loadRuntimeAvailability,
+    runtimeAvailability,
+  ]);
 
   useEffect(() => {
     loadEnvironment().catch(() => undefined);
-  }, [loadEnvironment, reviewKey]);
+  }, [loadEnvironment]);
 
   const cleanupPreparedPhoto = useCallback(async (preparedPhotoUri: string, originalPhotoUri: string) => {
     if (preparedPhotoUri === originalPhotoUri) {
@@ -355,7 +407,7 @@ export function useMealInputAssist({
       progress: 0.02,
       estimatedRemainingMs: 60000,
     });
-    const environment = await loadEnvironment();
+    const environment = await getRequestEnvironment();
     const nextPolicy = policy ?? createMealInputAssistPolicy({
       isEnabled: environment.isAiInputAssistEnabled,
       runtimeAvailability: environment.runtimeAvailability,
@@ -452,7 +504,7 @@ export function useMealInputAssist({
     } finally {
       await cleanupPreparedRequest();
     }
-  }, [loadEnvironment, policy, prepareRequestForSuggestion, request, setProgressState]);
+  }, [getRequestEnvironment, policy, prepareRequestForSuggestion, request, setProgressState]);
 
   const applyMealNameSuggestion = useCallback((suggestion: MealInputAssistTextSuggestion) => {
     onCaptureReviewChange('mealName', suggestion.value);

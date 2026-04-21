@@ -27,6 +27,28 @@ const LOCAL_RUNTIME_BATCH_SIZE = 128;
 const LOCAL_RUNTIME_IMAGE_MAX_TOKENS = 224;
 const LOCAL_RUNTIME_MAX_PREDICT = 96;
 const LOCAL_RUNTIME_EXPECTED_TOKEN_COUNT = 48;
+const LOCAL_RUNTIME_MODEL_LOAD_START_PROGRESS = 0.08;
+const LOCAL_RUNTIME_MODEL_LOAD_END_PROGRESS = 0.54;
+const LOCAL_RUNTIME_MULTIMODAL_READY_PROGRESS = 0.6;
+const LOCAL_RUNTIME_CLEAR_CACHE_START_PROGRESS = 0.64;
+const LOCAL_RUNTIME_CLEAR_CACHE_DONE_PROGRESS = 0.7;
+const LOCAL_RUNTIME_COMPLETION_SUBMITTED_PROGRESS = 0.74;
+const LOCAL_RUNTIME_GENERATION_START_PROGRESS = 0.8;
+const LOCAL_RUNTIME_GENERATION_END_PROGRESS = 0.96;
+const LOCAL_RUNTIME_FINALIZING_PROGRESS = 0.98;
+const LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS = 60000;
+const LOCAL_RUNTIME_MODEL_LOAD_END_ESTIMATED_REMAINING_MS = 55000;
+const LOCAL_RUNTIME_MULTIMODAL_READY_ESTIMATED_REMAINING_MS = 50000;
+const LOCAL_RUNTIME_CLEAR_CACHE_START_ESTIMATED_REMAINING_MS = 47000;
+const LOCAL_RUNTIME_CLEAR_CACHE_DONE_ESTIMATED_REMAINING_MS = 45000;
+const LOCAL_RUNTIME_COMPLETION_SUBMITTED_ESTIMATED_REMAINING_MS = 42000;
+const LOCAL_RUNTIME_GENERATION_INITIAL_ESTIMATED_REMAINING_MS = 18000;
+const LOCAL_RUNTIME_GENERATION_MIN_ESTIMATED_REMAINING_MS = 2000;
+const LOCAL_RUNTIME_FINALIZING_ESTIMATED_REMAINING_MS = 1000;
+const LOCAL_RUNTIME_MODEL_LOAD_PROGRESS_RANGE =
+  LOCAL_RUNTIME_MODEL_LOAD_END_PROGRESS - LOCAL_RUNTIME_MODEL_LOAD_START_PROGRESS;
+const LOCAL_RUNTIME_GENERATION_PROGRESS_RANGE =
+  LOCAL_RUNTIME_GENERATION_END_PROGRESS - LOCAL_RUNTIME_GENERATION_START_PROGRESS;
 
 type LocalRuntimePrototypeAvailability =
   | {
@@ -248,6 +270,29 @@ function reportSuggestProgress(
   });
 }
 
+function estimateModelLoadRemainingMs(progressPercentage: number) {
+  const normalizedProgress = Math.max(0, Math.min(100, progressPercentage));
+  const remainingMs =
+    LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS
+    - (
+      (normalizedProgress / 100)
+      * (
+        LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS
+        - LOCAL_RUNTIME_MODEL_LOAD_END_ESTIMATED_REMAINING_MS
+      )
+    );
+
+  return Math.round(remainingMs);
+}
+
+function estimateGenerationRemainingMs(tokenProgress: number) {
+  const normalizedProgress = Math.max(0, Math.min(1, tokenProgress));
+  return Math.max(
+    LOCAL_RUNTIME_GENERATION_MIN_ESTIMATED_REMAINING_MS,
+    Math.round(LOCAL_RUNTIME_GENERATION_INITIAL_ESTIMATED_REMAINING_MS * (1 - normalizedProgress))
+  );
+}
+
 class LlamaMultimodalContextLoader {
   private contextPromise: Promise<LlamaContext> | null = null;
   private isContextReady = false;
@@ -261,8 +306,8 @@ class LlamaMultimodalContextLoader {
     reportSuggestProgress(onProgress, {
       stage: 'loading_model',
       message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
-      progress: 0.08,
-      estimatedRemainingMs: 45000,
+      progress: LOCAL_RUNTIME_MODEL_LOAD_START_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS,
     });
 
     const context = await initLlama({
@@ -275,16 +320,17 @@ class LlamaMultimodalContextLoader {
       reportSuggestProgress(onProgress, {
         stage: 'loading_model',
         message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
-        progress: 0.08 + (progress / 100) * 0.42,
-        estimatedRemainingMs: Math.max(5000, Math.round(((100 - progress) / 100) * 45000)),
+        progress: LOCAL_RUNTIME_MODEL_LOAD_START_PROGRESS
+          + (progress / 100) * LOCAL_RUNTIME_MODEL_LOAD_PROGRESS_RANGE,
+        estimatedRemainingMs: estimateModelLoadRemainingMs(progress),
       });
     });
 
     reportSuggestProgress(onProgress, {
       stage: 'initializing_multimodal',
       message: '画像解析の準備をしています。',
-      progress: 0.54,
-      estimatedRemainingMs: 20000,
+      progress: LOCAL_RUNTIME_MODEL_LOAD_END_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_MODEL_LOAD_END_ESTIMATED_REMAINING_MS,
     });
     const initialized = await context.initMultimodal({
       path: this.projectorPath,
@@ -298,6 +344,13 @@ class LlamaMultimodalContextLoader {
     if (!support.vision) {
       throw new Error('Vision input is not supported by the configured multimodal runtime.');
     }
+
+    reportSuggestProgress(onProgress, {
+      stage: 'initializing_multimodal',
+      message: '画像解析の準備が完了しました。',
+      progress: LOCAL_RUNTIME_MULTIMODAL_READY_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_MULTIMODAL_READY_ESTIMATED_REMAINING_MS,
+    });
 
     this.isContextReady = true;
     return context;
@@ -313,9 +366,9 @@ class LlamaMultimodalContextLoader {
     } else if (this.isContextReady) {
       reportSuggestProgress(onProgress, {
         stage: 'analyzing_photo',
-        message: 'AI model の準備は完了しています。写真を解析します。',
-        progress: 0.64,
-        estimatedRemainingMs: 12000,
+        message: 'AI model の準備は完了しています。写真解析の前処理を始めます。',
+        progress: LOCAL_RUNTIME_MULTIMODAL_READY_PROGRESS,
+        estimatedRemainingMs: LOCAL_RUNTIME_MULTIMODAL_READY_ESTIMATED_REMAINING_MS,
       });
     }
 
@@ -337,11 +390,25 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
     const context = await this.contextLoader.load(options?.onProgress);
     reportSuggestProgress(options?.onProgress, {
       stage: 'analyzing_photo',
-      message: '写真を解析しています。',
-      progress: 0.7,
-      estimatedRemainingMs: 12000,
+      message: '写真解析の前処理を始めています。',
+      progress: LOCAL_RUNTIME_CLEAR_CACHE_START_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_START_ESTIMATED_REMAINING_MS,
     });
     await context.clearCache();
+
+    reportSuggestProgress(options?.onProgress, {
+      stage: 'analyzing_photo',
+      message: '写真解析の前処理が完了しました。',
+      progress: LOCAL_RUNTIME_CLEAR_CACHE_DONE_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_DONE_ESTIMATED_REMAINING_MS,
+    });
+
+    reportSuggestProgress(options?.onProgress, {
+      stage: 'analyzing_photo',
+      message: '写真を解析しています。候補生成を開始しました。',
+      progress: LOCAL_RUNTIME_COMPLETION_SUBMITTED_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_COMPLETION_SUBMITTED_ESTIMATED_REMAINING_MS,
+    });
 
     let emittedTokens = 0;
     const completion = await context.completion({
@@ -354,16 +421,17 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
       reportSuggestProgress(options?.onProgress, {
         stage: 'generating_response',
         message: '候補を整理しています。',
-        progress: 0.8 + tokenProgress * 0.16,
-        estimatedRemainingMs: Math.max(1000, Math.round((1 - tokenProgress) * 10000)),
+        progress: LOCAL_RUNTIME_GENERATION_START_PROGRESS
+          + tokenProgress * LOCAL_RUNTIME_GENERATION_PROGRESS_RANGE,
+        estimatedRemainingMs: estimateGenerationRemainingMs(tokenProgress),
       });
     });
 
     reportSuggestProgress(options?.onProgress, {
       stage: 'finalizing',
       message: '候補を整形しています。',
-      progress: 0.98,
-      estimatedRemainingMs: 1000,
+      progress: LOCAL_RUNTIME_FINALIZING_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_FINALIZING_ESTIMATED_REMAINING_MS,
     });
 
     const responseText = getCompletionResponseText(completion);

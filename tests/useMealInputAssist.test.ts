@@ -156,7 +156,6 @@ describe('useMealInputAssist', () => {
     const { result } = renderHook(() => useMealInputAssist({
       captureReview: createCaptureReview(),
       onCaptureReviewChange: jest.fn(),
-      provider,
       loadAiInputAssistEnabled,
       resolveRuntimeAvailability,
     }));
@@ -187,7 +186,6 @@ describe('useMealInputAssist', () => {
     const { result } = renderHook(() => useMealInputAssist({
       captureReview: createCaptureReview(),
       onCaptureReviewChange: jest.fn(),
-      provider,
       loadAiInputAssistEnabled,
       resolveRuntimeAvailability,
     }));
@@ -232,7 +230,6 @@ describe('useMealInputAssist', () => {
     const { result } = renderHook(() => useMealInputAssist({
       captureReview: createCaptureReview(),
       onCaptureReviewChange: jest.fn(),
-      provider,
       loadAiInputAssistEnabled,
       resolveRuntimeAvailability,
     }));
@@ -274,7 +271,6 @@ describe('useMealInputAssist', () => {
     const { result } = renderHook(() => useMealInputAssist({
       captureReview: createCaptureReview(),
       onCaptureReviewChange: jest.fn(),
-      provider,
       loadAiInputAssistEnabled,
       resolveRuntimeAvailability,
     }));
@@ -378,6 +374,77 @@ describe('useMealInputAssist', () => {
     await waitFor(() => {
       expect(provider.suggest).toHaveBeenCalledTimes(1);
     });
+  });
+
+  test('reuses the mounted runtime environment across sequential requests in the same review', async () => {
+    const provider = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mock-local',
+        mealNames: [{ value: '海鮮丼', confidence: 0.9 }],
+        cuisineTypes: [],
+      }),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = jest.fn(async () => createReadyRuntimeAvailability(provider));
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange: jest.fn(),
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    expect(result.current.status).toBe('success');
+
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    expect(result.current.status).toBe('success');
+    expect(provider.suggest).toHaveBeenCalledTimes(2);
+    expect(resolveRuntimeAvailability).toHaveBeenCalledTimes(1);
+  });
+
+  test('shares the in-flight environment load between preload and the first manual request', async () => {
+    const environmentDeferred = createDeferred<MealInputAssistRuntimeAvailability>();
+    const provider = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mock-local',
+        mealNames: [{ value: '海鮮丼', confidence: 0.9 }],
+        cuisineTypes: [],
+      }),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = jest.fn(() => environmentDeferred.promise);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange: jest.fn(),
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    let pendingRequest!: Promise<void>;
+    act(() => {
+      pendingRequest = result.current.requestSuggestions();
+    });
+
+    await waitFor(() => {
+      expect(resolveRuntimeAvailability).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      environmentDeferred.resolve(createReadyRuntimeAvailability(provider));
+      await pendingRequest;
+    });
+
+    expect(provider.suggest).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe('success');
+    expect(resolveRuntimeAvailability).toHaveBeenCalledTimes(1);
   });
 
   test('exposes analysis progress while the provider is running and clears it after success', async () => {
