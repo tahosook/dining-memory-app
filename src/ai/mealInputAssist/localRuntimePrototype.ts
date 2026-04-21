@@ -156,6 +156,28 @@ function parseMealInputAssistResponse(text: string | null | undefined): MealInpu
   };
 }
 
+function countProviderCandidates(result: MealInputAssistProviderResult) {
+  return {
+    mealNames: result.mealNames?.length ?? 0,
+    cuisineTypes: result.cuisineTypes?.length ?? 0,
+    homemade: result.homemade?.length ?? 0,
+  };
+}
+
+function hasAnyProviderCandidates(result: MealInputAssistProviderResult) {
+  const counts = countProviderCandidates(result);
+  return counts.mealNames > 0 || counts.cuisineTypes > 0 || counts.homemade > 0;
+}
+
+function buildResponsePreview(text: string, maxLength = 240) {
+  const singleLine = text.replace(/\s+/g, ' ').trim();
+  if (singleLine.length <= maxLength) {
+    return singleLine;
+  }
+
+  return `${singleLine.slice(0, maxLength - 1)}...`;
+}
+
 function getCompletionResponseText(completion: {
   text?: string | null;
   content?: string | null;
@@ -328,7 +350,19 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
       estimatedRemainingMs: 1000,
     });
 
-    return parseMealInputAssistResponse(getCompletionResponseText(completion));
+    const responseText = getCompletionResponseText(completion);
+    const parsedResponse = parseMealInputAssistResponse(responseText);
+
+    if (!hasAnyProviderCandidates(parsedResponse)) {
+      console.info('Meal input assist model response contained no provider candidates.', {
+        candidateCounts: countProviderCandidates(parsedResponse),
+        tokensPredicted: completion.tokens_predicted ?? null,
+        tokensEvaluated: completion.tokens_evaluated ?? null,
+        rawResponsePreview: buildResponsePreview(responseText),
+      });
+    }
+
+    return parsedResponse;
   }
 }
 

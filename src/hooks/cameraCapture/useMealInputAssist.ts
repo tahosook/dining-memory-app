@@ -15,6 +15,7 @@ import {
   type MealInputAssistProgress,
   type MealInputAssistProgressUpdate,
   type MealInputAssistProvider,
+  type MealInputAssistProviderResult,
   type MealInputAssistRuntimeAvailability,
   type MealInputAssistStatus,
   type MealInputAssistSuggestions,
@@ -48,6 +49,72 @@ function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
     notes: captureReview.notes,
     locationName: captureReview.locationName,
     isHomemade: captureReview.isHomemade,
+  };
+}
+
+function hasAnyMealInputAssistSuggestions(suggestions: MealInputAssistSuggestions) {
+  return suggestions.mealNames.length > 0
+    || suggestions.cuisineTypes.length > 0
+    || suggestions.homemade.length > 0;
+}
+
+function countProviderResultCandidates(result: MealInputAssistProviderResult) {
+  return {
+    mealNames: result.mealNames?.length ?? 0,
+    cuisineTypes: result.cuisineTypes?.length ?? 0,
+    homemade: result.homemade?.length ?? 0,
+  };
+}
+
+function countNormalizedSuggestions(suggestions: MealInputAssistSuggestions) {
+  return {
+    mealNames: suggestions.mealNames.length,
+    cuisineTypes: suggestions.cuisineTypes.length,
+    homemade: suggestions.homemade.length,
+  };
+}
+
+function summarizeProviderCandidate(candidate: unknown) {
+  if (typeof candidate === 'string') {
+    const value = candidate.trim();
+    return value || null;
+  }
+
+  if (typeof candidate === 'boolean') {
+    return candidate ? 'true' : 'false';
+  }
+
+  if (!candidate || typeof candidate !== 'object' || !('value' in candidate)) {
+    return null;
+  }
+
+  const value = candidate.value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+
+  return null;
+}
+
+function buildProviderResultPreview(result: MealInputAssistProviderResult) {
+  return {
+    mealNames: (result.mealNames ?? [])
+      .map((candidate) => summarizeProviderCandidate(candidate))
+      .filter((candidate): candidate is string => Boolean(candidate))
+      .slice(0, 3),
+    cuisineTypes: (result.cuisineTypes ?? [])
+      .map((candidate) => summarizeProviderCandidate(candidate))
+      .filter((candidate): candidate is string => Boolean(candidate))
+      .slice(0, 3),
+    homemade: (result.homemade ?? [])
+      .map((candidate) => summarizeProviderCandidate(candidate))
+      .filter((candidate): candidate is string => Boolean(candidate))
+      .slice(0, 3),
   };
 }
 
@@ -355,8 +422,24 @@ export function useMealInputAssist({
         return;
       }
 
+      const normalizedSuggestions = normalizeMealInputAssistResult(rawResult);
+      if (!hasAnyMealInputAssistSuggestions(normalizedSuggestions)) {
+        const rawCandidateCounts = countProviderResultCandidates(rawResult);
+        const rawCandidateTotal = rawCandidateCounts.mealNames
+          + rawCandidateCounts.cuisineTypes
+          + rawCandidateCounts.homemade;
+
+        if (rawCandidateTotal > 0) {
+          console.info('Meal input assist normalized all provider candidates away.', {
+            rawCandidateCounts,
+            normalizedCandidateCounts: countNormalizedSuggestions(normalizedSuggestions),
+            rawCandidatePreview: buildProviderResultPreview(rawResult),
+          });
+        }
+      }
+
       setProgressState(null);
-      setSuggestions(normalizeMealInputAssistResult(rawResult));
+      setSuggestions(normalizedSuggestions);
       setStatus('success');
     } catch (error) {
       isRunningRef.current = false;

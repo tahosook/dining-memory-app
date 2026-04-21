@@ -163,6 +163,62 @@ describe('meal input assist runtime availability', () => {
     })).rejects.toThrow('Meal input assist response was empty.');
   });
 
+  test('logs a raw response preview when the model returns no provider candidates', async () => {
+    const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(jest.fn());
+    const fakeContext = {
+      clearCache: jest.fn().mockResolvedValue(undefined),
+      initMultimodal: jest.fn().mockResolvedValue(true),
+      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
+      completion: jest.fn().mockResolvedValue({
+        text: JSON.stringify({
+          mealNames: [],
+          cuisineTypes: [],
+          homemade: [],
+        }),
+        tokens_predicted: 18,
+        tokens_evaluated: 312,
+      }),
+    };
+    jest.spyOn(llamaRn, 'initLlama').mockResolvedValue(fakeContext as never);
+
+    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+    expect(availability.kind).toBe('ready');
+
+    if (availability.kind !== 'ready') {
+      throw new Error('Expected local runtime availability to be ready.');
+    }
+
+    await expect(availability.provider.suggest({
+      photoUri: 'file:///tmp/mock-meal.jpg',
+      mealName: '',
+      cuisineType: '',
+      notes: '',
+      locationName: '',
+      isHomemade: false,
+    })).resolves.toEqual({
+      source: 'local-meal-input-assist',
+      mealNames: [],
+      cuisineTypes: [],
+      homemade: [],
+    });
+
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      'Meal input assist model response contained no provider candidates.',
+      expect.objectContaining({
+        candidateCounts: {
+          mealNames: 0,
+          cuisineTypes: 0,
+          homemade: 0,
+        },
+        tokensPredicted: 18,
+        tokensEvaluated: 312,
+        rawResponsePreview: expect.stringContaining('"mealNames":[]'),
+      })
+    );
+
+    consoleInfoSpy.mockRestore();
+  });
+
   test('returns model_unavailable when the projector file is missing', async () => {
     (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
       exists: !path.endsWith('meal-input-assist.mmproj'),

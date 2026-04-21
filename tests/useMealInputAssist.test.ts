@@ -64,10 +64,12 @@ async function flushEffects() {
 describe('useMealInputAssist', () => {
   let consoleErrorSpy: jest.SpyInstance;
   let consoleWarnSpy: jest.SpyInstance;
+  let consoleInfoSpy: jest.SpyInstance;
 
   beforeEach(() => {
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+    consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(jest.fn());
     (ImageResizer.createResizedImage as jest.Mock).mockResolvedValue({
       path: '/tmp/meal-photo-ai.jpg',
       uri: 'file:///tmp/meal-photo-ai.jpg',
@@ -82,6 +84,7 @@ describe('useMealInputAssist', () => {
   afterEach(() => {
     consoleErrorSpy.mockRestore();
     consoleWarnSpy.mockRestore();
+    consoleInfoSpy.mockRestore();
   });
 
   test('moves from idle to running to success and keeps zero-result success valid', async () => {
@@ -170,6 +173,55 @@ describe('useMealInputAssist', () => {
       expect(result.current.errorMessage).toBe('端末内解析に失敗しました。もう一度お試しください。');
     });
     expect(deleteAsync).toHaveBeenCalledWith('file:///tmp/meal-photo-ai.jpg', { idempotent: true });
+  });
+
+  test('logs when provider candidates are all filtered out during normalization', async () => {
+    const provider = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mock-local',
+        mealNames: [],
+        cuisineTypes: [{ value: 'イタリアン', confidence: 0.88 }],
+        homemade: [],
+      }),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange: jest.fn(),
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    expect(result.current.status).toBe('success');
+    expect(result.current.hasAnySuggestions).toBe(false);
+    expect(consoleInfoSpy).toHaveBeenCalledWith(
+      'Meal input assist normalized all provider candidates away.',
+      expect.objectContaining({
+        rawCandidateCounts: {
+          mealNames: 0,
+          cuisineTypes: 1,
+          homemade: 0,
+        },
+        normalizedCandidateCounts: {
+          mealNames: 0,
+          cuisineTypes: 0,
+          homemade: 0,
+        },
+        rawCandidatePreview: {
+          mealNames: [],
+          cuisineTypes: ['イタリアン'],
+          homemade: [],
+        },
+      })
+    );
   });
 
   test('returns disabled when settings keep AI input assist off', async () => {
