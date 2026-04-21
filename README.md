@@ -85,6 +85,20 @@ npx expo start --dev-client
 - meal input assist projector: `documentDirectory/ai-models/meal-input-assist.mmproj`
 - model の導入状態、readiness、blocker reason は Settings 画面で確認します
 
+### Gemma 4 食事写真ラベリング CLI
+- UI とは別に、`scripts/explore-food-labels.py` でローカル画像ディレクトリを一括ラベリングできます
+- 想定は macOS + Ollama のローカル API + `gemma4:e4b` です
+- 対応拡張子は `jpg`, `jpeg`, `png`, `webp`, `heic` です
+- 出力は `normalized/`, `raw/`, `labels.jsonl`, `errors.jsonl` に保存します
+
+まずは 50 枚程度で試す想定の最小例:
+
+```bash
+python3 scripts/explore-food-labels.py --input-dir <photos> --output-dir <out> --model gemma4:e4b --limit 50 --timeout 180
+```
+
+`normalized/<relative-file>.json` が画像ごとの正規化済み JSON、`raw/<relative-file>.response.json` が生レスポンス保存、`labels.jsonl` が全件集約、`errors.jsonl` が失敗ログです。
+
 ### 環境変数
 ```env
 # 将来的な機能拡張用 API キー
