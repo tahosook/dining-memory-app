@@ -99,6 +99,19 @@ python3 scripts/explore-food-labels.py --input-dir <photos> --output-dir <out> -
 
 `normalized/<relative-file>.json` が画像ごとの正規化済み JSON、`raw/<relative-file>.response.json` が生レスポンス保存、`labels.jsonl` が全件集約、`errors.jsonl` が失敗ログです。
 
+### Gemma 4 ラベリング結果 集計 CLI
+- `scripts/analyze-food-labels.py` で `labels.jsonl` または `normalized/**/*.json` を読み、分布・頻出 key・要レビュー候補を集計できます
+- `summary.json` と `summary.md` に全体像を保存し、`review_candidates.csv` などの候補 CSV も出力します
+- `--min-confidence` を指定すると、低信頼 record を summary 集計から除外して見直せます
+
+最小例:
+
+```bash
+python3 scripts/analyze-food-labels.py --input-path <label-output-dir> --output-dir <analysis-out> --top-n 20 --min-confidence 0.5
+```
+
+`summary.json`, `summary.md`, `review_candidates.csv`, `scene_level_candidates.csv`, `low_confidence_candidates.csv`, `unknown_candidates.csv` が出力されます。
+
 ### 環境変数
 ```env
 # 将来的な機能拡張用 API キー
