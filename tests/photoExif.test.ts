@@ -41,6 +41,22 @@ jest.mock('piexifjs', () => ({
 describe('photoExif', () => {
   const capturedAt = new Date(2026, 3, 22, 21, 35, 7);
 
+  const formatExpectedLocalExifDateTime = (date: Date) => {
+    const pad = (value: number) => value.toString().padStart(2, '0');
+    return `${date.getFullYear()}:${pad(date.getMonth() + 1)}:${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  };
+
+  const formatExpectedExifGpsDateStamp = (date: Date) => {
+    const pad = (value: number) => value.toString().padStart(2, '0');
+    return `${date.getUTCFullYear()}:${pad(date.getUTCMonth() + 1)}:${pad(date.getUTCDate())}`;
+  };
+
+  const buildExpectedExifGpsTimeStamp = (date: Date) => [
+    [date.getUTCHours(), 1],
+    [date.getUTCMinutes(), 1],
+    [date.getUTCSeconds(), 1],
+  ];
+
   beforeEach(() => {
     jest.clearAllMocks();
     (readAsStringAsync as jest.Mock).mockResolvedValue('ORIGINAL_BASE64');
@@ -89,8 +105,8 @@ describe('photoExif', () => {
       },
       Exif: {
         33434: [1, 60],
-        36867: '2026:04:22 21:35:07',
-        36868: '2026:04:22 21:35:07',
+        36867: formatExpectedLocalExifDateTime(capturedAt),
+        36868: formatExpectedLocalExifDateTime(capturedAt),
       },
       GPS: {
         1: 'N',
@@ -98,8 +114,8 @@ describe('photoExif', () => {
         3: 'E',
         4: [[139, 1], [41, 1], [301200, 10000]],
         6: [10, 1],
-        7: [[12, 1], [35, 1], [7, 1]],
-        29: '2026:04:22',
+        7: buildExpectedExifGpsTimeStamp(capturedAt),
+        29: formatExpectedExifGpsDateStamp(capturedAt),
       },
       Interop: {
         1: 'R98',
@@ -161,8 +177,8 @@ describe('photoExif', () => {
         305: 'Dining Memory',
       },
       Exif: {
-        36867: '2026:04:22 21:35:07',
-        36868: '2026:04:22 21:35:07',
+        36867: formatExpectedLocalExifDateTime(capturedAt),
+        36868: formatExpectedLocalExifDateTime(capturedAt),
       },
       GPS: {},
       Interop: {},
