@@ -168,6 +168,53 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertEqual(normalized["meal_style"], "drink")
         self.assertEqual(normalized["serving_style"], "cup_or_glass")
 
+    def test_merge_broad_refinement_clears_carried_review_state(self) -> None:
+        merged = MODULE.merge_broad_refinement_into_raw_result(
+            coarse_raw_result=make_raw_result(
+                primary_dish_key="meat_dish",
+                primary_dish_label_ja="肉料理",
+                review_reasons=["broad_primary", "low_confidence"],
+                needs_human_review=True,
+            ),
+            fine_raw_result={
+                "primary_dish_key": "grilled_meat",
+                "primary_dish_label_ja": "焼き肉",
+                "primary_dish_candidates": [
+                    {"key": "grilled_meat", "label_ja": "焼き肉", "score": 0.74},
+                    {"key": "meat_dish", "label_ja": "肉料理", "score": 0.33},
+                ],
+                "analysis_confidence": 0.74,
+                "review_note_ja": "",
+            },
+            coarse_primary_dish_key="meat_dish",
+        )
+
+        self.assertEqual(merged["review_reasons"], [])
+        self.assertFalse(merged["needs_human_review"])
+
+    def test_normalize_result_removes_broad_primary_for_specific_final_key(self) -> None:
+        normalized = MODULE.normalize_result(
+            make_raw_result(
+                primary_dish_key="grilled_meat",
+                primary_dish_label_ja="焼き肉",
+                primary_dish_candidates=[
+                    {"key": "grilled_meat", "label_ja": "焼き肉", "score": 0.88},
+                    {"key": "meat_dish", "label_ja": "肉料理", "score": 0.31},
+                ],
+                scene_type="single_dish",
+                meal_style="single_item",
+                serving_style="single_plate",
+                is_drink_only=False,
+                review_reasons=["broad_primary"],
+                analysis_confidence=0.88,
+            ),
+            image_id="img-final-specific",
+            source_path="photos/final-specific.jpg",
+        )
+
+        self.assertNotIn("broad_primary", normalized["review_reasons"])
+        self.assertFalse(normalized["needs_human_review"])
+
     def test_build_broad_refinement_prompt_limits_compare_set_per_broad_key(self) -> None:
         cases = {
             "stew": ["nimono", "curry_rice", "meat_and_potato_stew", "stew"],
@@ -191,6 +238,23 @@ class ExploreFoodLabelsTests(unittest.TestCase):
 
                 for compare_key in compare_keys:
                     self.assertIn(compare_key, prompt)
+
+    def test_build_broad_refinement_prompt_strengthens_meat_dish_comparison(self) -> None:
+        prompt = MODULE.build_broad_refinement_prompt(
+            image_id="img-meat-refine",
+            source_path="photos/meat.jpg",
+            coarse_normalized={
+                "primary_dish_key": "meat_dish",
+                "primary_dish_label_ja": "肉料理",
+                "primary_dish_candidates": [{"key": "meat_dish", "label_ja": "肉料理", "score": 0.58}],
+                "scene_type": "single_dish",
+                "review_reasons": ["broad_primary"],
+            },
+        )
+
+        self.assertIn("stir-fried feel", prompt)
+        self.assertIn("yakiniku-like pieces", prompt)
+        self.assertIn("choose that more specific key instead of meat_dish", prompt)
 
     def test_should_run_broad_refinement_depends_only_on_primary_key(self) -> None:
         self.assertTrue(
@@ -246,10 +310,47 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertEqual(result["broad_refinement_compare_keys"], ["nimono", "curry_rice", "meat_and_potato_stew", "stew"])
         self.assertEqual(normalized_payload["primary_dish_key"], "nimono")
         self.assertNotIn("broad_primary", normalized_payload["review_reasons"])
+        self.assertFalse(normalized_payload["needs_human_review"])
         self.assertIn("broad_refinement", raw_payload)
         self.assertEqual(raw_payload["broad_refinement"]["compare_keys"], ["nimono", "curry_rice", "meat_and_potato_stew", "stew"])
         self.assertEqual(calls[0]["format_schema"], MODULE.FORMAT_SCHEMA)
         self.assertEqual(calls[1]["format_schema"], MODULE.BROAD_REFINEMENT_FORMAT_SCHEMA)
+
+    def test_process_single_image_rescues_meat_dish_to_specific_candidate(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="meat_dish",
+            primary_dish_label_ja="肉料理",
+            primary_dish_candidates=[
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.6},
+                {"key": "grilled_meat", "label_ja": "焼き肉系", "score": 0.5},
+            ],
+            scene_type="single_dish",
+            meal_style="single_item",
+            serving_style="single_plate",
+            is_drink_only=False,
+            analysis_confidence=0.6,
+        )
+        fine_payload = {
+            "primary_dish_key": "meat_dish",
+            "primary_dish_label_ja": "肉料理",
+            "primary_dish_candidates": [
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.55},
+                {"key": "grilled_meat", "label_ja": "焼き肉系", "score": 0.46},
+            ],
+            "analysis_confidence": 0.55,
+            "review_note_ja": "焼きか炒めか判別困難",
+        }
+
+        result, normalized_payload, _raw_payload, _calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+        )
+
+        self.assertEqual(result["primary_dish_key"], "grilled_meat")
+        self.assertEqual(result["broad_refinement_status"], "resolved")
+        self.assertEqual(result["review_note_ja"], "")
+        self.assertEqual(result["broad_refinement_note_ja"], "")
+        self.assertNotIn("broad_primary", normalized_payload["review_reasons"])
+        self.assertFalse(normalized_payload["needs_human_review"])
 
     def test_process_single_image_keeps_broad_primary_when_fine_stage_cannot_resolve(self) -> None:
         coarse_payload = make_raw_result(
@@ -283,6 +384,40 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertEqual(result["review_note_ja"], "焼きか炒めか判別困難")
         self.assertEqual(normalized_payload["broad_refinement_note_ja"], "焼きか炒めか判別困難")
         self.assertEqual(raw_payload["broad_refinement"]["response_json"]["message"]["content"], json.dumps(fine_payload, ensure_ascii=False))
+
+    def test_process_single_image_does_not_rescue_weak_meat_dish_candidate(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="meat_dish",
+            primary_dish_label_ja="肉料理",
+            primary_dish_candidates=[
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.62},
+                {"key": "stir_fry", "label_ja": "炒め物", "score": 0.41},
+            ],
+            scene_type="single_dish",
+            meal_style="single_item",
+            serving_style="single_plate",
+            is_drink_only=False,
+            analysis_confidence=0.62,
+        )
+        fine_payload = {
+            "primary_dish_key": "meat_dish",
+            "primary_dish_label_ja": "肉料理",
+            "primary_dish_candidates": [
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.58},
+                {"key": "stir_fry", "label_ja": "炒め物", "score": 0.44},
+            ],
+            "analysis_confidence": 0.58,
+            "review_note_ja": "炒め物か断定しにくい",
+        }
+
+        result, normalized_payload, _raw_payload, _calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+        )
+
+        self.assertEqual(result["primary_dish_key"], "meat_dish")
+        self.assertEqual(result["broad_refinement_status"], "kept_broad")
+        self.assertIn("broad_primary", normalized_payload["review_reasons"])
+        self.assertTrue(normalized_payload["needs_human_review"])
 
     def test_process_single_image_falls_back_to_coarse_when_fine_stage_fails(self) -> None:
         coarse_payload = make_raw_result(

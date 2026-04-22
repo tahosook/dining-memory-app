@@ -92,6 +92,8 @@ npx expo start --dev-client
 - v3 では scene 説明より `primary_dish_key` の発掘を優先し、`supporting_items` と `review_reasons` に補助情報を分離します
 - `meat_dish` は broad な last-resort fallback として扱い、可能なら `fried_cutlet`, `fried_chicken`, `grilled_meat`, `stir_fry`, `stew` などへ寄せます
 - `stew`, `meat_dish`, `noodles` は coarse 判定で broad fallback になった時だけ、compare set を絞った fine refinement を追加実行します
+- broad refinement 後の `review_reasons` / `needs_human_review` は最終 `primary_dish_key` 基準で再計算され、resolved broad は不要に review へ残りにくくなります
+- `meat_dish` は compare rubric 強化に加えて、fine candidates が十分具体寄りな時だけ conservative rescue で `stir_fry` / `grilled_meat` へ寄せます
 - 出力は `normalized/`, `raw/`, `labels.jsonl`, `errors.jsonl` に保存します
 - `--workers` で安全寄りの並列実行ができます。既定は `1`、まずは `2` から試し、余裕があれば `3〜4` を検討してください
 

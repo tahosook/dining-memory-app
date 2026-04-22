@@ -33,6 +33,9 @@ SPECIFIC_DISH_CONFIDENCE_FALLBACK = 0.72
 BROAD_DISH_CONFIDENCE_FALLBACK = 0.58
 WEAK_DISH_CONFIDENCE_FALLBACK = 0.4
 FULL_IMAGE_MODE = "full_image"
+MEAT_DISH_RESCUE_KEYS = {"stir_fry", "grilled_meat"}
+MEAT_DISH_RESCUE_MIN_SCORE = 0.45
+MEAT_DISH_RESCUE_MAX_SCORE_GAP = 0.10
 
 SCENE_TYPE_OPTIONS = [
     "single_dish",
@@ -196,9 +199,9 @@ BROAD_REFINEMENT_RULES: Dict[str, Dict[str, Any]] = {
     "meat_dish": {
         "compare_keys": ["stir_fry", "grilled_meat", "meat_dish"],
         "comparison_notes": [
-            "stir_fry: chopped meat mixed with vegetables or sauce, pan-fried look, ingredients often spread across the plate.",
-            "grilled_meat: grilled slices or pieces of meat are the main subject, with clearer browned or charred surface and less mixed vegetables.",
-            "meat_dish: use only when you can tell it is mainly a meat dish, but it is not safe to choose stir_fry or grilled_meat.",
+            "stir_fry: meat is mixed with vegetables or sauce, looks tossed or pan-fried together, and ingredients often spread across the plate with an overall stir-fried feel.",
+            "grilled_meat: grilled or sauteed meat itself is the main subject, with clearer browned or charred surfaces, sliced meat or yakiniku-like pieces, and fewer mixed vegetables.",
+            "meat_dish: use only when it is clearly a meat-centered dish, but it is still not safe to decide between stir_fry and grilled_meat.",
         ],
     },
     "noodles": {
@@ -730,6 +733,10 @@ def process_single_image(
                 fine_raw_result=fine_raw_result,
                 coarse_primary_dish_key=broad_key,
             )
+            merged_raw_result = apply_conservative_meat_dish_candidate_rescue(
+                merged_raw_result=merged_raw_result,
+                coarse_primary_dish_key=broad_key,
+            )
             final_normalized = normalize_result(
                 merged_raw_result,
                 image_id=image_id,
@@ -744,7 +751,7 @@ def process_single_image(
                 ),
                 compare_keys=compare_keys,
                 image_mode=FULL_IMAGE_MODE,
-                note_ja=clean_short_text(fine_raw_result.get("review_note_ja")),
+                note_ja=clean_short_text(merged_raw_result.get("broad_refinement_note_ja")),
             )
         except Exception as error:
             broad_refinement_record["error"] = str(error)
@@ -1085,6 +1092,15 @@ def build_broad_refinement_prompt(
             f"source_path is '{source_path}' only for reference.",
         ]
     )
+    if broad_key == "meat_dish":
+        instructions.extend(
+            [
+                "",
+                "meat_dish-specific rule:",
+                "- if stir_fry or grilled_meat is reasonably supported, choose that more specific key instead of meat_dish",
+                "- keep meat_dish only when the dish is meat-centered but the image still does not safely support either stir_fry or grilled_meat",
+            ]
+        )
     return "\n".join(instructions)
 
 
@@ -1404,8 +1420,10 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         ):
         review_reasons = append_reason(review_reasons, "scene_dominant")
 
-    if primary_dish_key in BROAD_PRIMARY_KEYS:
-        review_reasons = append_reason(review_reasons, "broad_primary")
+    review_reasons = reconcile_broad_primary_review_reason(
+        review_reasons=review_reasons,
+        primary_dish_key=primary_dish_key,
+    )
 
     review_reasons = review_reasons[:MAX_REVIEW_REASONS]
     needs_human_review = any(reason in REVIEW_TRIGGER_REASONS for reason in review_reasons)
@@ -1512,6 +1530,8 @@ def merge_broad_refinement_into_raw_result(
     fine_note_ja = clean_short_text(fine_raw_result.get("review_note_ja"))
     merged_raw_result["review_note_ja"] = fine_note_ja
     merged_raw_result["broad_refinement_note_ja"] = fine_note_ja
+    merged_raw_result["review_reasons"] = []
+    merged_raw_result["needs_human_review"] = False
     return merged_raw_result
 
 
@@ -1538,6 +1558,50 @@ def apply_broad_refinement_metadata(
         elif not normalized["review_note_ja"]:
             normalized["review_note_ja"] = DEFAULT_REVIEW_NOTE_JA["broad_primary"]
     return normalized
+
+
+def apply_conservative_meat_dish_candidate_rescue(
+    *,
+    merged_raw_result: Dict[str, Any],
+    coarse_primary_dish_key: str,
+) -> Dict[str, Any]:
+    if coarse_primary_dish_key != "meat_dish":
+        return dict(merged_raw_result)
+
+    final_primary_dish_key = normalize_machine_key(merged_raw_result.get("primary_dish_key"), fallback="")
+    if final_primary_dish_key != "meat_dish":
+        return dict(merged_raw_result)
+
+    candidates = normalize_primary_dish_candidates(merged_raw_result.get("primary_dish_candidates"))
+    rescue_candidate = find_more_specific_broad_candidate(
+        primary_dish_key="meat_dish",
+        candidates=candidates,
+    )
+    if rescue_candidate is None or rescue_candidate["key"] not in MEAT_DISH_RESCUE_KEYS:
+        return dict(merged_raw_result)
+
+    broad_candidate = next((candidate for candidate in candidates if candidate["key"] == "meat_dish"), None)
+    if broad_candidate is None or not broad_candidate.get("_score_present") or not rescue_candidate.get("_score_present"):
+        return dict(merged_raw_result)
+
+    broad_score = clamp_score(broad_candidate.get("score"))
+    rescue_score = clamp_score(rescue_candidate.get("score"))
+    if broad_score is None or rescue_score is None:
+        return dict(merged_raw_result)
+    if rescue_score < MEAT_DISH_RESCUE_MIN_SCORE:
+        return dict(merged_raw_result)
+    if broad_score - rescue_score > MEAT_DISH_RESCUE_MAX_SCORE_GAP:
+        return dict(merged_raw_result)
+
+    rescued_raw_result = dict(merged_raw_result)
+    rescued_raw_result["primary_dish_key"] = rescue_candidate["key"]
+    rescued_raw_result["primary_dish_label_ja"] = rescue_candidate["label_ja"] or resolve_default_label(rescue_candidate["key"])
+    rescued_raw_result["primary_dish_candidates"] = serialize_primary_dish_candidates(
+        prioritize_primary_candidate(candidates, rescue_candidate["key"])[:MAX_PRIMARY_DISH_CANDIDATES]
+    )
+    rescued_raw_result["review_note_ja"] = ""
+    rescued_raw_result["broad_refinement_note_ja"] = ""
+    return rescued_raw_result
 
 
 def normalize_primary_dish_candidates(value: Any) -> List[Dict[str, Any]]:
@@ -1983,6 +2047,20 @@ def has_candidate_split(candidates: Sequence[Dict[str, Any]]) -> bool:
         return False
 
     return first < 0.75 and second >= 0.35 and abs(first - second) <= 0.08
+
+
+def reconcile_broad_primary_review_reason(
+    *,
+    review_reasons: Sequence[str],
+    primary_dish_key: str,
+) -> List[str]:
+    normalized = [reason for reason in review_reasons if reason != "broad_primary"]
+    if primary_dish_key not in BROAD_PRIMARY_KEYS:
+        return normalized[:MAX_REVIEW_REASONS]
+    if len(normalized) >= MAX_REVIEW_REASONS:
+        normalized = normalized[:MAX_REVIEW_REASONS - 1]
+    normalized.append("broad_primary")
+    return normalized
 
 
 def find_more_specific_broad_candidate(

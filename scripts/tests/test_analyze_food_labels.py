@@ -178,6 +178,11 @@ class AnalyzeFoodLabelsCliTests(unittest.TestCase):
             self.assertEqual(summary_json["totals"]["broad_refinement_failed"]["count"], 0)
             self.assertEqual(summary_json["candidate_counts"]["broad_primary_candidates"], 1)
             self.assertEqual(summary_json["candidate_counts"]["scene_dominant_candidates"], 1)
+            review_reason_counts = {
+                item["value"]: item["count"]
+                for item in summary_json["top_counts"]["review_reasons"]
+            }
+            self.assertEqual(review_reason_counts.get("broad_primary"), summary_json["totals"]["broad_primary"]["count"])
 
             self.assertEqual(len(broad_rows), 1)
             self.assertEqual(broad_rows[0]["image_id"], "img-broad")
