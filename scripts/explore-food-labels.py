@@ -21,7 +21,7 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 
 SCHEMA_VERSION = "food_label_exploration_v3"
-PROMPT_VERSION = "food_label_exploration_prompt_v5"
+PROMPT_VERSION = "food_label_exploration_prompt_v6"
 OLLAMA_API_BASE_URL = "http://localhost:11434/api"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.5
@@ -139,6 +139,26 @@ IMAGE_QUALITY_REASON_HINTS = {
     "glare",
     "motion_blur",
 }
+CONTAINER_HINT_BOTTLE_TOKENS = {
+    "glass_bottle",
+    "plastic_bottle",
+    "pet_bottle",
+    "bottle_drink",
+    "beer_bottle",
+    "sake_bottle",
+}
+CONTAINER_HINT_CAN_TOKENS = {
+    "metal_can",
+    "aluminum_can",
+    "beverage_can",
+    "can_drink",
+    "beer_can",
+}
+CONTAINER_HINT_BOTTLE_NOTE_KEYWORDS = (
+    "瓶",
+    "ボトル",
+)
+CONTAINER_HINT_CAN_NOTE_KEYWORDS = ("缶",)
 DEFAULT_LABEL_JA = {
     "unknown": "不明",
     "set_meal": "定食",
@@ -765,6 +785,9 @@ def build_user_prompt(*, image_id: str, source_path: str) -> str:
         "- set_meal should be rare and used only as fallback",
         "- unknown should be used only when even a broad dish label cannot be chosen",
         "- if primary_dish_key is set_meal or unknown, explain briefly in review_note_ja",
+        "- use visual_attributes for machine-readable appearance or container hints such as metal_can, glass_bottle, plastic_bottle, pet_bottle, label_visible, tall_container, cup, glass, plate, bowl, package",
+        "- use free_tags for review-helpful exploration tags in snake_case English such as can_drink, bottle_drink, beer_can, beer_bottle, sake_bottle",
+        "- if the food is unclear but the image mainly shows a can or bottle, mention that briefly in review_note_ja such as 缶飲料中心, 瓶飲料らしい, or 容器主体で料理不明",
         "- do not mark needs_human_review=true by default",
         "- if you provide confidence scores, use 0..1 and keep them moderate or high when a broad but usable dish label is still supported by the image",
         "",
@@ -1135,6 +1158,17 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
     elif not review_note_ja and review_reasons:
         review_note_ja = DEFAULT_REVIEW_NOTE_JA.get(review_reasons[0], "")
 
+    container_hint = infer_container_hint(
+        visual_attributes=visual_attributes,
+        free_tags=free_tags,
+        review_note_ja=review_note_ja,
+    )
+    contains_can_or_bottle = container_hint in {"can", "bottle"}
+    review_bucket = infer_review_bucket(
+        needs_human_review=needs_human_review,
+        container_hint=container_hint,
+    )
+
     primary_candidates = prioritize_primary_candidate(primary_candidates, primary_dish_key)
 
     normalized = {
@@ -1163,6 +1197,9 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         "free_tags": free_tags,
         "review_note_ja": review_note_ja,
         "needs_human_review": needs_human_review,
+        "container_hint": container_hint,
+        "contains_can_or_bottle": contains_can_or_bottle,
+        "review_bucket": review_bucket,
     }
     return normalized
 
@@ -1483,6 +1520,34 @@ def normalize_review_reasons(value: Any) -> List[str]:
         if len(normalized) >= MAX_REVIEW_REASONS:
             break
     return normalized
+
+
+def infer_container_hint(
+    *,
+    visual_attributes: Sequence[str],
+    free_tags: Sequence[str],
+    review_note_ja: str,
+) -> str:
+    hint_tokens = set(visual_attributes) | set(free_tags)
+    if hint_tokens & CONTAINER_HINT_BOTTLE_TOKENS:
+        return "bottle"
+    if any(keyword in review_note_ja for keyword in CONTAINER_HINT_BOTTLE_NOTE_KEYWORDS):
+        return "bottle"
+    if hint_tokens & CONTAINER_HINT_CAN_TOKENS:
+        return "can"
+    if any(keyword in review_note_ja for keyword in CONTAINER_HINT_CAN_NOTE_KEYWORDS):
+        return "can"
+    return "none"
+
+
+def infer_review_bucket(*, needs_human_review: bool, container_hint: str) -> str:
+    if not needs_human_review:
+        return "normal"
+    if container_hint == "bottle":
+        return "unknown_likely_bottle"
+    if container_hint == "can":
+        return "unknown_likely_can"
+    return "unknown_other"
 
 
 def has_single_item_primary_context(*, scene_type: str, meal_style: str, is_drink_only: bool) -> bool:

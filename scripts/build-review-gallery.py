@@ -112,6 +112,14 @@ REVIEW_REASON_SORT_ORDER = {
     "menu_or_text": 6,
     "image_quality_issue": 7,
 }
+DISPLAY_PRIMARY_BY_CONTAINER_HINT = {
+    "bottle": ("bottle_hint", "瓶主体ヒント"),
+    "can": ("can_hint", "缶主体ヒント"),
+}
+DISPLAY_PRIMARY_BY_REVIEW_BUCKET = {
+    "unknown_likely_bottle": DISPLAY_PRIMARY_BY_CONTAINER_HINT["bottle"],
+    "unknown_likely_can": DISPLAY_PRIMARY_BY_CONTAINER_HINT["can"],
+}
 
 
 @dataclass
@@ -608,11 +616,21 @@ def build_review_records(
         image_id = clean_text(payload.get("image_id")) or derive_image_id_from_source(loaded_record.source_path)
         source_path = clean_text(loaded_record.source_path)
         record_key = build_record_key(image_id, source_path)
+        primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
+        primary_dish_label_ja = clean_text(payload.get("primary_dish_label_ja")) or "(missing)"
+        container_hint = normalize_scalar(payload.get("container_hint"))
+        review_bucket = normalize_scalar(payload.get("review_bucket"))
+        display_primary_dish_key, display_primary_dish_label_ja = derive_display_primary(
+            primary_dish_key=primary_dish_key,
+            primary_dish_label_ja=primary_dish_label_ja,
+            container_hint=container_hint,
+            review_bucket=review_bucket,
+        )
         primary_dish_candidates = extract_primary_dish_candidate_objects(payload.get("primary_dish_candidates"))
         supporting_items = extract_string_list(payload.get("supporting_items"))
         review_reasons = extract_string_list(payload.get("review_reasons"))
         broad_primary_concrete_candidate = detect_broad_primary_concrete_candidate_key_from_candidates(
-            primary_dish_key=normalize_scalar(payload.get("primary_dish_key")),
+            primary_dish_key=primary_dish_key,
             candidates=primary_dish_candidates,
         )
         image_resolution = resolve_image_reference(
@@ -652,8 +670,14 @@ def build_review_records(
                 "origin": loaded_record.origin,
                 "analysis_confidence": loaded_record.analysis_confidence,
                 "analysis_confidence_display": format_confidence(loaded_record.analysis_confidence),
-                "primary_dish_key": normalize_scalar(payload.get("primary_dish_key")),
-                "primary_dish_label_ja": clean_text(payload.get("primary_dish_label_ja")) or "(missing)",
+                "primary_dish_key": primary_dish_key,
+                "primary_dish_label_ja": primary_dish_label_ja,
+                "display_primary_dish_key": display_primary_dish_key,
+                "display_primary_dish_label_ja": display_primary_dish_label_ja,
+                "display_primary_overridden": (
+                    display_primary_dish_key != primary_dish_key
+                    or display_primary_dish_label_ja != primary_dish_label_ja
+                ),
                 "primary_dish_candidates": primary_dish_candidates,
                 "primary_dish_candidates_display": format_primary_dish_candidates(primary_dish_candidates),
                 "supporting_items": supporting_items,
@@ -662,6 +686,9 @@ def build_review_records(
                 "cuisine_type": normalize_scalar(payload.get("cuisine_type")),
                 "meal_style": normalize_scalar(payload.get("meal_style")),
                 "serving_style": normalize_scalar(payload.get("serving_style")),
+                "container_hint": container_hint,
+                "review_bucket": review_bucket,
+                "contains_can_or_bottle": coerce_bool(payload.get("contains_can_or_bottle")),
                 "needs_human_review": coerce_bool(payload.get("needs_human_review")),
                 "review_reasons": review_reasons,
                 "review_reasons_display": format_list_for_display(review_reasons),
@@ -669,8 +696,8 @@ def build_review_records(
                 "candidate_groups": candidate_groups,
                 "candidate_group_reasons": candidate_group_reasons,
                 "candidate_groups_display": [GROUP_METADATA[group]["label"] for group in candidate_groups],
-                "broad_primary_key": normalize_scalar(payload.get("primary_dish_key"))
-                if normalize_scalar(payload.get("primary_dish_key")) in BROAD_PRIMARY_KEYS
+                "broad_primary_key": primary_dish_key
+                if primary_dish_key in BROAD_PRIMARY_KEYS
                 else "",
                 "broad_primary_concrete_candidate_key": broad_primary_concrete_candidate or "",
                 "image_uri": image_resolution["image_uri"],
@@ -680,7 +707,7 @@ def build_review_records(
                 "review_flags": review_reasons,
                 "group_priority": compute_group_priority(candidate_groups, review_reasons),
                 "all_sort_key": (
-                    normalize_scalar(payload.get("primary_dish_key")),
+                    primary_dish_key,
                     image_id.lower(),
                     source_path.lower(),
                 ),
@@ -747,6 +774,27 @@ def detect_broad_primary_concrete_candidate_key_from_candidates(
             continue
         return key
     return None
+
+
+def derive_display_primary(
+    *,
+    primary_dish_key: str,
+    primary_dish_label_ja: str,
+    container_hint: str,
+    review_bucket: str,
+) -> Tuple[str, str]:
+    if primary_dish_key != UNKNOWN_VALUE:
+        return primary_dish_key, primary_dish_label_ja
+
+    container_override = DISPLAY_PRIMARY_BY_CONTAINER_HINT.get(container_hint)
+    if container_override is not None:
+        return container_override
+
+    review_bucket_override = DISPLAY_PRIMARY_BY_REVIEW_BUCKET.get(review_bucket)
+    if review_bucket_override is not None:
+        return review_bucket_override
+
+    return primary_dish_key, primary_dish_label_ja
 
 
 def resolve_image_reference(
@@ -2331,7 +2379,7 @@ def render_all_records_section(records: Sequence[Dict[str, Any]]) -> str:
 def render_record_card(record: Dict[str, Any], *, compact: bool) -> str:
     card_classes = "card compact-card" if compact else "card focus-card"
     title_tag = "h4" if compact else "h3"
-    predicted_label = f'{record["primary_dish_key"]} / {record["primary_dish_label_ja"]}'
+    predicted_label = f'{record["display_primary_dish_key"]} / {record["display_primary_dish_label_ja"]}'
     group_badges = "".join(render_group_badge(group) for group in record["candidate_groups"])
     reason_badges = "".join(
         render_reason_badge(reason)
@@ -2443,18 +2491,40 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
     items = [
         ("image_id", escape_code(record["image_id"])),
         ("source_path", escape_code(record["source_path"])),
-        ("primary_dish_key", escape_code(record["primary_dish_key"])),
-        ("primary_dish_label_ja", escape_html(record["primary_dish_label_ja"])),
-        ("primary_dish_candidates", escape_code(record["primary_dish_candidates_display"])),
-        ("supporting_items", escape_code(record["supporting_items_display"])),
-        ("scene_type", escape_code(record["scene_type"])),
-        ("cuisine_type", escape_code(record["cuisine_type"])),
-        ("meal_style", escape_code(record["meal_style"])),
-        ("serving_style", escape_code(record["serving_style"])),
-        ("analysis_confidence", escape_code(record["analysis_confidence_display"])),
-        ("review_reasons", escape_code(record["review_reasons_display"])),
-        ("review_note_ja", escape_html(record["review_note_ja"] or "(none)")),
     ]
+    if record["display_primary_overridden"]:
+        items.extend(
+            [
+                ("display_primary_dish_key", escape_code(record["display_primary_dish_key"])),
+                ("display_primary_dish_label_ja", escape_html(record["display_primary_dish_label_ja"])),
+                ("raw_primary_dish_key", escape_code(record["primary_dish_key"])),
+                ("raw_primary_dish_label_ja", escape_html(record["primary_dish_label_ja"])),
+            ]
+        )
+    else:
+        items.extend(
+            [
+                ("primary_dish_key", escape_code(record["primary_dish_key"])),
+                ("primary_dish_label_ja", escape_html(record["primary_dish_label_ja"])),
+            ]
+        )
+    items.extend(
+        [
+            ("primary_dish_candidates", escape_code(record["primary_dish_candidates_display"])),
+            ("supporting_items", escape_code(record["supporting_items_display"])),
+            ("scene_type", escape_code(record["scene_type"])),
+            ("cuisine_type", escape_code(record["cuisine_type"])),
+            ("meal_style", escape_code(record["meal_style"])),
+            ("serving_style", escape_code(record["serving_style"])),
+            ("analysis_confidence", escape_code(record["analysis_confidence_display"])),
+            ("review_reasons", escape_code(record["review_reasons_display"])),
+            ("review_note_ja", escape_html(record["review_note_ja"] or "(none)")),
+        ]
+    )
+    if record["display_primary_overridden"] or record["container_hint"] not in {"missing", "none"}:
+        items.append(("container_hint", escape_code(record["container_hint"])))
+    if record["display_primary_overridden"] or record["review_bucket"] not in {"missing", "normal"}:
+        items.append(("review_bucket", escape_code(record["review_bucket"])))
     if record["broad_primary_key"]:
         items.append(("broad_primary_key", escape_code(record["broad_primary_key"])))
     if record["broad_primary_concrete_candidate_key"]:

@@ -25,6 +25,9 @@ def make_record(
     primary_dish_candidates: list[dict[str, object]] | None = None,
     supporting_items: list[str] | None = None,
     review_note_ja: str = "",
+    container_hint: str = "none",
+    contains_can_or_bottle: bool = False,
+    review_bucket: str = "normal",
 ) -> dict[str, object]:
     return {
         "schema_version": "food_label_exploration_v3",
@@ -52,6 +55,9 @@ def make_record(
         "free_tags": [],
         "review_note_ja": review_note_ja,
         "needs_human_review": needs_human_review,
+        "container_hint": container_hint,
+        "contains_can_or_bottle": contains_can_or_bottle,
+        "review_bucket": review_bucket,
     }
 
 
@@ -221,6 +227,48 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("broad_primary_concrete_candidate_key", html_text)
             self.assertIn("nimono", html_text)
             self.assertIn("Broken JSON: 1", result.stdout)
+
+    def test_unknown_with_container_hint_uses_display_primary_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "run_output"
+            output_html = input_dir / "review_gallery.html"
+            labels_path = input_dir / "labels.jsonl"
+            image_path = input_dir / "photos" / "bottle.jpg"
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            image_path.write_bytes(b"\xff\xd8\xff\xd9")
+
+            records = [
+                make_record(
+                    image_id="img-bottle-hint",
+                    source_path="photos/bottle.jpg",
+                    primary_dish_key="unknown",
+                    primary_dish_label_ja="不明",
+                    analysis_confidence=0.23,
+                    review_reasons=["unknown_primary", "low_confidence"],
+                    needs_human_review=True,
+                    review_note_ja="瓶主体で料理不明",
+                    container_hint="bottle",
+                    contains_can_or_bottle=True,
+                    review_bucket="unknown_likely_bottle",
+                )
+            ]
+            write_jsonl(labels_path, records)
+
+            result = run_cli(
+                "--input-path",
+                str(labels_path),
+                "--output-html",
+                str(output_html),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            html_text = output_html.read_text(encoding="utf-8")
+            self.assertIn("bottle_hint / 瓶主体ヒント", html_text)
+            self.assertIn("display_primary_dish_key", html_text)
+            self.assertIn("raw_primary_dish_key", html_text)
+            self.assertIn("container_hint", html_text)
+            self.assertIn("review_bucket", html_text)
 
     def test_candidate_group_filter_unknown_only_restricts_sections_and_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

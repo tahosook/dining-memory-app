@@ -106,7 +106,7 @@ python3 scripts/explore-food-labels.py --input-dir <photos> --output-dir <out> -
 python3 scripts/explore-food-labels.py --input-dir <photos> --output-dir <out> --model gemma4:e4b --workers 2
 ```
 
-`normalized/<relative-file>.json` が画像ごとの正規化済み JSON、`raw/<relative-file>.response.json` が生レスポンス保存、`labels.jsonl` が全件集約、`errors.jsonl` が失敗ログです。`labels.jsonl` は worker から直接追記せず、run 完了後に再構築します。主な v3 フィールドは `primary_dish_key`, `primary_dish_candidates`, `supporting_items`, `scene_type`, `review_reasons`, `needs_human_review` です。
+`normalized/<relative-file>.json` が画像ごとの正規化済み JSON、`raw/<relative-file>.response.json` が生レスポンス保存、`labels.jsonl` が全件集約、`errors.jsonl` が失敗ログです。`labels.jsonl` は worker から直接追記せず、run 完了後に再構築します。主な v3 フィールドは `primary_dish_key`, `primary_dish_candidates`, `supporting_items`, `scene_type`, `review_reasons`, `needs_human_review` で、review 補助メタデータとして `container_hint`, `contains_can_or_bottle`, `review_bucket` も含まれます。
 
 ### Gemma 4 ラベリング結果 集計 CLI
 - `scripts/analyze-food-labels.py` で `labels.jsonl` または `normalized/**/*.json` を読み、`primary_dish_key` を中心に分布・bias・要レビュー候補を集計できます
