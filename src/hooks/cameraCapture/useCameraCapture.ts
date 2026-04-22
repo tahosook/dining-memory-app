@@ -10,7 +10,7 @@ import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
 import { CameraCaptureMock } from './useCameraCaptureMock';
 import { MealService } from '../../database/services/MealService';
 import type { CuisineTypeOption } from '../../constants/MealOptions';
-import { persistPhotoToStablePath } from './photoStorage';
+import { persistPhotoToStablePath, type PersistPhotoOptions } from './photoStorage';
 import { openAppSettings } from '../../utils/openAppSettings';
 import type { RootTabParamList } from '../../navigation/types';
 import type { AppliedMealInputAssistMetadata } from '../../ai/mealInputAssist';
@@ -19,12 +19,15 @@ export interface CaptureReviewState {
   photoUri: string;
   width: number;
   height: number;
+  capturedAtMs: number;
   mealName: string;
   cuisineType: CuisineTypeOption | '';
   notes: string;
   locationName: string;
   isHomemade: boolean;
 }
+
+export type CaptureReviewEditableField = keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height' | 'capturedAtMs'>;
 
 interface SaveCaptureOptions {
   aiMetadata?: AppliedMealInputAssistMetadata | null;
@@ -79,7 +82,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     }
   }, []);
 
-  const persistPhotoLocally = useCallback(async (photoUri: string) => {
+  const persistPhotoLocally = useCallback(async (photoUri: string, options: PersistPhotoOptions) => {
     const resizedPhoto = await ImageResizer.createResizedImage(
       photoUri,
       CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH,
@@ -96,7 +99,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     );
 
     try {
-      return await persistPhotoToStablePath(resizedPhoto.uri);
+      return await persistPhotoToStablePath(resizedPhoto.uri, options);
     } finally {
       if (resizedPhoto.uri !== photoUri) {
         await cleanupTempFile(resizedPhoto.uri);
@@ -190,6 +193,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       photoUri: photo.uri,
       width: photo.width,
       height: photo.height,
+      capturedAtMs: Date.now(),
       mealName: '',
       cuisineType: '',
       notes: '',
@@ -218,6 +222,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         // 通常のカメラ撮影
         photo = await cameraRef.current!.takePictureAsync({
           quality: CAMERA_CONSTANTS.PHOTO_QUALITY,
+          exif: true,
           skipProcessing: false,
         });
       }
@@ -247,7 +252,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   }, [navigateToRecords]);
 
   const updateCaptureReview = useCallback(
-    (field: keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>, value: string | boolean) => {
+    (field: CaptureReviewEditableField, value: string | boolean) => {
       setCaptureReview((current) => {
         if (!current) {
           return current;
@@ -285,7 +290,11 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       const locationSnapshot = await getCurrentCoordinates();
       const persistedPhoto = isWebWithoutPermissions
         ? { stablePhotoUri: captureReview.photoUri, savedToMediaLibrary: false }
-        : await persistPhotoLocally(captureReview.photoUri);
+        : await persistPhotoLocally(captureReview.photoUri, {
+          capturedAt: new Date(captureReview.capturedAtMs),
+          location: locationSnapshot,
+          softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
+        });
       stablePhotoUri = persistedPhoto.stablePhotoUri;
 
       await MealService.createMeal({

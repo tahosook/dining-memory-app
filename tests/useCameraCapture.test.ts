@@ -170,18 +170,21 @@ describe('useCameraCapture', () => {
 
   test('creates a meal and navigates to records only after local persistence succeeds', async () => {
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    const takePictureAsync = jest.fn().mockResolvedValue({
+      uri: 'file:///tmp/photo.jpg',
+      width: 100,
+      height: 100,
+    });
 
     result.current.cameraRef.current = {
-      takePictureAsync: jest.fn().mockResolvedValue({
-        uri: 'file:///tmp/photo.jpg',
-        width: 100,
-        height: 100,
-      }),
+      takePictureAsync,
     } as never;
 
     await act(async () => {
       await result.current.takePicture();
     });
+
+    const capturedAtMs = result.current.captureReview?.capturedAtMs;
 
     act(() => {
       result.current.onCaptureReviewChange('mealName', 'パスタ');
@@ -206,7 +209,23 @@ describe('useCameraCapture', () => {
       );
     });
 
-    expect(persistPhotoToStablePath).toHaveBeenCalledWith('file:///tmp/resized-photo.jpg');
+    expect(takePictureAsync).toHaveBeenCalledWith({
+      quality: 0.8,
+      exif: true,
+      skipProcessing: false,
+    });
+    expect(capturedAtMs).toEqual(expect.any(Number));
+    expect(persistPhotoToStablePath).toHaveBeenCalledWith(
+      'file:///tmp/resized-photo.jpg',
+      expect.objectContaining({
+        capturedAt: new Date(capturedAtMs!),
+        location: {
+          latitude: 35.6895,
+          longitude: 139.6917,
+        },
+        softwareName: 'Dining Memory',
+      })
+    );
     expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
       'file:///tmp/photo.jpg',
       1600,
@@ -350,18 +369,21 @@ describe('useCameraCapture', () => {
   test('continues saving when location permission is denied', async () => {
     (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ granted: false });
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    const takePictureAsync = jest.fn().mockResolvedValue({
+      uri: 'file:///tmp/photo.jpg',
+      width: 100,
+      height: 100,
+    });
 
     result.current.cameraRef.current = {
-      takePictureAsync: jest.fn().mockResolvedValue({
-        uri: 'file:///tmp/photo.jpg',
-        width: 100,
-        height: 100,
-      }),
+      takePictureAsync,
     } as never;
 
     await act(async () => {
       await result.current.takePicture();
     });
+
+    const capturedAtMs = result.current.captureReview?.capturedAtMs;
 
     act(() => {
       result.current.onCaptureReviewChange('mealName', '海鮮丼');
@@ -376,6 +398,14 @@ describe('useCameraCapture', () => {
         meal_name: '海鮮丼',
         latitude: undefined,
         longitude: undefined,
+      })
+    );
+    expect(persistPhotoToStablePath).toHaveBeenCalledWith(
+      'file:///tmp/resized-photo.jpg',
+      expect.objectContaining({
+        capturedAt: new Date(capturedAtMs!),
+        location: {},
+        softwareName: 'Dining Memory',
       })
     );
   });

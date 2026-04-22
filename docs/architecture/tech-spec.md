@@ -32,6 +32,7 @@
 - Expo SDK 55 keeps the New Architecture enabled at all times.
 - App data lives primarily on the device.
 - Captured photos should be resized before save.
+- Final saved JPEG should keep available source EXIF when possible and add save-time EXIF updates such as capture timestamp and app `Software`, using a shared JS-only EXIF writer after the app-local copy is finalized.
 - On Android, captured photos should keep an app-local stable file for in-app display and also be added to a dedicated `Pictures / Dining Memory` album so future backup targeting stays possible without mixing unrelated media.
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
@@ -61,6 +62,7 @@
 - Allow external handoff only from an explicit user action, such as opening the OS share sheet from a saved record detail.
 - Request only the minimum camera, photo, and location access needed for the active feature.
 - Request foreground location only at save time, and keep meal saving available even if location permission is denied.
+- Write GPS EXIF only when save-time location permission is granted and coordinates are actually available; otherwise save the JPEG without GPS metadata.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
 - Phase 1 の AI 入力補助では写真やメモを外部送信せず、候補採用時だけ最小限の AI metadata を meal record に残す。

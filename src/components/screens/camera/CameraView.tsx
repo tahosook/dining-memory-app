@@ -20,7 +20,7 @@ import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraCon
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 import { CuisineTypeSelector } from '../../../components/common/CuisineTypeSelector';
 import type { CameraPermissionUiState } from '../../../hooks/cameraCapture';
-import type { CaptureReviewState } from '../../../hooks/cameraCapture/useCameraCapture';
+import type { CaptureReviewEditableField, CaptureReviewState } from '../../../hooks/cameraCapture/useCameraCapture';
 import type {
   MealInputAssistCuisineSuggestion,
   MealInputAssistProgress,
@@ -62,7 +62,7 @@ type CameraReviewState = {
 
 type CameraReviewOperations = {
   onCaptureReviewChange: (
-    field: keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>,
+    field: CaptureReviewEditableField,
     value: string | boolean
   ) => void;
   onCaptureReviewCancel: () => void;
@@ -188,7 +188,7 @@ const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
 interface CaptureReviewProps {
   captureReview: CaptureReviewState;
   onChange: (
-    field: keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>,
+    field: CaptureReviewEditableField,
     value: string | boolean
   ) => void;
   onCancel: () => void;

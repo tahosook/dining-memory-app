@@ -167,6 +167,7 @@ type MockCaptureReview = {
   photoUri: string;
   width: number;
   height: number;
+  capturedAtMs: number;
   mealName: string;
   cuisineType: string;
   notes: string;
@@ -228,6 +229,7 @@ function createCaptureReview(overrides: Partial<MockCaptureReview> = {}): MockCa
     photoUri: '/mock/photo.jpg',
     width: 800,
     height: 600,
+    capturedAtMs: new Date(2026, 3, 22, 21, 35, 7).getTime(),
     mealName: '',
     cuisineType: '',
     notes: '',

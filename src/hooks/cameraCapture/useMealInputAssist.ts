@@ -21,10 +21,10 @@ import {
   type MealInputAssistTextSuggestion,
 } from '../../ai/mealInputAssist';
 import { CAMERA_CONSTANTS } from '../../constants/CameraConstants';
-import type { CaptureReviewState } from './useCameraCapture';
+import type { CaptureReviewEditableField, CaptureReviewState } from './useCameraCapture';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
 
-type CaptureReviewField = keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height'>;
+type CaptureReviewField = CaptureReviewEditableField;
 
 interface UseMealInputAssistParams {
   captureReview: CaptureReviewState | null;

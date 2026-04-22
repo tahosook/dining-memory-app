@@ -1,0 +1,34 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "App.tsx",
+    "index.ts",
+    "app.json",
+    "babel.config.js",
+    "jest.setup.js",
+    "metro.config.js"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "tests/**/*.{ts,tsx}",
+    "scripts/**/*.cjs"
+  ],
+  "ignoreDependencies": [
+    "@typescript-eslint/eslint-plugin",
+    "@typescript-eslint/parser",
+    "@react-native-community/cli",
+    "eslint-config-prettier",
+    "eslint-plugin-react-hooks",
+    "expo-build-properties",
+    "expo-dev-client",
+    "expo-modules-core",
+    "expo-system-ui",
+    "expo-updates",
+    "jest-environment-jsdom",
+    "react-dom",
+    "react-native-gesture-handler",
+    "react-native-reanimated",
+    "react-native-worklets",
+    "react-native-web"
+  ]
+}

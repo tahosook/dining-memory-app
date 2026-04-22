@@ -1,24 +1,61 @@
 import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
-import { copyAsync, documentDirectory } from 'expo-file-system/legacy';
+import { copyAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
+import { buildMealPhotoFileName, type PhotoLocationSnapshot, writePhotoExifToJpeg } from './photoExif';
 
 export const ANDROID_PHOTO_ALBUM_NAME = 'Dining Memory';
+export const DEFAULT_PHOTO_SOFTWARE_NAME = process.env.EXPO_PUBLIC_APP_NAME ?? ANDROID_PHOTO_ALBUM_NAME;
 
 type PersistResult = {
   stablePhotoUri: string;
   savedToMediaLibrary: boolean;
 };
 
-export async function persistPhotoToStablePath(photoUri: string): Promise<PersistResult> {
+export interface PersistPhotoOptions {
+  capturedAt: Date;
+  location?: PhotoLocationSnapshot;
+  softwareName?: string;
+}
+
+async function resolveDestinationUri(capturedAt: Date) {
   if (!documentDirectory) {
     throw new Error('Document directory is not available');
   }
 
-  const destination = `${documentDirectory}meal-${Date.now()}.jpg`;
+  let collisionIndex = 0;
+
+  while (true) {
+    const candidate = `${documentDirectory}${buildMealPhotoFileName(capturedAt, collisionIndex)}`;
+    const fileInfo = await getInfoAsync(candidate);
+
+    if (!fileInfo.exists) {
+      return candidate;
+    }
+
+    collisionIndex += 1;
+  }
+}
+
+export async function persistPhotoToStablePath(photoUri: string, options: PersistPhotoOptions): Promise<PersistResult> {
+  if (!documentDirectory) {
+    throw new Error('Document directory is not available');
+  }
+
+  const destination = await resolveDestinationUri(options.capturedAt);
   await copyAsync({
     from: photoUri,
     to: destination,
   });
+
+  try {
+    await writePhotoExifToJpeg(destination, {
+      capturedAt: options.capturedAt,
+      location: options.location,
+      softwareName: options.softwareName?.trim() || DEFAULT_PHOTO_SOFTWARE_NAME,
+    });
+  } catch (photoExifError: unknown) {
+    console.warn('Photo EXIF update skipped, but local photo copy is preserved:', photoExifError);
+  }
 
   if (Platform.OS === 'android') {
     try {
