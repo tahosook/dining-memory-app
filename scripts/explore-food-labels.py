@@ -15,18 +15,22 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 
 SCHEMA_VERSION = "food_label_exploration_v3"
-PROMPT_VERSION = "food_label_exploration_prompt_v3"
+PROMPT_VERSION = "food_label_exploration_prompt_v5"
 OLLAMA_API_BASE_URL = "http://localhost:11434/api"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.5
 MAX_PRIMARY_DISH_CANDIDATES = 3
 MAX_SUPPORTING_ITEMS = 5
 MAX_REVIEW_REASONS = 5
+SPECIFIC_DISH_CONFIDENCE_FALLBACK = 0.72
+BROAD_DISH_CONFIDENCE_FALLBACK = 0.58
+WEAK_DISH_CONFIDENCE_FALLBACK = 0.4
 
 SCENE_TYPE_OPTIONS = [
     "single_dish",
@@ -105,6 +109,21 @@ SUPPORTING_ITEM_KEYS = {
     "sauce",
     "side_dish",
 }
+CONTEXTUAL_SUPPORTING_ITEM_KEYS = {
+    "bread",
+    "egg",
+    "drink",
+    "drinks",
+}
+SCENE_FALLBACK_PRIMARY_KEYS = {
+    "set_meal",
+    "multi_dish_table",
+}
+BROAD_PRIMARY_KEYS = {
+    "meat_dish",
+    "stew",
+    "noodles",
+}
 SCENE_DOMINANT_PRIMARY_KEYS = {
     "set_meal",
     "multi_dish_table",
@@ -135,6 +154,11 @@ DEFAULT_REVIEW_NOTE_JA = {
     "candidate_split": "候補割れ",
     "menu_or_text": "メニュー画像",
     "image_quality_issue": "画質要確認",
+    "broad_primary": "主料理粒度要確認",
+}
+PRIMARY_FALLBACK_REVIEW_NOTE_JA = {
+    "unknown": "主料理不明",
+    "set_meal": "主料理特定困難",
 }
 
 FORMAT_SCHEMA: Dict[str, Any] = {
@@ -246,6 +270,12 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="画像ごとの sleep 秒数 (default: 0)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="並列 worker 数 (default: 1)",
+    )
     return parser.parse_args()
 
 
@@ -270,6 +300,10 @@ def main() -> int:
         print("--sleep-seconds must be 0 or greater.", file=sys.stderr)
         return 2
 
+    if args.workers <= 0:
+        print("--workers must be greater than 0.", file=sys.stderr)
+        return 2
+
     normalized_root = output_dir / "normalized"
     raw_root = output_dir / "raw"
     errors_path = output_dir / "errors.jsonl"
@@ -292,10 +326,8 @@ def main() -> int:
 
     print(f"Found {len(image_paths)} supported images under {input_dir}.")
 
-    attempted_new = 0
-    succeeded = 0
     skipped = 0
-    error_count = 0
+    jobs: List[Dict[str, Any]] = []
 
     for image_path in image_paths:
         relative_path = image_path.relative_to(input_dir)
@@ -309,61 +341,107 @@ def main() -> int:
             print(f"[skip] {relative_path}")
             continue
 
-        if args.limit is not None and attempted_new >= args.limit:
+        if args.limit is not None and len(jobs) >= args.limit:
             break
 
-        attempted_new += 1
-        print(f"[run ] {relative_path}")
+        jobs.append(
+            {
+                "image_path": image_path,
+                "relative_path": relative_path,
+                "image_id": image_id,
+                "source_path": source_path,
+                "normalized_path": normalized_path,
+                "raw_path": raw_path,
+            }
+        )
 
-        try:
-            raw_response = process_single_image(
-                image_path=image_path,
-                relative_path=relative_path,
-                image_id=image_id,
-                source_path=source_path,
-                normalized_path=normalized_path,
-                raw_path=raw_path,
+    if not jobs:
+        rebuild_labels_jsonl(normalized_root=normalized_root, labels_path=labels_path)
+        print("")
+        print("Done.")
+        print("- processed: 0")
+        print(f"- skipped: {skipped}")
+        print("- failed: 0")
+        print(f"- workers: {args.workers}")
+        print(f"- labels_jsonl: {labels_path}")
+        print(f"- normalized_dir: {normalized_root}")
+        print(f"- raw_dir: {raw_root}")
+        print(f"- errors_jsonl: {errors_path}")
+        return 0
+
+    workers_used = min(args.workers, len(jobs))
+    print(f"Queueing {len(jobs)} new images with workers={workers_used}.")
+
+    for job in jobs:
+        print(f"[run ] {job['relative_path']}")
+
+    processed = 0
+    failed = 0
+    future_to_job: Dict[Future[Optional[Dict[str, Any]]], Dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=workers_used) as executor:
+        for job in jobs:
+            future = executor.submit(
+                process_single_image_job,
+                image_path=job["image_path"],
+                relative_path=job["relative_path"],
+                image_id=job["image_id"],
+                source_path=job["source_path"],
+                normalized_path=job["normalized_path"],
+                raw_path=job["raw_path"],
                 model=args.model,
                 timeout=args.timeout,
+                sleep_seconds=args.sleep_seconds,
             )
-            if raw_response is not None:
-                succeeded += 1
-        except StageError as error:
-            error_count += 1
-            append_error(
-                errors_path=errors_path,
-                image_id=image_id,
-                relative_path=relative_path,
-                stage=error.stage,
-                model=args.model,
-                error_type=type(error.__cause__ or error).__name__,
-                message=str(error.__cause__ or error),
-            )
-            print(f"[error] {relative_path} ({error.stage}): {error}", file=sys.stderr)
-        except Exception as error:
-            error_count += 1
-            append_error(
-                errors_path=errors_path,
-                image_id=image_id,
-                relative_path=relative_path,
-                stage="unknown",
-                model=args.model,
-                error_type=type(error).__name__,
-                message=str(error),
-            )
-            print(f"[error] {relative_path} (unknown): {error}", file=sys.stderr)
+            future_to_job[future] = job
 
-        if args.sleep_seconds > 0:
-            time.sleep(args.sleep_seconds)
+        total_jobs = len(jobs)
+        for future in as_completed(future_to_job):
+            job = future_to_job[future]
+            relative_path = job["relative_path"]
+            progress_done = processed + failed + 1
+            progress_suffix = f"(completed={progress_done}/{total_jobs} processed={processed} failed={failed})"
+
+            try:
+                raw_response = future.result()
+                if raw_response is not None:
+                    processed += 1
+                print(
+                    f"[done] {relative_path} "
+                    f"(completed={processed + failed}/{total_jobs} processed={processed} failed={failed})"
+                )
+            except StageError as error:
+                failed += 1
+                append_error(
+                    errors_path=errors_path,
+                    image_id=job["image_id"],
+                    relative_path=relative_path,
+                    stage=error.stage,
+                    model=args.model,
+                    error_type=type(error.__cause__ or error).__name__,
+                    message=str(error.__cause__ or error),
+                )
+                print(f"[error] {relative_path} ({error.stage}) {progress_suffix}: {error}", file=sys.stderr)
+            except Exception as error:
+                failed += 1
+                append_error(
+                    errors_path=errors_path,
+                    image_id=job["image_id"],
+                    relative_path=relative_path,
+                    stage="unknown",
+                    model=args.model,
+                    error_type=type(error).__name__,
+                    message=str(error),
+                )
+                print(f"[error] {relative_path} (unknown) {progress_suffix}: {error}", file=sys.stderr)
 
     rebuild_labels_jsonl(normalized_root=normalized_root, labels_path=labels_path)
 
     print("")
     print("Done.")
-    print(f"- attempted_new: {attempted_new}")
-    print(f"- succeeded: {succeeded}")
+    print(f"- processed: {processed}")
     print(f"- skipped: {skipped}")
-    print(f"- errors: {error_count}")
+    print(f"- failed: {failed}")
+    print(f"- workers: {workers_used}")
     print(f"- labels_jsonl: {labels_path}")
     print(f"- normalized_dir: {normalized_root}")
     print(f"- raw_dir: {raw_root}")
@@ -376,6 +454,34 @@ class StageError(RuntimeError):
         super().__init__(message)
         self.stage = stage
         self.__cause__ = cause
+
+
+def process_single_image_job(
+    *,
+    image_path: Path,
+    relative_path: Path,
+    image_id: str,
+    source_path: str,
+    normalized_path: Path,
+    raw_path: Path,
+    model: str,
+    timeout: float,
+    sleep_seconds: float,
+) -> Optional[Dict[str, Any]]:
+    try:
+        return process_single_image(
+            image_path=image_path,
+            relative_path=relative_path,
+            image_id=image_id,
+            source_path=source_path,
+            normalized_path=normalized_path,
+            raw_path=raw_path,
+            model=model,
+            timeout=timeout,
+        )
+    finally:
+        if sleep_seconds > 0:
+            time.sleep(sleep_seconds)
 
 
 def collect_image_paths(input_dir: Path) -> List[Path]:
@@ -583,10 +689,17 @@ def build_chat_payload(*, model: str, image_id: str, source_path: str, image_pat
 
 
 def build_system_prompt() -> str:
-    return (
-        "あなたは食事写真のラベル発掘器です。"
-        "目的は scene の説明ではなく、主料理カテゴリ候補の発掘です。"
-        "必ず JSON オブジェクトのみを返し、説明文やコードブロックは禁止です。"
+    return "\n".join(
+        [
+            "You are labeling meal photos for dataset design.",
+            "Your primary goal is NOT to describe the scene.",
+            "Your primary goal is to identify the most representative MAIN DISH category in the photo.",
+            "Choose the dish the user most likely wants to log.",
+            "Return exactly one valid JSON object only.",
+            "Do not include markdown.",
+            "Do not include code fences.",
+            "Do not include explanations.",
+        ]
     )
 
 
@@ -601,23 +714,86 @@ def build_user_prompt(*, image_id: str, source_path: str) -> str:
     }
 
     instructions = [
-        "目的: scene の説明ではなく、この写真で最も代表的な主料理カテゴリを 1 つ発掘してください。",
-        "primary_dish_key は open な snake_case 英語で、カテゴリ設計に使いやすい粒度を優先してください。",
-        "例: ramen, curry_rice, fried_chicken, grilled_fish, hamburger_steak, pasta, sushi, dessert, drink, bento, set_meal, unknown。",
-        "rice, soup, miso_soup, salad, pickles, sauce, side_dish は primary ではなく supporting_items に入れてください。",
-        "定食や複数皿でも、できるだけ主料理カテゴリを 1 つ選んでください。主料理が分からないときだけ set_meal または unknown を使ってください。",
-        "scene_type は補助情報です。scene より dish を優先してください。",
-        "primary_dish_candidates は主料理候補だけを最大 3 件まで、supporting_items は最大 5 件までにしてください。",
-        "review_reasons は次の語彙だけを使ってください: "
-        + ", ".join(REVIEW_REASON_OPTIONS)
-        + "。",
-        "low_confidence, candidate_split, menu_or_text, image_quality_issue, unknown_primary, scene_dominant は review 対象理由です。",
-        "broad_primary や side_item_primary は理由として返してよいですが、それだけで needs_human_review=true にしなくてかまいません。",
-        "label_ja と review_note_ja は短い日本語にしてください。",
-        f"image_id は '{image_id}' を返してください。",
-        f"source_path は '{source_path}' を返してください。",
-        "返答は JSON オブジェクトのみ。説明文、前置き、コードブロックは禁止です。",
-        "利用できる enum 候補:",
+        "Important priorities:",
+        "1. Prefer a MAIN DISH label over a scene label.",
+        "2. Use scene_type only as supporting context.",
+        "3. Use supporting_items for rice, soup, miso_soup, salad, pickles, sauce, side_dish, bread, egg, drinks, and other accompaniments.",
+        "4. Use set_meal as primary_dish_key ONLY when the main dish truly cannot be identified.",
+        "5. Even if the photo shows multiple dishes, choose the most representative main dish category if possible.",
+        "6. When choosing the main dish, use this order: specific dish > cooking-method dish > broad dish > set_meal or unknown.",
+        "7. Do NOT use rice, soup, side_dish, pickles, salad, sauce, or other accompaniments as primary_dish_key unless the image genuinely centers on that food alone.",
+        "8. multi_dish_table and set_meal are fallback labels, not default labels.",
+        "9. If a meat dish is visible and you can roughly tell the style, prefer fried_cutlet, fried_chicken, grilled_meat, stir_fry, stew, or meat_and_potato_stew over meat_dish.",
+        "10. Use meat_dish only as a last-resort broad fallback when no more specific dish-oriented label can be chosen reasonably.",
+        "11. A broad but usable dish label is still better than set_meal. Low confidence should be used only for real ambiguity, not by default.",
+        "12. Only set needs_human_review=true when there is a real reason, such as unknown primary dish, very low confidence, strong ambiguity between candidates, menu/text image, or severe visibility issues.",
+        "",
+        "When choosing primary_dish_key:",
+        '- First ask: "What is the main dish the user most likely wants to log?"',
+        "- If visible, pick that dish.",
+        "- If the exact dish name is unclear but the cooking method or family is visible, choose that more specific dish-oriented label.",
+        "- If that is still unclear, choose a broader dish category.",
+        "- Only if no main dish can be reasonably chosen, use set_meal or unknown.",
+        "",
+        "Good examples:",
+        "- grilled fish set meal -> primary_dish_key = grilled_fish",
+        "- curry with salad and soup -> primary_dish_key = curry_rice",
+        "- fried chicken with rice and miso soup -> primary_dish_key = fried_chicken",
+        "- pork cutlet set meal -> primary_dish_key = fried_cutlet",
+        "- grilled meat plate with rice -> primary_dish_key = grilled_meat",
+        "- meat and vegetables stir fry with rice -> primary_dish_key = stir_fry",
+        "- stew with bread and salad -> primary_dish_key = stew",
+        "- noodle bowl with side dishes -> primary_dish_key = noodles",
+        "- only when the meal is too mixed or unclear -> primary_dish_key = set_meal",
+        "",
+        "Bad examples:",
+        "- primary_dish_key = rice when rice is just part of a set",
+        "- primary_dish_key = soup when soup is just part of a set",
+        "- primary_dish_key = side_dish when a main dish is visible",
+        "- primary_dish_key = set_meal when grilled_fish, curry_rice, fried_chicken, stew, noodles, or another dish is visible",
+        "- primary_dish_key = meat_dish when fried_cutlet, fried_chicken, grilled_meat, stir_fry, or stew is reasonably visible",
+        "",
+        "Rules:",
+        "- primary_dish_key is required",
+        "- use snake_case English keys",
+        "- use short natural Japanese for *_ja fields",
+        "- primary_dish_candidates: up to 3",
+        "- supporting_items: up to 5",
+        "- review_reasons: up to 5",
+        "- free_tags: up to 5",
+        "- if uncertain, prefer a broader DISH label over a scene label",
+        "- set_meal should be rare and used only as fallback",
+        "- unknown should be used only when even a broad dish label cannot be chosen",
+        "- if primary_dish_key is set_meal or unknown, explain briefly in review_note_ja",
+        "- do not mark needs_human_review=true by default",
+        "- if you provide confidence scores, use 0..1 and keep them moderate or high when a broad but usable dish label is still supported by the image",
+        "",
+        "Recommended dish-oriented labels when exact dish is unclear:",
+        "- grilled_fish",
+        "- fried_fish",
+        "- grilled_meat",
+        "- fried_chicken",
+        "- fried_cutlet",
+        "- meat_and_potato_stew",
+        "- stew",
+        "- nimono",
+        "- stir_fry",
+        "- noodles",
+        "- curry_rice",
+        "- sushi",
+        "- pasta",
+        "- bento",
+        "- dessert",
+        "- drink",
+        "- meat_dish",
+        "- set_meal",
+        "- unknown",
+        "",
+        "Use only the structured JSON object defined by the response schema.",
+        "review_reasons must use only these values: " + ", ".join(REVIEW_REASON_OPTIONS) + ".",
+        f"image_id must be '{image_id}'.",
+        f"source_path must be '{source_path}'.",
+        "Available enum options:",
         json.dumps(schema_summary, ensure_ascii=False),
     ]
     return "\n".join(instructions)
@@ -840,20 +1016,21 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
             primary_candidates=primary_candidates,
         )
 
-    analysis_confidence = resolve_analysis_confidence(
-        raw_result=raw_result,
-        primary_candidates=primary_candidates,
-    )
-
     visual_attributes = normalize_machine_string_list(raw_result.get("visual_attributes"))
     uncertainty_reasons = normalize_machine_string_list(raw_result.get("uncertainty_reasons"))
     free_tags = normalize_machine_string_list(raw_result.get("free_tags"))
     review_reasons = normalize_review_reasons(raw_result.get("review_reasons"))
 
-    # Keep dish discovery primary by demoting side items out of the main slot.
+    # Keep dish discovery primary by demoting obvious accompaniments out of the main slot.
     if primary_dish_key in SUPPORTING_ITEM_KEYS:
         supporting_items = append_unique_limited(supporting_items, primary_dish_key, limit=MAX_SUPPORTING_ITEMS)
-        promoted_candidate = first_non_supporting_candidate(primary_candidates)
+        promoted_candidate = find_primary_replacement_candidate(
+            primary_candidates,
+            scene_type=scene_type,
+            meal_style=meal_style,
+            is_drink_only=is_drink_only,
+            allow_contextual=True,
+        )
         review_reasons = append_reason(review_reasons, "side_item_primary")
         if promoted_candidate is not None:
             primary_dish_key = promoted_candidate["key"]
@@ -862,10 +1039,58 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
             primary_dish_key = "unknown"
             primary_dish_label_ja = resolve_default_label("unknown")
 
+    if primary_dish_key in SCENE_FALLBACK_PRIMARY_KEYS:
+        promoted_candidate = find_primary_replacement_candidate(
+            primary_candidates,
+            scene_type=scene_type,
+            meal_style=meal_style,
+            is_drink_only=is_drink_only,
+            allow_contextual=True,
+        )
+        if promoted_candidate is not None:
+            primary_dish_key = promoted_candidate["key"]
+            primary_dish_label_ja = promoted_candidate["label_ja"]
+
+    if primary_dish_key in CONTEXTUAL_SUPPORTING_ITEM_KEYS and should_demote_contextual_primary(
+        primary_dish_key=primary_dish_key,
+        primary_candidates=primary_candidates,
+        scene_type=scene_type,
+        meal_style=meal_style,
+        is_drink_only=is_drink_only,
+    ):
+        supporting_items = append_unique_limited(supporting_items, primary_dish_key, limit=MAX_SUPPORTING_ITEMS)
+        promoted_candidate = find_primary_replacement_candidate(
+            primary_candidates,
+            scene_type=scene_type,
+            meal_style=meal_style,
+            is_drink_only=is_drink_only,
+            allow_contextual=False,
+        )
+        review_reasons = append_reason(review_reasons, "side_item_primary")
+        if promoted_candidate is not None:
+            primary_dish_key = promoted_candidate["key"]
+            primary_dish_label_ja = promoted_candidate["label_ja"]
+
+    analysis_confidence, confidence_source = resolve_analysis_confidence(
+        raw_result=raw_result,
+        primary_candidates=primary_candidates,
+        primary_dish_key=primary_dish_key,
+        scene_type=scene_type,
+        is_menu_or_text_only=is_menu_or_text_only,
+        uncertainty_reasons=uncertainty_reasons,
+    )
+
     if primary_dish_key == "unknown":
         review_reasons = append_reason(review_reasons, "unknown_primary")
 
-    if analysis_confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD:
+    if should_add_low_confidence(
+        analysis_confidence=analysis_confidence,
+        confidence_source=confidence_source,
+        primary_dish_key=primary_dish_key,
+        scene_type=scene_type,
+        is_menu_or_text_only=is_menu_or_text_only,
+        uncertainty_reasons=uncertainty_reasons,
+    ):
         review_reasons = append_reason(review_reasons, "low_confidence")
 
     if has_candidate_split(primary_candidates):
@@ -877,18 +1102,40 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
     if has_image_quality_issue(uncertainty_reasons):
         review_reasons = append_reason(review_reasons, "image_quality_issue")
 
-    if (
-        primary_dish_key in SCENE_DOMINANT_PRIMARY_KEYS
-        and not has_non_scene_primary_candidate(primary_candidates)
-    ):
+    if primary_dish_key in SCENE_DOMINANT_PRIMARY_KEYS and (
+        primary_dish_key == "menu_or_text"
+        or find_primary_replacement_candidate(
+            primary_candidates,
+            scene_type=scene_type,
+            meal_style=meal_style,
+            is_drink_only=is_drink_only,
+            allow_contextual=True,
+        )
+        is None
+        ):
         review_reasons = append_reason(review_reasons, "scene_dominant")
 
+    more_specific_broad_candidate = None
+    if primary_dish_key in BROAD_PRIMARY_KEYS:
+        more_specific_broad_candidate = find_more_specific_broad_candidate(
+            primary_dish_key=primary_dish_key,
+            candidates=primary_candidates,
+        )
+        if more_specific_broad_candidate is not None:
+            review_reasons = append_reason(review_reasons, "broad_primary")
+
     review_reasons = review_reasons[:MAX_REVIEW_REASONS]
-    needs_human_review = any(reason in REVIEW_TRIGGER_REASONS for reason in review_reasons)
+    needs_human_review = any(reason in REVIEW_TRIGGER_REASONS for reason in review_reasons) or (
+        "broad_primary" in review_reasons and more_specific_broad_candidate is not None
+    )
 
     review_note_ja = clean_short_text(raw_result.get("review_note_ja"))
-    if not review_note_ja and review_reasons:
+    if not review_note_ja and primary_dish_key in PRIMARY_FALLBACK_REVIEW_NOTE_JA:
+        review_note_ja = PRIMARY_FALLBACK_REVIEW_NOTE_JA[primary_dish_key]
+    elif not review_note_ja and review_reasons:
         review_note_ja = DEFAULT_REVIEW_NOTE_JA.get(review_reasons[0], "")
+
+    primary_candidates = prioritize_primary_candidate(primary_candidates, primary_dish_key)
 
     normalized = {
         "schema_version": SCHEMA_VERSION,
@@ -898,7 +1145,7 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         "analysis_confidence": round(analysis_confidence, 4),
         "primary_dish_key": primary_dish_key or "unknown",
         "primary_dish_label_ja": primary_dish_label_ja or resolve_default_label(primary_dish_key or "unknown"),
-        "primary_dish_candidates": primary_candidates[:MAX_PRIMARY_DISH_CANDIDATES],
+        "primary_dish_candidates": serialize_primary_dish_candidates(primary_candidates[:MAX_PRIMARY_DISH_CANDIDATES]),
         "supporting_items": supporting_items[:MAX_SUPPORTING_ITEMS],
         "scene_type": scene_type,
         "cuisine_type": cuisine_type,
@@ -944,6 +1191,7 @@ def normalize_primary_dish_candidate(value: Any) -> Optional[Dict[str, Any]]:
             "key": key,
             "label_ja": resolve_default_label(key),
             "score": 0.0,
+            "_score_present": False,
         }
 
     if not isinstance(value, dict):
@@ -956,14 +1204,26 @@ def normalize_primary_dish_candidate(value: Any) -> Optional[Dict[str, Any]]:
 
     label_ja = clean_short_text(value.get("label_ja") or value.get("label")) or resolve_default_label(key)
     score = clamp_score(value.get("score"))
-    if score is None:
-        score = 0.0
 
     return {
         "key": key,
         "label_ja": label_ja,
-        "score": round(score, 4),
+        "score": round(score, 4) if score is not None else 0.0,
+        "_score_present": score is not None,
     }
+
+
+def serialize_primary_dish_candidates(candidates: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    serialized: List[Dict[str, Any]] = []
+    for candidate in candidates:
+        serialized.append(
+            {
+                "key": candidate["key"],
+                "label_ja": candidate["label_ja"],
+                "score": round(clamp_score(candidate.get("score")) or 0.0, 4),
+            }
+        )
+    return serialized
 
 
 def normalize_supporting_items(value: Any) -> List[str]:
@@ -998,7 +1258,7 @@ def move_support_items_out_of_candidates(
             )
             continue
         normalized_candidates.append(candidate)
-    return normalized_candidates[:MAX_PRIMARY_DISH_CANDIDATES], normalized_supporting_items[:MAX_SUPPORTING_ITEMS]
+    return normalized_candidates, normalized_supporting_items[:MAX_SUPPORTING_ITEMS]
 
 
 def infer_scene_type(
@@ -1137,15 +1397,78 @@ def resolve_default_label(key: str) -> str:
     return key or DEFAULT_LABEL_JA["unknown"]
 
 
-def resolve_analysis_confidence(*, raw_result: Dict[str, Any], primary_candidates: Sequence[Dict[str, Any]]) -> float:
-    candidate_scores = [candidate["score"] for candidate in primary_candidates if isinstance(candidate.get("score"), (int, float))]
+def resolve_analysis_confidence(
+    *,
+    raw_result: Dict[str, Any],
+    primary_candidates: Sequence[Dict[str, Any]],
+    primary_dish_key: str,
+    scene_type: str,
+    is_menu_or_text_only: bool,
+    uncertainty_reasons: Sequence[str],
+) -> Tuple[float, str]:
+    candidate_scores = [
+        candidate["score"]
+        for candidate in primary_candidates
+        if candidate.get("_score_present") and isinstance(candidate.get("score"), (int, float))
+    ]
     if candidate_scores:
-        return round(max(candidate_scores), 4)
+        return round(max(candidate_scores), 4), "candidate_scores"
 
     top_level = clamp_score(raw_result.get("analysis_confidence"))
     if top_level is not None:
-        return round(top_level, 4)
-    return 0.0
+        return round(top_level, 4), "top_level"
+    return (
+        round(
+            estimate_analysis_confidence(
+                primary_dish_key=primary_dish_key,
+                scene_type=scene_type,
+                is_menu_or_text_only=is_menu_or_text_only,
+                uncertainty_reasons=uncertainty_reasons,
+            ),
+            4,
+        ),
+        "heuristic",
+    )
+
+
+def estimate_analysis_confidence(
+    *,
+    primary_dish_key: str,
+    scene_type: str,
+    is_menu_or_text_only: bool,
+    uncertainty_reasons: Sequence[str],
+) -> float:
+    if is_menu_or_text_only or scene_type == "menu_or_text":
+        return WEAK_DISH_CONFIDENCE_FALLBACK
+    if primary_dish_key in {"unknown", "set_meal"}:
+        return WEAK_DISH_CONFIDENCE_FALLBACK
+    if has_image_quality_issue(uncertainty_reasons):
+        return WEAK_DISH_CONFIDENCE_FALLBACK
+    if primary_dish_key in BROAD_PRIMARY_KEYS:
+        return BROAD_DISH_CONFIDENCE_FALLBACK
+    if primary_dish_key in SCENE_DOMINANT_PRIMARY_KEYS:
+        return WEAK_DISH_CONFIDENCE_FALLBACK
+    return SPECIFIC_DISH_CONFIDENCE_FALLBACK
+
+
+def should_add_low_confidence(
+    *,
+    analysis_confidence: float,
+    confidence_source: str,
+    primary_dish_key: str,
+    scene_type: str,
+    is_menu_or_text_only: bool,
+    uncertainty_reasons: Sequence[str],
+) -> bool:
+    if confidence_source in {"candidate_scores", "top_level"}:
+        return analysis_confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD
+    if is_menu_or_text_only or scene_type == "menu_or_text":
+        return True
+    if primary_dish_key in {"unknown", "set_meal"}:
+        return True
+    if has_image_quality_issue(uncertainty_reasons):
+        return True
+    return analysis_confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD
 
 
 def normalize_review_reasons(value: Any) -> List[str]:
@@ -1162,15 +1485,95 @@ def normalize_review_reasons(value: Any) -> List[str]:
     return normalized
 
 
-def first_non_supporting_candidate(candidates: Sequence[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+def has_single_item_primary_context(*, scene_type: str, meal_style: str, is_drink_only: bool) -> bool:
+    if is_drink_only:
+        return True
+    if scene_type in {"single_dish", "drink_only", "dessert_and_drink"}:
+        return True
+    if meal_style in {"single_item", "drink", "dessert"}:
+        return True
+    return False
+
+
+def find_primary_replacement_candidate(
+    candidates: Sequence[Dict[str, Any]],
+    *,
+    scene_type: str,
+    meal_style: str,
+    is_drink_only: bool,
+    allow_contextual: bool,
+) -> Optional[Dict[str, Any]]:
     for candidate in candidates:
-        if candidate["key"] not in SUPPORTING_ITEM_KEYS:
-            return candidate
+        key = candidate["key"]
+        if key in SUPPORTING_ITEM_KEYS or key in SCENE_DOMINANT_PRIMARY_KEYS or key == "unknown":
+            continue
+        if key in CONTEXTUAL_SUPPORTING_ITEM_KEYS:
+            continue
+        return candidate
+
+    if allow_contextual and has_single_item_primary_context(
+        scene_type=scene_type,
+        meal_style=meal_style,
+        is_drink_only=is_drink_only,
+    ):
+        for candidate in candidates:
+            if candidate["key"] in CONTEXTUAL_SUPPORTING_ITEM_KEYS:
+                return candidate
+
     return None
+
+
+def should_demote_contextual_primary(
+    *,
+    primary_dish_key: str,
+    primary_candidates: Sequence[Dict[str, Any]],
+    scene_type: str,
+    meal_style: str,
+    is_drink_only: bool,
+) -> bool:
+    if primary_dish_key not in CONTEXTUAL_SUPPORTING_ITEM_KEYS:
+        return False
+    if has_single_item_primary_context(
+        scene_type=scene_type,
+        meal_style=meal_style,
+        is_drink_only=is_drink_only,
+    ):
+        return False
+    return (
+        find_primary_replacement_candidate(
+            primary_candidates,
+            scene_type=scene_type,
+            meal_style=meal_style,
+            is_drink_only=is_drink_only,
+            allow_contextual=False,
+        )
+        is not None
+    )
+
+
+def prioritize_primary_candidate(
+    candidates: Sequence[Dict[str, Any]],
+    primary_dish_key: str,
+) -> List[Dict[str, Any]]:
+    prioritized: List[Dict[str, Any]] = []
+    seen = set()
+    for candidate in candidates:
+        if candidate["key"] == primary_dish_key and candidate["key"] not in seen:
+            prioritized.append(candidate)
+            seen.add(candidate["key"])
+    for candidate in candidates:
+        if candidate["key"] in seen:
+            continue
+        prioritized.append(candidate)
+        seen.add(candidate["key"])
+    return prioritized
 
 
 def has_candidate_split(candidates: Sequence[Dict[str, Any]]) -> bool:
     if len(candidates) < 2:
+        return False
+
+    if not candidates[0].get("_score_present") or not candidates[1].get("_score_present"):
         return False
 
     first = clamp_score(candidates[0].get("score"))
@@ -1181,15 +1584,31 @@ def has_candidate_split(candidates: Sequence[Dict[str, Any]]) -> bool:
     return first < 0.75 and second >= 0.35 and abs(first - second) <= 0.08
 
 
+def find_more_specific_broad_candidate(
+    *,
+    primary_dish_key: str,
+    candidates: Sequence[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    if primary_dish_key not in BROAD_PRIMARY_KEYS:
+        return None
+
+    for candidate in candidates:
+        key = candidate["key"]
+        if key == primary_dish_key:
+            continue
+        if key in SUPPORTING_ITEM_KEYS or key in CONTEXTUAL_SUPPORTING_ITEM_KEYS:
+            continue
+        if key in SCENE_DOMINANT_PRIMARY_KEYS or key == "unknown":
+            continue
+        if key in BROAD_PRIMARY_KEYS:
+            continue
+        return candidate
+
+    return None
+
+
 def has_image_quality_issue(uncertainty_reasons: Sequence[str]) -> bool:
     return any(reason in IMAGE_QUALITY_REASON_HINTS for reason in uncertainty_reasons)
-
-
-def has_non_scene_primary_candidate(candidates: Sequence[Dict[str, Any]]) -> bool:
-    for candidate in candidates:
-        if candidate["key"] not in SCENE_DOMINANT_PRIMARY_KEYS and candidate["key"] != "unknown":
-            return True
-    return False
 
 
 def append_reason(reasons: Sequence[str], reason: str) -> List[str]:
@@ -1289,7 +1708,25 @@ def clamp_score(value: Any) -> Optional[float]:
 def write_json_file(path: Path, payload: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     serialized = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
-    path.write_text(serialized + "\n", encoding="utf-8")
+    temp_path: Optional[Path] = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            handle.write(serialized)
+            handle.write("\n")
+            temp_path = Path(handle.name)
+
+        temp_path.replace(path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            with contextlib.suppress(FileNotFoundError):
+                temp_path.unlink()
 
 
 def append_error(

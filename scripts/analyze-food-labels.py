@@ -24,8 +24,27 @@ UNKNOWN_CANDIDATES_NAME = "unknown_candidates.csv"
 SCENE_DOMINANT_CANDIDATES_NAME = "scene_dominant_candidates.csv"
 SIDE_ITEM_PRIMARY_CANDIDATES_NAME = "side_item_primary_candidates.csv"
 LOW_CONFIDENCE_CANDIDATES_NAME = "low_confidence_candidates.csv"
+BROAD_PRIMARY_CANDIDATES_NAME = "broad_primary_candidates.csv"
 UNKNOWN_VALUE = "unknown"
 BIAS_REASONS = {"side_item_primary", "scene_dominant", "broad_primary"}
+BROAD_PRIMARY_KEYS = {"meat_dish", "stew", "noodles"}
+NON_CONCRETE_CANDIDATE_KEYS = BROAD_PRIMARY_KEYS | {
+    UNKNOWN_VALUE,
+    "set_meal",
+    "multi_dish_table",
+    "menu_or_text",
+    "rice",
+    "soup",
+    "miso_soup",
+    "salad",
+    "pickles",
+    "sauce",
+    "side_dish",
+    "bread",
+    "egg",
+    "drink",
+    "drinks",
+}
 
 CSV_FIELDNAMES = [
     "image_id",
@@ -55,6 +74,7 @@ OUTPUT_FILENAMES = {
     SCENE_DOMINANT_CANDIDATES_NAME,
     SIDE_ITEM_PRIMARY_CANDIDATES_NAME,
     LOW_CONFIDENCE_CANDIDATES_NAME,
+    BROAD_PRIMARY_CANDIDATES_NAME,
 }
 
 
@@ -137,6 +157,7 @@ def main() -> int:
     scene_dominant_csv_path = output_dir / SCENE_DOMINANT_CANDIDATES_NAME
     side_item_primary_csv_path = output_dir / SIDE_ITEM_PRIMARY_CANDIDATES_NAME
     low_conf_csv_path = output_dir / LOW_CONFIDENCE_CANDIDATES_NAME
+    broad_primary_csv_path = output_dir / BROAD_PRIMARY_CANDIDATES_NAME
 
     write_json(summary_json_path, analysis["summary_json"])
     write_markdown(summary_md_path, analysis["summary_md"])
@@ -145,6 +166,7 @@ def main() -> int:
     write_csv(scene_dominant_csv_path, analysis["scene_dominant_candidates"], include_reasons=True)
     write_csv(side_item_primary_csv_path, analysis["side_item_primary_candidates"], include_reasons=True)
     write_csv(low_conf_csv_path, analysis["low_confidence_candidates"], include_reasons=True)
+    write_csv(broad_primary_csv_path, analysis["broad_primary_candidates"], include_reasons=True)
 
     print_console_summary(
         summary_json=analysis["summary_json"],
@@ -157,6 +179,7 @@ def main() -> int:
             scene_dominant_csv_path,
             side_item_primary_csv_path,
             low_conf_csv_path,
+            broad_primary_csv_path,
         ],
         top_n=min(args.top_n, 5),
     )
@@ -400,6 +423,8 @@ def analyze_records(
     meal_style_counter = Counter()
     serving_style_counter = Counter()
     free_tags_counter = Counter()
+    broad_primary_key_counter = Counter()
+    broad_primary_concrete_candidate_counter = Counter()
 
     needs_human_review_count = 0
     unknown_primary_count = 0
@@ -418,6 +443,7 @@ def analyze_records(
         supporting_items = extract_string_list(payload.get("supporting_items"))
         review_reasons = extract_string_list(payload.get("review_reasons"))
         free_tags = extract_string_list(payload.get("free_tags"))
+        broad_primary_candidate_key = detect_broad_primary_concrete_candidate_key(record)
 
         primary_dish_counter[primary_dish_key] += 1
         scene_type_counter[scene_type] += 1
@@ -436,12 +462,19 @@ def analyze_records(
             side_item_primary_count += 1
         if "scene_dominant" in review_reasons:
             scene_dominant_count += 1
-        if "broad_primary" in review_reasons:
+        if primary_dish_key in BROAD_PRIMARY_KEYS:
             broad_primary_count += 1
-        if record.analysis_confidence < LOW_CONFIDENCE_THRESHOLD or "low_confidence" in review_reasons:
+            broad_primary_key_counter[primary_dish_key] += 1
+            if broad_primary_candidate_key is not None:
+                broad_primary_concrete_candidate_counter[broad_primary_candidate_key] += 1
+        if detect_low_confidence_reasons(record):
             low_confidence_count += 1
 
-        if primary_dish_key != UNKNOWN_VALUE and not any(reason in review_reasons for reason in BIAS_REASONS):
+        if (
+            primary_dish_key != UNKNOWN_VALUE
+            and primary_dish_key not in BROAD_PRIMARY_KEYS
+            and not any(reason in review_reasons for reason in BIAS_REASONS)
+        ):
             design_candidate_primary_counter[primary_dish_key] += 1
 
     review_candidates = [
@@ -469,12 +502,21 @@ def analyze_records(
         for record in v3_records
         if detect_low_confidence_reasons(record)
     ]
+    broad_primary_candidates = []
+    for record in v3_records:
+        candidate_reason = build_broad_primary_candidate_reason(record)
+        if not candidate_reason:
+            continue
+        broad_primary_candidates.append(
+            build_csv_row(record, candidate_reasons=[candidate_reason])
+        )
 
     sort_candidate_rows(review_candidates)
     sort_candidate_rows(unknown_candidates)
     sort_candidate_rows(scene_dominant_candidates)
     sort_candidate_rows(side_item_primary_candidates)
     sort_candidate_rows(low_confidence_candidates)
+    sort_candidate_rows(broad_primary_candidates)
 
     filtered_count = len(filtered_records)
     summary_json = {
@@ -517,6 +559,8 @@ def analyze_records(
             "meal_style": counter_to_items(meal_style_counter, top_n),
             "serving_style": counter_to_items(serving_style_counter, top_n),
             "free_tags": counter_to_items(free_tags_counter, top_n),
+            "broad_primary_key": counter_to_items(broad_primary_key_counter, top_n),
+            "broad_primary_concrete_candidate_key": counter_to_items(broad_primary_concrete_candidate_counter, top_n),
         },
         "candidate_counts": {
             "review_candidates": len(review_candidates),
@@ -524,6 +568,7 @@ def analyze_records(
             "scene_dominant_candidates": len(scene_dominant_candidates),
             "side_item_primary_candidates": len(side_item_primary_candidates),
             "low_confidence_candidates": len(low_confidence_candidates),
+            "broad_primary_candidates": len(broad_primary_candidates),
         },
         "errors": {
             "broken_json_count": broken_json_count,
@@ -537,6 +582,8 @@ def analyze_records(
             side_item_primary_count=side_item_primary_count,
             scene_dominant_count=scene_dominant_count,
             broad_primary_count=broad_primary_count,
+            low_confidence_count=low_confidence_count,
+            broad_primary_key_counter=broad_primary_key_counter,
         ),
         "output_files": {
             "summary_json": str(output_dir / SUMMARY_JSON_NAME),
@@ -546,6 +593,7 @@ def analyze_records(
             "scene_dominant_candidates_csv": str(output_dir / SCENE_DOMINANT_CANDIDATES_NAME),
             "side_item_primary_candidates_csv": str(output_dir / SIDE_ITEM_PRIMARY_CANDIDATES_NAME),
             "low_confidence_candidates_csv": str(output_dir / LOW_CONFIDENCE_CANDIDATES_NAME),
+            "broad_primary_candidates_csv": str(output_dir / BROAD_PRIMARY_CANDIDATES_NAME),
         },
     }
 
@@ -559,6 +607,7 @@ def analyze_records(
         "scene_dominant_candidates": scene_dominant_candidates,
         "side_item_primary_candidates": side_item_primary_candidates,
         "low_confidence_candidates": low_confidence_candidates,
+        "broad_primary_candidates": broad_primary_candidates,
     }
 
 
@@ -659,6 +708,20 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "### broad_primary_key",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts["broad_primary_key"]))
+    lines.extend(
+        [
+            "",
+            "### broad_primary_concrete_candidate_key",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts["broad_primary_concrete_candidate_key"]))
+    lines.extend(
+        [
+            "",
             "## Review & Design Signals",
             f"- 人手レビュー推奨件数: {totals['needs_human_review']['count']} ({format_percent(totals['needs_human_review']['ratio'])})",
             f"- unknown_primary 件数: {totals['unknown_primary']['count']} ({format_percent(totals['unknown_primary']['ratio'])})",
@@ -671,6 +734,7 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
             f"- scene_dominant_candidates.csv 件数: {candidate_counts['scene_dominant_candidates']}",
             f"- side_item_primary_candidates.csv 件数: {candidate_counts['side_item_primary_candidates']}",
             f"- low_confidence_candidates.csv 件数: {candidate_counts['low_confidence_candidates']}",
+            f"- broad_primary_candidates.csv 件数: {candidate_counts['broad_primary_candidates']}",
             "",
             "## Insights",
         ]
@@ -706,6 +770,8 @@ def build_insights(
     side_item_primary_count: int,
     scene_dominant_count: int,
     broad_primary_count: int,
+    low_confidence_count: int,
+    broad_primary_key_counter: Counter,
 ) -> List[str]:
     if filtered_count <= 0:
         return []
@@ -721,6 +787,10 @@ def build_insights(
         insights.append("needs_human_review が多く、review 条件の再設計が必要です。")
     if broad_primary_count / filtered_count >= 0.10:
         insights.append("broad_primary が多く、主料理カテゴリの粒度がまだ粗い可能性があります。")
+    if broad_primary_key_counter.get("meat_dish", 0) / filtered_count >= 0.10:
+        insights.append("meat_dish への偏りが残っており、より具体的な肉料理ラベル優先の prompt 強化が必要です。")
+    if low_confidence_count / filtered_count >= 0.10:
+        insights.append("low_confidence が多く、confidence の出し方と review 条件の整合性を見直す余地があります。")
     return insights
 
 
@@ -738,18 +808,34 @@ def extract_string_list(value: Any) -> List[str]:
 
 def extract_primary_dish_candidates(value: Any) -> List[str]:
     candidates: List[str] = []
-    for item in ensure_list(value):
-        if not isinstance(item, dict):
-            continue
-        key = normalize_scalar(item.get("key"))
-        label_ja = clean_text(item.get("label_ja"))
-        score = format_confidence(coerce_confidence(item.get("score")))
+    for item in extract_primary_dish_candidate_objects(value):
+        key = item["key"]
+        label_ja = item["label_ja"]
+        score = format_confidence(item["score"])
         if key == "missing":
             continue
         if label_ja:
             candidates.append(f"{key}|{label_ja}|{score}")
         else:
             candidates.append(f"{key}|{score}")
+    return candidates
+
+
+def extract_primary_dish_candidate_objects(value: Any) -> List[Dict[str, Any]]:
+    candidates: List[Dict[str, Any]] = []
+    for item in ensure_list(value):
+        if not isinstance(item, dict):
+            continue
+        key = normalize_scalar(item.get("key"))
+        if key == "missing":
+            continue
+        candidates.append(
+            {
+                "key": key,
+                "label_ja": clean_text(item.get("label_ja")),
+                "score": coerce_confidence(item.get("score")),
+            }
+        )
     return candidates
 
 
@@ -764,6 +850,29 @@ def detect_low_confidence_reasons(record: LoadedRecord) -> List[str]:
     if record_has_review_reason(record, "low_confidence"):
         reasons.append("review_reasons=low_confidence")
     return reasons
+
+
+def detect_broad_primary_concrete_candidate_key(record: LoadedRecord) -> Optional[str]:
+    primary_dish_key = normalize_scalar(record.payload.get("primary_dish_key"))
+    if primary_dish_key not in BROAD_PRIMARY_KEYS:
+        return None
+
+    for candidate in extract_primary_dish_candidate_objects(record.payload.get("primary_dish_candidates")):
+        candidate_key = candidate["key"]
+        if candidate_key == primary_dish_key:
+            continue
+        if candidate_key in NON_CONCRETE_CANDIDATE_KEYS:
+            continue
+        return candidate_key
+    return None
+
+
+def build_broad_primary_candidate_reason(record: LoadedRecord) -> str:
+    primary_dish_key = normalize_scalar(record.payload.get("primary_dish_key"))
+    concrete_candidate_key = detect_broad_primary_concrete_candidate_key(record)
+    if primary_dish_key not in BROAD_PRIMARY_KEYS or concrete_candidate_key is None:
+        return ""
+    return f"broad_primary:{primary_dish_key}->{concrete_candidate_key}"
 
 
 def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str]] = None) -> Dict[str, str]:
@@ -845,13 +954,15 @@ def print_console_summary(
         "Signals: "
         f"needs_human_review={totals['needs_human_review']['count']} "
         f"low_confidence={totals['low_confidence']['count']} "
-        f"unknown_primary={totals['unknown_primary']['count']}"
+        f"unknown_primary={totals['unknown_primary']['count']} "
+        f"broad_primary={totals['broad_primary']['count']}"
     )
     print(f"Top primary_dish_key: {format_top_items(top_counts['primary_dish_key'], top_n)}")
     print(
         "Top design_candidate_primary_dish_key: "
         f"{format_top_items(top_counts['design_candidate_primary_dish_key'], top_n)}"
     )
+    print(f"Top broad_primary_key: {format_top_items(top_counts['broad_primary_key'], top_n)}")
     print(f"Top scene_type: {format_top_items(top_counts['scene_type'], top_n)}")
     print("Outputs:")
     for path in output_files:
