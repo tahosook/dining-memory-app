@@ -16,13 +16,17 @@ import unicodedata
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 
-SCHEMA_VERSION = "food_label_exploration_v2"
-PROMPT_VERSION = "food_label_exploration_prompt_v1"
+SCHEMA_VERSION = "food_label_exploration_v3"
+PROMPT_VERSION = "food_label_exploration_prompt_v3"
 OLLAMA_API_BASE_URL = "http://localhost:11434/api"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
+LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.5
+MAX_PRIMARY_DISH_CANDIDATES = 3
+MAX_SUPPORTING_ITEMS = 5
+MAX_REVIEW_REASONS = 5
 
 SCENE_TYPE_OPTIONS = [
     "single_dish",
@@ -74,37 +78,76 @@ SERVING_STYLE_OPTIONS = [
     "menu_page",
     "unknown",
 ]
-LABEL_GRANULARITY_OPTIONS = [
-    "specific_dish",
-    "broad_dish_type",
-    "meal_set",
-    "scene_level",
-    "unknown",
+REVIEW_REASON_OPTIONS = [
+    "unknown_primary",
+    "scene_dominant",
+    "side_item_primary",
+    "low_confidence",
+    "candidate_split",
+    "menu_or_text",
+    "image_quality_issue",
+    "broad_primary",
 ]
+REVIEW_TRIGGER_REASONS = {
+    "unknown_primary",
+    "scene_dominant",
+    "low_confidence",
+    "candidate_split",
+    "menu_or_text",
+    "image_quality_issue",
+}
+SUPPORTING_ITEM_KEYS = {
+    "rice",
+    "soup",
+    "miso_soup",
+    "salad",
+    "pickles",
+    "sauce",
+    "side_dish",
+}
+SCENE_DOMINANT_PRIMARY_KEYS = {
+    "set_meal",
+    "multi_dish_table",
+    "menu_or_text",
+}
+IMAGE_QUALITY_REASON_HINTS = {
+    "blurry",
+    "blur",
+    "low_resolution",
+    "occluded",
+    "cropped",
+    "dark",
+    "glare",
+    "motion_blur",
+}
+DEFAULT_LABEL_JA = {
+    "unknown": "不明",
+    "set_meal": "定食",
+    "bento": "弁当",
+    "dessert": "デザート",
+    "drink": "ドリンク",
+    "menu_or_text": "メニュー画像",
+}
+DEFAULT_REVIEW_NOTE_JA = {
+    "unknown_primary": "主料理不明",
+    "scene_dominant": "scene優勢",
+    "low_confidence": "低信頼",
+    "candidate_split": "候補割れ",
+    "menu_or_text": "メニュー画像",
+    "image_quality_issue": "画質要確認",
+}
 
 FORMAT_SCHEMA: Dict[str, Any] = {
     "type": "object",
     "properties": {
         "schema_version": {"type": "string"},
         "image_id": {"type": "string"},
+        "source_path": {"type": "string"},
         "is_food_related": {"type": "boolean"},
         "analysis_confidence": {"type": "number"},
-        "scene_type": {"type": "string", "enum": SCENE_TYPE_OPTIONS},
-        "main_subjects": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "key": {"type": "string"},
-                    "label_ja": {"type": "string"},
-                    "score": {"type": "number"},
-                    "role": {"type": "string"},
-                },
-                "required": ["key", "label_ja", "score", "role"],
-                "additionalProperties": False,
-            },
-        },
-        "possible_dish_keys": {
+        "primary_dish_key": {"type": "string"},
+        "primary_dish_label_ja": {"type": "string"},
+        "primary_dish_candidates": {
             "type": "array",
             "items": {
                 "type": "object",
@@ -117,14 +160,14 @@ FORMAT_SCHEMA: Dict[str, Any] = {
                 "additionalProperties": False,
             },
         },
-        "secondary_item_keys": {
+        "supporting_items": {
             "type": "array",
             "items": {"type": "string"},
         },
+        "scene_type": {"type": "string", "enum": SCENE_TYPE_OPTIONS},
         "cuisine_type": {"type": "string", "enum": CUISINE_TYPE_OPTIONS},
         "meal_style": {"type": "string", "enum": MEAL_STYLE_OPTIONS},
         "serving_style": {"type": "string", "enum": SERVING_STYLE_OPTIONS},
-        "label_granularity": {"type": "string", "enum": LABEL_GRANULARITY_OPTIONS},
         "contains_multiple_dishes": {"type": "boolean"},
         "is_drink_only": {"type": "boolean"},
         "is_sweets_or_dessert": {"type": "boolean"},
@@ -133,6 +176,7 @@ FORMAT_SCHEMA: Dict[str, Any] = {
         "is_takeout_or_delivery": {"type": "boolean"},
         "visual_attributes": {"type": "array", "items": {"type": "string"}},
         "uncertainty_reasons": {"type": "array", "items": {"type": "string"}},
+        "review_reasons": {"type": "array", "items": {"type": "string", "enum": REVIEW_REASON_OPTIONS}},
         "free_tags": {"type": "array", "items": {"type": "string"}},
         "review_note_ja": {"type": "string"},
         "needs_human_review": {"type": "boolean"},
@@ -140,16 +184,17 @@ FORMAT_SCHEMA: Dict[str, Any] = {
     "required": [
         "schema_version",
         "image_id",
+        "source_path",
         "is_food_related",
         "analysis_confidence",
+        "primary_dish_key",
+        "primary_dish_label_ja",
+        "primary_dish_candidates",
+        "supporting_items",
         "scene_type",
-        "main_subjects",
-        "possible_dish_keys",
-        "secondary_item_keys",
         "cuisine_type",
         "meal_style",
         "serving_style",
-        "label_granularity",
         "contains_multiple_dishes",
         "is_drink_only",
         "is_sweets_or_dessert",
@@ -158,6 +203,7 @@ FORMAT_SCHEMA: Dict[str, Any] = {
         "is_takeout_or_delivery",
         "visual_attributes",
         "uncertainty_reasons",
+        "review_reasons",
         "free_tags",
         "review_note_ja",
         "needs_human_review",
@@ -253,6 +299,7 @@ def main() -> int:
 
     for image_path in image_paths:
         relative_path = image_path.relative_to(input_dir)
+        source_path = relative_path.as_posix()
         image_id = build_image_id(relative_path)
         normalized_path = output_path_with_suffix(normalized_root, relative_path, ".json")
         raw_path = output_path_with_suffix(raw_root, relative_path, ".response.json")
@@ -273,6 +320,7 @@ def main() -> int:
                 image_path=image_path,
                 relative_path=relative_path,
                 image_id=image_id,
+                source_path=source_path,
                 normalized_path=normalized_path,
                 raw_path=raw_path,
                 model=args.model,
@@ -403,6 +451,7 @@ def process_single_image(
     image_path: Path,
     relative_path: Path,
     image_id: str,
+    source_path: str,
     normalized_path: Path,
     raw_path: Path,
     model: str,
@@ -413,6 +462,7 @@ def process_single_image(
             payload = build_chat_payload(
                 model=model,
                 image_id=image_id,
+                source_path=source_path,
                 image_path=prepared_path,
             )
     except Exception as error:
@@ -472,7 +522,11 @@ def process_single_image(
         raise StageError("parse_response", f"Failed to parse model JSON: {error}", cause=error) from error
 
     try:
-        normalized_result = normalize_result(parsed_object, image_id=image_id)
+        normalized_result = normalize_result(
+            parsed_object,
+            image_id=image_id,
+            source_path=source_path,
+        )
     except Exception as error:
         raise StageError("normalize_result", f"Failed to normalize response: {error}", cause=error) from error
 
@@ -503,7 +557,7 @@ def preflight_ollama(*, model: str, timeout: float) -> None:
         )
 
 
-def build_chat_payload(*, model: str, image_id: str, image_path: Path) -> Dict[str, Any]:
+def build_chat_payload(*, model: str, image_id: str, source_path: str, image_path: Path) -> Dict[str, Any]:
     image_bytes = image_path.read_bytes()
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -521,7 +575,7 @@ def build_chat_payload(*, model: str, image_id: str, image_path: Path) -> Dict[s
             },
             {
                 "role": "user",
-                "content": build_user_prompt(image_id=image_id),
+                "content": build_user_prompt(image_id=image_id, source_path=source_path),
                 "images": [image_b64],
             },
         ],
@@ -531,30 +585,37 @@ def build_chat_payload(*, model: str, image_id: str, image_path: Path) -> Dict[s
 def build_system_prompt() -> str:
     return (
         "あなたは食事写真のラベル発掘器です。"
-        "最終分類器ではなく、後でカテゴリ設計に使える半構造化 JSON を返してください。"
-        "JSON オブジェクト以外は返さないでください。"
+        "目的は scene の説明ではなく、主料理カテゴリ候補の発掘です。"
+        "必ず JSON オブジェクトのみを返し、説明文やコードブロックは禁止です。"
     )
 
 
-def build_user_prompt(*, image_id: str) -> str:
+def build_user_prompt(*, image_id: str, source_path: str) -> str:
     schema_summary = {
         "schema_version": SCHEMA_VERSION,
         "scene_type_options": SCENE_TYPE_OPTIONS,
         "cuisine_type_options": CUISINE_TYPE_OPTIONS,
         "meal_style_options": MEAL_STYLE_OPTIONS,
         "serving_style_options": SERVING_STYLE_OPTIONS,
-        "label_granularity_options": LABEL_GRANULARITY_OPTIONS,
+        "review_reason_options": REVIEW_REASON_OPTIONS,
     }
 
     instructions = [
-        "目的: 料理分類器ではなく、食事カテゴリ発掘のためのラベル発掘器として振る舞ってください。",
-        "単品料理に無理に押し込まず、定食、複数皿、デザート+ドリンク、パッケージ食品、メニュー画像、非料理画像も正直に表現してください。",
-        "狭すぎる断定より、少し広くても正しいラベルを優先してください。",
-        "machine-readable な key / tag は snake_case の英語にしてください。",
+        "目的: scene の説明ではなく、この写真で最も代表的な主料理カテゴリを 1 つ発掘してください。",
+        "primary_dish_key は open な snake_case 英語で、カテゴリ設計に使いやすい粒度を優先してください。",
+        "例: ramen, curry_rice, fried_chicken, grilled_fish, hamburger_steak, pasta, sushi, dessert, drink, bento, set_meal, unknown。",
+        "rice, soup, miso_soup, salad, pickles, sauce, side_dish は primary ではなく supporting_items に入れてください。",
+        "定食や複数皿でも、できるだけ主料理カテゴリを 1 つ選んでください。主料理が分からないときだけ set_meal または unknown を使ってください。",
+        "scene_type は補助情報です。scene より dish を優先してください。",
+        "primary_dish_candidates は主料理候補だけを最大 3 件まで、supporting_items は最大 5 件までにしてください。",
+        "review_reasons は次の語彙だけを使ってください: "
+        + ", ".join(REVIEW_REASON_OPTIONS)
+        + "。",
+        "low_confidence, candidate_split, menu_or_text, image_quality_issue, unknown_primary, scene_dominant は review 対象理由です。",
+        "broad_primary や side_item_primary は理由として返してよいですが、それだけで needs_human_review=true にしなくてかまいません。",
         "label_ja と review_note_ja は短い日本語にしてください。",
-        "低信頼・複数皿・曖昧画像では needs_human_review=true にしてください。",
-        "空欄にせず、判断不能な enum は unknown を使ってください。",
         f"image_id は '{image_id}' を返してください。",
+        f"source_path は '{source_path}' を返してください。",
         "返答は JSON オブジェクトのみ。説明文、前置き、コードブロックは禁止です。",
         "利用できる enum 候補:",
         json.dumps(schema_summary, ensure_ascii=False),
@@ -716,7 +777,7 @@ def extract_first_balanced_json_object(value: str) -> str:
     raise ValueError("Could not recover a balanced JSON object from the response.")
 
 
-def normalize_result(raw_result: Dict[str, Any], *, image_id: str) -> Dict[str, Any]:
+def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: str) -> Dict[str, Any]:
     if not isinstance(raw_result, dict):
         raise ValueError("raw_result must be a dict.")
 
@@ -727,156 +788,122 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str) -> Dict[str, 
     is_menu_or_text_only = coerce_bool(raw_result.get("is_menu_or_text_only"), default=False)
     is_takeout_or_delivery = coerce_bool(raw_result.get("is_takeout_or_delivery"), default=False)
 
-    main_subjects = normalize_main_subjects(raw_result.get("main_subjects"))
-    possible_dish_keys = normalize_dish_candidates(raw_result.get("possible_dish_keys"))
-
-    if not main_subjects and possible_dish_keys:
-        first_candidate = possible_dish_keys[0]
-        main_subjects = [
-            {
-                "key": first_candidate["key"],
-                "label_ja": first_candidate["label_ja"],
-                "score": first_candidate["score"],
-                "role": "primary",
-            }
-        ]
-
-    if not possible_dish_keys and main_subjects:
-        possible_dish_keys = [
-            {
-                "key": subject["key"],
-                "label_ja": subject["label_ja"],
-                "score": subject["score"],
-            }
-            for subject in main_subjects[:3]
-        ]
-
-    secondary_item_keys = normalize_machine_string_list(raw_result.get("secondary_item_keys"))
-    if not secondary_item_keys and len(main_subjects) > 1:
-        secondary_item_keys = [subject["key"] for subject in main_subjects[1:] if subject["key"]]
-
-    confidence_candidates = [
-        item["score"] for item in main_subjects if isinstance(item.get("score"), (int, float))
-    ] + [
-        item["score"] for item in possible_dish_keys if isinstance(item.get("score"), (int, float))
-    ]
-    analysis_confidence = clamp_score(raw_result.get("analysis_confidence"))
-    if analysis_confidence is None:
-        analysis_confidence = round(max(confidence_candidates, default=0.0), 4)
-
-    scene_type = normalize_enum(raw_result.get("scene_type"), SCENE_TYPE_OPTIONS)
-    if scene_type is None:
-        if is_menu_or_text_only:
-            scene_type = "menu_or_text"
-        elif is_packaged_food:
-            scene_type = "packaged_food"
-        elif is_drink_only:
-            scene_type = "drink_only"
-        elif contains_multiple_dishes:
-            scene_type = "multi_dish_table"
-        elif raw_result.get("meal_style") == "bento":
-            scene_type = "bento"
-        elif raw_result.get("meal_style") == "set_meal":
-            scene_type = "set_meal"
-        elif main_subjects:
-            scene_type = "single_dish"
-        else:
-            scene_type = "unknown"
-
-    is_food_related = coerce_bool(raw_result.get("is_food_related"), default=None)
-    if is_food_related is None:
-        is_food_related = scene_type != "non_food"
-
-    cuisine_type = normalize_enum(raw_result.get("cuisine_type"), CUISINE_TYPE_OPTIONS)
-    if cuisine_type is None:
-        if is_drink_only:
-            cuisine_type = "drink"
-        elif is_sweets_or_dessert:
-            cuisine_type = "dessert"
-        elif scene_type == "packaged_food":
-            cuisine_type = "mixed"
-        else:
-            cuisine_type = "unknown"
-
-    meal_style = normalize_enum(raw_result.get("meal_style"), MEAL_STYLE_OPTIONS)
-    if meal_style is None:
-        if scene_type == "bento":
-            meal_style = "bento"
-        elif scene_type == "set_meal":
-            meal_style = "set_meal"
-        elif scene_type == "multi_dish_table":
-            meal_style = "shared_table"
-        elif scene_type == "drink_only":
-            meal_style = "drink"
-        elif scene_type == "dessert_and_drink" or is_sweets_or_dessert:
-            meal_style = "dessert"
-        elif scene_type == "packaged_food":
-            meal_style = "packaged"
-        elif scene_type == "single_dish":
-            meal_style = "single_item"
-        else:
-            meal_style = "unknown"
-
-    serving_style = normalize_enum(raw_result.get("serving_style"), SERVING_STYLE_OPTIONS)
-    if serving_style is None:
-        if scene_type == "set_meal":
-            serving_style = "tray"
-        elif scene_type == "multi_dish_table":
-            serving_style = "table_with_multiple_items"
-        elif scene_type == "drink_only":
-            serving_style = "cup_or_glass"
-        elif scene_type == "bento":
-            serving_style = "boxed_meal"
-        elif scene_type == "packaged_food":
-            serving_style = "package"
-        elif scene_type == "menu_or_text":
-            serving_style = "menu_page"
-        else:
-            serving_style = "unknown"
-
-    label_granularity = normalize_enum(
-        raw_result.get("label_granularity"),
-        LABEL_GRANULARITY_OPTIONS,
+    primary_candidates = normalize_primary_dish_candidates(
+        raw_result.get("primary_dish_candidates")
+        or raw_result.get("possible_dish_keys")
+        or raw_result.get("main_subjects")
     )
-    if label_granularity is None:
-        if scene_type in {"set_meal", "bento"}:
-            label_granularity = "meal_set"
-        elif scene_type in {"multi_dish_table", "dessert_and_drink", "menu_or_text", "non_food", "unknown"}:
-            label_granularity = "scene_level"
-        elif possible_dish_keys:
-            label_granularity = "broad_dish_type"
-        else:
-            label_granularity = "unknown"
+    supporting_items = normalize_supporting_items(
+        raw_result.get("supporting_items") or raw_result.get("secondary_item_keys")
+    )
+    primary_candidates, supporting_items = move_support_items_out_of_candidates(
+        primary_candidates,
+        supporting_items,
+    )
+
+    primary_dish_key = normalize_machine_key(raw_result.get("primary_dish_key"), fallback="")
+    primary_dish_label_ja = clean_short_text(raw_result.get("primary_dish_label_ja"))
+
+    if not primary_dish_key and primary_candidates:
+        primary_dish_key = primary_candidates[0]["key"]
+        primary_dish_label_ja = primary_dish_label_ja or primary_candidates[0]["label_ja"]
+
+    scene_type = infer_scene_type(
+        raw_result=raw_result,
+        contains_multiple_dishes=contains_multiple_dishes,
+        is_drink_only=is_drink_only,
+        is_packaged_food=is_packaged_food,
+        primary_candidates=primary_candidates,
+    )
+    is_food_related = infer_is_food_related(raw_result=raw_result, scene_type=scene_type)
+    cuisine_type = infer_cuisine_type(
+        raw_result=raw_result,
+        is_drink_only=is_drink_only,
+        is_sweets_or_dessert=is_sweets_or_dessert,
+        scene_type=scene_type,
+    )
+    meal_style = infer_meal_style(raw_result=raw_result, scene_type=scene_type, is_sweets_or_dessert=is_sweets_or_dessert)
+    serving_style = infer_serving_style(raw_result=raw_result, scene_type=scene_type)
+
+    if not primary_dish_key:
+        primary_dish_key = infer_primary_dish_from_context(
+            scene_type=scene_type,
+            is_food_related=is_food_related,
+            is_drink_only=is_drink_only,
+            is_sweets_or_dessert=is_sweets_or_dessert,
+            meal_style=meal_style,
+        )
+
+    if not primary_dish_label_ja:
+        primary_dish_label_ja = resolve_primary_label(
+            primary_dish_key=primary_dish_key,
+            primary_candidates=primary_candidates,
+        )
+
+    analysis_confidence = resolve_analysis_confidence(
+        raw_result=raw_result,
+        primary_candidates=primary_candidates,
+    )
 
     visual_attributes = normalize_machine_string_list(raw_result.get("visual_attributes"))
     uncertainty_reasons = normalize_machine_string_list(raw_result.get("uncertainty_reasons"))
     free_tags = normalize_machine_string_list(raw_result.get("free_tags"))
+    review_reasons = normalize_review_reasons(raw_result.get("review_reasons"))
 
-    heuristic_review = (
-        analysis_confidence < 0.45
-        or contains_multiple_dishes
-        or scene_type in {"multi_dish_table", "menu_or_text", "unknown"}
-        or bool(uncertainty_reasons)
-    )
-    needs_human_review = coerce_bool(raw_result.get("needs_human_review"), default=False) or heuristic_review
+    # Keep dish discovery primary by demoting side items out of the main slot.
+    if primary_dish_key in SUPPORTING_ITEM_KEYS:
+        supporting_items = append_unique_limited(supporting_items, primary_dish_key, limit=MAX_SUPPORTING_ITEMS)
+        promoted_candidate = first_non_supporting_candidate(primary_candidates)
+        review_reasons = append_reason(review_reasons, "side_item_primary")
+        if promoted_candidate is not None:
+            primary_dish_key = promoted_candidate["key"]
+            primary_dish_label_ja = promoted_candidate["label_ja"]
+        else:
+            primary_dish_key = "unknown"
+            primary_dish_label_ja = resolve_default_label("unknown")
+
+    if primary_dish_key == "unknown":
+        review_reasons = append_reason(review_reasons, "unknown_primary")
+
+    if analysis_confidence < LOW_CONFIDENCE_REVIEW_THRESHOLD:
+        review_reasons = append_reason(review_reasons, "low_confidence")
+
+    if has_candidate_split(primary_candidates):
+        review_reasons = append_reason(review_reasons, "candidate_split")
+
+    if is_menu_or_text_only or scene_type == "menu_or_text":
+        review_reasons = append_reason(review_reasons, "menu_or_text")
+
+    if has_image_quality_issue(uncertainty_reasons):
+        review_reasons = append_reason(review_reasons, "image_quality_issue")
+
+    if (
+        primary_dish_key in SCENE_DOMINANT_PRIMARY_KEYS
+        and not has_non_scene_primary_candidate(primary_candidates)
+    ):
+        review_reasons = append_reason(review_reasons, "scene_dominant")
+
+    review_reasons = review_reasons[:MAX_REVIEW_REASONS]
+    needs_human_review = any(reason in REVIEW_TRIGGER_REASONS for reason in review_reasons)
 
     review_note_ja = clean_short_text(raw_result.get("review_note_ja"))
-    if not review_note_ja and needs_human_review:
-        review_note_ja = "要確認"
+    if not review_note_ja and review_reasons:
+        review_note_ja = DEFAULT_REVIEW_NOTE_JA.get(review_reasons[0], "")
 
     normalized = {
         "schema_version": SCHEMA_VERSION,
         "image_id": image_id,
+        "source_path": source_path,
         "is_food_related": is_food_related,
         "analysis_confidence": round(analysis_confidence, 4),
+        "primary_dish_key": primary_dish_key or "unknown",
+        "primary_dish_label_ja": primary_dish_label_ja or resolve_default_label(primary_dish_key or "unknown"),
+        "primary_dish_candidates": primary_candidates[:MAX_PRIMARY_DISH_CANDIDATES],
+        "supporting_items": supporting_items[:MAX_SUPPORTING_ITEMS],
         "scene_type": scene_type,
-        "main_subjects": main_subjects,
-        "possible_dish_keys": possible_dish_keys,
-        "secondary_item_keys": secondary_item_keys,
         "cuisine_type": cuisine_type,
         "meal_style": meal_style,
         "serving_style": serving_style,
-        "label_granularity": label_granularity,
         "contains_multiple_dishes": contains_multiple_dishes,
         "is_drink_only": is_drink_only,
         "is_sweets_or_dessert": is_sweets_or_dessert,
@@ -885,6 +912,7 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str) -> Dict[str, 
         "is_takeout_or_delivery": is_takeout_or_delivery,
         "visual_attributes": visual_attributes,
         "uncertainty_reasons": uncertainty_reasons,
+        "review_reasons": review_reasons,
         "free_tags": free_tags,
         "review_note_ja": review_note_ja,
         "needs_human_review": needs_human_review,
@@ -892,71 +920,14 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str) -> Dict[str, 
     return normalized
 
 
-def normalize_main_subjects(value: Any) -> List[Dict[str, Any]]:
-    normalized: List[Dict[str, Any]] = []
-    seen = set()
-    for index, item in enumerate(ensure_list(value)):
-        candidate = normalize_subject(item, index=index)
-        if candidate is None:
-            continue
-        dedupe_key = (candidate["key"], candidate["label_ja"])
-        if dedupe_key in seen:
-            continue
-        seen.add(dedupe_key)
-        normalized.append(candidate)
-
-    if normalized:
-        normalized[0]["role"] = "primary"
-        for item in normalized[1:]:
-            if item["role"] == "primary":
-                item["role"] = "secondary"
-
-    return normalized
-
-
-def normalize_subject(value: Any, *, index: int) -> Optional[Dict[str, Any]]:
-    if isinstance(value, str):
-        label_ja = clean_short_text(value)
-        if not label_ja:
-            return None
-        key = normalize_machine_key(value, fallback="unknown")
-        return {
-            "key": key,
-            "label_ja": label_ja,
-            "score": 0.0,
-            "role": "primary" if index == 0 else "secondary",
-        }
-
-    if not isinstance(value, dict):
-        return None
-
-    label_ja = clean_short_text(value.get("label_ja") or value.get("label"))
-    key_source = value.get("key") or value.get("label_ja") or value.get("label")
-    key = normalize_machine_key(key_source, fallback="unknown")
-    score = clamp_score(value.get("score"))
-    if score is None:
-        score = 0.0
-
-    role = clean_short_text(value.get("role")).lower()
-    if not role:
-        role = "primary" if index == 0 else "secondary"
-
-    return {
-        "key": key,
-        "label_ja": label_ja or key,
-        "score": round(score, 4),
-        "role": role,
-    }
-
-
-def normalize_dish_candidates(value: Any) -> List[Dict[str, Any]]:
+def normalize_primary_dish_candidates(value: Any) -> List[Dict[str, Any]]:
     normalized: List[Dict[str, Any]] = []
     seen = set()
     for item in ensure_list(value):
-        candidate = normalize_dish_candidate(item)
+        candidate = normalize_primary_dish_candidate(item)
         if candidate is None:
             continue
-        dedupe_key = (candidate["key"], candidate["label_ja"])
+        dedupe_key = candidate["key"]
         if dedupe_key in seen:
             continue
         seen.add(dedupe_key)
@@ -964,33 +935,274 @@ def normalize_dish_candidates(value: Any) -> List[Dict[str, Any]]:
     return normalized
 
 
-def normalize_dish_candidate(value: Any) -> Optional[Dict[str, Any]]:
+def normalize_primary_dish_candidate(value: Any) -> Optional[Dict[str, Any]]:
     if isinstance(value, str):
-        label_ja = clean_short_text(value)
-        if not label_ja:
+        key = normalize_machine_key(value, fallback="")
+        if not key:
             return None
-        key = normalize_machine_key(value, fallback="unknown")
         return {
             "key": key,
-            "label_ja": label_ja,
+            "label_ja": resolve_default_label(key),
             "score": 0.0,
         }
 
     if not isinstance(value, dict):
         return None
 
-    label_ja = clean_short_text(value.get("label_ja") or value.get("label"))
     key_source = value.get("key") or value.get("label_ja") or value.get("label")
-    key = normalize_machine_key(key_source, fallback="unknown")
+    key = normalize_machine_key(key_source, fallback="")
+    if not key:
+        return None
+
+    label_ja = clean_short_text(value.get("label_ja") or value.get("label")) or resolve_default_label(key)
     score = clamp_score(value.get("score"))
     if score is None:
         score = 0.0
 
     return {
         "key": key,
-        "label_ja": label_ja or key,
+        "label_ja": label_ja,
         "score": round(score, 4),
     }
+
+
+def normalize_supporting_items(value: Any) -> List[str]:
+    normalized: List[str] = []
+    seen = set()
+    for item in ensure_list(value):
+        if isinstance(item, dict):
+            normalized_value = normalize_machine_key(item.get("key") or item.get("label") or item.get("label_ja"), fallback="")
+        else:
+            normalized_value = normalize_machine_key(item, fallback="")
+        if not normalized_value or normalized_value in seen:
+            continue
+        seen.add(normalized_value)
+        normalized.append(normalized_value)
+        if len(normalized) >= MAX_SUPPORTING_ITEMS:
+            break
+    return normalized
+
+
+def move_support_items_out_of_candidates(
+    candidates: Sequence[Dict[str, Any]],
+    supporting_items: Sequence[str],
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    normalized_candidates: List[Dict[str, Any]] = []
+    normalized_supporting_items = list(supporting_items)
+    for candidate in candidates:
+        if candidate["key"] in SUPPORTING_ITEM_KEYS:
+            normalized_supporting_items = append_unique_limited(
+                normalized_supporting_items,
+                candidate["key"],
+                limit=MAX_SUPPORTING_ITEMS,
+            )
+            continue
+        normalized_candidates.append(candidate)
+    return normalized_candidates[:MAX_PRIMARY_DISH_CANDIDATES], normalized_supporting_items[:MAX_SUPPORTING_ITEMS]
+
+
+def infer_scene_type(
+    *,
+    raw_result: Dict[str, Any],
+    contains_multiple_dishes: bool,
+    is_drink_only: bool,
+    is_packaged_food: bool,
+    primary_candidates: Sequence[Dict[str, Any]],
+) -> str:
+    scene_type = normalize_enum(raw_result.get("scene_type"), SCENE_TYPE_OPTIONS)
+    if scene_type is not None:
+        return scene_type
+
+    if coerce_bool(raw_result.get("is_menu_or_text_only"), default=False):
+        return "menu_or_text"
+    if is_packaged_food:
+        return "packaged_food"
+    if is_drink_only:
+        return "drink_only"
+    if normalize_enum(raw_result.get("meal_style"), MEAL_STYLE_OPTIONS) == "bento":
+        return "bento"
+    if normalize_enum(raw_result.get("meal_style"), MEAL_STYLE_OPTIONS) == "set_meal":
+        return "set_meal"
+    if contains_multiple_dishes:
+        return "multi_dish_table"
+    if primary_candidates:
+        return "single_dish"
+    return "unknown"
+
+
+def infer_is_food_related(*, raw_result: Dict[str, Any], scene_type: str) -> bool:
+    is_food_related = coerce_bool(raw_result.get("is_food_related"), default=None)
+    if is_food_related is not None:
+        return is_food_related
+    return scene_type != "non_food"
+
+
+def infer_cuisine_type(
+    *,
+    raw_result: Dict[str, Any],
+    is_drink_only: bool,
+    is_sweets_or_dessert: bool,
+    scene_type: str,
+) -> str:
+    cuisine_type = normalize_enum(raw_result.get("cuisine_type"), CUISINE_TYPE_OPTIONS)
+    if cuisine_type is not None:
+        return cuisine_type
+
+    if is_drink_only:
+        return "drink"
+    if is_sweets_or_dessert:
+        return "dessert"
+    if scene_type == "packaged_food":
+        return "mixed"
+    return "unknown"
+
+
+def infer_meal_style(*, raw_result: Dict[str, Any], scene_type: str, is_sweets_or_dessert: bool) -> str:
+    meal_style = normalize_enum(raw_result.get("meal_style"), MEAL_STYLE_OPTIONS)
+    if meal_style is not None:
+        return meal_style
+
+    if scene_type == "bento":
+        return "bento"
+    if scene_type == "set_meal":
+        return "set_meal"
+    if scene_type == "multi_dish_table":
+        return "shared_table"
+    if scene_type == "drink_only":
+        return "drink"
+    if scene_type == "dessert_and_drink" or is_sweets_or_dessert:
+        return "dessert"
+    if scene_type == "packaged_food":
+        return "packaged"
+    if scene_type == "single_dish":
+        return "single_item"
+    return "unknown"
+
+
+def infer_serving_style(*, raw_result: Dict[str, Any], scene_type: str) -> str:
+    serving_style = normalize_enum(raw_result.get("serving_style"), SERVING_STYLE_OPTIONS)
+    if serving_style is not None:
+        return serving_style
+
+    if scene_type == "set_meal":
+        return "tray"
+    if scene_type == "multi_dish_table":
+        return "table_with_multiple_items"
+    if scene_type == "drink_only":
+        return "cup_or_glass"
+    if scene_type == "bento":
+        return "boxed_meal"
+    if scene_type == "packaged_food":
+        return "package"
+    if scene_type == "menu_or_text":
+        return "menu_page"
+    return "unknown"
+
+
+def infer_primary_dish_from_context(
+    *,
+    scene_type: str,
+    is_food_related: bool,
+    is_drink_only: bool,
+    is_sweets_or_dessert: bool,
+    meal_style: str,
+) -> str:
+    if not is_food_related:
+        return "unknown"
+    if is_drink_only:
+        return "drink"
+    if is_sweets_or_dessert:
+        return "dessert"
+    if scene_type == "bento" or meal_style == "bento":
+        return "bento"
+    if scene_type == "set_meal" or meal_style == "set_meal":
+        return "set_meal"
+    return "unknown"
+
+
+def resolve_primary_label(
+    *,
+    primary_dish_key: str,
+    primary_candidates: Sequence[Dict[str, Any]],
+) -> str:
+    for candidate in primary_candidates:
+        if candidate["key"] == primary_dish_key:
+            return candidate["label_ja"]
+    return resolve_default_label(primary_dish_key)
+
+
+def resolve_default_label(key: str) -> str:
+    if key in DEFAULT_LABEL_JA:
+        return DEFAULT_LABEL_JA[key]
+    return key or DEFAULT_LABEL_JA["unknown"]
+
+
+def resolve_analysis_confidence(*, raw_result: Dict[str, Any], primary_candidates: Sequence[Dict[str, Any]]) -> float:
+    candidate_scores = [candidate["score"] for candidate in primary_candidates if isinstance(candidate.get("score"), (int, float))]
+    if candidate_scores:
+        return round(max(candidate_scores), 4)
+
+    top_level = clamp_score(raw_result.get("analysis_confidence"))
+    if top_level is not None:
+        return round(top_level, 4)
+    return 0.0
+
+
+def normalize_review_reasons(value: Any) -> List[str]:
+    normalized: List[str] = []
+    seen = set()
+    for item in ensure_list(value):
+        reason = normalize_machine_key(item, fallback="")
+        if reason not in REVIEW_REASON_OPTIONS or reason in seen:
+            continue
+        seen.add(reason)
+        normalized.append(reason)
+        if len(normalized) >= MAX_REVIEW_REASONS:
+            break
+    return normalized
+
+
+def first_non_supporting_candidate(candidates: Sequence[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    for candidate in candidates:
+        if candidate["key"] not in SUPPORTING_ITEM_KEYS:
+            return candidate
+    return None
+
+
+def has_candidate_split(candidates: Sequence[Dict[str, Any]]) -> bool:
+    if len(candidates) < 2:
+        return False
+
+    first = clamp_score(candidates[0].get("score"))
+    second = clamp_score(candidates[1].get("score"))
+    if first is None or second is None:
+        return False
+
+    return first < 0.75 and second >= 0.35 and abs(first - second) <= 0.08
+
+
+def has_image_quality_issue(uncertainty_reasons: Sequence[str]) -> bool:
+    return any(reason in IMAGE_QUALITY_REASON_HINTS for reason in uncertainty_reasons)
+
+
+def has_non_scene_primary_candidate(candidates: Sequence[Dict[str, Any]]) -> bool:
+    for candidate in candidates:
+        if candidate["key"] not in SCENE_DOMINANT_PRIMARY_KEYS and candidate["key"] != "unknown":
+            return True
+    return False
+
+
+def append_reason(reasons: Sequence[str], reason: str) -> List[str]:
+    if reason not in REVIEW_REASON_OPTIONS:
+        return list(reasons)
+    return append_unique_limited(list(reasons), reason, limit=MAX_REVIEW_REASONS)
+
+
+def append_unique_limited(values: Sequence[str], item: str, *, limit: int) -> List[str]:
+    normalized = list(values)
+    if item and item not in normalized:
+        normalized.append(item)
+    return normalized[:limit]
 
 
 def ensure_list(value: Any) -> List[Any]:

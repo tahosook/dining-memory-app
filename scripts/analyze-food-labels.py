@@ -11,54 +11,38 @@ import sys
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 
-TARGET_SCHEMA_VERSION = "food_label_exploration_v2"
+TARGET_SCHEMA_VERSION = "food_label_exploration_v3"
 DEFAULT_TOP_N = 20
 LOW_CONFIDENCE_THRESHOLD = 0.5
 SUMMARY_JSON_NAME = "summary.json"
 SUMMARY_MD_NAME = "summary.md"
 REVIEW_CANDIDATES_NAME = "review_candidates.csv"
-SCENE_LEVEL_CANDIDATES_NAME = "scene_level_candidates.csv"
-LOW_CONFIDENCE_CANDIDATES_NAME = "low_confidence_candidates.csv"
 UNKNOWN_CANDIDATES_NAME = "unknown_candidates.csv"
+SCENE_DOMINANT_CANDIDATES_NAME = "scene_dominant_candidates.csv"
+SIDE_ITEM_PRIMARY_CANDIDATES_NAME = "side_item_primary_candidates.csv"
+LOW_CONFIDENCE_CANDIDATES_NAME = "low_confidence_candidates.csv"
 UNKNOWN_VALUE = "unknown"
-
-SUMMARY_BOOLEAN_FIELDS = {
-    "needs_human_review": "人手レビュー推奨",
-    "contains_multiple_dishes": "複数皿",
-    "is_menu_or_text_only": "メニュー/文字のみ",
-}
-
-UNKNOWN_FIELD_LABELS = {
-    "scene_type": "scene_type",
-    "cuisine_type": "cuisine_type",
-    "meal_style": "meal_style",
-    "serving_style": "serving_style",
-    "label_granularity": "label_granularity",
-    "main_subjects.key": "main_subjects.key",
-    "possible_dish_keys.key": "possible_dish_keys.key",
-    "secondary_item_keys": "secondary_item_keys",
-}
+BIAS_REASONS = {"side_item_primary", "scene_dominant", "broad_primary"}
 
 CSV_FIELDNAMES = [
     "image_id",
     "source_path",
     "analysis_confidence",
+    "primary_dish_key",
+    "primary_dish_label_ja",
+    "primary_dish_candidates",
+    "supporting_items",
     "scene_type",
     "cuisine_type",
     "meal_style",
     "serving_style",
-    "label_granularity",
     "needs_human_review",
-    "contains_multiple_dishes",
-    "is_menu_or_text_only",
-    "main_subject_keys",
-    "possible_dish_keys",
-    "secondary_item_keys",
-    "free_tags",
+    "review_reasons",
     "uncertainty_reasons",
+    "free_tags",
     "review_note_ja",
 ]
 CSV_WITH_REASONS_FIELDNAMES = CSV_FIELDNAMES + ["candidate_reasons"]
@@ -67,9 +51,10 @@ OUTPUT_FILENAMES = {
     SUMMARY_JSON_NAME,
     SUMMARY_MD_NAME,
     REVIEW_CANDIDATES_NAME,
-    SCENE_LEVEL_CANDIDATES_NAME,
-    LOW_CONFIDENCE_CANDIDATES_NAME,
     UNKNOWN_CANDIDATES_NAME,
+    SCENE_DOMINANT_CANDIDATES_NAME,
+    SIDE_ITEM_PRIMARY_CANDIDATES_NAME,
+    LOW_CONFIDENCE_CANDIDATES_NAME,
 }
 
 
@@ -94,7 +79,7 @@ class LoadedRecord:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="food_label_exploration_v2 の JSON / JSONL を集計して summary と候補 CSV を出力します。"
+        description="food_label_exploration_v3 の JSON / JSONL を集計して summary と候補 CSV を出力します。"
     )
     parser.add_argument("--input-path", required=True, help="labels.jsonl または集計対象ディレクトリ")
     parser.add_argument("--output-dir", required=True, help="集計結果の出力先ディレクトリ")
@@ -148,16 +133,18 @@ def main() -> int:
     summary_json_path = output_dir / SUMMARY_JSON_NAME
     summary_md_path = output_dir / SUMMARY_MD_NAME
     review_csv_path = output_dir / REVIEW_CANDIDATES_NAME
-    scene_csv_path = output_dir / SCENE_LEVEL_CANDIDATES_NAME
-    low_conf_csv_path = output_dir / LOW_CONFIDENCE_CANDIDATES_NAME
     unknown_csv_path = output_dir / UNKNOWN_CANDIDATES_NAME
+    scene_dominant_csv_path = output_dir / SCENE_DOMINANT_CANDIDATES_NAME
+    side_item_primary_csv_path = output_dir / SIDE_ITEM_PRIMARY_CANDIDATES_NAME
+    low_conf_csv_path = output_dir / LOW_CONFIDENCE_CANDIDATES_NAME
 
     write_json(summary_json_path, analysis["summary_json"])
     write_markdown(summary_md_path, analysis["summary_md"])
     write_csv(review_csv_path, analysis["review_candidates"], include_reasons=False)
-    write_csv(scene_csv_path, analysis["scene_level_candidates"], include_reasons=True)
-    write_csv(low_conf_csv_path, analysis["low_confidence_candidates"], include_reasons=False)
     write_csv(unknown_csv_path, analysis["unknown_candidates"], include_reasons=True)
+    write_csv(scene_dominant_csv_path, analysis["scene_dominant_candidates"], include_reasons=True)
+    write_csv(side_item_primary_csv_path, analysis["side_item_primary_candidates"], include_reasons=True)
+    write_csv(low_conf_csv_path, analysis["low_confidence_candidates"], include_reasons=True)
 
     print_console_summary(
         summary_json=analysis["summary_json"],
@@ -166,9 +153,10 @@ def main() -> int:
             summary_json_path,
             summary_md_path,
             review_csv_path,
-            scene_csv_path,
-            low_conf_csv_path,
             unknown_csv_path,
+            scene_dominant_csv_path,
+            side_item_primary_csv_path,
+            low_conf_csv_path,
         ],
         top_n=min(args.top_n, 5),
     )
@@ -399,90 +387,94 @@ def analyze_records(
     total_records = parseable_records + broken_json_count + invalid_record_shape_count
     schema_version_counts = Counter(record.schema_version for record in records)
 
-    valid_records = [record for record in records if record.schema_version == TARGET_SCHEMA_VERSION]
-    filtered_records = filter_records_by_confidence(valid_records, min_confidence)
-    excluded_by_min_confidence = len(valid_records) - len(filtered_records)
+    v3_records = [record for record in records if record.schema_version == TARGET_SCHEMA_VERSION]
+    filtered_records = filter_records_by_confidence(v3_records, min_confidence)
+    excluded_by_min_confidence = len(v3_records) - len(filtered_records)
 
+    primary_dish_counter = Counter()
+    design_candidate_primary_counter = Counter()
     scene_type_counter = Counter()
+    supporting_items_counter = Counter()
+    review_reasons_counter = Counter()
     cuisine_type_counter = Counter()
     meal_style_counter = Counter()
     serving_style_counter = Counter()
-    label_granularity_counter = Counter()
-    main_subject_counter = Counter()
-    possible_dish_counter = Counter()
-    secondary_item_counter = Counter()
     free_tags_counter = Counter()
-    uncertainty_reasons_counter = Counter()
 
-    is_food_related_count = 0
-    boolean_counts = Counter()
-    unknown_record_count = 0
-    multi_dish_table_count = 0
-    scene_level_count = 0
+    needs_human_review_count = 0
+    unknown_primary_count = 0
+    side_item_primary_count = 0
+    scene_dominant_count = 0
+    broad_primary_count = 0
     low_confidence_count = 0
 
     for record in filtered_records:
         payload = record.payload
-        if coerce_bool(payload.get("is_food_related")):
-            is_food_related_count += 1
-
-        if coerce_bool(payload.get("needs_human_review")):
-            boolean_counts["needs_human_review"] += 1
-        if coerce_bool(payload.get("contains_multiple_dishes")):
-            boolean_counts["contains_multiple_dishes"] += 1
-        if coerce_bool(payload.get("is_menu_or_text_only")):
-            boolean_counts["is_menu_or_text_only"] += 1
-
-        if record.analysis_confidence < LOW_CONFIDENCE_THRESHOLD:
-            low_confidence_count += 1
-
+        primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
         scene_type = normalize_scalar(payload.get("scene_type"))
         cuisine_type = normalize_scalar(payload.get("cuisine_type"))
         meal_style = normalize_scalar(payload.get("meal_style"))
         serving_style = normalize_scalar(payload.get("serving_style"))
-        label_granularity = normalize_scalar(payload.get("label_granularity"))
+        supporting_items = extract_string_list(payload.get("supporting_items"))
+        review_reasons = extract_string_list(payload.get("review_reasons"))
+        free_tags = extract_string_list(payload.get("free_tags"))
 
+        primary_dish_counter[primary_dish_key] += 1
         scene_type_counter[scene_type] += 1
+        supporting_items_counter.update(supporting_items)
+        review_reasons_counter.update(review_reasons)
         cuisine_type_counter[cuisine_type] += 1
         meal_style_counter[meal_style] += 1
         serving_style_counter[serving_style] += 1
-        label_granularity_counter[label_granularity] += 1
+        free_tags_counter.update(free_tags)
 
-        if scene_type == "multi_dish_table":
-            multi_dish_table_count += 1
-        if label_granularity == "scene_level":
-            scene_level_count += 1
+        if coerce_bool(payload.get("needs_human_review")):
+            needs_human_review_count += 1
+        if "unknown_primary" in review_reasons:
+            unknown_primary_count += 1
+        if "side_item_primary" in review_reasons:
+            side_item_primary_count += 1
+        if "scene_dominant" in review_reasons:
+            scene_dominant_count += 1
+        if "broad_primary" in review_reasons:
+            broad_primary_count += 1
+        if record.analysis_confidence < LOW_CONFIDENCE_THRESHOLD or "low_confidence" in review_reasons:
+            low_confidence_count += 1
 
-        main_subject_counter.update(extract_subject_keys(payload.get("main_subjects")))
-        possible_dish_counter.update(extract_subject_keys(payload.get("possible_dish_keys")))
-        secondary_item_counter.update(extract_string_list(payload.get("secondary_item_keys")))
-        free_tags_counter.update(extract_string_list(payload.get("free_tags")))
-        uncertainty_reasons_counter.update(extract_string_list(payload.get("uncertainty_reasons")))
+        if primary_dish_key != UNKNOWN_VALUE and not any(reason in review_reasons for reason in BIAS_REASONS):
+            design_candidate_primary_counter[primary_dish_key] += 1
 
-        if detect_unknown_fields(payload):
-            unknown_record_count += 1
-
-    review_candidates = [build_csv_row(record) for record in valid_records if coerce_bool(record.payload.get("needs_human_review"))]
-    low_confidence_candidates = [
+    review_candidates = [
         build_csv_row(record)
-        for record in valid_records
-        if record.analysis_confidence < LOW_CONFIDENCE_THRESHOLD
-    ]
-    scene_level_candidates = [
-        build_csv_row(record, candidate_reasons=reasons)
-        for record in valid_records
-        if (reasons := detect_scene_level_candidate_reasons(record.payload))
+        for record in v3_records
+        if coerce_bool(record.payload.get("needs_human_review"))
     ]
     unknown_candidates = [
-        build_csv_row(record, candidate_reasons=reasons)
-        for record in valid_records
-        if (reasons := detect_unknown_fields(record.payload))
+        build_csv_row(record, candidate_reasons=["unknown_primary"])
+        for record in v3_records
+        if record_has_review_reason(record, "unknown_primary")
+    ]
+    scene_dominant_candidates = [
+        build_csv_row(record, candidate_reasons=["scene_dominant"])
+        for record in v3_records
+        if record_has_review_reason(record, "scene_dominant")
+    ]
+    side_item_primary_candidates = [
+        build_csv_row(record, candidate_reasons=["side_item_primary"])
+        for record in v3_records
+        if record_has_review_reason(record, "side_item_primary")
+    ]
+    low_confidence_candidates = [
+        build_csv_row(record, candidate_reasons=detect_low_confidence_reasons(record))
+        for record in v3_records
+        if detect_low_confidence_reasons(record)
     ]
 
     sort_candidate_rows(review_candidates)
-    sort_candidate_rows(low_confidence_candidates)
-    sort_candidate_rows(scene_level_candidates)
     sort_candidate_rows(unknown_candidates)
+    sort_candidate_rows(scene_dominant_candidates)
+    sort_candidate_rows(side_item_primary_candidates)
+    sort_candidate_rows(low_confidence_candidates)
 
     filtered_count = len(filtered_records)
     summary_json = {
@@ -503,36 +495,35 @@ def analyze_records(
             "parseable_records": parseable_records,
             "broken_json_records": broken_json_count,
             "invalid_record_shape_count": invalid_record_shape_count,
-            "valid_schema_records": len(valid_records),
-            "filtered_records": filtered_count,
+            "v3_valid_records": len(v3_records),
+            "filtered_v3_records": filtered_count,
             "excluded_by_min_confidence": excluded_by_min_confidence,
-            "is_food_related_count": is_food_related_count,
-            "needs_human_review": build_count_ratio(boolean_counts["needs_human_review"], filtered_count),
-            "contains_multiple_dishes": build_count_ratio(boolean_counts["contains_multiple_dishes"], filtered_count),
-            "is_menu_or_text_only": build_count_ratio(boolean_counts["is_menu_or_text_only"], filtered_count),
-            "unknown_record_count": build_count_ratio(unknown_record_count, filtered_count),
-            "low_confidence_count": build_count_ratio(low_confidence_count, filtered_count),
-            "multi_dish_table_count": build_count_ratio(multi_dish_table_count, filtered_count),
-            "scene_level_count": build_count_ratio(scene_level_count, filtered_count),
+            "legacy_records_skipped": parseable_records - len(v3_records),
+            "needs_human_review": build_count_ratio(needs_human_review_count, filtered_count),
+            "unknown_primary": build_count_ratio(unknown_primary_count, filtered_count),
+            "side_item_primary": build_count_ratio(side_item_primary_count, filtered_count),
+            "scene_dominant": build_count_ratio(scene_dominant_count, filtered_count),
+            "broad_primary": build_count_ratio(broad_primary_count, filtered_count),
+            "low_confidence": build_count_ratio(low_confidence_count, filtered_count),
         },
         "schema_version_counts": dict(sorted(schema_version_counts.items())),
         "top_counts": {
+            "primary_dish_key": counter_to_items(primary_dish_counter, top_n),
+            "design_candidate_primary_dish_key": counter_to_items(design_candidate_primary_counter, top_n),
             "scene_type": counter_to_items(scene_type_counter, top_n),
+            "supporting_items": counter_to_items(supporting_items_counter, top_n),
+            "review_reasons": counter_to_items(review_reasons_counter, top_n),
             "cuisine_type": counter_to_items(cuisine_type_counter, top_n),
             "meal_style": counter_to_items(meal_style_counter, top_n),
             "serving_style": counter_to_items(serving_style_counter, top_n),
-            "label_granularity": counter_to_items(label_granularity_counter, top_n),
-            "main_subjects": counter_to_items(main_subject_counter, top_n),
-            "possible_dish_keys": counter_to_items(possible_dish_counter, top_n),
-            "secondary_item_keys": counter_to_items(secondary_item_counter, top_n),
             "free_tags": counter_to_items(free_tags_counter, top_n),
-            "uncertainty_reasons": counter_to_items(uncertainty_reasons_counter, top_n),
         },
         "candidate_counts": {
             "review_candidates": len(review_candidates),
-            "scene_level_candidates": len(scene_level_candidates),
-            "low_confidence_candidates": len(low_confidence_candidates),
             "unknown_candidates": len(unknown_candidates),
+            "scene_dominant_candidates": len(scene_dominant_candidates),
+            "side_item_primary_candidates": len(side_item_primary_candidates),
+            "low_confidence_candidates": len(low_confidence_candidates),
         },
         "errors": {
             "broken_json_count": broken_json_count,
@@ -541,18 +532,20 @@ def analyze_records(
         },
         "insights": build_insights(
             filtered_count=filtered_count,
-            scene_level_count=scene_level_count,
-            multi_dish_table_count=multi_dish_table_count,
-            unknown_record_count=unknown_record_count,
-            needs_human_review_count=boolean_counts["needs_human_review"],
+            needs_human_review_count=needs_human_review_count,
+            unknown_primary_count=unknown_primary_count,
+            side_item_primary_count=side_item_primary_count,
+            scene_dominant_count=scene_dominant_count,
+            broad_primary_count=broad_primary_count,
         ),
         "output_files": {
             "summary_json": str(output_dir / SUMMARY_JSON_NAME),
             "summary_md": str(output_dir / SUMMARY_MD_NAME),
             "review_candidates_csv": str(output_dir / REVIEW_CANDIDATES_NAME),
-            "scene_level_candidates_csv": str(output_dir / SCENE_LEVEL_CANDIDATES_NAME),
-            "low_confidence_candidates_csv": str(output_dir / LOW_CONFIDENCE_CANDIDATES_NAME),
             "unknown_candidates_csv": str(output_dir / UNKNOWN_CANDIDATES_NAME),
+            "scene_dominant_candidates_csv": str(output_dir / SCENE_DOMINANT_CANDIDATES_NAME),
+            "side_item_primary_candidates_csv": str(output_dir / SIDE_ITEM_PRIMARY_CANDIDATES_NAME),
+            "low_confidence_candidates_csv": str(output_dir / LOW_CONFIDENCE_CANDIDATES_NAME),
         },
     }
 
@@ -562,9 +555,10 @@ def analyze_records(
         "summary_json": summary_json,
         "summary_md": summary_md,
         "review_candidates": review_candidates,
-        "scene_level_candidates": scene_level_candidates,
-        "low_confidence_candidates": low_confidence_candidates,
         "unknown_candidates": unknown_candidates,
+        "scene_dominant_candidates": scene_dominant_candidates,
+        "side_item_primary_candidates": side_item_primary_candidates,
+        "low_confidence_candidates": low_confidence_candidates,
     }
 
 
@@ -612,10 +606,11 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
         f"- Min confidence filter: `{filters['min_confidence']}`",
         f"- Top N: `{filters['top_n']}`",
         f"- 総件数: {totals['total_records']}",
-        f"- 有効件数: {totals['valid_schema_records']}",
-        f"- フィルタ適用後件数: {totals['filtered_records']}",
+        f"- v3 有効件数: {totals['v3_valid_records']}",
+        f"- フィルタ適用後件数: {totals['filtered_v3_records']}",
         f"- 壊れた JSON 件数: {totals['broken_json_records']}",
         f"- 不正 record shape 件数: {totals['invalid_record_shape_count']}",
+        f"- legacy records skipped: {totals['legacy_records_skipped']}",
         "",
         "## Schema Version Counts",
         "| schema_version | count |",
@@ -629,6 +624,20 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
         [
             "",
             "## Top Counts",
+            "### primary_dish_key",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts["primary_dish_key"]))
+    lines.extend(
+        [
+            "",
+            "### design_candidate_primary_dish_key",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts["design_candidate_primary_dish_key"]))
+    lines.extend(
+        [
+            "",
             "### scene_type",
         ]
     )
@@ -636,44 +645,32 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "### main_subjects",
+            "### supporting_items",
         ]
     )
-    lines.extend(render_top_count_table(top_counts["main_subjects"]))
+    lines.extend(render_top_count_table(top_counts["supporting_items"]))
     lines.extend(
         [
             "",
-            "### possible_dish_keys",
+            "### review_reasons",
         ]
     )
-    lines.extend(render_top_count_table(top_counts["possible_dish_keys"]))
-    lines.extend(
-        [
-            "",
-            "### secondary_item_keys",
-        ]
-    )
-    lines.extend(render_top_count_table(top_counts["secondary_item_keys"]))
-    lines.extend(
-        [
-            "",
-            "### free_tags",
-        ]
-    )
-    lines.extend(render_top_count_table(top_counts["free_tags"]))
+    lines.extend(render_top_count_table(top_counts["review_reasons"]))
     lines.extend(
         [
             "",
             "## Review & Design Signals",
             f"- 人手レビュー推奨件数: {totals['needs_human_review']['count']} ({format_percent(totals['needs_human_review']['ratio'])})",
-            f"- 低信頼件数: {totals['low_confidence_count']['count']} ({format_percent(totals['low_confidence_count']['ratio'])})",
-            f"- multi_dish_table 件数: {totals['multi_dish_table_count']['count']} ({format_percent(totals['multi_dish_table_count']['ratio'])})",
-            f"- scene_level 件数: {totals['scene_level_count']['count']} ({format_percent(totals['scene_level_count']['ratio'])})",
-            f"- unknown を含む件数: {totals['unknown_record_count']['count']} ({format_percent(totals['unknown_record_count']['ratio'])})",
+            f"- unknown_primary 件数: {totals['unknown_primary']['count']} ({format_percent(totals['unknown_primary']['ratio'])})",
+            f"- side_item_primary 件数: {totals['side_item_primary']['count']} ({format_percent(totals['side_item_primary']['ratio'])})",
+            f"- scene_dominant 件数: {totals['scene_dominant']['count']} ({format_percent(totals['scene_dominant']['ratio'])})",
+            f"- broad_primary 件数: {totals['broad_primary']['count']} ({format_percent(totals['broad_primary']['ratio'])})",
+            f"- low_confidence 件数: {totals['low_confidence']['count']} ({format_percent(totals['low_confidence']['ratio'])})",
             f"- review_candidates.csv 件数: {candidate_counts['review_candidates']}",
-            f"- scene_level_candidates.csv 件数: {candidate_counts['scene_level_candidates']}",
-            f"- low_confidence_candidates.csv 件数: {candidate_counts['low_confidence_candidates']}",
             f"- unknown_candidates.csv 件数: {candidate_counts['unknown_candidates']}",
+            f"- scene_dominant_candidates.csv 件数: {candidate_counts['scene_dominant_candidates']}",
+            f"- side_item_primary_candidates.csv 件数: {candidate_counts['side_item_primary_candidates']}",
+            f"- low_confidence_candidates.csv 件数: {candidate_counts['low_confidence_candidates']}",
             "",
             "## Insights",
         ]
@@ -682,7 +679,7 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
     if insights:
         lines.extend([f"- {insight}" for insight in insights])
     else:
-        lines.append("- 顕著な偏りはまだ大きくありません。追加データで分布を見直してください。")
+        lines.append("- 顕著な偏りはまだ大きくありません。100 枚単位で再試行して傾向を確認してください。")
 
     return "\n".join(lines) + "\n"
 
@@ -704,73 +701,68 @@ def render_top_count_table(items: Sequence[Dict[str, Any]]) -> List[str]:
 def build_insights(
     *,
     filtered_count: int,
-    scene_level_count: int,
-    multi_dish_table_count: int,
-    unknown_record_count: int,
     needs_human_review_count: int,
+    unknown_primary_count: int,
+    side_item_primary_count: int,
+    scene_dominant_count: int,
+    broad_primary_count: int,
 ) -> List[str]:
     if filtered_count <= 0:
         return []
 
     insights: List[str] = []
-    if scene_level_count / filtered_count >= 0.10:
-        insights.append("scene_level が多いため、単品料理だけでなく scene 系カテゴリを検討してください。")
-    if multi_dish_table_count / filtered_count >= 0.10:
-        insights.append("multi_dish_table が多いため、単一料理分類に無理がある可能性があります。")
-    if unknown_record_count / filtered_count >= 0.10:
-        insights.append("unknown を含む record が多いため、プロンプトまたはカテゴリ粒度の見直し候補です。")
+    if side_item_primary_count / filtered_count >= 0.10:
+        insights.append("primary が rice/soup/side_dish 系に寄っており、主料理定義の強化が必要です。")
+    if scene_dominant_count / filtered_count >= 0.10:
+        insights.append("primary が set_meal / scene 系に寄っており、dish 優先の prompt 修正が必要です。")
+    if unknown_primary_count / filtered_count < 0.10 and scene_dominant_count / filtered_count >= 0.10:
+        insights.append("unknown は少なく scene_dominant が多いため、認識不能より prompt 設計の問題が大きい可能性があります。")
     if needs_human_review_count / filtered_count >= 0.10:
-        insights.append("人手レビュー推奨の割合が高く、人手確認コストが高い可能性があります。")
+        insights.append("needs_human_review が多く、review 条件の再設計が必要です。")
+    if broad_primary_count / filtered_count >= 0.10:
+        insights.append("broad_primary が多く、主料理カテゴリの粒度がまだ粗い可能性があります。")
     return insights
-
-
-def extract_subject_keys(value: Any) -> List[str]:
-    keys: List[str] = []
-    for item in ensure_list(value):
-        if not isinstance(item, dict):
-            continue
-        key = normalize_scalar(item.get("key"))
-        if key != "missing":
-            keys.append(key)
-    return keys
 
 
 def extract_string_list(value: Any) -> List[str]:
     values: List[str] = []
+    seen = set()
     for item in ensure_list(value):
         normalized = normalize_scalar(item)
-        if normalized != "missing":
-            values.append(normalized)
+        if normalized == "missing" or normalized in seen:
+            continue
+        seen.add(normalized)
+        values.append(normalized)
     return values
 
 
-def detect_scene_level_candidate_reasons(payload: Dict[str, Any]) -> List[str]:
+def extract_primary_dish_candidates(value: Any) -> List[str]:
+    candidates: List[str] = []
+    for item in ensure_list(value):
+        if not isinstance(item, dict):
+            continue
+        key = normalize_scalar(item.get("key"))
+        label_ja = clean_text(item.get("label_ja"))
+        score = format_confidence(coerce_confidence(item.get("score")))
+        if key == "missing":
+            continue
+        if label_ja:
+            candidates.append(f"{key}|{label_ja}|{score}")
+        else:
+            candidates.append(f"{key}|{score}")
+    return candidates
+
+
+def record_has_review_reason(record: LoadedRecord, reason: str) -> bool:
+    return reason in extract_string_list(record.payload.get("review_reasons"))
+
+
+def detect_low_confidence_reasons(record: LoadedRecord) -> List[str]:
     reasons: List[str] = []
-    if normalize_scalar(payload.get("scene_type")) == "multi_dish_table":
-        reasons.append("scene_type=multi_dish_table")
-    if normalize_scalar(payload.get("label_granularity")) == "scene_level":
-        reasons.append("label_granularity=scene_level")
-    if coerce_bool(payload.get("contains_multiple_dishes")):
-        reasons.append("contains_multiple_dishes=true")
-    if coerce_bool(payload.get("is_menu_or_text_only")):
-        reasons.append("is_menu_or_text_only=true")
-    if coerce_bool(payload.get("is_packaged_food")):
-        reasons.append("is_packaged_food=true")
-    return reasons
-
-
-def detect_unknown_fields(payload: Dict[str, Any]) -> List[str]:
-    reasons: List[str] = []
-    for field_name in ("scene_type", "cuisine_type", "meal_style", "serving_style", "label_granularity"):
-        if normalize_scalar(payload.get(field_name)) == UNKNOWN_VALUE:
-            reasons.append(UNKNOWN_FIELD_LABELS[field_name])
-
-    if UNKNOWN_VALUE in extract_subject_keys(payload.get("main_subjects")):
-        reasons.append(UNKNOWN_FIELD_LABELS["main_subjects.key"])
-    if UNKNOWN_VALUE in extract_subject_keys(payload.get("possible_dish_keys")):
-        reasons.append(UNKNOWN_FIELD_LABELS["possible_dish_keys.key"])
-    if UNKNOWN_VALUE in extract_string_list(payload.get("secondary_item_keys")):
-        reasons.append(UNKNOWN_FIELD_LABELS["secondary_item_keys"])
+    if record.analysis_confidence < LOW_CONFIDENCE_THRESHOLD:
+        reasons.append("analysis_confidence<0.5")
+    if record_has_review_reason(record, "low_confidence"):
+        reasons.append("review_reasons=low_confidence")
     return reasons
 
 
@@ -780,19 +772,18 @@ def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str
         "image_id": clean_text(payload.get("image_id")),
         "source_path": record.source_path,
         "analysis_confidence": format_confidence(record.analysis_confidence),
+        "primary_dish_key": normalize_scalar(payload.get("primary_dish_key")),
+        "primary_dish_label_ja": clean_text(payload.get("primary_dish_label_ja")),
+        "primary_dish_candidates": ";".join(extract_primary_dish_candidates(payload.get("primary_dish_candidates"))),
+        "supporting_items": ";".join(extract_string_list(payload.get("supporting_items"))),
         "scene_type": normalize_scalar(payload.get("scene_type")),
         "cuisine_type": normalize_scalar(payload.get("cuisine_type")),
         "meal_style": normalize_scalar(payload.get("meal_style")),
         "serving_style": normalize_scalar(payload.get("serving_style")),
-        "label_granularity": normalize_scalar(payload.get("label_granularity")),
         "needs_human_review": format_bool(payload.get("needs_human_review")),
-        "contains_multiple_dishes": format_bool(payload.get("contains_multiple_dishes")),
-        "is_menu_or_text_only": format_bool(payload.get("is_menu_or_text_only")),
-        "main_subject_keys": ";".join(extract_subject_keys(payload.get("main_subjects"))),
-        "possible_dish_keys": ";".join(extract_subject_keys(payload.get("possible_dish_keys"))),
-        "secondary_item_keys": ";".join(extract_string_list(payload.get("secondary_item_keys"))),
-        "free_tags": ";".join(extract_string_list(payload.get("free_tags"))),
+        "review_reasons": ";".join(extract_string_list(payload.get("review_reasons"))),
         "uncertainty_reasons": ";".join(extract_string_list(payload.get("uncertainty_reasons"))),
+        "free_tags": ";".join(extract_string_list(payload.get("free_tags"))),
         "review_note_ja": clean_text(payload.get("review_note_ja")),
     }
     if candidate_reasons is not None:
@@ -844,8 +835,8 @@ def print_console_summary(
     print(
         "Totals: "
         f"total={totals['total_records']} "
-        f"valid={totals['valid_schema_records']} "
-        f"filtered={totals['filtered_records']} "
+        f"v3_valid={totals['v3_valid_records']} "
+        f"filtered={totals['filtered_v3_records']} "
         f"broken_json={totals['broken_json_records']} "
         f"invalid_shape={totals['invalid_record_shape_count']}"
     )
@@ -853,12 +844,15 @@ def print_console_summary(
     print(
         "Signals: "
         f"needs_human_review={totals['needs_human_review']['count']} "
-        f"low_confidence={totals['low_confidence_count']['count']} "
-        f"unknown={totals['unknown_record_count']['count']}"
+        f"low_confidence={totals['low_confidence']['count']} "
+        f"unknown_primary={totals['unknown_primary']['count']}"
+    )
+    print(f"Top primary_dish_key: {format_top_items(top_counts['primary_dish_key'], top_n)}")
+    print(
+        "Top design_candidate_primary_dish_key: "
+        f"{format_top_items(top_counts['design_candidate_primary_dish_key'], top_n)}"
     )
     print(f"Top scene_type: {format_top_items(top_counts['scene_type'], top_n)}")
-    print(f"Top main_subjects: {format_top_items(top_counts['main_subjects'], top_n)}")
-    print(f"Top possible_dish_keys: {format_top_items(top_counts['possible_dish_keys'], top_n)}")
     print("Outputs:")
     for path in output_files:
         print(f"- {path}")

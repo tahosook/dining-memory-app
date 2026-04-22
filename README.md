@@ -89,6 +89,7 @@ npx expo start --dev-client
 - UI とは別に、`scripts/explore-food-labels.py` でローカル画像ディレクトリを一括ラベリングできます
 - 想定は macOS + Ollama のローカル API + `gemma4:e4b` です
 - 対応拡張子は `jpg`, `jpeg`, `png`, `webp`, `heic` です
+- v3 では scene 説明より `primary_dish_key` の発掘を優先し、`supporting_items` と `review_reasons` に補助情報を分離します
 - 出力は `normalized/`, `raw/`, `labels.jsonl`, `errors.jsonl` に保存します
 
 まずは 50 枚程度で試す想定の最小例:
@@ -97,11 +98,11 @@ npx expo start --dev-client
 python3 scripts/explore-food-labels.py --input-dir <photos> --output-dir <out> --model gemma4:e4b --limit 50 --timeout 180
 ```
 
-`normalized/<relative-file>.json` が画像ごとの正規化済み JSON、`raw/<relative-file>.response.json` が生レスポンス保存、`labels.jsonl` が全件集約、`errors.jsonl` が失敗ログです。
+`normalized/<relative-file>.json` が画像ごとの正規化済み JSON、`raw/<relative-file>.response.json` が生レスポンス保存、`labels.jsonl` が全件集約、`errors.jsonl` が失敗ログです。主な v3 フィールドは `primary_dish_key`, `primary_dish_candidates`, `supporting_items`, `scene_type`, `review_reasons`, `needs_human_review` です。
 
 ### Gemma 4 ラベリング結果 集計 CLI
-- `scripts/analyze-food-labels.py` で `labels.jsonl` または `normalized/**/*.json` を読み、分布・頻出 key・要レビュー候補を集計できます
-- `summary.json` と `summary.md` に全体像を保存し、`review_candidates.csv` などの候補 CSV も出力します
+- `scripts/analyze-food-labels.py` で `labels.jsonl` または `normalized/**/*.json` を読み、`primary_dish_key` を中心に分布・bias・要レビュー候補を集計できます
+- `summary.json` と `summary.md` に全体像を保存し、`review_candidates.csv` と reason 別 candidate CSV を出力します
 - `--min-confidence` を指定すると、低信頼 record を summary 集計から除外して見直せます
 
 最小例:
@@ -110,7 +111,7 @@ python3 scripts/explore-food-labels.py --input-dir <photos> --output-dir <out> -
 python3 scripts/analyze-food-labels.py --input-path <label-output-dir> --output-dir <analysis-out> --top-n 20 --min-confidence 0.5
 ```
 
-`summary.json`, `summary.md`, `review_candidates.csv`, `scene_level_candidates.csv`, `low_confidence_candidates.csv`, `unknown_candidates.csv` が出力されます。
+`summary.json`, `summary.md`, `review_candidates.csv`, `unknown_candidates.csv`, `scene_dominant_candidates.csv`, `side_item_primary_candidates.csv`, `low_confidence_candidates.csv` が出力されます。
 
 ### 環境変数
 ```env
