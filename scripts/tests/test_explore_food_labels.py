@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -51,6 +52,15 @@ def make_raw_result(**overrides: object) -> dict[str, object]:
     }
     payload.update(overrides)
     return payload
+
+
+def make_stage_result(payload: dict[str, object]) -> dict[str, object]:
+    content = json.dumps(payload, ensure_ascii=False)
+    return {
+        "request": {"stub": True},
+        "raw_message_content": content,
+        "response_json": {"message": {"content": content}},
+    }
 
 
 class ExploreFoodLabelsTests(unittest.TestCase):
@@ -158,6 +168,146 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertEqual(normalized["meal_style"], "drink")
         self.assertEqual(normalized["serving_style"], "cup_or_glass")
 
+    def test_build_broad_refinement_prompt_limits_compare_set_per_broad_key(self) -> None:
+        cases = {
+            "stew": ["nimono", "curry_rice", "meat_and_potato_stew", "stew"],
+            "meat_dish": ["stir_fry", "grilled_meat", "meat_dish"],
+            "noodles": ["pasta", "noodles"],
+        }
+
+        for broad_key, compare_keys in cases.items():
+            with self.subTest(broad_key=broad_key):
+                prompt = MODULE.build_broad_refinement_prompt(
+                    image_id="img-refine",
+                    source_path="photos/refine.jpg",
+                    coarse_normalized={
+                        "primary_dish_key": broad_key,
+                        "primary_dish_label_ja": "仮ラベル",
+                        "primary_dish_candidates": [{"key": broad_key, "label_ja": "仮ラベル", "score": 0.61}],
+                        "scene_type": "single_dish",
+                        "review_reasons": ["scene_dominant"],
+                    },
+                )
+
+                for compare_key in compare_keys:
+                    self.assertIn(compare_key, prompt)
+
+    def test_should_run_broad_refinement_depends_only_on_primary_key(self) -> None:
+        self.assertTrue(
+            MODULE.should_run_broad_refinement(
+                {
+                    "primary_dish_key": "stew",
+                    "scene_type": "multi_dish_table",
+                    "review_reasons": ["scene_dominant"],
+                }
+            )
+        )
+        self.assertFalse(
+            MODULE.should_run_broad_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "multi_dish_table",
+                    "review_reasons": ["scene_dominant"],
+                }
+            )
+        )
+
+    def test_process_single_image_resolves_broad_primary_with_fine_stage(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="stew",
+            primary_dish_label_ja="煮込み",
+            primary_dish_candidates=[
+                {"key": "stew", "label_ja": "煮込み", "score": 0.66},
+                {"key": "nimono", "label_ja": "煮物", "score": 0.61},
+            ],
+            scene_type="single_dish",
+            meal_style="single_item",
+            serving_style="single_bowl",
+            analysis_confidence=0.66,
+        )
+        fine_payload = {
+            "primary_dish_key": "nimono",
+            "primary_dish_label_ja": "煮物",
+            "primary_dish_candidates": [
+                {"key": "nimono", "label_ja": "煮物", "score": 0.84},
+                {"key": "stew", "label_ja": "煮込み", "score": 0.4},
+            ],
+            "analysis_confidence": 0.84,
+            "review_note_ja": "",
+        }
+
+        result, normalized_payload, raw_payload, calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+        )
+
+        self.assertEqual(result["primary_dish_key"], "nimono")
+        self.assertEqual(result["coarse_primary_dish_key"], "stew")
+        self.assertEqual(result["broad_refinement_status"], "resolved")
+        self.assertEqual(result["broad_refinement_compare_keys"], ["nimono", "curry_rice", "meat_and_potato_stew", "stew"])
+        self.assertEqual(normalized_payload["primary_dish_key"], "nimono")
+        self.assertNotIn("broad_primary", normalized_payload["review_reasons"])
+        self.assertIn("broad_refinement", raw_payload)
+        self.assertEqual(raw_payload["broad_refinement"]["compare_keys"], ["nimono", "curry_rice", "meat_and_potato_stew", "stew"])
+        self.assertEqual(calls[0]["format_schema"], MODULE.FORMAT_SCHEMA)
+        self.assertEqual(calls[1]["format_schema"], MODULE.BROAD_REFINEMENT_FORMAT_SCHEMA)
+
+    def test_process_single_image_keeps_broad_primary_when_fine_stage_cannot_resolve(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="meat_dish",
+            primary_dish_label_ja="肉料理",
+            primary_dish_candidates=[
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.63},
+                {"key": "grilled_meat", "label_ja": "焼肉系", "score": 0.49},
+            ],
+            analysis_confidence=0.63,
+        )
+        fine_payload = {
+            "primary_dish_key": "meat_dish",
+            "primary_dish_label_ja": "肉料理",
+            "primary_dish_candidates": [
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.58},
+                {"key": "grilled_meat", "label_ja": "焼肉系", "score": 0.47},
+            ],
+            "analysis_confidence": 0.58,
+            "review_note_ja": "焼きか炒めか判別困難",
+        }
+
+        result, normalized_payload, raw_payload, _calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+        )
+
+        self.assertEqual(result["primary_dish_key"], "meat_dish")
+        self.assertEqual(result["broad_refinement_status"], "kept_broad")
+        self.assertTrue(result["needs_human_review"])
+        self.assertIn("broad_primary", result["review_reasons"])
+        self.assertEqual(result["review_note_ja"], "焼きか炒めか判別困難")
+        self.assertEqual(normalized_payload["broad_refinement_note_ja"], "焼きか炒めか判別困難")
+        self.assertEqual(raw_payload["broad_refinement"]["response_json"]["message"]["content"], json.dumps(fine_payload, ensure_ascii=False))
+
+    def test_process_single_image_falls_back_to_coarse_when_fine_stage_fails(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="stew",
+            primary_dish_label_ja="煮込み",
+            primary_dish_candidates=[
+                {"key": "stew", "label_ja": "煮込み", "score": 0.62},
+                {"key": "curry_rice", "label_ja": "カレーライス", "score": 0.41},
+            ],
+            analysis_confidence=0.62,
+        )
+
+        result, normalized_payload, raw_payload, calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload), RuntimeError("fine stage timeout")]
+        )
+
+        self.assertEqual(result["primary_dish_key"], "stew")
+        self.assertEqual(result["broad_refinement_status"], "failed")
+        self.assertEqual(result["coarse_primary_dish_key"], "stew")
+        self.assertTrue(result["needs_human_review"])
+        self.assertIn("broad_primary", normalized_payload["review_reasons"])
+        self.assertIn("error", raw_payload["broad_refinement"])
+        self.assertIn("fine stage timeout", raw_payload["broad_refinement"]["error"])
+        self.assertEqual(calls[1]["image_mode"], MODULE.FULL_IMAGE_MODE)
+
     def test_rebuild_labels_jsonl_copies_derived_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -188,6 +338,47 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             self.assertEqual(payload["container_hint"], "bottle")
             self.assertTrue(payload["contains_can_or_bottle"])
             self.assertEqual(payload["review_bucket"], "unknown_likely_bottle")
+
+    def run_process_single_image(
+        self,
+        stage_results: list[object],
+    ) -> tuple[dict[str, object], dict[str, object], dict[str, object], list[dict[str, object]]]:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            image_path = root / "photos" / "sample.jpg"
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            image_path.write_bytes(b"\xff\xd8\xff\xd9")
+            normalized_path = root / "normalized" / "sample.jpg.json"
+            raw_path = root / "raw" / "sample.jpg.response.json"
+
+            calls: list[dict[str, object]] = []
+
+            def fake_run_model_stage(**kwargs: object) -> dict[str, object]:
+                calls.append(dict(kwargs))
+                index = len(calls) - 1
+                outcome = stage_results[index]
+                if isinstance(outcome, Exception):
+                    raise outcome
+                return outcome
+
+            with mock.patch.object(MODULE, "run_model_stage", side_effect=fake_run_model_stage):
+                result = MODULE.process_single_image(
+                    image_path=image_path,
+                    relative_path=Path("photos/sample.jpg"),
+                    image_id="img-process",
+                    source_path="photos/sample.jpg",
+                    normalized_path=normalized_path,
+                    raw_path=raw_path,
+                    model="stub-model",
+                    timeout=30.0,
+                )
+
+            if result is None:
+                raise AssertionError("Expected process_single_image to return a normalized record.")
+
+            normalized_payload = json.loads(normalized_path.read_text(encoding="utf-8"))
+            raw_payload = json.loads(raw_path.read_text(encoding="utf-8"))
+            return result, normalized_payload, raw_payload, calls
 
 
 if __name__ == "__main__":

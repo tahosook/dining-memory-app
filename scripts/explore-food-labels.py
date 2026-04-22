@@ -21,7 +21,8 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 
 SCHEMA_VERSION = "food_label_exploration_v3"
-PROMPT_VERSION = "food_label_exploration_prompt_v6"
+PROMPT_VERSION = "food_label_exploration_prompt_v7"
+BROAD_REFINEMENT_PROMPT_VERSION = "food_label_exploration_broad_refinement_prompt_v1"
 OLLAMA_API_BASE_URL = "http://localhost:11434/api"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.5
@@ -31,6 +32,7 @@ MAX_REVIEW_REASONS = 5
 SPECIFIC_DISH_CONFIDENCE_FALLBACK = 0.72
 BROAD_DISH_CONFIDENCE_FALLBACK = 0.58
 WEAK_DISH_CONFIDENCE_FALLBACK = 0.4
+FULL_IMAGE_MODE = "full_image"
 
 SCENE_TYPE_OPTIONS = [
     "single_dish",
@@ -99,6 +101,7 @@ REVIEW_TRIGGER_REASONS = {
     "candidate_split",
     "menu_or_text",
     "image_quality_issue",
+    "broad_primary",
 }
 SUPPORTING_ITEM_KEYS = {
     "rice",
@@ -180,6 +183,32 @@ PRIMARY_FALLBACK_REVIEW_NOTE_JA = {
     "unknown": "主料理不明",
     "set_meal": "主料理特定困難",
 }
+BROAD_REFINEMENT_RULES: Dict[str, Dict[str, Any]] = {
+    "stew": {
+        "compare_keys": ["nimono", "curry_rice", "meat_and_potato_stew", "stew"],
+        "comparison_notes": [
+            "nimono: looks like Japanese simmered dishes, ingredients keep their shape, and often appears in a small bowl or as part of a set meal.",
+            "curry_rice: looks like curry sauce or roux, often paired with rice, with a broad smooth sauce-like surface.",
+            "meat_and_potato_stew: looks like nikujaga-style stew with visible chunks such as meat, potato, and onion.",
+            "stew: use only when it clearly looks simmered or stewed, but it is not safe to choose the more specific options above.",
+        ],
+    },
+    "meat_dish": {
+        "compare_keys": ["stir_fry", "grilled_meat", "meat_dish"],
+        "comparison_notes": [
+            "stir_fry: chopped meat mixed with vegetables or sauce, pan-fried look, ingredients often spread across the plate.",
+            "grilled_meat: grilled slices or pieces of meat are the main subject, with clearer browned or charred surface and less mixed vegetables.",
+            "meat_dish: use only when you can tell it is mainly a meat dish, but it is not safe to choose stir_fry or grilled_meat.",
+        ],
+    },
+    "noodles": {
+        "compare_keys": ["pasta", "noodles"],
+        "comparison_notes": [
+            "pasta: Italian-style pasta noodles, often with sauce, cheese, or Western plating cues.",
+            "noodles: use only when noodles are clear but it is not safe to call them pasta from the image.",
+        ],
+    },
+}
 
 FORMAT_SCHEMA: Dict[str, Any] = {
     "type": "object",
@@ -251,6 +280,36 @@ FORMAT_SCHEMA: Dict[str, Any] = {
         "free_tags",
         "review_note_ja",
         "needs_human_review",
+    ],
+    "additionalProperties": False,
+}
+BROAD_REFINEMENT_FORMAT_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "primary_dish_key": {"type": "string"},
+        "primary_dish_label_ja": {"type": "string"},
+        "primary_dish_candidates": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "key": {"type": "string"},
+                    "label_ja": {"type": "string"},
+                    "score": {"type": "number"},
+                },
+                "required": ["key", "label_ja", "score"],
+                "additionalProperties": False,
+            },
+        },
+        "analysis_confidence": {"type": "number"},
+        "review_note_ja": {"type": "string"},
+    },
+    "required": [
+        "primary_dish_key",
+        "primary_dish_label_ja",
+        "primary_dish_candidates",
+        "analysis_confidence",
+        "review_note_ja",
     ],
     "additionalProperties": False,
 }
@@ -585,83 +644,171 @@ def process_single_image(
 ) -> Optional[Dict[str, Any]]:
     try:
         with prepared_image_path(image_path) as prepared_path:
-            payload = build_chat_payload(
-                model=model,
-                image_id=image_id,
-                source_path=source_path,
-                image_path=prepared_path,
-            )
+            try:
+                coarse_stage = run_model_stage(
+                    model=model,
+                    format_schema=FORMAT_SCHEMA,
+                    system_prompt=build_system_prompt(),
+                    user_prompt=build_user_prompt(image_id=image_id, source_path=source_path),
+                    prepared_image_path=prepared_path,
+                    timeout=timeout,
+                    image_mode=FULL_IMAGE_MODE,
+                )
+            except Exception as error:
+                raise StageError("ollama_chat", f"Failed to analyze image with Ollama: {error}", cause=error) from error
     except Exception as error:
         raise StageError("prepare_image", f"Failed to prepare image: {error}", cause=error) from error
 
-    try:
-        response_json = post_json(
-            path="/chat",
-            payload=payload,
-            timeout=timeout,
-        )
-    except Exception as error:
-        raise StageError("ollama_chat", f"Failed to analyze image with Ollama: {error}", cause=error) from error
-
-    raw_message_content = None
-    if isinstance(response_json, dict):
-        message = response_json.get("message")
-        if isinstance(message, dict):
-            raw_message_content = message.get("content")
-
-    raw_record = {
-        "schema_version": SCHEMA_VERSION,
-        "prompt_version": PROMPT_VERSION,
-        "image_id": image_id,
-        "relative_path": relative_path.as_posix(),
-        "model": model,
-        "api_path": "/chat",
-        "request": {
-            "model": model,
-            "stream": False,
-            "timeout_seconds": timeout,
-            "format_schema": FORMAT_SCHEMA,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": payload["messages"][0]["content"],
-                },
-                {
-                    "role": "user",
-                    "content": payload["messages"][1]["content"],
-                    "images": ["<omitted_base64_image>"],
-                },
-            ],
-        },
-        "raw_message_content": raw_message_content,
-        "response_json": response_json,
-    }
+    raw_record = build_raw_record(
+        image_id=image_id,
+        relative_path=relative_path,
+        model=model,
+        prompt_version=PROMPT_VERSION,
+        stage_result=coarse_stage,
+    )
+    persist_raw_record(raw_path=raw_path, raw_record=raw_record)
 
     try:
-        write_json_file(raw_path, raw_record)
-    except Exception as error:
-        raise StageError("write_raw_response", f"Failed to write raw response: {error}", cause=error) from error
-
-    try:
-        parsed_object = parse_model_json_object(raw_message_content)
+        coarse_raw_result = parse_model_json_object(coarse_stage["raw_message_content"])
     except Exception as error:
         raise StageError("parse_response", f"Failed to parse model JSON: {error}", cause=error) from error
 
     try:
-        normalized_result = normalize_result(
-            parsed_object,
+        coarse_normalized = normalize_result(
+            coarse_raw_result,
             image_id=image_id,
             source_path=source_path,
         )
     except Exception as error:
         raise StageError("normalize_result", f"Failed to normalize response: {error}", cause=error) from error
 
+    final_normalized = apply_broad_refinement_metadata(
+        coarse_normalized,
+        coarse_normalized=coarse_normalized,
+        status="not_applicable",
+        compare_keys=[],
+        image_mode=FULL_IMAGE_MODE,
+        note_ja="",
+    )
+
+    if should_run_broad_refinement(coarse_normalized):
+        broad_key = coarse_normalized["primary_dish_key"]
+        compare_keys = list(BROAD_REFINEMENT_RULES[broad_key]["compare_keys"])
+        broad_refinement_record: Dict[str, Any] = {
+            "prompt_version": BROAD_REFINEMENT_PROMPT_VERSION,
+            "image_mode": FULL_IMAGE_MODE,
+            "compare_keys": compare_keys,
+        }
+        try:
+            with prepared_image_path(image_path) as refinement_prepared_path:
+                fine_stage = run_model_stage(
+                    model=model,
+                    format_schema=BROAD_REFINEMENT_FORMAT_SCHEMA,
+                    system_prompt=build_system_prompt(),
+                    user_prompt=build_broad_refinement_prompt(
+                        image_id=image_id,
+                        source_path=source_path,
+                        coarse_normalized=coarse_normalized,
+                    ),
+                    prepared_image_path=refinement_prepared_path,
+                    timeout=timeout,
+                    image_mode=FULL_IMAGE_MODE,
+                )
+            broad_refinement_record.update(
+                {
+                    "request": fine_stage["request"],
+                    "raw_message_content": fine_stage["raw_message_content"],
+                    "response_json": fine_stage["response_json"],
+                }
+            )
+            raw_record["broad_refinement"] = broad_refinement_record
+            persist_raw_record(raw_path=raw_path, raw_record=raw_record)
+
+            fine_raw_result = parse_model_json_object(fine_stage["raw_message_content"])
+            merged_raw_result = merge_broad_refinement_into_raw_result(
+                coarse_raw_result=coarse_raw_result,
+                fine_raw_result=fine_raw_result,
+                coarse_primary_dish_key=broad_key,
+            )
+            final_normalized = normalize_result(
+                merged_raw_result,
+                image_id=image_id,
+                source_path=source_path,
+            )
+            final_normalized = apply_broad_refinement_metadata(
+                final_normalized,
+                coarse_normalized=coarse_normalized,
+                status=derive_broad_refinement_status(
+                    coarse_primary_dish_key=broad_key,
+                    final_primary_dish_key=final_normalized["primary_dish_key"],
+                ),
+                compare_keys=compare_keys,
+                image_mode=FULL_IMAGE_MODE,
+                note_ja=clean_short_text(fine_raw_result.get("review_note_ja")),
+            )
+        except Exception as error:
+            broad_refinement_record["error"] = str(error)
+            raw_record["broad_refinement"] = broad_refinement_record
+            persist_raw_record(raw_path=raw_path, raw_record=raw_record)
+            final_normalized = apply_broad_refinement_metadata(
+                coarse_normalized,
+                coarse_normalized=coarse_normalized,
+                status="failed",
+                compare_keys=compare_keys,
+                image_mode=FULL_IMAGE_MODE,
+                note_ja="",
+            )
+
     try:
-        write_json_file(normalized_path, normalized_result)
+        write_json_file(normalized_path, final_normalized)
     except Exception as error:
         raise StageError("write_normalized", f"Failed to write normalized JSON: {error}", cause=error) from error
 
-    return normalized_result
+    return final_normalized
+
+
+def resolve_stage_image_path(*, prepared_image_path: Path, image_mode: str) -> Path:
+    if image_mode != FULL_IMAGE_MODE:
+        raise ValueError(f"Unsupported image_mode: {image_mode}")
+    return prepared_image_path
+
+
+def should_run_broad_refinement(coarse_normalized: Dict[str, Any]) -> bool:
+    return coarse_normalized.get("primary_dish_key") in BROAD_PRIMARY_KEYS
+
+
+def derive_broad_refinement_status(*, coarse_primary_dish_key: str, final_primary_dish_key: str) -> str:
+    if final_primary_dish_key == coarse_primary_dish_key:
+        return "kept_broad"
+    return "resolved"
+
+
+def build_raw_record(
+    *,
+    image_id: str,
+    relative_path: Path,
+    model: str,
+    prompt_version: str,
+    stage_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "prompt_version": prompt_version,
+        "image_id": image_id,
+        "relative_path": relative_path.as_posix(),
+        "model": model,
+        "api_path": "/chat",
+        "request": stage_result["request"],
+        "raw_message_content": stage_result["raw_message_content"],
+        "response_json": stage_result["response_json"],
+    }
+
+
+def persist_raw_record(*, raw_path: Path, raw_record: Dict[str, Any]) -> None:
+    try:
+        write_json_file(raw_path, raw_record)
+    except Exception as error:
+        raise StageError("write_raw_response", f"Failed to write raw response: {error}", cause=error) from error
 
 
 def preflight_ollama(*, model: str, timeout: float) -> None:
@@ -683,25 +830,87 @@ def preflight_ollama(*, model: str, timeout: float) -> None:
         )
 
 
-def build_chat_payload(*, model: str, image_id: str, source_path: str, image_path: Path) -> Dict[str, Any]:
+def run_model_stage(
+    *,
+    model: str,
+    format_schema: Dict[str, Any],
+    system_prompt: str,
+    user_prompt: str,
+    prepared_image_path: Path,
+    timeout: float,
+    image_mode: str,
+) -> Dict[str, Any]:
+    stage_image_path = resolve_stage_image_path(
+        prepared_image_path=prepared_image_path,
+        image_mode=image_mode,
+    )
+    payload = build_chat_payload(
+        model=model,
+        format_schema=format_schema,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        image_path=stage_image_path,
+    )
+    response_json = post_json(
+        path="/chat",
+        payload=payload,
+        timeout=timeout,
+    )
+    raw_message_content = None
+    if isinstance(response_json, dict):
+        message = response_json.get("message")
+        if isinstance(message, dict):
+            raw_message_content = message.get("content")
+    return {
+        "request": {
+            "model": model,
+            "stream": False,
+            "timeout_seconds": timeout,
+            "format_schema": format_schema,
+            "image_mode": image_mode,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt,
+                    "images": ["<omitted_base64_image>"],
+                },
+            ],
+        },
+        "raw_message_content": raw_message_content,
+        "response_json": response_json,
+    }
+
+
+def build_chat_payload(
+    *,
+    model: str,
+    format_schema: Dict[str, Any],
+    system_prompt: str,
+    user_prompt: str,
+    image_path: Path,
+) -> Dict[str, Any]:
     image_bytes = image_path.read_bytes()
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
     return {
         "model": model,
         "stream": False,
-        "format": FORMAT_SCHEMA,
+        "format": format_schema,
         "options": {
             "temperature": 0,
         },
         "messages": [
             {
                 "role": "system",
-                "content": build_system_prompt(),
+                "content": system_prompt,
             },
             {
                 "role": "user",
-                "content": build_user_prompt(image_id=image_id, source_path=source_path),
+                "content": user_prompt,
                 "images": [image_b64],
             },
         ],
@@ -745,8 +954,10 @@ def build_user_prompt(*, image_id: str, source_path: str) -> str:
         "8. multi_dish_table and set_meal are fallback labels, not default labels.",
         "9. If a meat dish is visible and you can roughly tell the style, prefer fried_cutlet, fried_chicken, grilled_meat, stir_fry, stew, or meat_and_potato_stew over meat_dish.",
         "10. Use meat_dish only as a last-resort broad fallback when no more specific dish-oriented label can be chosen reasonably.",
-        "11. A broad but usable dish label is still better than set_meal. Low confidence should be used only for real ambiguity, not by default.",
-        "12. Only set needs_human_review=true when there is a real reason, such as unknown primary dish, very low confidence, strong ambiguity between candidates, menu/text image, or severe visibility issues.",
+        "11. Use stew only as a last-resort broad fallback when you cannot safely choose nimono, curry_rice, or meat_and_potato_stew.",
+        "12. Use noodles only as a fallback when noodles are visible but it is not safe to narrow them beyond noodles.",
+        "13. A broad but usable dish label is still better than set_meal. Low confidence should be used only for real ambiguity, not by default.",
+        "14. Only set needs_human_review=true when there is a real reason, such as unknown primary dish, very low confidence, strong ambiguity between candidates, menu/text image, or severe visibility issues.",
         "",
         "When choosing primary_dish_key:",
         '- First ask: "What is the main dish the user most likely wants to log?"',
@@ -819,6 +1030,61 @@ def build_user_prompt(*, image_id: str, source_path: str) -> str:
         "Available enum options:",
         json.dumps(schema_summary, ensure_ascii=False),
     ]
+    return "\n".join(instructions)
+
+
+def build_broad_refinement_prompt(
+    *,
+    image_id: str,
+    source_path: str,
+    coarse_normalized: Dict[str, Any],
+) -> str:
+    broad_key = coarse_normalized["primary_dish_key"]
+    if broad_key not in BROAD_REFINEMENT_RULES:
+        raise ValueError(f"Unsupported broad refinement key: {broad_key}")
+
+    rules = BROAD_REFINEMENT_RULES[broad_key]
+    compare_keys = rules["compare_keys"]
+    comparison_notes = rules["comparison_notes"]
+    candidates_preview = [
+        f'{candidate["key"]}|{candidate["label_ja"]}|{round(candidate["score"], 4)}'
+        for candidate in coarse_normalized.get("primary_dish_candidates", [])
+    ]
+
+    instructions = [
+        "Refine a previously broad main-dish label.",
+        f"The coarse stage selected '{broad_key}'.",
+        f"Choose only from these compare keys: {', '.join(compare_keys)}.",
+        "Prefer the most specific safe category.",
+        f"Use '{broad_key}' only as the fallback when the more specific compare keys are not safe.",
+        "",
+        "Comparison rubric:",
+    ]
+    instructions.extend(f"- {note}" for note in comparison_notes)
+    instructions.extend(
+        [
+            "",
+            "Coarse-stage hints:",
+            f"- coarse_primary_dish_key: {coarse_normalized['primary_dish_key']}",
+            f"- coarse_primary_dish_label_ja: {coarse_normalized['primary_dish_label_ja']}",
+            f"- coarse_primary_dish_candidates: {json.dumps(candidates_preview, ensure_ascii=False)}",
+            f"- coarse_scene_type: {coarse_normalized['scene_type']}",
+            f"- coarse_review_reasons: {json.dumps(coarse_normalized['review_reasons'], ensure_ascii=False)}",
+            "",
+            "Rules:",
+            f"- primary_dish_key must be one of: {', '.join(compare_keys)}",
+            "- primary_dish_label_ja must be short natural Japanese",
+            f"- primary_dish_candidates: up to {len(compare_keys)} and only use compare keys",
+            "- review_note_ja should be empty when the refinement resolves cleanly",
+            f"- if you keep '{broad_key}', explain briefly in review_note_ja why it is still not safe to choose a more specific key",
+            "- use confidence scores in 0..1",
+            "- do not output scene labels or unrelated categories",
+            "",
+            "Use only the structured JSON object defined by the response schema.",
+            f"image_id is '{image_id}' only for reference.",
+            f"source_path is '{source_path}' only for reference.",
+        ]
+    )
     return "\n".join(instructions)
 
 
@@ -1138,25 +1404,22 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         ):
         review_reasons = append_reason(review_reasons, "scene_dominant")
 
-    more_specific_broad_candidate = None
     if primary_dish_key in BROAD_PRIMARY_KEYS:
-        more_specific_broad_candidate = find_more_specific_broad_candidate(
-            primary_dish_key=primary_dish_key,
-            candidates=primary_candidates,
-        )
-        if more_specific_broad_candidate is not None:
-            review_reasons = append_reason(review_reasons, "broad_primary")
+        review_reasons = append_reason(review_reasons, "broad_primary")
 
     review_reasons = review_reasons[:MAX_REVIEW_REASONS]
-    needs_human_review = any(reason in REVIEW_TRIGGER_REASONS for reason in review_reasons) or (
-        "broad_primary" in review_reasons and more_specific_broad_candidate is not None
-    )
+    needs_human_review = any(reason in REVIEW_TRIGGER_REASONS for reason in review_reasons)
 
+    broad_refinement_note_ja = clean_short_text(raw_result.get("broad_refinement_note_ja"))
     review_note_ja = clean_short_text(raw_result.get("review_note_ja"))
-    if not review_note_ja and primary_dish_key in PRIMARY_FALLBACK_REVIEW_NOTE_JA:
+    if primary_dish_key in BROAD_PRIMARY_KEYS and broad_refinement_note_ja:
+        review_note_ja = broad_refinement_note_ja
+    elif not review_note_ja and primary_dish_key in PRIMARY_FALLBACK_REVIEW_NOTE_JA:
         review_note_ja = PRIMARY_FALLBACK_REVIEW_NOTE_JA[primary_dish_key]
     elif not review_note_ja and review_reasons:
         review_note_ja = DEFAULT_REVIEW_NOTE_JA.get(review_reasons[0], "")
+    if primary_dish_key in BROAD_PRIMARY_KEYS and not review_note_ja:
+        review_note_ja = DEFAULT_REVIEW_NOTE_JA["broad_primary"]
 
     container_hint = infer_container_hint(
         visual_attributes=visual_attributes,
@@ -1201,6 +1464,79 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         "contains_can_or_bottle": contains_can_or_bottle,
         "review_bucket": review_bucket,
     }
+    return normalized
+
+
+def merge_broad_refinement_into_raw_result(
+    *,
+    coarse_raw_result: Dict[str, Any],
+    fine_raw_result: Dict[str, Any],
+    coarse_primary_dish_key: str,
+) -> Dict[str, Any]:
+    if coarse_primary_dish_key not in BROAD_REFINEMENT_RULES:
+        raise ValueError(f"Unsupported broad refinement key: {coarse_primary_dish_key}")
+
+    compare_keys = set(BROAD_REFINEMENT_RULES[coarse_primary_dish_key]["compare_keys"])
+    fine_primary_dish_key = normalize_machine_key(fine_raw_result.get("primary_dish_key"), fallback="")
+    if fine_primary_dish_key not in compare_keys:
+        raise ValueError(
+            f"Broad refinement returned unsupported key '{fine_primary_dish_key}' for coarse '{coarse_primary_dish_key}'."
+        )
+
+    fine_candidates = [
+        candidate
+        for candidate in normalize_primary_dish_candidates(fine_raw_result.get("primary_dish_candidates"))
+        if candidate["key"] in compare_keys
+    ]
+    if fine_primary_dish_key and not any(candidate["key"] == fine_primary_dish_key for candidate in fine_candidates):
+        fine_candidates.insert(
+            0,
+            {
+                "key": fine_primary_dish_key,
+                "label_ja": clean_short_text(fine_raw_result.get("primary_dish_label_ja")) or resolve_default_label(fine_primary_dish_key),
+                "score": round(clamp_score(fine_raw_result.get("analysis_confidence")) or 0.0, 4),
+                "_score_present": clamp_score(fine_raw_result.get("analysis_confidence")) is not None,
+            },
+        )
+
+    merged_raw_result = dict(coarse_raw_result)
+    merged_raw_result["primary_dish_key"] = fine_primary_dish_key
+    merged_raw_result["primary_dish_label_ja"] = (
+        clean_short_text(fine_raw_result.get("primary_dish_label_ja")) or resolve_default_label(fine_primary_dish_key)
+    )
+    merged_raw_result["primary_dish_candidates"] = serialize_primary_dish_candidates(
+        prioritize_primary_candidate(fine_candidates, fine_primary_dish_key)[:MAX_PRIMARY_DISH_CANDIDATES]
+    )
+    if clamp_score(fine_raw_result.get("analysis_confidence")) is not None:
+        merged_raw_result["analysis_confidence"] = round(clamp_score(fine_raw_result.get("analysis_confidence")) or 0.0, 4)
+    fine_note_ja = clean_short_text(fine_raw_result.get("review_note_ja"))
+    merged_raw_result["review_note_ja"] = fine_note_ja
+    merged_raw_result["broad_refinement_note_ja"] = fine_note_ja
+    return merged_raw_result
+
+
+def apply_broad_refinement_metadata(
+    final_normalized: Dict[str, Any],
+    *,
+    coarse_normalized: Dict[str, Any],
+    status: str,
+    compare_keys: Sequence[str],
+    image_mode: str,
+    note_ja: str,
+) -> Dict[str, Any]:
+    normalized = dict(final_normalized)
+    cleaned_note_ja = clean_short_text(note_ja)
+    normalized["coarse_primary_dish_key"] = coarse_normalized["primary_dish_key"]
+    normalized["coarse_primary_dish_label_ja"] = coarse_normalized["primary_dish_label_ja"]
+    normalized["broad_refinement_status"] = status
+    normalized["broad_refinement_compare_keys"] = list(compare_keys)
+    normalized["broad_refinement_note_ja"] = cleaned_note_ja
+    normalized["broad_refinement_image_mode"] = image_mode
+    if normalized["primary_dish_key"] in BROAD_PRIMARY_KEYS:
+        if cleaned_note_ja:
+            normalized["review_note_ja"] = cleaned_note_ja
+        elif not normalized["review_note_ja"]:
+            normalized["review_note_ja"] = DEFAULT_REVIEW_NOTE_JA["broad_primary"]
     return normalized
 
 

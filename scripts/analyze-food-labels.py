@@ -28,6 +28,9 @@ BROAD_PRIMARY_CANDIDATES_NAME = "broad_primary_candidates.csv"
 UNKNOWN_VALUE = "unknown"
 BIAS_REASONS = {"side_item_primary", "scene_dominant", "broad_primary"}
 BROAD_PRIMARY_KEYS = {"meat_dish", "stew", "noodles"}
+RESOLVED_BROAD_REFINEMENT_STATUSES = {"resolved"}
+FAILED_BROAD_REFINEMENT_STATUSES = {"failed"}
+KEPT_BROAD_REFINEMENT_STATUSES = {"kept_broad"}
 NON_CONCRETE_CANDIDATE_KEYS = BROAD_PRIMARY_KEYS | {
     UNKNOWN_VALUE,
     "set_meal",
@@ -425,17 +428,27 @@ def analyze_records(
     free_tags_counter = Counter()
     broad_primary_key_counter = Counter()
     broad_primary_concrete_candidate_counter = Counter()
+    coarse_broad_primary_key_counter = Counter()
+    broad_refinement_resolved_to_key_counter = Counter()
 
     needs_human_review_count = 0
     unknown_primary_count = 0
     side_item_primary_count = 0
     scene_dominant_count = 0
     broad_primary_count = 0
+    coarse_broad_primary_count = 0
+    broad_refinement_resolved_count = 0
+    broad_refinement_kept_broad_count = 0
+    broad_refinement_failed_count = 0
     low_confidence_count = 0
 
     for record in filtered_records:
         payload = record.payload
         primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
+        coarse_primary_dish_key = normalize_scalar(payload.get("coarse_primary_dish_key"))
+        if coarse_primary_dish_key == "missing":
+            coarse_primary_dish_key = primary_dish_key
+        broad_refinement_status = normalize_scalar(payload.get("broad_refinement_status"))
         scene_type = normalize_scalar(payload.get("scene_type"))
         cuisine_type = normalize_scalar(payload.get("cuisine_type"))
         meal_style = normalize_scalar(payload.get("meal_style"))
@@ -467,6 +480,17 @@ def analyze_records(
             broad_primary_key_counter[primary_dish_key] += 1
             if broad_primary_candidate_key is not None:
                 broad_primary_concrete_candidate_counter[broad_primary_candidate_key] += 1
+        if coarse_primary_dish_key in BROAD_PRIMARY_KEYS:
+            coarse_broad_primary_count += 1
+            coarse_broad_primary_key_counter[coarse_primary_dish_key] += 1
+        if broad_refinement_status in RESOLVED_BROAD_REFINEMENT_STATUSES:
+            broad_refinement_resolved_count += 1
+            if primary_dish_key not in {"missing", UNKNOWN_VALUE}:
+                broad_refinement_resolved_to_key_counter[primary_dish_key] += 1
+        if broad_refinement_status in KEPT_BROAD_REFINEMENT_STATUSES:
+            broad_refinement_kept_broad_count += 1
+        if broad_refinement_status in FAILED_BROAD_REFINEMENT_STATUSES:
+            broad_refinement_failed_count += 1
         if detect_low_confidence_reasons(record):
             low_confidence_count += 1
 
@@ -504,11 +528,11 @@ def analyze_records(
     ]
     broad_primary_candidates = []
     for record in v3_records:
-        candidate_reason = build_broad_primary_candidate_reason(record)
-        if not candidate_reason:
+        candidate_reasons = build_broad_primary_candidate_reasons(record)
+        if not candidate_reasons:
             continue
         broad_primary_candidates.append(
-            build_csv_row(record, candidate_reasons=[candidate_reason])
+            build_csv_row(record, candidate_reasons=candidate_reasons)
         )
 
     sort_candidate_rows(review_candidates)
@@ -546,6 +570,10 @@ def analyze_records(
             "side_item_primary": build_count_ratio(side_item_primary_count, filtered_count),
             "scene_dominant": build_count_ratio(scene_dominant_count, filtered_count),
             "broad_primary": build_count_ratio(broad_primary_count, filtered_count),
+            "coarse_broad_primary": build_count_ratio(coarse_broad_primary_count, filtered_count),
+            "broad_refinement_resolved": build_count_ratio(broad_refinement_resolved_count, filtered_count),
+            "broad_refinement_kept_broad": build_count_ratio(broad_refinement_kept_broad_count, filtered_count),
+            "broad_refinement_failed": build_count_ratio(broad_refinement_failed_count, filtered_count),
             "low_confidence": build_count_ratio(low_confidence_count, filtered_count),
         },
         "schema_version_counts": dict(sorted(schema_version_counts.items())),
@@ -559,8 +587,10 @@ def analyze_records(
             "meal_style": counter_to_items(meal_style_counter, top_n),
             "serving_style": counter_to_items(serving_style_counter, top_n),
             "free_tags": counter_to_items(free_tags_counter, top_n),
+            "coarse_broad_primary_key": counter_to_items(coarse_broad_primary_key_counter, top_n),
             "broad_primary_key": counter_to_items(broad_primary_key_counter, top_n),
             "broad_primary_concrete_candidate_key": counter_to_items(broad_primary_concrete_candidate_counter, top_n),
+            "broad_refinement_resolved_to_key": counter_to_items(broad_refinement_resolved_to_key_counter, top_n),
         },
         "candidate_counts": {
             "review_candidates": len(review_candidates),
@@ -582,6 +612,10 @@ def analyze_records(
             side_item_primary_count=side_item_primary_count,
             scene_dominant_count=scene_dominant_count,
             broad_primary_count=broad_primary_count,
+            coarse_broad_primary_count=coarse_broad_primary_count,
+            broad_refinement_resolved_count=broad_refinement_resolved_count,
+            broad_refinement_kept_broad_count=broad_refinement_kept_broad_count,
+            broad_refinement_failed_count=broad_refinement_failed_count,
             low_confidence_count=low_confidence_count,
             broad_primary_key_counter=broad_primary_key_counter,
         ),
@@ -715,10 +749,24 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "### coarse_broad_primary_key",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts["coarse_broad_primary_key"]))
+    lines.extend(
+        [
+            "",
             "### broad_primary_concrete_candidate_key",
         ]
     )
     lines.extend(render_top_count_table(top_counts["broad_primary_concrete_candidate_key"]))
+    lines.extend(
+        [
+            "",
+            "### broad_refinement_resolved_to_key",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts["broad_refinement_resolved_to_key"]))
     lines.extend(
         [
             "",
@@ -728,6 +776,10 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
             f"- side_item_primary 件数: {totals['side_item_primary']['count']} ({format_percent(totals['side_item_primary']['ratio'])})",
             f"- scene_dominant 件数: {totals['scene_dominant']['count']} ({format_percent(totals['scene_dominant']['ratio'])})",
             f"- broad_primary 件数: {totals['broad_primary']['count']} ({format_percent(totals['broad_primary']['ratio'])})",
+            f"- coarse_broad_primary 件数: {totals['coarse_broad_primary']['count']} ({format_percent(totals['coarse_broad_primary']['ratio'])})",
+            f"- broad_refinement_resolved 件数: {totals['broad_refinement_resolved']['count']} ({format_percent(totals['broad_refinement_resolved']['ratio'])})",
+            f"- broad_refinement_kept_broad 件数: {totals['broad_refinement_kept_broad']['count']} ({format_percent(totals['broad_refinement_kept_broad']['ratio'])})",
+            f"- broad_refinement_failed 件数: {totals['broad_refinement_failed']['count']} ({format_percent(totals['broad_refinement_failed']['ratio'])})",
             f"- low_confidence 件数: {totals['low_confidence']['count']} ({format_percent(totals['low_confidence']['ratio'])})",
             f"- review_candidates.csv 件数: {candidate_counts['review_candidates']}",
             f"- unknown_candidates.csv 件数: {candidate_counts['unknown_candidates']}",
@@ -770,6 +822,10 @@ def build_insights(
     side_item_primary_count: int,
     scene_dominant_count: int,
     broad_primary_count: int,
+    coarse_broad_primary_count: int,
+    broad_refinement_resolved_count: int,
+    broad_refinement_kept_broad_count: int,
+    broad_refinement_failed_count: int,
     low_confidence_count: int,
     broad_primary_key_counter: Counter,
 ) -> List[str]:
@@ -787,6 +843,17 @@ def build_insights(
         insights.append("needs_human_review が多く、review 条件の再設計が必要です。")
     if broad_primary_count / filtered_count >= 0.10:
         insights.append("broad_primary が多く、主料理カテゴリの粒度がまだ粗い可能性があります。")
+    if coarse_broad_primary_count > broad_primary_count:
+        resolved_count = coarse_broad_primary_count - broad_primary_count
+        insights.append(
+            f"coarse broad から {resolved_count} 件は fine refinement で具体カテゴリへ落ちており、broad fallback の残件確認が有効です。"
+        )
+    if broad_refinement_kept_broad_count / filtered_count >= 0.10:
+        insights.append("fine refinement 後も broad fallback が多く残っており、比較 rubric か crop 補助の改善余地があります。")
+    if broad_refinement_failed_count > 0:
+        insights.append("broad refinement failed があり、fine stage のレスポンス安定性確認が必要です。")
+    if broad_refinement_resolved_count > 0 and broad_primary_count == 0:
+        insights.append("coarse broad は fine refinement で解消できており、residual broad はかなり減っています。")
     if broad_primary_key_counter.get("meat_dish", 0) / filtered_count >= 0.10:
         insights.append("meat_dish への偏りが残っており、より具体的な肉料理ラベル優先の prompt 強化が必要です。")
     if low_confidence_count / filtered_count >= 0.10:
@@ -867,12 +934,36 @@ def detect_broad_primary_concrete_candidate_key(record: LoadedRecord) -> Optiona
     return None
 
 
-def build_broad_primary_candidate_reason(record: LoadedRecord) -> str:
-    primary_dish_key = normalize_scalar(record.payload.get("primary_dish_key"))
-    concrete_candidate_key = detect_broad_primary_concrete_candidate_key(record)
-    if primary_dish_key not in BROAD_PRIMARY_KEYS or concrete_candidate_key is None:
+def compact_candidate_reason_text(value: Any) -> str:
+    text = clean_text(value)
+    if not text:
         return ""
-    return f"broad_primary:{primary_dish_key}->{concrete_candidate_key}"
+    text = re.sub(r"\s+", " ", text).strip()
+    return text.replace(";", ",")
+
+
+def build_broad_primary_candidate_reasons(record: LoadedRecord) -> List[str]:
+    primary_dish_key = normalize_scalar(record.payload.get("primary_dish_key"))
+    if primary_dish_key not in BROAD_PRIMARY_KEYS:
+        return []
+
+    coarse_primary_dish_key = normalize_scalar(record.payload.get("coarse_primary_dish_key"))
+    if coarse_primary_dish_key == "missing":
+        coarse_primary_dish_key = primary_dish_key
+
+    reasons = [f"broad_fallback:{coarse_primary_dish_key}"]
+
+    concrete_candidate_key = detect_broad_primary_concrete_candidate_key(record)
+    if concrete_candidate_key is not None:
+        reasons.append(f"best_alt:{concrete_candidate_key}")
+
+    refinement_note_ja = compact_candidate_reason_text(
+        record.payload.get("broad_refinement_note_ja") or record.payload.get("review_note_ja")
+    )
+    if refinement_note_ja:
+        reasons.append(f"refine_note:{refinement_note_ja}")
+
+    return reasons
 
 
 def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str]] = None) -> Dict[str, str]:
@@ -955,7 +1046,11 @@ def print_console_summary(
         f"needs_human_review={totals['needs_human_review']['count']} "
         f"low_confidence={totals['low_confidence']['count']} "
         f"unknown_primary={totals['unknown_primary']['count']} "
-        f"broad_primary={totals['broad_primary']['count']}"
+        f"broad_primary={totals['broad_primary']['count']} "
+        f"coarse_broad_primary={totals['coarse_broad_primary']['count']} "
+        f"refined={totals['broad_refinement_resolved']['count']} "
+        f"kept_broad={totals['broad_refinement_kept_broad']['count']} "
+        f"refinement_failed={totals['broad_refinement_failed']['count']}"
     )
     print(f"Top primary_dish_key: {format_top_items(top_counts['primary_dish_key'], top_n)}")
     print(
@@ -963,6 +1058,11 @@ def print_console_summary(
         f"{format_top_items(top_counts['design_candidate_primary_dish_key'], top_n)}"
     )
     print(f"Top broad_primary_key: {format_top_items(top_counts['broad_primary_key'], top_n)}")
+    print(f"Top coarse_broad_primary_key: {format_top_items(top_counts['coarse_broad_primary_key'], top_n)}")
+    print(
+        "Top broad_refinement_resolved_to_key: "
+        f"{format_top_items(top_counts['broad_refinement_resolved_to_key'], top_n)}"
+    )
     print(f"Top scene_type: {format_top_items(top_counts['scene_type'], top_n)}")
     print("Outputs:")
     for path in output_files:

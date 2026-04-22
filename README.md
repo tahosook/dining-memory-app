@@ -91,6 +91,7 @@ npx expo start --dev-client
 - 対応拡張子は `jpg`, `jpeg`, `png`, `webp`, `heic` です
 - v3 では scene 説明より `primary_dish_key` の発掘を優先し、`supporting_items` と `review_reasons` に補助情報を分離します
 - `meat_dish` は broad な last-resort fallback として扱い、可能なら `fried_cutlet`, `fried_chicken`, `grilled_meat`, `stir_fry`, `stew` などへ寄せます
+- `stew`, `meat_dish`, `noodles` は coarse 判定で broad fallback になった時だけ、compare set を絞った fine refinement を追加実行します
 - 出力は `normalized/`, `raw/`, `labels.jsonl`, `errors.jsonl` に保存します
 - `--workers` で安全寄りの並列実行ができます。既定は `1`、まずは `2` から試し、余裕があれば `3〜4` を検討してください
 
@@ -111,7 +112,8 @@ python3 scripts/explore-food-labels.py --input-dir <photos> --output-dir <out> -
 ### Gemma 4 ラベリング結果 集計 CLI
 - `scripts/analyze-food-labels.py` で `labels.jsonl` または `normalized/**/*.json` を読み、`primary_dish_key` を中心に分布・bias・要レビュー候補を集計できます
 - `summary.json` と `summary.md` に全体像を保存し、`review_candidates.csv` と reason 別 candidate CSV を出力します
-- `broad_primary_candidates.csv` で、`meat_dish` など broad primary だが候補により具体的な dish が見えている record を抽出できます
+- `summary.json` / `summary.md` には coarse broad 件数と fine refinement の resolved / kept_broad / failed 件数も含まれます
+- `broad_primary_candidates.csv` は fine refinement 後も broad fallback のまま残った record を中心に抽出します
 - `--min-confidence` を指定すると、低信頼 record を summary 集計から除外して見直せます
 
 最小例:
