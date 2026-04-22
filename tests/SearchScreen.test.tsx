@@ -26,6 +26,8 @@ jest.mock('../src/database/services/MealService', () => ({
 import { SearchScreen } from '../src/screens/SearchScreen/SearchScreen';
 import { MealService } from '../src/database/services/MealService';
 
+let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -63,6 +65,11 @@ describe('SearchScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     focusCallbacks.length = 0;
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   test('shows loading state during the first search', async () => {

@@ -23,6 +23,8 @@ import {
   redownloadMealInputAssistModel,
 } from '../src/ai/mealInputAssist/modelInstaller';
 
+let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
+
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     getStatistics: jest.fn(),
@@ -130,6 +132,11 @@ describe('StatsScreen', () => {
   beforeEach(() => {
     focusCallbacks.length = 0;
     jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
   });
 
   test('shows loading state on the initial render', async () => {
@@ -222,6 +229,7 @@ describe('SettingsScreen', () => {
   beforeEach(() => {
     focusCallbacks.length = 0;
     jest.clearAllMocks();
+    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
     (AppSettingsService.setAiInputAssistEnabled as jest.Mock).mockResolvedValue(undefined);
