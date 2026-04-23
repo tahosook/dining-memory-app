@@ -24,6 +24,7 @@
 - [docs/domain/database-design.md](./domain/database-design.md): current storage rules
 - [docs/engineering/coding-standards.md](./engineering/coding-standards.md): coding rules
 - [docs/engineering/codex-workflow.md](./engineering/codex-workflow.md): verification and workflow
+- [docs/engineering/food-labeling-guidelines.md](./engineering/food-labeling-guidelines.md): 食事画像ラベリング用スクリプトの責務、優先度、打ち止めライン
 
 ## Canonical Docs
 
@@ -47,6 +48,7 @@
 ### Engineering
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Codex Workflow](./engineering/codex-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
+- [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
 - [Immediate Improvements](./engineering/immediate-improvements.md): 今すぐ入れるべき具体的な改善案と優先度.
 
 ### Notes

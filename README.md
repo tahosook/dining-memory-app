@@ -23,6 +23,7 @@
 - [DB設計](docs/domain/database-design.md): current schema and storage rules
 - [実装規約](docs/engineering/coding-standards.md): coding rules
 - [Codex 作業ルール](docs/engineering/codex-workflow.md): review and verification workflow
+- [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けた script 修整の判断ルール
 - [即時改善提案](docs/engineering/immediate-improvements.md): 今すぐ入れるべき改善案の整理
 
 ### ドキュメント入口
@@ -86,6 +87,7 @@ npx expo start --dev-client
 - model の導入状態、readiness、blocker reason は Settings 画面で確認します
 
 ### Gemma 4 食事写真ラベリング CLI
+- script の修整方針、責務、打ち止めラインは [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md) を参照してください
 - UI とは別に、`scripts/explore-food-labels.py` でローカル画像ディレクトリを一括ラベリングできます
 - 想定は macOS + Ollama のローカル API + `gemma4:e4b` です
 - 対応拡張子は `jpg`, `jpeg`, `png`, `webp`, `heic` です
