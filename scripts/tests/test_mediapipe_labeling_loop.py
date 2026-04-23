@@ -6,11 +6,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 MODULE_PATH = SCRIPTS_DIR / "mediapipe_labeling_loop.py"
+EXPLORE_MODULE_PATH = SCRIPTS_DIR / "explore-food-labels.py"
 
 
 def load_module():
@@ -24,6 +26,19 @@ def load_module():
 
 
 MODULE = load_module()
+
+
+def load_explore_module():
+    sys.path.insert(0, str(SCRIPTS_DIR))
+    spec = importlib.util.spec_from_file_location("explore_food_labels_for_tests", EXPLORE_MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Could not load module from {EXPLORE_MODULE_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+EXPLORE_MODULE = load_explore_module()
 
 
 def write_json(path: Path, payload: dict[str, object]) -> None:
@@ -212,7 +227,73 @@ class SequencedGitSnapshotProvider:
         return snapshot
 
 
+class RecordingExecutor:
+    def __init__(self) -> None:
+        self.models: list[str | None] = []
+
+    def run(
+        self,
+        prompt_text: str,
+        repo_root: Path,
+        output_dir: Path,
+        model_name: str | None = None,
+    ) -> dict[str, object]:
+        del prompt_text, repo_root
+        self.models.append(model_name)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        last_message_path = output_dir / "executor_last_message.txt"
+        stdout_path = output_dir / "executor_stdout.txt"
+        stderr_path = output_dir / "executor_stderr.txt"
+        last_message_path.write_text("recording-executor\n", encoding="utf-8")
+        stdout_path.write_text("ok\n", encoding="utf-8")
+        stderr_path.write_text("", encoding="utf-8")
+        return {
+            "success": True,
+            "exit_code": 0,
+            "model": model_name,
+            "last_message_path": str(last_message_path),
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+        }
+
+
 class MediaPipeLabelingLoopTests(unittest.TestCase):
+    def test_explore_prompt_prioritizes_dish_over_scene(self) -> None:
+        prompt = EXPLORE_MODULE.build_user_prompt(image_id="img-1", source_path="photos/1.jpg")
+
+        self.assertIn(
+            "choose specific dish > cooking-method dish > broad dish > set_meal > unknown",
+            prompt,
+        )
+        self.assertIn(
+            "scene_type only as supporting context; it must not override a visible dish",
+            prompt,
+        )
+        self.assertIn(
+            "multi_dish_table and set_meal are fallback labels for truly mixed or dish-less scenes",
+            prompt,
+        )
+
+    def test_codex_cli_executor_passes_selected_model(self) -> None:
+        executor = MODULE.CodexCliExecutor(default_model="gpt-5.4-mini")
+        completed = mock.Mock(returncode=0, stdout="ok", stderr="")
+        with tempfile.TemporaryDirectory() as temp_dir, mock.patch.object(
+            MODULE.subprocess,
+            "run",
+            return_value=completed,
+        ) as run_mock:
+            output_dir = Path(temp_dir)
+            result = executor.run(
+                "hello",
+                REPO_ROOT,
+                output_dir,
+                model_name="gpt-5.3-codex",
+            )
+
+        command = run_mock.call_args.args[0]
+        self.assertEqual(command[:6], ["codex", "exec", "--full-auto", "-m", "gpt-5.3-codex", "-C"])
+        self.assertEqual(result["model"], "gpt-5.3-codex")
+
     def test_select_target_prioritizes_unknown_primary_over_broad(self) -> None:
         config = make_config()
         summary = make_summary(
@@ -298,6 +379,9 @@ class MediaPipeLabelingLoopTests(unittest.TestCase):
                 runs_dir=runs_dir,
                 summary_path=None,
                 executor_name="dry_run",
+                codex_model="gpt-5.4-mini",
+                codex_fallback_model="gpt-5.3-codex",
+                codex_fallback_after_stalled_cycles=2,
                 explore_model="gemma4:e4b",
                 explore_limit=5,
                 explore_workers=2,
@@ -351,6 +435,9 @@ class MediaPipeLabelingLoopTests(unittest.TestCase):
                 runs_dir=runs_dir,
                 summary_path=None,
                 executor_name="codex_cli",
+                codex_model="gpt-5.4-mini",
+                codex_fallback_model="gpt-5.3-codex",
+                codex_fallback_after_stalled_cycles=2,
                 explore_model="gemma4:e4b",
                 explore_limit=None,
                 explore_workers=2,
@@ -400,6 +487,9 @@ class MediaPipeLabelingLoopTests(unittest.TestCase):
                 runs_dir=runs_dir,
                 summary_path=None,
                 executor_name="dry_run",
+                codex_model="gpt-5.4-mini",
+                codex_fallback_model="gpt-5.3-codex",
+                codex_fallback_after_stalled_cycles=2,
                 explore_model="gemma4:e4b",
                 explore_limit=None,
                 explore_workers=2,
@@ -448,6 +538,9 @@ class MediaPipeLabelingLoopTests(unittest.TestCase):
                 runs_dir=runs_dir,
                 summary_path=None,
                 executor_name="dry_run",
+                codex_model="gpt-5.4-mini",
+                codex_fallback_model="gpt-5.3-codex",
+                codex_fallback_after_stalled_cycles=2,
                 explore_model="gemma4:e4b",
                 explore_limit=None,
                 explore_workers=2,
@@ -461,6 +554,69 @@ class MediaPipeLabelingLoopTests(unittest.TestCase):
 
             self.assertEqual(result["stop_reason"], "max_cycles_reached")
             self.assertEqual(len(pipeline_runner.calls), 1)
+
+    def test_run_loop_switches_to_fallback_model_after_consecutive_stalls(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "photos"
+            input_dir.mkdir()
+            prompt_template_path = root / "prompt.txt"
+            prompt_template_path.write_text("{{HYPOTHESIS_TEXT}}", encoding="utf-8")
+            config_path = root / "config.json"
+            write_json(config_path, make_config(max_cycles_per_run=3, max_no_change_attempts_per_target=3))
+            state_path = root / "state.json"
+            write_json(state_path, MODULE.default_state())
+            runs_dir = root / "runs"
+
+            baseline_summary = make_summary(
+                unknown_primary=(4, 0.2),
+                broad_primary=(4, 0.2),
+                broad_primary_key=[{"value": "stew", "count": 4}],
+            )
+            after_summary = make_summary(
+                unknown_primary=(4, 0.2),
+                broad_primary=(4, 0.2),
+                broad_primary_key=[{"value": "stew", "count": 4}],
+            )
+            pipeline_runner = FakePipelineRunner(
+                [
+                    {"summary": baseline_summary},
+                    {"summary": after_summary},
+                    {"summary": after_summary},
+                    {"summary": after_summary},
+                ]
+            )
+            executor = RecordingExecutor()
+
+            MODULE.run_loop(
+                repo_root=REPO_ROOT,
+                input_dir=input_dir,
+                config_path=config_path,
+                prompt_template_path=prompt_template_path,
+                state_path=state_path,
+                runs_dir=runs_dir,
+                summary_path=None,
+                executor_name="codex_cli",
+                codex_model="gpt-5.4-mini",
+                codex_fallback_model="gpt-5.3-codex",
+                codex_fallback_after_stalled_cycles=2,
+                explore_model="gemma4:e4b",
+                explore_limit=None,
+                explore_workers=2,
+                explore_timeout=180.0,
+                analyze_top_n=20,
+                analyze_min_confidence=0.5,
+                executor=executor,
+                pipeline_runner=pipeline_runner,
+                git_snapshot_provider=StaticGitSnapshotProvider(),
+            )
+
+            self.assertEqual(executor.models, ["gpt-5.4-mini", "gpt-5.4-mini", "gpt-5.3-codex"])
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [entry["executor_model_strategy"] for entry in state["cycle_history"]],
+                ["primary", "primary", "fallback_after_stalled_cycles"],
+            )
 
     def test_detect_guardrail_violations_flags_new_disallowed_change(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -508,6 +664,9 @@ class MediaPipeLabelingLoopTests(unittest.TestCase):
                 runs_dir=runs_dir,
                 summary_path=None,
                 executor_name="dry_run",
+                codex_model="gpt-5.4-mini",
+                codex_fallback_model="gpt-5.3-codex",
+                codex_fallback_after_stalled_cycles=2,
                 explore_model="gemma4:e4b",
                 explore_limit=None,
                 explore_workers=2,

@@ -21,8 +21,8 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 
 SCHEMA_VERSION = "food_label_exploration_v3"
-PROMPT_VERSION = "food_label_exploration_prompt_v7"
-BROAD_REFINEMENT_PROMPT_VERSION = "food_label_exploration_broad_refinement_prompt_v1"
+PROMPT_VERSION = "food_label_exploration_prompt_v9"
+BROAD_REFINEMENT_PROMPT_VERSION = "food_label_exploration_broad_refinement_prompt_v3"
 OLLAMA_API_BASE_URL = "http://localhost:11434/api"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 LOW_CONFIDENCE_REVIEW_THRESHOLD = 0.5
@@ -105,6 +105,12 @@ REVIEW_TRIGGER_REASONS = {
     "menu_or_text",
     "image_quality_issue",
     "broad_primary",
+}
+SCENE_DOMINANT_FALLBACK_REASONS = {
+    "low_confidence",
+    "candidate_split",
+    "menu_or_text",
+    "image_quality_issue",
 }
 SUPPORTING_ITEM_KEYS = {
     "rice",
@@ -191,16 +197,19 @@ BROAD_REFINEMENT_RULES: Dict[str, Dict[str, Any]] = {
         "compare_keys": ["nimono", "curry_rice", "meat_and_potato_stew", "stew"],
         "comparison_notes": [
             "nimono: prefer this for Japanese simmered dishes where ingredients keep their shape, including small bowls or set-meal dishes that the coarse stage called stew.",
+            "nimono: if the image has Japanese simmered-dish cues and nimono is moderately supported, choose nimono even when the sauce is thick or dark, or the ingredients are varied.",
             "curry_rice: looks like curry sauce or roux, often paired with rice, with a broad smooth sauce-like surface.",
             "meat_and_potato_stew: looks like nikujaga-style stew with visible chunks such as meat, potato, and onion.",
-            "stew: keep only for generic stew-like dishes, sauce- or soup-heavy Western stew cues, or when the specific options above are not safe.",
+            "stew: keep only for generic stew-like dishes, sauce- or soup-heavy Western stew cues, or when nimono, curry_rice, and meat_and_potato_stew are all unsafe.",
         ],
     },
     "meat_dish": {
         "compare_keys": ["stir_fry", "grilled_meat", "meat_dish"],
         "comparison_notes": [
             "stir_fry: meat is mixed with vegetables or sauce, looks tossed or pan-fried together, and ingredients often spread across the plate with an overall stir-fried feel.",
+            "stir_fry: for Japanese set meals or rice bowls, prefer this when cooked meat pieces are visible with sauce or pan-fried texture but no clear grill marks.",
             "grilled_meat: grilled or sauteed meat itself is the main subject, with clearer browned or charred surfaces, sliced meat or yakiniku-like pieces, and fewer mixed vegetables.",
+            "grilled_meat: prefer this when sliced or chunked meat dominates and has visible browning, searing, or yakiniku/steak-like cues even if it is served with rice.",
             "meat_dish: use only when it is clearly a meat-centered dish, but it is still not safe to decide between stir_fry and grilled_meat.",
         ],
     },
@@ -951,20 +960,21 @@ def build_user_prompt(*, image_id: str, source_path: str) -> str:
 
     instructions = [
         "Important priorities:",
-        "1. Prefer a MAIN DISH label over a scene label.",
-        "2. Use scene_type only as supporting context.",
+        "1. Prefer a MAIN DISH label over a scene label: if any representative dish is visible, choose specific dish > cooking-method dish > broad dish > set_meal > unknown.",
+        "2. Use scene_type only as supporting context; it must not override a visible dish.",
         "3. Use supporting_items for rice, soup, miso_soup, salad, pickles, sauce, side_dish, bread, egg, drinks, and other accompaniments.",
         "4. Use set_meal as primary_dish_key ONLY when the main dish truly cannot be identified.",
         "5. Even if the photo shows multiple dishes, choose the most representative main dish category if possible.",
         "6. When choosing the main dish, use this order: specific dish > cooking-method dish > broad dish > set_meal or unknown.",
         "7. Do NOT use rice, soup, side_dish, pickles, salad, sauce, or other accompaniments as primary_dish_key unless the image genuinely centers on that food alone.",
-        "8. multi_dish_table and set_meal are fallback labels, not default labels.",
+        "8. multi_dish_table and set_meal are fallback labels for truly mixed or dish-less scenes, not default labels.",
         "9. If a meat dish is visible and you can roughly tell the style, prefer fried_cutlet, fried_chicken, grilled_meat, stir_fry, stew, or meat_and_potato_stew over meat_dish.",
         "10. Use meat_dish only as a last-resort broad fallback when no more specific dish-oriented label can be chosen reasonably.",
         "11. Use stew only as a last-resort broad fallback when you cannot safely choose nimono, curry_rice, or meat_and_potato_stew.",
         "12. Use noodles only as a fallback when noodles are visible but it is not safe to narrow them beyond noodles.",
         "13. A broad but usable dish label is still better than set_meal. Low confidence should be used only for real ambiguity, not by default.",
         "14. Only set needs_human_review=true when there is a real reason, such as unknown primary dish, very low confidence, strong ambiguity between candidates, menu/text image, or severe visibility issues.",
+        "15. Do not include scene_dominant in review_reasons when primary_dish_key is a specific dish such as grilled_fish, fried_cutlet, stir_fry, grilled_meat, curry_rice, nimono, dessert, or drink.",
         "",
         "When choosing primary_dish_key:",
         '- First ask: "What is the main dish the user most likely wants to log?"',
@@ -1098,6 +1108,7 @@ def build_broad_refinement_prompt(
                 "",
                 "meat_dish-specific rule:",
                 "- if stir_fry or grilled_meat is reasonably supported, choose that more specific key instead of meat_dish",
+                "- for cooked meat served over or beside rice, prefer stir_fry unless clear browned or charred meat surfaces support grilled_meat",
                 "- keep meat_dish only when the dish is meat-centered but the image still does not safely support either stir_fry or grilled_meat",
             ]
         )
@@ -1107,6 +1118,7 @@ def build_broad_refinement_prompt(
                 "",
                 "stew-specific rule:",
                 "- if nimono is reasonably supported by visible shaped ingredients and Japanese simmered-dish cues, choose nimono instead of stew",
+                "- do not keep stew merely because the sauce is thick/dark or the ingredients are varied when Japanese nimono cues are visible",
                 "- keep stew only for generic stew-like dishes or sauce/soup-heavy Western stew cues that do not safely fit nimono, curry_rice, or meat_and_potato_stew",
             ]
         )
@@ -1406,6 +1418,8 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         uncertainty_reasons=uncertainty_reasons,
     ):
         review_reasons = append_reason(review_reasons, "low_confidence")
+    else:
+        review_reasons = remove_reason(review_reasons, "low_confidence")
 
     if has_candidate_split(primary_candidates):
         review_reasons = append_reason(review_reasons, "candidate_split")
@@ -1416,18 +1430,17 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
     if has_image_quality_issue(uncertainty_reasons):
         review_reasons = append_reason(review_reasons, "image_quality_issue")
 
-    if primary_dish_key in SCENE_DOMINANT_PRIMARY_KEYS and (
-        primary_dish_key == "menu_or_text"
-        or find_primary_replacement_candidate(
-            primary_candidates,
-            scene_type=scene_type,
-            meal_style=meal_style,
-            is_drink_only=is_drink_only,
-            allow_contextual=True,
-        )
-        is None
-        ):
+    if should_keep_scene_dominant_review_reason(
+        primary_dish_key=primary_dish_key,
+        primary_candidates=primary_candidates,
+        scene_type=scene_type,
+        meal_style=meal_style,
+        is_drink_only=is_drink_only,
+        review_reasons=review_reasons,
+    ):
         review_reasons = append_reason(review_reasons, "scene_dominant")
+    else:
+        review_reasons = remove_reason(review_reasons, "scene_dominant")
 
     review_reasons = reconcile_broad_primary_review_reason(
         review_reasons=review_reasons,
@@ -1856,6 +1869,7 @@ def resolve_analysis_confidence(
         candidate["score"]
         for candidate in primary_candidates
         if candidate.get("_score_present") and isinstance(candidate.get("score"), (int, float))
+        and candidate["score"] > 0
     ]
     if candidate_scores:
         return round(max(candidate_scores), 4), "candidate_scores"
@@ -2058,6 +2072,31 @@ def has_candidate_split(candidates: Sequence[Dict[str, Any]]) -> bool:
     return first < 0.75 and second >= 0.35 and abs(first - second) <= 0.08
 
 
+def should_keep_scene_dominant_review_reason(
+    *,
+    primary_dish_key: str,
+    primary_candidates: Sequence[Dict[str, Any]],
+    scene_type: str,
+    meal_style: str,
+    is_drink_only: bool,
+    review_reasons: Sequence[str],
+) -> bool:
+    if primary_dish_key not in SCENE_DOMINANT_PRIMARY_KEYS:
+        return False
+    if any(reason in SCENE_DOMINANT_FALLBACK_REASONS for reason in review_reasons):
+        return False
+    return (
+        find_primary_replacement_candidate(
+            primary_candidates,
+            scene_type=scene_type,
+            meal_style=meal_style,
+            is_drink_only=is_drink_only,
+            allow_contextual=True,
+        )
+        is None
+    )
+
+
 def reconcile_broad_primary_review_reason(
     *,
     review_reasons: Sequence[str],
@@ -2103,6 +2142,10 @@ def append_reason(reasons: Sequence[str], reason: str) -> List[str]:
     if reason not in REVIEW_REASON_OPTIONS:
         return list(reasons)
     return append_unique_limited(list(reasons), reason, limit=MAX_REVIEW_REASONS)
+
+
+def remove_reason(reasons: Sequence[str], reason: str) -> List[str]:
+    return [item for item in reasons if item != reason]
 
 
 def append_unique_limited(values: Sequence[str], item: str, *, limit: int) -> List[str]:

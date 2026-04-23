@@ -36,6 +36,8 @@ MediaPipe path は separate path として扱い、将来 rich classifier result
 ### やるべき修整
 - `explore-food-labels.py` の prompt、rubric、fallback 順序を見直し、主料理が `side_item` や `scene` に奪われにくいようにする。
 - 高頻度 `broad_primary` だけを対象に compare set や review note を調整し、具体カテゴリへ寄せやすくする。
+- `scene_dominant` は、`low_confidence` や `candidate_split` など別の review reason が既に付いている場合は last-resort の fallback とみなし、scene 優勢だけを独立した理由として残す。
+- `scene_dominant` や `low_confidence` は model の raw reason をそのまま信じず、最終 `primary_dish_key` と最終 confidence から再判定し、specific dish が選べている時の stale reason は落とす。
 - `analyze-food-labels.py` の集計で、`broad_primary` の残件と、その中身がどの具体クラスに割れそうかを見えるように保つ。
 - `build-review-gallery.py` の review candidate 整理や export を、教師データ化しやすい shape に寄せる。
 - 出力契約を変えるのは、ラベル設計や教師データ化に直接効くときに限る。

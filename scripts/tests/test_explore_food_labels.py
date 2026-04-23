@@ -72,6 +72,12 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertIn("can_drink", prompt)
         self.assertIn("瓶飲料らしい", prompt)
 
+    def test_build_user_prompt_discourages_scene_dominant_for_specific_dish(self) -> None:
+        prompt = MODULE.build_user_prompt(image_id="img-001", source_path="photos/meal.jpg")
+
+        self.assertIn("Do not include scene_dominant", prompt)
+        self.assertIn("primary_dish_key is a specific dish", prompt)
+
     def test_format_schema_enums_do_not_add_can_or_bottle(self) -> None:
         schema = MODULE.FORMAT_SCHEMA
 
@@ -168,6 +174,98 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertEqual(normalized["meal_style"], "drink")
         self.assertEqual(normalized["serving_style"], "cup_or_glass")
 
+    def test_normalize_result_removes_scene_dominant_for_specific_primary(self) -> None:
+        normalized = MODULE.normalize_result(
+            make_raw_result(
+                primary_dish_key="grilled_fish",
+                primary_dish_label_ja="焼き魚",
+                primary_dish_candidates=[
+                    {"key": "grilled_fish", "label_ja": "焼き魚", "score": 0.72},
+                    {"key": "set_meal", "label_ja": "定食", "score": 0.31},
+                ],
+                supporting_items=["rice", "soup"],
+                scene_type="multi_dish_table",
+                meal_style="set_meal",
+                review_reasons=["scene_dominant"],
+                analysis_confidence=0.72,
+            ),
+            image_id="img-specific-scene",
+            source_path="photos/specific-scene.jpg",
+        )
+
+        self.assertEqual(normalized["primary_dish_key"], "grilled_fish")
+        self.assertNotIn("scene_dominant", normalized["review_reasons"])
+        self.assertFalse(normalized["needs_human_review"])
+
+    def test_normalize_result_keeps_scene_dominant_for_unresolved_set_meal(self) -> None:
+        normalized = MODULE.normalize_result(
+            make_raw_result(
+                primary_dish_key="set_meal",
+                primary_dish_label_ja="定食",
+                primary_dish_candidates=[
+                    {"key": "set_meal", "label_ja": "定食", "score": 0.58},
+                    {"key": "rice", "label_ja": "ご飯", "score": 0.42},
+                ],
+                supporting_items=["rice", "soup"],
+                scene_type="set_meal",
+                meal_style="set_meal",
+                review_reasons=[],
+                analysis_confidence=0.58,
+            ),
+            image_id="img-set-meal",
+            source_path="photos/set-meal.jpg",
+        )
+
+        self.assertEqual(normalized["primary_dish_key"], "set_meal")
+        self.assertIn("scene_dominant", normalized["review_reasons"])
+        self.assertTrue(normalized["needs_human_review"])
+
+    def test_normalize_result_prefers_low_confidence_over_scene_dominant_for_set_meal(self) -> None:
+        normalized = MODULE.normalize_result(
+            make_raw_result(
+                primary_dish_key="set_meal",
+                primary_dish_label_ja="定食",
+                primary_dish_candidates=[
+                    {"key": "set_meal", "label_ja": "定食", "score": 0.45},
+                    {"key": "rice", "label_ja": "ご飯", "score": 0.4},
+                ],
+                supporting_items=["rice", "soup"],
+                scene_type="set_meal",
+                meal_style="set_meal",
+                review_reasons=[],
+                analysis_confidence=0.45,
+            ),
+            image_id="img-set-meal-low-confidence",
+            source_path="photos/set-meal-low-confidence.jpg",
+        )
+
+        self.assertEqual(normalized["primary_dish_key"], "set_meal")
+        self.assertIn("low_confidence", normalized["review_reasons"])
+        self.assertNotIn("scene_dominant", normalized["review_reasons"])
+        self.assertTrue(normalized["needs_human_review"])
+
+    def test_normalize_result_uses_top_level_confidence_when_candidate_scores_are_zero(self) -> None:
+        normalized = MODULE.normalize_result(
+            make_raw_result(
+                primary_dish_key="fried_cutlet",
+                primary_dish_label_ja="とんかつ",
+                primary_dish_candidates=[
+                    {"key": "fried_cutlet", "label_ja": "とんかつ", "score": 0.0},
+                    {"key": "meat_dish", "label_ja": "肉料理", "score": 0.0},
+                ],
+                scene_type="set_meal",
+                meal_style="set_meal",
+                review_reasons=["low_confidence"],
+                analysis_confidence=0.72,
+            ),
+            image_id="img-zero-scores",
+            source_path="photos/zero-scores.jpg",
+        )
+
+        self.assertEqual(normalized["analysis_confidence"], 0.72)
+        self.assertNotIn("low_confidence", normalized["review_reasons"])
+        self.assertFalse(normalized["needs_human_review"])
+
     def test_merge_broad_refinement_clears_carried_review_state(self) -> None:
         merged = MODULE.merge_broad_refinement_into_raw_result(
             coarse_raw_result=make_raw_result(
@@ -253,7 +351,9 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         )
 
         self.assertIn("stir-fried feel", prompt)
+        self.assertIn("cooked meat pieces are visible with sauce", prompt)
         self.assertIn("yakiniku-like pieces", prompt)
+        self.assertIn("for cooked meat served over or beside rice, prefer stir_fry", prompt)
         self.assertIn("choose that more specific key instead of meat_dish", prompt)
 
     def test_build_broad_refinement_prompt_strengthens_stew_to_nimono(self) -> None:
@@ -275,6 +375,7 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertIn("stew-specific rule", prompt)
         self.assertIn("choose nimono instead of stew", prompt)
         self.assertIn("visible shaped ingredients", prompt)
+        self.assertIn("do not keep stew merely because the sauce is thick/dark", prompt)
         self.assertIn("sauce/soup-heavy Western stew cues", prompt)
 
     def test_should_run_broad_refinement_depends_only_on_primary_key(self) -> None:

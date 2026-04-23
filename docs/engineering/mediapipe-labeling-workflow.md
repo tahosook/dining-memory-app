@@ -52,6 +52,12 @@ AI は capture review 上の optional な入力補助であり、manual save を
 - 同じ target で `no_change` が続くときは、同方向へ無限に粘らず別 hypothesis か別 target へ切り替える。
 - `src/` は原則非変更とし、主に `scripts/explore-food-labels.py`、`scripts/analyze-food-labels.py`、`prompts/*`、`config/*`、`docs/engineering/*`、必要最小限の補助 script だけを触る。
 
+### nested Codex model 方針
+- `codex_cli` executor の既定 model は `gpt-5.4-mini` とし、まず軽い bounded 修整で改善を進める。
+- `compare` 結果が `no_change` または `regressed` の cycle が連続するときだけ、fallback として `gpt-5.3-codex` を使う。
+- 既定の自動昇格条件は 2 連続 stall とする。threshold や fallback model は CLI 引数で調整できるように保つ。
+- cycle artifact には、その cycle で使った nested Codex model と strategy を残し、あとから改善経路を追えるようにする。
+
 ### 停止条件
 - `unknown_primary` と `side_item_primary` がごく少数で安定している。
 - `broad_primary` が実用ラインまで下がり、高頻度 broad の割れ先が十分見えている。

@@ -151,6 +151,8 @@ python3 scripts/compare_labeling_reports.py \
 - state seed は `state/mediapipe_labeling_state.json`、prompt template は `prompts/mediapipe_labeling_implementer.txt`、goal config は `config/mediapipe_labeling_goals.json` を使います
 - `--executor dry_run` で prompt / state / compare artifact だけ確認できます。dry-run cycle では実装差分が無いため、cycle 側の再ラベリングは行わず baseline summary を after として扱います
 - `--executor codex_cli` では実際に `codex exec` を呼び、cycle 側でも labels/report を再生成して before / after を比較します
+- `codex_cli` の既定 model は `gpt-5.4-mini` です。`no_change` / `regressed` が連続 2 cycle 続くと、残りの stalled cycle では `gpt-5.3-codex` へ自動昇格します
+- `--codex-model`, `--codex-fallback-model`, `--codex-fallback-after-stalled-cycles` で nested Codex の運用方針を調整できます
 - `--explore-limit` を指定すると、実写真ディレクトリ全体ではなく先頭 N 件だけを bounded に処理できます
 
 dry-run 例:
@@ -176,6 +178,9 @@ python3 scripts/mediapipe_labeling_loop.py \
   --state-path state/mediapipe_labeling_state.json \
   --runs-dir state/mediapipe_labeling_runs \
   --executor codex_cli \
+  --codex-model gpt-5.4-mini \
+  --codex-fallback-model gpt-5.3-codex \
+  --codex-fallback-after-stalled-cycles 2 \
   --explore-limit 50 \
   --explore-model gemma4:e4b \
   --explore-workers 2 \

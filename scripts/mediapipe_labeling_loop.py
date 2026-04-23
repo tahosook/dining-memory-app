@@ -30,20 +30,35 @@ from mediapipe_labeling_common import (
 
 
 STATE_SCHEMA_VERSION = "mediapipe_labeling_state_v1"
+DEFAULT_CODEX_MODEL = "gpt-5.4-mini"
+DEFAULT_CODEX_FALLBACK_MODEL = "gpt-5.3-codex"
+STALL_COMPARE_RESULTS = {"no_change", "regressed"}
 
 
 class CodexCliExecutor:
-    def run(self, prompt_text: str, repo_root: Path, output_dir: Path) -> Dict[str, Any]:
+    def __init__(self, default_model: str = DEFAULT_CODEX_MODEL) -> None:
+        self.default_model = default_model
+
+    def run(
+        self,
+        prompt_text: str,
+        repo_root: Path,
+        output_dir: Path,
+        model_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         output_dir.mkdir(parents=True, exist_ok=True)
         last_message_path = output_dir / "executor_last_message.txt"
         stdout_path = output_dir / "executor_stdout.txt"
         stderr_path = output_dir / "executor_stderr.txt"
+        selected_model = (model_name or self.default_model).strip() or DEFAULT_CODEX_MODEL
 
         result = subprocess.run(
             [
                 "codex",
                 "exec",
                 "--full-auto",
+                "-m",
+                selected_model,
                 "-C",
                 str(repo_root),
                 "-o",
@@ -65,6 +80,7 @@ class CodexCliExecutor:
         return {
             "success": result.returncode == 0,
             "exit_code": result.returncode,
+            "model": selected_model,
             "last_message_path": str(last_message_path),
             "stdout_path": str(stdout_path),
             "stderr_path": str(stderr_path),
@@ -72,7 +88,13 @@ class CodexCliExecutor:
 
 
 class DryRunExecutor:
-    def run(self, prompt_text: str, repo_root: Path, output_dir: Path) -> Dict[str, Any]:
+    def run(
+        self,
+        prompt_text: str,
+        repo_root: Path,
+        output_dir: Path,
+        model_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         del prompt_text, repo_root
         output_dir.mkdir(parents=True, exist_ok=True)
         last_message_path = output_dir / "executor_last_message.txt"
@@ -84,6 +106,7 @@ class DryRunExecutor:
         return {
             "success": True,
             "exit_code": 0,
+            "model": model_name,
             "last_message_path": str(last_message_path),
             "stdout_path": str(stdout_path),
             "stderr_path": str(stderr_path),
@@ -91,7 +114,13 @@ class DryRunExecutor:
 
 
 class PromptOnlyExecutor:
-    def run(self, prompt_text: str, repo_root: Path, output_dir: Path) -> Dict[str, Any]:
+    def run(
+        self,
+        prompt_text: str,
+        repo_root: Path,
+        output_dir: Path,
+        model_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
         del prompt_text, repo_root
         output_dir.mkdir(parents=True, exist_ok=True)
         last_message_path = output_dir / "executor_last_message.txt"
@@ -103,6 +132,7 @@ class PromptOnlyExecutor:
         return {
             "success": True,
             "exit_code": 0,
+            "model": model_name,
             "last_message_path": str(last_message_path),
             "stdout_path": str(stdout_path),
             "stderr_path": str(stderr_path),
@@ -124,6 +154,22 @@ def parse_args() -> argparse.Namespace:
         default="codex_cli",
         choices=["codex_cli", "dry_run", "prompt_only"],
         help="実装 executor",
+    )
+    parser.add_argument(
+        "--codex-model",
+        default=DEFAULT_CODEX_MODEL,
+        help="codex_cli executor が最初に使う model",
+    )
+    parser.add_argument(
+        "--codex-fallback-model",
+        default=DEFAULT_CODEX_FALLBACK_MODEL,
+        help="mini で連続 stall した後に使う fallback model。空文字で無効化。",
+    )
+    parser.add_argument(
+        "--codex-fallback-after-stalled-cycles",
+        type=int,
+        default=2,
+        help="no_change / regressed が何 cycle 続いたら fallback model に切り替えるか",
     )
     parser.add_argument("--explore-model", default="gemma4:e4b", help="explore-food-labels.py の model")
     parser.add_argument("--explore-limit", type=int, default=None, help="explore-food-labels.py の limit")
@@ -169,9 +215,9 @@ def save_state(path: Path, state: Dict[str, Any]) -> None:
     write_json(path, state)
 
 
-def build_executor(name: str) -> Any:
+def build_executor(name: str, codex_model: str = DEFAULT_CODEX_MODEL) -> Any:
     if name == "codex_cli":
-        return CodexCliExecutor()
+        return CodexCliExecutor(default_model=codex_model)
     if name == "dry_run":
         return DryRunExecutor()
     return PromptOnlyExecutor()
@@ -179,6 +225,49 @@ def build_executor(name: str) -> Any:
 
 def executor_changes_worktree(executor_name: str) -> bool:
     return executor_name == "codex_cli"
+
+
+def count_consecutive_stalled_cycles(state: Dict[str, Any]) -> int:
+    stalled = 0
+    for raw_entry in reversed(ensure_list(state.get("cycle_history"))):
+        entry = ensure_dict(raw_entry)
+        result = str(entry.get("result", ""))
+        if result == "improved":
+            break
+        if result in STALL_COMPARE_RESULTS:
+            stalled += 1
+            continue
+        break
+    return stalled
+
+
+def select_executor_model(
+    *,
+    executor_name: str,
+    state: Dict[str, Any],
+    primary_model: str,
+    fallback_model: Optional[str],
+    fallback_after_stalled_cycles: int,
+) -> Dict[str, Optional[str]]:
+    if executor_name != "codex_cli":
+        return {"model": None, "strategy": None}
+
+    normalized_primary_model = primary_model.strip() or DEFAULT_CODEX_MODEL
+    normalized_fallback_model = (fallback_model or "").strip()
+    if (
+        normalized_fallback_model
+        and fallback_after_stalled_cycles > 0
+        and count_consecutive_stalled_cycles(state) >= fallback_after_stalled_cycles
+    ):
+        return {
+            "model": normalized_fallback_model,
+            "strategy": "fallback_after_stalled_cycles",
+        }
+
+    return {
+        "model": normalized_primary_model,
+        "strategy": "primary",
+    }
 
 
 def build_current_metrics_payload(summary: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
@@ -550,6 +639,9 @@ def run_loop(
     runs_dir: Path,
     summary_path: Optional[Path],
     executor_name: str,
+    codex_model: str,
+    codex_fallback_model: Optional[str],
+    codex_fallback_after_stalled_cycles: int,
     explore_model: str,
     explore_limit: Optional[int],
     explore_workers: int,
@@ -567,7 +659,7 @@ def run_loop(
     state_path.parent.mkdir(parents=True, exist_ok=True)
     template_text = prompt_template_path.read_text(encoding="utf-8")
 
-    active_executor = executor or build_executor(executor_name)
+    active_executor = executor or build_executor(executor_name, codex_model)
     active_pipeline_runner = pipeline_runner or run_pipeline
     active_git_snapshot_provider = git_snapshot_provider or capture_git_snapshot
     active_compare_fn = compare_fn or compare_reports
@@ -651,8 +743,20 @@ def run_loop(
         prompt_path = cycle_dir / "implementer_prompt.txt"
         prompt_path.write_text(prompt_text, encoding="utf-8")
 
+        executor_model_selection = select_executor_model(
+            executor_name=executor_name,
+            state=state,
+            primary_model=codex_model,
+            fallback_model=codex_fallback_model,
+            fallback_after_stalled_cycles=codex_fallback_after_stalled_cycles,
+        )
         before_snapshot = active_git_snapshot_provider(repo_root, allowed_scopes, disallowed_prefixes)
-        executor_result = active_executor.run(prompt_text, repo_root, cycle_dir)
+        executor_result = active_executor.run(
+            prompt_text,
+            repo_root,
+            cycle_dir,
+            model_name=executor_model_selection["model"],
+        )
         after_snapshot = active_git_snapshot_provider(repo_root, allowed_scopes, disallowed_prefixes)
         violations = detect_guardrail_violations(
             repo_root=repo_root,
@@ -691,6 +795,8 @@ def run_loop(
             "hypothesis_text": selected_target["hypothesis_text"],
             "prompt_path": str(prompt_path),
             "executor_last_message_path": executor_result["last_message_path"],
+            "executor_model": executor_result.get("model"),
+            "executor_model_strategy": executor_model_selection["strategy"],
             "labels_dir": str((cycle_dir / "labels").resolve()),
             "report_dir": str((cycle_dir / "report").resolve()),
         }
@@ -821,6 +927,9 @@ def main() -> int:
     if args.explore_timeout <= 0:
         print("--explore-timeout must be greater than 0.", file=sys.stderr)
         return 2
+    if args.codex_fallback_after_stalled_cycles < 0:
+        print("--codex-fallback-after-stalled-cycles must be greater than or equal to 0.", file=sys.stderr)
+        return 2
     if args.analyze_top_n <= 0:
         print("--analyze-top-n must be greater than 0.", file=sys.stderr)
         return 2
@@ -834,6 +943,9 @@ def main() -> int:
         runs_dir=runs_dir,
         summary_path=summary_path,
         executor_name=args.executor,
+        codex_model=args.codex_model,
+        codex_fallback_model=args.codex_fallback_model or None,
+        codex_fallback_after_stalled_cycles=args.codex_fallback_after_stalled_cycles,
         explore_model=args.explore_model,
         explore_limit=args.explore_limit,
         explore_workers=args.explore_workers,
