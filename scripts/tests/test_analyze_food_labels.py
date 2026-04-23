@@ -29,6 +29,8 @@ def make_record(
     broad_refinement_status: str = "not_applicable",
     broad_refinement_compare_keys: list[str] | None = None,
     broad_refinement_note_ja: str = "",
+    crop_refinement_status: str = "not_triggered",
+    crop_refinement_applied: bool = False,
 ) -> dict[str, object]:
     return {
         "schema_version": "food_label_exploration_v3",
@@ -65,6 +67,11 @@ def make_record(
         "broad_refinement_compare_keys": broad_refinement_compare_keys or [],
         "broad_refinement_note_ja": broad_refinement_note_ja,
         "broad_refinement_image_mode": "full_image",
+        "crop_refinement_status": crop_refinement_status,
+        "crop_refinement_applied": crop_refinement_applied,
+        "crop_candidate_count": 0,
+        "crop_selected_index": None,
+        "crop_refinement_note_ja": "",
     }
 
 
@@ -113,6 +120,8 @@ class AnalyzeFoodLabelsCliTests(unittest.TestCase):
                     coarse_primary_dish_label_ja="煮込み",
                     broad_refinement_status="resolved",
                     broad_refinement_compare_keys=["nimono", "curry_rice", "meat_and_potato_stew", "stew"],
+                    crop_refinement_status="applied",
+                    crop_refinement_applied=True,
                 ),
                 make_record(
                     image_id="img-broad",
@@ -132,6 +141,7 @@ class AnalyzeFoodLabelsCliTests(unittest.TestCase):
                     broad_refinement_status="kept_broad",
                     broad_refinement_compare_keys=["stir_fry", "grilled_meat", "meat_dish"],
                     broad_refinement_note_ja="焼きか炒めか判別困難",
+                    crop_refinement_status="kept_full_image",
                 ),
                 make_record(
                     image_id="img-scene",
@@ -176,6 +186,9 @@ class AnalyzeFoodLabelsCliTests(unittest.TestCase):
             self.assertEqual(summary_json["totals"]["broad_refinement_resolved"]["count"], 1)
             self.assertEqual(summary_json["totals"]["broad_refinement_kept_broad"]["count"], 1)
             self.assertEqual(summary_json["totals"]["broad_refinement_failed"]["count"], 0)
+            self.assertEqual(summary_json["totals"]["crop_refinement_triggered"]["count"], 2)
+            self.assertEqual(summary_json["totals"]["crop_refinement_applied"]["count"], 1)
+            self.assertEqual(summary_json["totals"]["crop_refinement_failed"]["count"], 0)
             self.assertEqual(summary_json["candidate_counts"]["broad_primary_candidates"], 1)
             self.assertEqual(summary_json["candidate_counts"]["scene_dominant_candidates"], 1)
             review_reason_counts = {
@@ -186,8 +199,18 @@ class AnalyzeFoodLabelsCliTests(unittest.TestCase):
 
             self.assertEqual(len(broad_rows), 1)
             self.assertEqual(broad_rows[0]["image_id"], "img-broad")
-            self.assertIn("broad_fallback:meat_dish", broad_rows[0]["candidate_reasons"])
-            self.assertIn("best_alt:grilled_meat", broad_rows[0]["candidate_reasons"])
+            self.assertEqual(broad_rows[0]["coarse_primary_dish_key"], "meat_dish")
+            self.assertEqual(broad_rows[0]["broad_refinement_status"], "kept_broad")
+            self.assertEqual(broad_rows[0]["crop_refinement_status"], "kept_full_image")
+            self.assertEqual(broad_rows[0]["best_concrete_candidate_key"], "grilled_meat")
+            self.assertEqual(broad_rows[0]["top1_score"], "0.5700")
+            self.assertEqual(broad_rows[0]["top2_score"], "0.4600")
+            self.assertEqual(broad_rows[0]["score_gap"], "0.1100")
+            self.assertIn("kept_broad:meat_dish", broad_rows[0]["candidate_reasons"])
+            self.assertIn("coarse_primary:meat_dish", broad_rows[0]["candidate_reasons"])
+            self.assertIn("best_concrete_candidate:grilled_meat", broad_rows[0]["candidate_reasons"])
+            self.assertIn("score_gap:0.1100", broad_rows[0]["candidate_reasons"])
+            self.assertIn("crop_refinement_status:kept_full_image", broad_rows[0]["candidate_reasons"])
             self.assertIn("refine_note:焼きか炒めか判別困難", broad_rows[0]["candidate_reasons"])
 
             review_ids = {row["image_id"] for row in review_rows}
@@ -199,6 +222,8 @@ class AnalyzeFoodLabelsCliTests(unittest.TestCase):
             self.assertIn("coarse_broad_primary 件数: 2", summary_md)
             self.assertIn("broad_refinement_resolved 件数: 1", summary_md)
             self.assertIn("broad_refinement_kept_broad 件数: 1", summary_md)
+            self.assertIn("crop_refinement_triggered 件数: 2", summary_md)
+            self.assertIn("crop_refinement_applied 件数: 1", summary_md)
             self.assertIn("### broad_refinement_resolved_to_key", summary_md)
 
             resolved_top = summary_json["top_counts"]["broad_refinement_resolved_to_key"]

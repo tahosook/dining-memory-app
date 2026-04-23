@@ -629,6 +629,14 @@ def build_review_records(
         primary_dish_candidates = extract_primary_dish_candidate_objects(payload.get("primary_dish_candidates"))
         supporting_items = extract_string_list(payload.get("supporting_items"))
         review_reasons = extract_string_list(payload.get("review_reasons"))
+        coarse_primary_dish_key = normalize_scalar(payload.get("coarse_primary_dish_key"))
+        if coarse_primary_dish_key == "missing":
+            coarse_primary_dish_key = primary_dish_key
+        broad_refinement_status = normalize_scalar(payload.get("broad_refinement_status"))
+        crop_refinement_status = normalize_scalar(payload.get("crop_refinement_status"))
+        broad_refinement_compare_keys = extract_string_list(payload.get("broad_refinement_compare_keys"))
+        crop_refinement_applied = coerce_bool(payload.get("crop_refinement_applied"))
+        primary_score_info = extract_primary_candidate_scores(primary_dish_candidates)
         broad_primary_concrete_candidate = detect_broad_primary_concrete_candidate_key_from_candidates(
             primary_dish_key=primary_dish_key,
             candidates=primary_dish_candidates,
@@ -670,6 +678,7 @@ def build_review_records(
                 "origin": loaded_record.origin,
                 "analysis_confidence": loaded_record.analysis_confidence,
                 "analysis_confidence_display": format_confidence(loaded_record.analysis_confidence),
+                "coarse_primary_dish_key": coarse_primary_dish_key,
                 "primary_dish_key": primary_dish_key,
                 "primary_dish_label_ja": primary_dish_label_ja,
                 "display_primary_dish_key": display_primary_dish_key,
@@ -680,6 +689,10 @@ def build_review_records(
                 ),
                 "primary_dish_candidates": primary_dish_candidates,
                 "primary_dish_candidates_display": format_primary_dish_candidates(primary_dish_candidates),
+                "best_concrete_candidate_key": primary_score_info["best_concrete_candidate_key"],
+                "top1_score_display": format_confidence(primary_score_info["top1_score"]),
+                "top2_score_display": format_confidence(primary_score_info["top2_score"]),
+                "score_gap_display": format_confidence(primary_score_info["score_gap"]),
                 "supporting_items": supporting_items,
                 "supporting_items_display": format_list_for_display(supporting_items),
                 "scene_type": normalize_scalar(payload.get("scene_type")),
@@ -688,6 +701,11 @@ def build_review_records(
                 "serving_style": normalize_scalar(payload.get("serving_style")),
                 "container_hint": container_hint,
                 "review_bucket": review_bucket,
+                "broad_refinement_status": broad_refinement_status,
+                "broad_refinement_compare_keys": broad_refinement_compare_keys,
+                "broad_refinement_compare_keys_display": format_list_for_display(broad_refinement_compare_keys),
+                "crop_refinement_status": crop_refinement_status,
+                "crop_refinement_applied": crop_refinement_applied,
                 "contains_can_or_bottle": coerce_bool(payload.get("contains_can_or_bottle")),
                 "needs_human_review": coerce_bool(payload.get("needs_human_review")),
                 "review_reasons": review_reasons,
@@ -774,6 +792,24 @@ def detect_broad_primary_concrete_candidate_key_from_candidates(
             continue
         return key
     return None
+
+
+def extract_primary_candidate_scores(candidates: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    top1_score = candidates[0]["score"] if candidates else 0.0
+    top2_score = candidates[1]["score"] if len(candidates) >= 2 else 0.0
+    best_concrete_candidate_key = ""
+    for candidate in candidates:
+        key = candidate["key"]
+        if key in NON_CONCRETE_CANDIDATE_KEYS:
+            continue
+        best_concrete_candidate_key = key
+        break
+    return {
+        "top1_score": top1_score,
+        "top2_score": top2_score,
+        "score_gap": max(0.0, top1_score - top2_score),
+        "best_concrete_candidate_key": best_concrete_candidate_key,
+    }
 
 
 def derive_display_primary(
@@ -2381,6 +2417,7 @@ def render_record_card(record: Dict[str, Any], *, compact: bool) -> str:
     title_tag = "h4" if compact else "h3"
     predicted_label = f'{record["display_primary_dish_key"]} / {record["display_primary_dish_label_ja"]}'
     group_badges = "".join(render_group_badge(group) for group in record["candidate_groups"])
+    diagnostic_badges = "".join(render_diagnostic_badges(record))
     reason_badges = "".join(
         render_reason_badge(reason)
         for reason in record["review_reasons"]
@@ -2416,7 +2453,7 @@ def render_record_card(record: Dict[str, Any], *, compact: bool) -> str:
             '</div>'
             f'{review_status_badge}'
             '</div>'
-            f'<div class="badge-row">{group_badges}{reason_badges}</div>'
+            f'<div class="badge-row">{group_badges}{diagnostic_badges}{reason_badges}</div>'
             '</div>'
             f'{details_block}'
             '</div>'
@@ -2435,7 +2472,7 @@ def render_record_card(record: Dict[str, Any], *, compact: bool) -> str:
         '</div>'
         f'{review_status_badge}'
         '</div>'
-        f'<div class="badge-row">{group_badges}{reason_badges}</div>'
+        f'<div class="badge-row">{group_badges}{diagnostic_badges}{reason_badges}</div>'
         '</div>'
         f'{meta_grid}'
         f'{review_form}'
@@ -2470,6 +2507,20 @@ def render_reason_badge(reason: str) -> str:
     return f'<span class="badge {badge_class}">{escape_html(reason)}</span>'
 
 
+def render_diagnostic_badges(record: Dict[str, Any]) -> List[str]:
+    badges: List[str] = []
+    if record["broad_refinement_status"] == "kept_broad":
+        badges.append('<span class="badge badge-broad">kept_broad</span>')
+    elif record["broad_refinement_status"] == "resolved":
+        badges.append('<span class="badge badge-review-target">broad_resolved</span>')
+
+    if record["crop_refinement_status"] != "missing" and record["crop_refinement_status"] != "not_triggered":
+        badges.append(
+            f'<span class="badge badge-scene">crop_{escape_html(record["crop_refinement_status"])}</span>'
+        )
+    return badges
+
+
 def render_image_block(record: Dict[str, Any]) -> str:
     if record["image_missing"] or not record["image_uri"]:
         return (
@@ -2491,6 +2542,9 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
     items = [
         ("image_id", escape_code(record["image_id"])),
         ("source_path", escape_code(record["source_path"])),
+        ("coarse_primary_dish_key", escape_code(record["coarse_primary_dish_key"])),
+        ("final_primary_dish_key", escape_code(record["primary_dish_key"])),
+        ("final_primary_dish_label_ja", escape_html(record["primary_dish_label_ja"])),
     ]
     if record["display_primary_overridden"]:
         items.extend(
@@ -2502,25 +2556,35 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
             ]
         )
     else:
-        items.extend(
-            [
-                ("primary_dish_key", escape_code(record["primary_dish_key"])),
-                ("primary_dish_label_ja", escape_html(record["primary_dish_label_ja"])),
-            ]
-        )
+        items.extend([])
     items.extend(
         [
             ("primary_dish_candidates", escape_code(record["primary_dish_candidates_display"])),
+            ("best_concrete_candidate_key", escape_code(record["best_concrete_candidate_key"] or "(none)")),
+            ("top1_score", escape_code(record["top1_score_display"])),
+            ("top2_score", escape_code(record["top2_score_display"])),
+            ("score_gap", escape_code(record["score_gap_display"])),
             ("supporting_items", escape_code(record["supporting_items_display"])),
             ("scene_type", escape_code(record["scene_type"])),
             ("cuisine_type", escape_code(record["cuisine_type"])),
             ("meal_style", escape_code(record["meal_style"])),
             ("serving_style", escape_code(record["serving_style"])),
             ("analysis_confidence", escape_code(record["analysis_confidence_display"])),
+            ("broad_refinement_status", escape_code(record["broad_refinement_status"])),
+            ("crop_refinement_status", escape_code(record["crop_refinement_status"])),
             ("review_reasons", escape_code(record["review_reasons_display"])),
             ("review_note_ja", escape_html(record["review_note_ja"] or "(none)")),
         ]
     )
+    if record["broad_refinement_compare_keys"]:
+        items.append(
+            (
+                "broad_refinement_compare_keys",
+                escape_code(record["broad_refinement_compare_keys_display"]),
+            )
+        )
+    if record["crop_refinement_applied"] or record["crop_refinement_status"] not in {"missing", "not_triggered"}:
+        items.append(("crop_refinement_applied", escape_code(str(record["crop_refinement_applied"]).lower())))
     if record["display_primary_overridden"] or record["container_hint"] not in {"missing", "none"}:
         items.append(("container_hint", escape_code(record["container_hint"])))
     if record["display_primary_overridden"] or record["review_bucket"] not in {"missing", "normal"}:

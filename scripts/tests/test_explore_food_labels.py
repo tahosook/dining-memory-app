@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import tempfile
@@ -398,6 +399,44 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             )
         )
 
+    def test_should_run_crop_refinement_depends_on_scene_review_or_broad(self) -> None:
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "set_meal",
+                    "review_reasons": [],
+                }
+            )
+        )
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "single_dish",
+                    "review_reasons": ["scene_dominant"],
+                }
+            )
+        )
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "stew",
+                    "scene_type": "single_dish",
+                    "review_reasons": [],
+                }
+            )
+        )
+        self.assertFalse(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "single_dish",
+                    "review_reasons": [],
+                }
+            )
+        )
+
     def test_process_single_image_resolves_broad_primary_with_fine_stage(self) -> None:
         coarse_payload = make_raw_result(
             primary_dish_key="stew",
@@ -421,22 +460,175 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             "analysis_confidence": 0.84,
             "review_note_ja": "",
         }
+        crop_payload = make_raw_result(
+            primary_dish_key="stew",
+            primary_dish_label_ja="煮込み",
+            primary_dish_candidates=[
+                {"key": "stew", "label_ja": "煮込み", "score": 0.63},
+                {"key": "nimono", "label_ja": "煮物", "score": 0.44},
+            ],
+            scene_type="single_dish",
+            meal_style="single_item",
+            serving_style="single_bowl",
+            analysis_confidence=0.63,
+        )
 
         result, normalized_payload, raw_payload, calls = self.run_process_single_image(
-            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+            [
+                make_stage_result(coarse_payload),
+                make_stage_result(crop_payload),
+                make_stage_result(fine_payload),
+            ],
+            crop_candidates=[{"name": "center_large"}],
         )
 
         self.assertEqual(result["primary_dish_key"], "nimono")
         self.assertEqual(result["coarse_primary_dish_key"], "stew")
+        self.assertEqual(result["crop_refinement_status"], "kept_full_image")
         self.assertEqual(result["broad_refinement_status"], "resolved")
         self.assertEqual(result["broad_refinement_compare_keys"], ["nimono", "curry_rice", "meat_and_potato_stew", "stew"])
         self.assertEqual(normalized_payload["primary_dish_key"], "nimono")
         self.assertNotIn("broad_primary", normalized_payload["review_reasons"])
         self.assertFalse(normalized_payload["needs_human_review"])
         self.assertIn("broad_refinement", raw_payload)
+        self.assertIn("crop_refinement", raw_payload)
         self.assertEqual(raw_payload["broad_refinement"]["compare_keys"], ["nimono", "curry_rice", "meat_and_potato_stew", "stew"])
         self.assertEqual(calls[0]["format_schema"], MODULE.FORMAT_SCHEMA)
-        self.assertEqual(calls[1]["format_schema"], MODULE.BROAD_REFINEMENT_FORMAT_SCHEMA)
+        self.assertEqual(calls[1]["format_schema"], MODULE.FORMAT_SCHEMA)
+        self.assertEqual(calls[1]["image_mode"], MODULE.CROP_CANDIDATE_IMAGE_MODE)
+        self.assertEqual(calls[2]["format_schema"], MODULE.BROAD_REFINEMENT_FORMAT_SCHEMA)
+        self.assertEqual(calls[2]["image_mode"], MODULE.FULL_IMAGE_MODE)
+
+    def test_process_single_image_applies_crop_for_scene_dominant_set_meal(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="set_meal",
+            primary_dish_label_ja="定食",
+            primary_dish_candidates=[
+                {"key": "set_meal", "label_ja": "定食", "score": 0.61},
+                {"key": "rice", "label_ja": "ご飯", "score": 0.35},
+            ],
+            scene_type="set_meal",
+            meal_style="set_meal",
+            serving_style="tray",
+            analysis_confidence=0.61,
+            review_reasons=["scene_dominant"],
+        )
+        crop_payload = make_raw_result(
+            primary_dish_key="grilled_fish",
+            primary_dish_label_ja="焼き魚",
+            primary_dish_candidates=[
+                {"key": "grilled_fish", "label_ja": "焼き魚", "score": 0.78},
+                {"key": "set_meal", "label_ja": "定食", "score": 0.2},
+            ],
+            scene_type="single_dish",
+            meal_style="single_item",
+            serving_style="single_plate",
+            analysis_confidence=0.78,
+        )
+
+        result, normalized_payload, raw_payload, _calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload), make_stage_result(crop_payload)],
+            crop_candidates=[{"name": "lower_center_large"}],
+        )
+
+        self.assertEqual(result["primary_dish_key"], "grilled_fish")
+        self.assertEqual(result["crop_refinement_status"], "applied")
+        self.assertTrue(result["crop_refinement_applied"])
+        self.assertEqual(result["crop_selected_index"], 0)
+        self.assertEqual(result["broad_refinement_status"], "not_applicable")
+        self.assertNotIn("scene_dominant", normalized_payload["review_reasons"])
+        self.assertEqual(raw_payload["crop_refinement"]["selected_index"], 0)
+
+    def test_process_single_image_keeps_full_image_when_crop_is_weak(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="set_meal",
+            primary_dish_label_ja="定食",
+            primary_dish_candidates=[
+                {"key": "set_meal", "label_ja": "定食", "score": 0.62},
+                {"key": "rice", "label_ja": "ご飯", "score": 0.34},
+            ],
+            scene_type="set_meal",
+            meal_style="set_meal",
+            serving_style="tray",
+            analysis_confidence=0.62,
+            review_reasons=["scene_dominant"],
+        )
+        crop_payload = make_raw_result(
+            primary_dish_key="stew",
+            primary_dish_label_ja="煮込み",
+            primary_dish_candidates=[
+                {"key": "stew", "label_ja": "煮込み", "score": 0.44},
+                {"key": "set_meal", "label_ja": "定食", "score": 0.4},
+            ],
+            scene_type="single_dish",
+            meal_style="single_item",
+            serving_style="single_bowl",
+            analysis_confidence=0.44,
+        )
+
+        result, normalized_payload, raw_payload, _calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload), make_stage_result(crop_payload)],
+            crop_candidates=[{"name": "center_tight"}],
+        )
+
+        self.assertEqual(result["primary_dish_key"], "set_meal")
+        self.assertEqual(result["crop_refinement_status"], "kept_full_image")
+        self.assertFalse(result["crop_refinement_applied"])
+        self.assertEqual(result["crop_candidate_count"], 1)
+        self.assertEqual(normalized_payload["primary_dish_key"], "set_meal")
+        self.assertEqual(raw_payload["crop_refinement"]["status"], "kept_full_image")
+
+    def test_process_single_image_uses_selected_crop_for_broad_refinement(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="set_meal",
+            primary_dish_label_ja="定食",
+            primary_dish_candidates=[
+                {"key": "set_meal", "label_ja": "定食", "score": 0.63},
+                {"key": "rice", "label_ja": "ご飯", "score": 0.35},
+            ],
+            scene_type="set_meal",
+            meal_style="set_meal",
+            serving_style="tray",
+            analysis_confidence=0.63,
+            review_reasons=["scene_dominant"],
+        )
+        crop_payload = make_raw_result(
+            primary_dish_key="stew",
+            primary_dish_label_ja="煮込み",
+            primary_dish_candidates=[
+                {"key": "stew", "label_ja": "煮込み", "score": 0.68},
+                {"key": "set_meal", "label_ja": "定食", "score": 0.2},
+            ],
+            scene_type="single_dish",
+            meal_style="single_item",
+            serving_style="single_bowl",
+            analysis_confidence=0.68,
+        )
+        fine_payload = {
+            "primary_dish_key": "nimono",
+            "primary_dish_label_ja": "煮物",
+            "primary_dish_candidates": [
+                {"key": "nimono", "label_ja": "煮物", "score": 0.8},
+                {"key": "stew", "label_ja": "煮込み", "score": 0.37},
+            ],
+            "analysis_confidence": 0.8,
+            "review_note_ja": "",
+        }
+
+        result, normalized_payload, _raw_payload, calls = self.run_process_single_image(
+            [
+                make_stage_result(coarse_payload),
+                make_stage_result(crop_payload),
+                make_stage_result(fine_payload),
+            ],
+            crop_candidates=[{"name": "lower_center_large"}],
+        )
+
+        self.assertEqual(result["primary_dish_key"], "nimono")
+        self.assertEqual(result["crop_refinement_status"], "applied")
+        self.assertTrue(result["crop_refinement_applied"])
+        self.assertEqual(normalized_payload["crop_selected_index"], 0)
+        self.assertEqual(calls[2]["image_mode"], MODULE.CROP_SELECTED_IMAGE_MODE)
 
     def test_process_single_image_rescues_meat_dish_to_specific_candidate(self) -> None:
         coarse_payload = make_raw_result(
@@ -462,12 +654,27 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             "analysis_confidence": 0.55,
             "review_note_ja": "焼きか炒めか判別困難",
         }
+        crop_payload = make_raw_result(
+            primary_dish_key="meat_dish",
+            primary_dish_label_ja="肉料理",
+            primary_dish_candidates=[
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.58},
+                {"key": "grilled_meat", "label_ja": "焼き肉系", "score": 0.43},
+            ],
+            analysis_confidence=0.58,
+        )
 
         result, normalized_payload, _raw_payload, _calls = self.run_process_single_image(
-            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+            [
+                make_stage_result(coarse_payload),
+                make_stage_result(crop_payload),
+                make_stage_result(fine_payload),
+            ],
+            crop_candidates=[{"name": "center_large"}],
         )
 
         self.assertEqual(result["primary_dish_key"], "grilled_meat")
+        self.assertEqual(result["crop_refinement_status"], "kept_full_image")
         self.assertEqual(result["broad_refinement_status"], "resolved")
         self.assertEqual(result["review_note_ja"], "")
         self.assertEqual(result["broad_refinement_note_ja"], "")
@@ -494,9 +701,23 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             "analysis_confidence": 0.58,
             "review_note_ja": "焼きか炒めか判別困難",
         }
+        crop_payload = make_raw_result(
+            primary_dish_key="meat_dish",
+            primary_dish_label_ja="肉料理",
+            primary_dish_candidates=[
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.6},
+                {"key": "grilled_meat", "label_ja": "焼肉系", "score": 0.43},
+            ],
+            analysis_confidence=0.6,
+        )
 
         result, normalized_payload, raw_payload, _calls = self.run_process_single_image(
-            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+            [
+                make_stage_result(coarse_payload),
+                make_stage_result(crop_payload),
+                make_stage_result(fine_payload),
+            ],
+            crop_candidates=[{"name": "center_large"}],
         )
 
         self.assertEqual(result["primary_dish_key"], "meat_dish")
@@ -531,15 +752,65 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             "analysis_confidence": 0.58,
             "review_note_ja": "炒め物か断定しにくい",
         }
+        crop_payload = make_raw_result(
+            primary_dish_key="meat_dish",
+            primary_dish_label_ja="肉料理",
+            primary_dish_candidates=[
+                {"key": "meat_dish", "label_ja": "肉料理", "score": 0.59},
+                {"key": "stir_fry", "label_ja": "炒め物", "score": 0.4},
+            ],
+            analysis_confidence=0.59,
+        )
 
         result, normalized_payload, _raw_payload, _calls = self.run_process_single_image(
-            [make_stage_result(coarse_payload), make_stage_result(fine_payload)]
+            [
+                make_stage_result(coarse_payload),
+                make_stage_result(crop_payload),
+                make_stage_result(fine_payload),
+            ],
+            crop_candidates=[{"name": "center_large"}],
         )
 
         self.assertEqual(result["primary_dish_key"], "meat_dish")
         self.assertEqual(result["broad_refinement_status"], "kept_broad")
         self.assertIn("broad_primary", normalized_payload["review_reasons"])
         self.assertTrue(normalized_payload["needs_human_review"])
+
+    def test_apply_conservative_broad_candidate_rescue_rescues_stew(self) -> None:
+        rescued = MODULE.apply_conservative_broad_candidate_rescue(
+            merged_raw_result={
+                "primary_dish_key": "stew",
+                "primary_dish_label_ja": "煮込み",
+                "primary_dish_candidates": [
+                    {"key": "stew", "label_ja": "煮込み", "score": 0.56},
+                    {"key": "nimono", "label_ja": "煮物", "score": 0.5},
+                ],
+                "review_note_ja": "煮物か断定しにくい",
+                "broad_refinement_note_ja": "煮物か断定しにくい",
+            },
+            coarse_primary_dish_key="stew",
+        )
+
+        self.assertEqual(rescued["primary_dish_key"], "nimono")
+        self.assertEqual(rescued["review_note_ja"], "")
+
+    def test_apply_conservative_broad_candidate_rescue_rescues_noodles(self) -> None:
+        rescued = MODULE.apply_conservative_broad_candidate_rescue(
+            merged_raw_result={
+                "primary_dish_key": "noodles",
+                "primary_dish_label_ja": "麺類",
+                "primary_dish_candidates": [
+                    {"key": "noodles", "label_ja": "麺類", "score": 0.58},
+                    {"key": "pasta", "label_ja": "パスタ", "score": 0.53},
+                ],
+                "review_note_ja": "麺類のままでもよいか迷う",
+                "broad_refinement_note_ja": "麺類のままでもよいか迷う",
+            },
+            coarse_primary_dish_key="noodles",
+        )
+
+        self.assertEqual(rescued["primary_dish_key"], "pasta")
+        self.assertEqual(rescued["broad_refinement_note_ja"], "")
 
     def test_process_single_image_falls_back_to_coarse_when_fine_stage_fails(self) -> None:
         coarse_payload = make_raw_result(
@@ -551,9 +822,23 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             ],
             analysis_confidence=0.62,
         )
+        crop_payload = make_raw_result(
+            primary_dish_key="stew",
+            primary_dish_label_ja="煮込み",
+            primary_dish_candidates=[
+                {"key": "stew", "label_ja": "煮込み", "score": 0.61},
+                {"key": "curry_rice", "label_ja": "カレーライス", "score": 0.39},
+            ],
+            analysis_confidence=0.61,
+        )
 
         result, normalized_payload, raw_payload, calls = self.run_process_single_image(
-            [make_stage_result(coarse_payload), RuntimeError("fine stage timeout")]
+            [
+                make_stage_result(coarse_payload),
+                make_stage_result(crop_payload),
+                RuntimeError("fine stage timeout"),
+            ],
+            crop_candidates=[{"name": "center_large"}],
         )
 
         self.assertEqual(result["primary_dish_key"], "stew")
@@ -563,7 +848,7 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertIn("broad_primary", normalized_payload["review_reasons"])
         self.assertIn("error", raw_payload["broad_refinement"])
         self.assertIn("fine stage timeout", raw_payload["broad_refinement"]["error"])
-        self.assertEqual(calls[1]["image_mode"], MODULE.FULL_IMAGE_MODE)
+        self.assertEqual(calls[2]["image_mode"], MODULE.FULL_IMAGE_MODE)
 
     def test_rebuild_labels_jsonl_copies_derived_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -599,6 +884,8 @@ class ExploreFoodLabelsTests(unittest.TestCase):
     def run_process_single_image(
         self,
         stage_results: list[object],
+        *,
+        crop_candidates: list[dict[str, object]] | None = None,
     ) -> tuple[dict[str, object], dict[str, object], dict[str, object], list[dict[str, object]]]:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -618,7 +905,34 @@ class ExploreFoodLabelsTests(unittest.TestCase):
                     raise outcome
                 return outcome
 
-            with mock.patch.object(MODULE, "run_model_stage", side_effect=fake_run_model_stage):
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(mock.patch.object(MODULE, "run_model_stage", side_effect=fake_run_model_stage))
+                if crop_candidates is not None:
+                    patched_candidates = []
+                    for index, candidate in enumerate(crop_candidates):
+                        crop_path = root / f"crop-{index}.jpg"
+                        crop_path.write_bytes(b"\xff\xd8\xff\xd9")
+                        patched_candidates.append(
+                            {
+                                "index": index,
+                                "name": candidate.get("name", f"crop-{index}"),
+                                "box": candidate.get(
+                                    "box",
+                                    {"left": 0, "top": 0, "width": 120, "height": 120},
+                                ),
+                                "path": crop_path,
+                            }
+                        )
+
+                    @contextlib.contextmanager
+                    def fake_temporary_crop_candidates(*, prepared_path: Path):
+                        del prepared_path
+                        yield patched_candidates
+
+                    stack.enter_context(
+                        mock.patch.object(MODULE, "temporary_crop_candidates", fake_temporary_crop_candidates)
+                    )
+
                 result = MODULE.process_single_image(
                     image_path=image_path,
                     relative_path=Path("photos/sample.jpg"),

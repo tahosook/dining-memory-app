@@ -28,6 +28,11 @@ def make_record(
     container_hint: str = "none",
     contains_can_or_bottle: bool = False,
     review_bucket: str = "normal",
+    coarse_primary_dish_key: str | None = None,
+    broad_refinement_status: str = "not_applicable",
+    broad_refinement_compare_keys: list[str] | None = None,
+    crop_refinement_status: str = "not_triggered",
+    crop_refinement_applied: bool = False,
 ) -> dict[str, object]:
     return {
         "schema_version": "food_label_exploration_v3",
@@ -58,6 +63,14 @@ def make_record(
         "container_hint": container_hint,
         "contains_can_or_bottle": contains_can_or_bottle,
         "review_bucket": review_bucket,
+        "coarse_primary_dish_key": coarse_primary_dish_key or primary_dish_key,
+        "broad_refinement_status": broad_refinement_status,
+        "broad_refinement_compare_keys": broad_refinement_compare_keys or [],
+        "crop_refinement_status": crop_refinement_status,
+        "crop_refinement_applied": crop_refinement_applied,
+        "crop_candidate_count": 0,
+        "crop_selected_index": None,
+        "crop_refinement_note_ja": "",
     }
 
 
@@ -114,6 +127,8 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
                     ],
                     supporting_items=["salad"],
                     review_note_ja="主料理不明",
+                    coarse_primary_dish_key="set_meal",
+                    crop_refinement_status="kept_full_image",
                 ),
                 make_record(
                     image_id="img-fish",
@@ -176,6 +191,10 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("img-unknown::photos/unknown.jpg", html_text)
             self.assertIn("file://", html_text)
             self.assertIn("csv:unknown", html_text)
+            self.assertIn("coarse_primary_dish_key", html_text)
+            self.assertIn("final_primary_dish_key", html_text)
+            self.assertIn("crop_refinement_status", html_text)
+            self.assertIn("score_gap", html_text)
 
     def test_builds_from_normalized_without_labels_and_writes_provisional_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -198,6 +217,11 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
                     {"key": "nimono", "label_ja": "煮物", "score": 0.39},
                 ],
                 review_note_ja="主料理粒度要確認",
+                coarse_primary_dish_key="meat_dish",
+                broad_refinement_status="kept_broad",
+                broad_refinement_compare_keys=["stir_fry", "grilled_meat", "meat_dish"],
+                crop_refinement_status="applied",
+                crop_refinement_applied=True,
             )
             (normalized_dir / "sample-1.jpg.json").write_text(
                 json.dumps(record, ensure_ascii=False, indent=2),
@@ -225,6 +249,11 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("labels.provisional.jsonl", html_text)
             self.assertIn("Broad primary candidates", html_text)
             self.assertIn("broad_primary_concrete_candidate_key", html_text)
+            self.assertIn("kept_broad", html_text)
+            self.assertIn("crop_applied", html_text)
+            self.assertIn("broad_refinement_compare_keys", html_text)
+            self.assertIn("top1_score", html_text)
+            self.assertIn("top2_score", html_text)
             self.assertIn("nimono", html_text)
             self.assertIn("Broken JSON: 1", result.stdout)
 

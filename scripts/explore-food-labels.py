@@ -22,6 +22,7 @@ from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 SCHEMA_VERSION = "food_label_exploration_v3"
 PROMPT_VERSION = "food_label_exploration_prompt_v9"
+CROP_REFINEMENT_PROMPT_VERSION = "food_label_exploration_crop_refinement_prompt_v1"
 BROAD_REFINEMENT_PROMPT_VERSION = "food_label_exploration_broad_refinement_prompt_v3"
 OLLAMA_API_BASE_URL = "http://localhost:11434/api"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
@@ -33,9 +34,63 @@ SPECIFIC_DISH_CONFIDENCE_FALLBACK = 0.72
 BROAD_DISH_CONFIDENCE_FALLBACK = 0.58
 WEAK_DISH_CONFIDENCE_FALLBACK = 0.4
 FULL_IMAGE_MODE = "full_image"
+CROP_CANDIDATE_IMAGE_MODE = "crop_candidate"
+CROP_SELECTED_IMAGE_MODE = "crop_selected"
+CROP_REFINEMENT_MIN_CONFIDENCE = LOW_CONFIDENCE_REVIEW_THRESHOLD
+CROP_MIN_EDGE_PIXELS = 96
+CROP_STATUS_NOT_TRIGGERED = "not_triggered"
+CROP_STATUS_APPLIED = "applied"
+CROP_STATUS_KEPT_FULL_IMAGE = "kept_full_image"
+CROP_STATUS_FAILED = "failed"
 MEAT_DISH_RESCUE_KEYS = {"stir_fry", "grilled_meat"}
 MEAT_DISH_RESCUE_MIN_SCORE = 0.45
 MEAT_DISH_RESCUE_MAX_SCORE_GAP = 0.10
+STEW_RESCUE_KEYS = {"nimono", "curry_rice", "meat_and_potato_stew"}
+STEW_RESCUE_MIN_SCORE = 0.48
+STEW_RESCUE_MAX_SCORE_GAP = 0.08
+NOODLES_RESCUE_KEYS = {"pasta"}
+NOODLES_RESCUE_MIN_SCORE = 0.5
+NOODLES_RESCUE_MAX_SCORE_GAP = 0.08
+CROP_CANDIDATE_LAYOUTS: Sequence[Dict[str, Any]] = (
+    {
+        "name": "lower_center_large",
+        "width_ratio": 0.78,
+        "height_ratio": 0.68,
+        "center_x_ratio": 0.50,
+        "center_y_ratio": 0.62,
+    },
+    {
+        "name": "center_large",
+        "width_ratio": 0.74,
+        "height_ratio": 0.62,
+        "center_x_ratio": 0.50,
+        "center_y_ratio": 0.50,
+    },
+    {
+        "name": "center_tight",
+        "width_ratio": 0.58,
+        "height_ratio": 0.52,
+        "center_x_ratio": 0.50,
+        "center_y_ratio": 0.50,
+    },
+)
+BROAD_CANDIDATE_RESCUE_RULES: Dict[str, Dict[str, Any]] = {
+    "meat_dish": {
+        "allowed_keys": MEAT_DISH_RESCUE_KEYS,
+        "min_score": MEAT_DISH_RESCUE_MIN_SCORE,
+        "max_score_gap": MEAT_DISH_RESCUE_MAX_SCORE_GAP,
+    },
+    "stew": {
+        "allowed_keys": STEW_RESCUE_KEYS,
+        "min_score": STEW_RESCUE_MIN_SCORE,
+        "max_score_gap": STEW_RESCUE_MAX_SCORE_GAP,
+    },
+    "noodles": {
+        "allowed_keys": NOODLES_RESCUE_KEYS,
+        "min_score": NOODLES_RESCUE_MIN_SCORE,
+        "max_score_gap": NOODLES_RESCUE_MAX_SCORE_GAP,
+    },
+}
 
 SCENE_TYPE_OPTIONS = [
     "single_dish",
@@ -668,123 +723,256 @@ def process_single_image(
                 )
             except Exception as error:
                 raise StageError("ollama_chat", f"Failed to analyze image with Ollama: {error}", cause=error) from error
-    except Exception as error:
-        raise StageError("prepare_image", f"Failed to prepare image: {error}", cause=error) from error
-
-    raw_record = build_raw_record(
-        image_id=image_id,
-        relative_path=relative_path,
-        model=model,
-        prompt_version=PROMPT_VERSION,
-        stage_result=coarse_stage,
-    )
-    persist_raw_record(raw_path=raw_path, raw_record=raw_record)
-
-    try:
-        coarse_raw_result = parse_model_json_object(coarse_stage["raw_message_content"])
-    except Exception as error:
-        raise StageError("parse_response", f"Failed to parse model JSON: {error}", cause=error) from error
-
-    try:
-        coarse_normalized = normalize_result(
-            coarse_raw_result,
-            image_id=image_id,
-            source_path=source_path,
-        )
-    except Exception as error:
-        raise StageError("normalize_result", f"Failed to normalize response: {error}", cause=error) from error
-
-    final_normalized = apply_broad_refinement_metadata(
-        coarse_normalized,
-        coarse_normalized=coarse_normalized,
-        status="not_applicable",
-        compare_keys=[],
-        image_mode=FULL_IMAGE_MODE,
-        note_ja="",
-    )
-
-    if should_run_broad_refinement(coarse_normalized):
-        broad_key = coarse_normalized["primary_dish_key"]
-        compare_keys = list(BROAD_REFINEMENT_RULES[broad_key]["compare_keys"])
-        broad_refinement_record: Dict[str, Any] = {
-            "prompt_version": BROAD_REFINEMENT_PROMPT_VERSION,
-            "image_mode": FULL_IMAGE_MODE,
-            "compare_keys": compare_keys,
-        }
-        try:
-            with prepared_image_path(image_path) as refinement_prepared_path:
-                fine_stage = run_model_stage(
-                    model=model,
-                    format_schema=BROAD_REFINEMENT_FORMAT_SCHEMA,
-                    system_prompt=build_system_prompt(),
-                    user_prompt=build_broad_refinement_prompt(
-                        image_id=image_id,
-                        source_path=source_path,
-                        coarse_normalized=coarse_normalized,
-                    ),
-                    prepared_image_path=refinement_prepared_path,
-                    timeout=timeout,
-                    image_mode=FULL_IMAGE_MODE,
-                )
-            broad_refinement_record.update(
-                {
-                    "request": fine_stage["request"],
-                    "raw_message_content": fine_stage["raw_message_content"],
-                    "response_json": fine_stage["response_json"],
-                }
+            raw_record = build_raw_record(
+                image_id=image_id,
+                relative_path=relative_path,
+                model=model,
+                prompt_version=PROMPT_VERSION,
+                stage_result=coarse_stage,
             )
-            raw_record["broad_refinement"] = broad_refinement_record
             persist_raw_record(raw_path=raw_path, raw_record=raw_record)
 
-            fine_raw_result = parse_model_json_object(fine_stage["raw_message_content"])
-            merged_raw_result = merge_broad_refinement_into_raw_result(
-                coarse_raw_result=coarse_raw_result,
-                fine_raw_result=fine_raw_result,
-                coarse_primary_dish_key=broad_key,
-            )
-            merged_raw_result = apply_conservative_meat_dish_candidate_rescue(
-                merged_raw_result=merged_raw_result,
-                coarse_primary_dish_key=broad_key,
-            )
-            final_normalized = normalize_result(
-                merged_raw_result,
-                image_id=image_id,
-                source_path=source_path,
+            try:
+                coarse_raw_result = parse_model_json_object(coarse_stage["raw_message_content"])
+            except Exception as error:
+                raise StageError("parse_response", f"Failed to parse model JSON: {error}", cause=error) from error
+
+            try:
+                coarse_normalized = normalize_result(
+                    coarse_raw_result,
+                    image_id=image_id,
+                    source_path=source_path,
+                )
+            except Exception as error:
+                raise StageError("normalize_result", f"Failed to normalize response: {error}", cause=error) from error
+
+            working_raw_result = dict(coarse_raw_result)
+            working_normalized = dict(coarse_normalized)
+            refinement_image_path = prepared_path
+            refinement_image_mode = FULL_IMAGE_MODE
+            crop_status = CROP_STATUS_NOT_TRIGGERED
+            crop_applied = False
+            crop_candidate_count = 0
+            crop_selected_index: Optional[int] = None
+            crop_note_ja = ""
+
+            if should_run_crop_refinement(coarse_normalized):
+                crop_trigger_reasons = derive_crop_refinement_trigger_reasons(coarse_normalized)
+                crop_refinement_record: Dict[str, Any] = {
+                    "prompt_version": CROP_REFINEMENT_PROMPT_VERSION,
+                    "trigger_reasons": crop_trigger_reasons,
+                    "candidates": [],
+                    "candidate_count": 0,
+                }
+                try:
+                    with temporary_crop_candidates(prepared_path=prepared_path) as crop_candidates:
+                        crop_candidate_count = len(crop_candidates)
+                        crop_refinement_record["candidate_count"] = crop_candidate_count
+                        best_crop_result: Optional[Dict[str, Any]] = None
+                        best_crop_priority: Optional[Tuple[float, float, float, float]] = None
+
+                        for candidate in crop_candidates:
+                            candidate_record: Dict[str, Any] = {
+                                "index": candidate["index"],
+                                "name": candidate["name"],
+                                "box": dict(candidate["box"]),
+                                "image_mode": CROP_CANDIDATE_IMAGE_MODE,
+                            }
+                            try:
+                                crop_stage = run_model_stage(
+                                    model=model,
+                                    format_schema=FORMAT_SCHEMA,
+                                    system_prompt=build_system_prompt(),
+                                    user_prompt=build_crop_refinement_prompt(
+                                        image_id=image_id,
+                                        source_path=source_path,
+                                        coarse_normalized=coarse_normalized,
+                                        crop_name=candidate["name"],
+                                    ),
+                                    prepared_image_path=candidate["path"],
+                                    timeout=timeout,
+                                    image_mode=CROP_CANDIDATE_IMAGE_MODE,
+                                )
+                                candidate_record.update(
+                                    {
+                                        "request": crop_stage["request"],
+                                        "raw_message_content": crop_stage["raw_message_content"],
+                                        "response_json": crop_stage["response_json"],
+                                    }
+                                )
+                                crop_raw_result = parse_model_json_object(crop_stage["raw_message_content"])
+                                crop_normalized = normalize_result(
+                                    crop_raw_result,
+                                    image_id=image_id,
+                                    source_path=source_path,
+                                )
+                                candidate_record["normalized_primary_dish_key"] = crop_normalized["primary_dish_key"]
+                                candidate_record["analysis_confidence"] = crop_normalized["analysis_confidence"]
+                                candidate_record["score_gap"] = extract_primary_candidate_score_gap(
+                                    crop_normalized.get("primary_dish_candidates")
+                                )
+                                crop_priority = build_crop_candidate_priority(
+                                    normalized=crop_normalized,
+                                    candidate_index=candidate["index"],
+                                )
+                                if best_crop_priority is None or crop_priority > best_crop_priority:
+                                    best_crop_priority = crop_priority
+                                    best_crop_result = {
+                                        "index": candidate["index"],
+                                        "path": candidate["path"],
+                                        "raw_result": crop_raw_result,
+                                        "normalized": crop_normalized,
+                                    }
+                            except Exception as error:
+                                candidate_record["error"] = str(error)
+                            crop_refinement_record["candidates"].append(candidate_record)
+
+                        if best_crop_result is not None and should_apply_crop_candidate(
+                            current_normalized=working_normalized,
+                            crop_normalized=best_crop_result["normalized"],
+                        ):
+                            working_raw_result = dict(best_crop_result["raw_result"])
+                            working_normalized = dict(best_crop_result["normalized"])
+                            refinement_image_path = best_crop_result["path"]
+                            refinement_image_mode = CROP_SELECTED_IMAGE_MODE
+                            crop_status = CROP_STATUS_APPLIED
+                            crop_applied = True
+                            crop_selected_index = best_crop_result["index"]
+                            crop_note_ja = clean_short_text(working_normalized.get("review_note_ja"))
+                        else:
+                            crop_status = CROP_STATUS_KEPT_FULL_IMAGE
+
+                        crop_refinement_record["selected_index"] = crop_selected_index
+                        crop_refinement_record["status"] = crop_status
+                        raw_record["crop_refinement"] = crop_refinement_record
+                        persist_raw_record(raw_path=raw_path, raw_record=raw_record)
+                except Exception as error:
+                    crop_status = CROP_STATUS_FAILED
+                    crop_applied = False
+                    crop_note_ja = ""
+                    crop_refinement_record["status"] = crop_status
+                    crop_refinement_record["error"] = str(error)
+                    raw_record["crop_refinement"] = crop_refinement_record
+                    persist_raw_record(raw_path=raw_path, raw_record=raw_record)
+
+            final_normalized = apply_crop_refinement_metadata(
+                working_normalized,
+                status=crop_status,
+                applied=crop_applied,
+                candidate_count=crop_candidate_count,
+                selected_index=crop_selected_index,
+                note_ja=crop_note_ja,
             )
             final_normalized = apply_broad_refinement_metadata(
                 final_normalized,
                 coarse_normalized=coarse_normalized,
-                status=derive_broad_refinement_status(
-                    coarse_primary_dish_key=broad_key,
-                    final_primary_dish_key=final_normalized["primary_dish_key"],
-                ),
-                compare_keys=compare_keys,
-                image_mode=FULL_IMAGE_MODE,
-                note_ja=clean_short_text(merged_raw_result.get("broad_refinement_note_ja")),
-            )
-        except Exception as error:
-            broad_refinement_record["error"] = str(error)
-            raw_record["broad_refinement"] = broad_refinement_record
-            persist_raw_record(raw_path=raw_path, raw_record=raw_record)
-            final_normalized = apply_broad_refinement_metadata(
-                coarse_normalized,
-                coarse_normalized=coarse_normalized,
-                status="failed",
-                compare_keys=compare_keys,
+                status="not_applicable",
+                compare_keys=[],
                 image_mode=FULL_IMAGE_MODE,
                 note_ja="",
             )
 
-    try:
-        write_json_file(normalized_path, final_normalized)
-    except Exception as error:
-        raise StageError("write_normalized", f"Failed to write normalized JSON: {error}", cause=error) from error
+            if should_run_broad_refinement(working_normalized):
+                broad_key = working_normalized["primary_dish_key"]
+                compare_keys = list(BROAD_REFINEMENT_RULES[broad_key]["compare_keys"])
+                broad_refinement_record = {
+                    "prompt_version": BROAD_REFINEMENT_PROMPT_VERSION,
+                    "image_mode": refinement_image_mode,
+                    "compare_keys": compare_keys,
+                }
+                try:
+                    fine_stage = run_model_stage(
+                        model=model,
+                        format_schema=BROAD_REFINEMENT_FORMAT_SCHEMA,
+                        system_prompt=build_system_prompt(),
+                        user_prompt=build_broad_refinement_prompt(
+                            image_id=image_id,
+                            source_path=source_path,
+                            coarse_normalized=working_normalized,
+                        ),
+                        prepared_image_path=refinement_image_path,
+                        timeout=timeout,
+                        image_mode=refinement_image_mode,
+                    )
+                    broad_refinement_record.update(
+                        {
+                            "request": fine_stage["request"],
+                            "raw_message_content": fine_stage["raw_message_content"],
+                            "response_json": fine_stage["response_json"],
+                        }
+                    )
+                    raw_record["broad_refinement"] = broad_refinement_record
+                    persist_raw_record(raw_path=raw_path, raw_record=raw_record)
 
-    return final_normalized
+                    fine_raw_result = parse_model_json_object(fine_stage["raw_message_content"])
+                    merged_raw_result = merge_broad_refinement_into_raw_result(
+                        coarse_raw_result=working_raw_result,
+                        fine_raw_result=fine_raw_result,
+                        coarse_primary_dish_key=broad_key,
+                    )
+                    merged_raw_result = apply_conservative_broad_candidate_rescue(
+                        merged_raw_result=merged_raw_result,
+                        coarse_primary_dish_key=broad_key,
+                    )
+                    final_normalized = normalize_result(
+                        merged_raw_result,
+                        image_id=image_id,
+                        source_path=source_path,
+                    )
+                    final_normalized = apply_crop_refinement_metadata(
+                        final_normalized,
+                        status=crop_status,
+                        applied=crop_applied,
+                        candidate_count=crop_candidate_count,
+                        selected_index=crop_selected_index,
+                        note_ja=crop_note_ja,
+                    )
+                    final_normalized = apply_broad_refinement_metadata(
+                        final_normalized,
+                        coarse_normalized=coarse_normalized,
+                        status=derive_broad_refinement_status(
+                            coarse_primary_dish_key=broad_key,
+                            final_primary_dish_key=final_normalized["primary_dish_key"],
+                        ),
+                        compare_keys=compare_keys,
+                        image_mode=refinement_image_mode,
+                        note_ja=clean_short_text(merged_raw_result.get("broad_refinement_note_ja")),
+                    )
+                except Exception as error:
+                    broad_refinement_record["error"] = str(error)
+                    raw_record["broad_refinement"] = broad_refinement_record
+                    persist_raw_record(raw_path=raw_path, raw_record=raw_record)
+                    final_normalized = apply_crop_refinement_metadata(
+                        working_normalized,
+                        status=crop_status,
+                        applied=crop_applied,
+                        candidate_count=crop_candidate_count,
+                        selected_index=crop_selected_index,
+                        note_ja=crop_note_ja,
+                    )
+                    final_normalized = apply_broad_refinement_metadata(
+                        final_normalized,
+                        coarse_normalized=coarse_normalized,
+                        status="failed",
+                        compare_keys=compare_keys,
+                        image_mode=refinement_image_mode,
+                        note_ja="",
+                    )
+
+            try:
+                write_json_file(normalized_path, final_normalized)
+            except Exception as error:
+                raise StageError("write_normalized", f"Failed to write normalized JSON: {error}", cause=error) from error
+
+            return final_normalized
+    except StageError:
+        raise
+    except Exception as error:
+        raise StageError("prepare_image", f"Failed to prepare image: {error}", cause=error) from error
 
 
 def resolve_stage_image_path(*, prepared_image_path: Path, image_mode: str) -> Path:
-    if image_mode != FULL_IMAGE_MODE:
+    if image_mode not in {FULL_IMAGE_MODE, CROP_CANDIDATE_IMAGE_MODE, CROP_SELECTED_IMAGE_MODE}:
         raise ValueError(f"Unsupported image_mode: {image_mode}")
     return prepared_image_path
 
@@ -793,10 +981,49 @@ def should_run_broad_refinement(coarse_normalized: Dict[str, Any]) -> bool:
     return coarse_normalized.get("primary_dish_key") in BROAD_PRIMARY_KEYS
 
 
+def should_run_crop_refinement(coarse_normalized: Dict[str, Any]) -> bool:
+    return bool(derive_crop_refinement_trigger_reasons(coarse_normalized))
+
+
+def derive_crop_refinement_trigger_reasons(coarse_normalized: Dict[str, Any]) -> List[str]:
+    reasons: List[str] = []
+    scene_type = coarse_normalized.get("scene_type")
+    if scene_type in {"set_meal", "multi_dish_table"}:
+        reasons.append(f"scene_type:{scene_type}")
+
+    review_reasons = ensure_list(coarse_normalized.get("review_reasons"))
+    if "scene_dominant" in review_reasons:
+        reasons.append("review_reason:scene_dominant")
+
+    primary_dish_key = coarse_normalized.get("primary_dish_key")
+    if primary_dish_key in BROAD_PRIMARY_KEYS:
+        reasons.append(f"broad_primary:{primary_dish_key}")
+
+    return reasons
+
+
 def derive_broad_refinement_status(*, coarse_primary_dish_key: str, final_primary_dish_key: str) -> str:
     if final_primary_dish_key == coarse_primary_dish_key:
         return "kept_broad"
     return "resolved"
+
+
+def apply_crop_refinement_metadata(
+    final_normalized: Dict[str, Any],
+    *,
+    status: str,
+    applied: bool,
+    candidate_count: int,
+    selected_index: Optional[int],
+    note_ja: str,
+) -> Dict[str, Any]:
+    normalized = dict(final_normalized)
+    normalized["crop_refinement_status"] = status
+    normalized["crop_refinement_applied"] = applied
+    normalized["crop_candidate_count"] = max(0, int(candidate_count))
+    normalized["crop_selected_index"] = selected_index
+    normalized["crop_refinement_note_ja"] = clean_short_text(note_ja)
+    return normalized
 
 
 def build_raw_record(
@@ -825,6 +1052,109 @@ def persist_raw_record(*, raw_path: Path, raw_record: Dict[str, Any]) -> None:
         write_json_file(raw_path, raw_record)
     except Exception as error:
         raise StageError("write_raw_response", f"Failed to write raw response: {error}", cause=error) from error
+
+
+@contextlib.contextmanager
+def temporary_crop_candidates(*, prepared_path: Path) -> Iterator[List[Dict[str, Any]]]:
+    width, height = get_image_dimensions(prepared_path)
+    crop_specs = build_crop_candidate_specs(width=width, height=height)
+
+    with tempfile.TemporaryDirectory(prefix="food-label-crops-") as temp_dir:
+        temp_root = Path(temp_dir)
+        candidates: List[Dict[str, Any]] = []
+        for index, spec in enumerate(crop_specs):
+            output_path = temp_root / f"{index:02d}_{spec['name']}{prepared_path.suffix.lower() or '.jpg'}"
+            create_crop_image(
+                source_path=prepared_path,
+                output_path=output_path,
+                crop_box=spec["box"],
+            )
+            candidates.append(
+                {
+                    "index": index,
+                    "name": spec["name"],
+                    "box": dict(spec["box"]),
+                    "path": output_path,
+                }
+            )
+        yield candidates
+
+
+def get_image_dimensions(image_path: Path) -> Tuple[int, int]:
+    result = subprocess.run(
+        [
+            "/usr/bin/sips",
+            "-g",
+            "pixelWidth",
+            "-g",
+            "pixelHeight",
+            str(image_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        error_output = result.stderr.strip() or result.stdout.strip() or "unknown sips error"
+        raise RuntimeError(f"sips failed to inspect image size: {error_output}")
+
+    width_match = re.search(r"pixelWidth:\s*(\d+)", result.stdout)
+    height_match = re.search(r"pixelHeight:\s*(\d+)", result.stdout)
+    if width_match is None or height_match is None:
+        raise RuntimeError("sips output did not include pixelWidth / pixelHeight.")
+
+    return int(width_match.group(1)), int(height_match.group(1))
+
+
+def build_crop_candidate_specs(*, width: int, height: int) -> List[Dict[str, Any]]:
+    seen = set()
+    specs: List[Dict[str, Any]] = []
+    for layout in CROP_CANDIDATE_LAYOUTS:
+        crop_width = max(CROP_MIN_EDGE_PIXELS, min(width, int(round(width * layout["width_ratio"]))))
+        crop_height = max(CROP_MIN_EDGE_PIXELS, min(height, int(round(height * layout["height_ratio"]))))
+        if crop_width > width or crop_height > height:
+            continue
+
+        center_x = int(round(width * layout["center_x_ratio"]))
+        center_y = int(round(height * layout["center_y_ratio"]))
+        left = max(0, min(width - crop_width, center_x - crop_width // 2))
+        top = max(0, min(height - crop_height, center_y - crop_height // 2))
+        box = {
+            "left": left,
+            "top": top,
+            "width": crop_width,
+            "height": crop_height,
+        }
+        dedupe_key = (box["left"], box["top"], box["width"], box["height"])
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        specs.append({"name": layout["name"], "box": box})
+    return specs
+
+
+def create_crop_image(*, source_path: Path, output_path: Path, crop_box: Dict[str, int]) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    result = subprocess.run(
+        [
+            "/usr/bin/sips",
+            "--cropToHeightWidth",
+            str(crop_box["height"]),
+            str(crop_box["width"]),
+            "--cropOffset",
+            str(crop_box["top"]),
+            str(crop_box["left"]),
+            str(source_path),
+            "--out",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or not output_path.exists():
+        error_output = result.stderr.strip() or result.stdout.strip() or "unknown sips error"
+        raise RuntimeError(f"sips failed to create crop image: {error_output}")
 
 
 def preflight_ollama(*, model: str, timeout: float) -> None:
@@ -1048,6 +1378,28 @@ def build_user_prompt(*, image_id: str, source_path: str) -> str:
         json.dumps(schema_summary, ensure_ascii=False),
     ]
     return "\n".join(instructions)
+
+
+def build_crop_refinement_prompt(
+    *,
+    image_id: str,
+    source_path: str,
+    coarse_normalized: Dict[str, Any],
+    crop_name: str,
+) -> str:
+    base_prompt = build_user_prompt(image_id=image_id, source_path=source_path)
+    crop_instructions = [
+        "",
+        "Crop refinement focus:",
+        "- This image is a crop candidate chosen to help identify the MAIN DISH.",
+        "- Prioritize the main dish visible inside this crop, not the whole tray or scene.",
+        "- Do not use set_meal, multi_dish_table, or scene-style fallback labels unless this crop still does not show a safe dish candidate.",
+        f"- crop_candidate_name: {crop_name}",
+        f"- coarse_primary_dish_key: {coarse_normalized['primary_dish_key']}",
+        f"- coarse_scene_type: {coarse_normalized['scene_type']}",
+        f"- coarse_review_reasons: {json.dumps(coarse_normalized['review_reasons'], ensure_ascii=False)}",
+    ]
+    return base_prompt + "\n" + "\n".join(crop_instructions)
 
 
 def build_broad_refinement_prompt(
@@ -1582,27 +1934,28 @@ def apply_broad_refinement_metadata(
     return normalized
 
 
-def apply_conservative_meat_dish_candidate_rescue(
+def apply_conservative_broad_candidate_rescue(
     *,
     merged_raw_result: Dict[str, Any],
     coarse_primary_dish_key: str,
 ) -> Dict[str, Any]:
-    if coarse_primary_dish_key != "meat_dish":
+    rescue_rule = BROAD_CANDIDATE_RESCUE_RULES.get(coarse_primary_dish_key)
+    if rescue_rule is None:
         return dict(merged_raw_result)
 
     final_primary_dish_key = normalize_machine_key(merged_raw_result.get("primary_dish_key"), fallback="")
-    if final_primary_dish_key != "meat_dish":
+    if final_primary_dish_key != coarse_primary_dish_key:
         return dict(merged_raw_result)
 
     candidates = normalize_primary_dish_candidates(merged_raw_result.get("primary_dish_candidates"))
     rescue_candidate = find_more_specific_broad_candidate(
-        primary_dish_key="meat_dish",
+        primary_dish_key=coarse_primary_dish_key,
         candidates=candidates,
     )
-    if rescue_candidate is None or rescue_candidate["key"] not in MEAT_DISH_RESCUE_KEYS:
+    if rescue_candidate is None or rescue_candidate["key"] not in rescue_rule["allowed_keys"]:
         return dict(merged_raw_result)
 
-    broad_candidate = next((candidate for candidate in candidates if candidate["key"] == "meat_dish"), None)
+    broad_candidate = next((candidate for candidate in candidates if candidate["key"] == coarse_primary_dish_key), None)
     if broad_candidate is None or not broad_candidate.get("_score_present") or not rescue_candidate.get("_score_present"):
         return dict(merged_raw_result)
 
@@ -1610,9 +1963,9 @@ def apply_conservative_meat_dish_candidate_rescue(
     rescue_score = clamp_score(rescue_candidate.get("score"))
     if broad_score is None or rescue_score is None:
         return dict(merged_raw_result)
-    if rescue_score < MEAT_DISH_RESCUE_MIN_SCORE:
+    if rescue_score < rescue_rule["min_score"]:
         return dict(merged_raw_result)
-    if broad_score - rescue_score > MEAT_DISH_RESCUE_MAX_SCORE_GAP:
+    if broad_score - rescue_score > rescue_rule["max_score_gap"]:
         return dict(merged_raw_result)
 
     rescued_raw_result = dict(merged_raw_result)
@@ -1624,6 +1977,17 @@ def apply_conservative_meat_dish_candidate_rescue(
     rescued_raw_result["review_note_ja"] = ""
     rescued_raw_result["broad_refinement_note_ja"] = ""
     return rescued_raw_result
+
+
+def apply_conservative_meat_dish_candidate_rescue(
+    *,
+    merged_raw_result: Dict[str, Any],
+    coarse_primary_dish_key: str,
+) -> Dict[str, Any]:
+    return apply_conservative_broad_candidate_rescue(
+        merged_raw_result=merged_raw_result,
+        coarse_primary_dish_key=coarse_primary_dish_key,
+    )
 
 
 def normalize_primary_dish_candidates(value: Any) -> List[Dict[str, Any]]:
@@ -2055,6 +2419,66 @@ def prioritize_primary_candidate(
         prioritized.append(candidate)
         seen.add(candidate["key"])
     return prioritized
+
+
+def extract_primary_candidate_score_gap(candidates: Any) -> float:
+    normalized_candidates = normalize_primary_dish_candidates(candidates)
+    if not normalized_candidates:
+        return 0.0
+
+    first = clamp_score(normalized_candidates[0].get("score"))
+    if first is None:
+        return 0.0
+    second = 0.0
+    if len(normalized_candidates) >= 2:
+        second = clamp_score(normalized_candidates[1].get("score")) or 0.0
+    return round(max(0.0, first - second), 4)
+
+
+def classify_primary_dish_specificity(primary_dish_key: str) -> int:
+    if primary_dish_key in BROAD_PRIMARY_KEYS:
+        return 2
+    if primary_dish_key in SCENE_DOMINANT_PRIMARY_KEYS:
+        return 1
+    if (
+        primary_dish_key == "unknown"
+        or primary_dish_key in SUPPORTING_ITEM_KEYS
+        or primary_dish_key in CONTEXTUAL_SUPPORTING_ITEM_KEYS
+    ):
+        return 0
+    return 3
+
+
+def build_crop_candidate_priority(
+    *,
+    normalized: Dict[str, Any],
+    candidate_index: int,
+) -> Tuple[float, float, float, float]:
+    return (
+        float(classify_primary_dish_specificity(normalized["primary_dish_key"])),
+        float(normalized["analysis_confidence"]),
+        float(extract_primary_candidate_score_gap(normalized.get("primary_dish_candidates"))),
+        float(-candidate_index),
+    )
+
+
+def should_apply_crop_candidate(
+    *,
+    current_normalized: Dict[str, Any],
+    crop_normalized: Dict[str, Any],
+) -> bool:
+    current_rank = classify_primary_dish_specificity(current_normalized["primary_dish_key"])
+    crop_rank = classify_primary_dish_specificity(crop_normalized["primary_dish_key"])
+
+    if current_rank >= 3:
+        return False
+    if crop_rank <= current_rank:
+        return False
+    if crop_rank == 2 and current_rank not in {0, 1}:
+        return False
+    if crop_rank == 3 and current_rank not in {0, 1, 2}:
+        return False
+    return crop_normalized["analysis_confidence"] >= CROP_REFINEMENT_MIN_CONFIDENCE
 
 
 def has_candidate_split(candidates: Sequence[Dict[str, Any]]) -> bool:
