@@ -66,3 +66,6 @@ node_modules/
 .vscode/
 .idea/
 .eslintcache
+
+# MediaPipe labeling loop runtime artifacts
+state/mediapipe_labeling_runs/

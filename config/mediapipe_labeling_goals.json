@@ -1,0 +1,199 @@
+{
+  "schema_version": "mediapipe_labeling_goals_v1",
+  "purpose": "MediaPipe static-image food classifier 用に、学習可能で実用的なラベル体系を bounded に固め、教師データ追加フェーズへ進める。",
+  "priority_broad_keys": [
+    "stew",
+    "meat_dish",
+    "noodles"
+  ],
+  "preferred_primary_class_count_range": {
+    "min": 8,
+    "max": 12
+  },
+  "tracked_metrics": [
+    {
+      "name": "unknown_primary",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "side_item_primary",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "broad_primary",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "coarse_broad_primary",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "broad_refinement_resolved",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "higher"
+    },
+    {
+      "name": "broad_refinement_failed",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "scene_dominant",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "low_confidence",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "needs_human_review",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "broad_primary_key",
+      "source": "top_counts",
+      "kind": "top_count_map",
+      "better": "lower"
+    },
+    {
+      "name": "broad_primary_concrete_candidate_key",
+      "source": "top_counts",
+      "kind": "top_count_map",
+      "better": "higher"
+    },
+    {
+      "name": "broad_refinement_resolved_to_key",
+      "source": "top_counts",
+      "kind": "top_count_map",
+      "better": "higher"
+    }
+  ],
+  "max_cycles_per_run": 5,
+  "max_no_change_attempts_per_target": 2,
+  "guardrails": {
+    "allowed_touched_paths": [
+      "scripts/explore-food-labels.py",
+      "scripts/analyze-food-labels.py",
+      "scripts/compare_labeling_reports.py",
+      "scripts/mediapipe_labeling_loop.py",
+      "scripts/mediapipe_labeling_common.py",
+      "scripts/tests/test_compare_labeling_reports.py",
+      "scripts/tests/test_mediapipe_labeling_loop.py",
+      "prompts/",
+      "config/",
+      "docs/engineering/food-labeling-guidelines.md",
+      "docs/engineering/mediapipe-labeling-workflow.md",
+      "docs/index.md",
+      "README.md",
+      "state/mediapipe_labeling_state.json",
+      "state/mediapipe_labeling_runs/"
+    ],
+    "disallowed_path_prefixes": [
+      "src/"
+    ],
+    "dataset_size_mismatch": "regressed",
+    "regression_limits": {
+      "unknown_primary": {
+        "max_delta_count": 1,
+        "max_delta_ratio": 0.005
+      },
+      "side_item_primary": {
+        "max_delta_count": 1,
+        "max_delta_ratio": 0.005
+      },
+      "needs_human_review": {
+        "max_delta_count": 3,
+        "max_delta_ratio": 0.02
+      },
+      "scene_dominant": {
+        "max_delta_count": 2,
+        "max_delta_ratio": 0.01
+      },
+      "broken_json_records": {
+        "max_delta_count": 0,
+        "max_delta_ratio": 0.0
+      },
+      "invalid_record_shape_count": {
+        "max_delta_count": 0,
+        "max_delta_ratio": 0.0
+      }
+    }
+  },
+  "stop_conditions": {
+    "metrics": {
+      "unknown_primary": {
+        "max_count": 5,
+        "max_ratio": 0.03
+      },
+      "side_item_primary": {
+        "max_count": 5,
+        "max_ratio": 0.03
+      },
+      "broad_primary": {
+        "max_ratio": 0.12
+      },
+      "needs_human_review": {
+        "max_ratio": 0.15
+      }
+    },
+    "broad_keys": {
+      "max_residual_count": 5,
+      "dominant_candidate_share_threshold": 0.6,
+      "min_residual_count_for_dominant_share": 3
+    },
+    "preferred_primary_class_count_range": {
+      "min": 8,
+      "max": 12
+    }
+  },
+  "comparison_rules": {
+    "weights": {
+      "unknown_primary": 5,
+      "side_item_primary": 5,
+      "broad_primary": 4,
+      "broad_refinement_failed": 4,
+      "scene_dominant": 3,
+      "needs_human_review": 3,
+      "low_confidence": 2,
+      "coarse_broad_primary": 2,
+      "broad_refinement_resolved": 2
+    },
+    "material_change_thresholds": {
+      "count": 1,
+      "ratio": 0.005
+    },
+    "broad_hint_candidate_share_threshold": 0.45
+  },
+  "target_selection": {
+    "ordered_metric_targets": [
+      "unknown_primary",
+      "side_item_primary",
+      "scene_dominant",
+      "low_confidence",
+      "needs_human_review"
+    ],
+    "max_hypotheses_per_target": 2,
+    "broad_candidate_share_threshold": 0.45
+  },
+  "verification_commands": [
+    "python3 -m unittest scripts.tests.test_compare_labeling_reports",
+    "python3 -m unittest scripts.tests.test_mediapipe_labeling_loop",
+    "python3 -m unittest scripts.tests.test_explore_food_labels scripts.tests.test_analyze_food_labels scripts.tests.test_build_review_gallery"
+  ]
+}

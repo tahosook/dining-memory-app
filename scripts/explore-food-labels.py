@@ -190,10 +190,10 @@ BROAD_REFINEMENT_RULES: Dict[str, Dict[str, Any]] = {
     "stew": {
         "compare_keys": ["nimono", "curry_rice", "meat_and_potato_stew", "stew"],
         "comparison_notes": [
-            "nimono: looks like Japanese simmered dishes, ingredients keep their shape, and often appears in a small bowl or as part of a set meal.",
+            "nimono: prefer this for Japanese simmered dishes where ingredients keep their shape, including small bowls or set-meal dishes that the coarse stage called stew.",
             "curry_rice: looks like curry sauce or roux, often paired with rice, with a broad smooth sauce-like surface.",
             "meat_and_potato_stew: looks like nikujaga-style stew with visible chunks such as meat, potato, and onion.",
-            "stew: use only when it clearly looks simmered or stewed, but it is not safe to choose the more specific options above.",
+            "stew: keep only for generic stew-like dishes, sauce- or soup-heavy Western stew cues, or when the specific options above are not safe.",
         ],
     },
     "meat_dish": {
@@ -1099,6 +1099,15 @@ def build_broad_refinement_prompt(
                 "meat_dish-specific rule:",
                 "- if stir_fry or grilled_meat is reasonably supported, choose that more specific key instead of meat_dish",
                 "- keep meat_dish only when the dish is meat-centered but the image still does not safely support either stir_fry or grilled_meat",
+            ]
+        )
+    if broad_key == "stew":
+        instructions.extend(
+            [
+                "",
+                "stew-specific rule:",
+                "- if nimono is reasonably supported by visible shaped ingredients and Japanese simmered-dish cues, choose nimono instead of stew",
+                "- keep stew only for generic stew-like dishes or sauce/soup-heavy Western stew cues that do not safely fit nimono, curry_rice, or meat_and_potato_stew",
             ]
         )
     return "\n".join(instructions)

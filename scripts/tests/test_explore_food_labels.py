@@ -256,6 +256,27 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertIn("yakiniku-like pieces", prompt)
         self.assertIn("choose that more specific key instead of meat_dish", prompt)
 
+    def test_build_broad_refinement_prompt_strengthens_stew_to_nimono(self) -> None:
+        prompt = MODULE.build_broad_refinement_prompt(
+            image_id="img-stew-refine",
+            source_path="photos/stew.jpg",
+            coarse_normalized={
+                "primary_dish_key": "stew",
+                "primary_dish_label_ja": "煮込み",
+                "primary_dish_candidates": [
+                    {"key": "stew", "label_ja": "煮込み", "score": 0.58},
+                    {"key": "nimono", "label_ja": "煮物", "score": 0.53},
+                ],
+                "scene_type": "single_dish",
+                "review_reasons": ["broad_primary"],
+            },
+        )
+
+        self.assertIn("stew-specific rule", prompt)
+        self.assertIn("choose nimono instead of stew", prompt)
+        self.assertIn("visible shaped ingredients", prompt)
+        self.assertIn("sauce/soup-heavy Western stew cues", prompt)
+
     def test_should_run_broad_refinement_depends_only_on_primary_key(self) -> None:
         self.assertTrue(
             MODULE.should_run_broad_refinement(

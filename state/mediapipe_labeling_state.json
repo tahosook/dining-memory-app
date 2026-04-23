@@ -1,0 +1,14 @@
+{
+  "schema_version": "mediapipe_labeling_state_v1",
+  "current_iteration": 0,
+  "latest_summary_path": null,
+  "tried_targets": [],
+  "target_attempt_counts": {},
+  "target_hypothesis_attempts": {},
+  "cycle_history": [],
+  "last_result": null,
+  "last_before_summary": null,
+  "last_after_summary": null,
+  "stop_reason": null,
+  "next_phase": null
+}

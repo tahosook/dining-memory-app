@@ -4,7 +4,7 @@
 - Purpose: MediaPipe static-image food classifier 向けのラベル設計と教師データ作成に関する、食事画像ラベリング用スクリプトの修整判断ルールを定義する。
 - Audience: `scripts/explore-food-labels.py`、`scripts/analyze-food-labels.py`、`scripts/build-review-gallery.py` を修整する実装者とレビュー担当者。
 - Update trigger: ラベリング用スクリプトの責務、優先度、出力契約、打ち止めラインの考え方が変わったとき。
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/product/overview.md](../product/overview.md), [docs/product/progress.md](../product/progress.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/user-flows.md](../ux/user-flows.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/product/overview.md](../product/overview.md), [docs/product/progress.md](../product/progress.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md)
 
 ## Summary
 このスクリプト群の役割は、MediaPipe static-image food classifier 用の学習可能なラベル体系を固め、教師データを作りやすくするための道具である。  

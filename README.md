@@ -24,6 +24,7 @@
 - [実装規約](docs/engineering/coding-standards.md): coding rules
 - [Codex 作業ルール](docs/engineering/codex-workflow.md): review and verification workflow
 - [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けた script 修整の判断ルール
+- [MediaPipe ラベル改善ワークフロー](docs/engineering/mediapipe-labeling-workflow.md): 自動改善 loop の目的、guardrail、停止条件
 - [即時改善提案](docs/engineering/immediate-improvements.md): 今すぐ入れるべき改善案の整理
 
 ### ドキュメント入口
@@ -88,6 +89,7 @@ npx expo start --dev-client
 
 ### Gemma 4 食事写真ラベリング CLI
 - script の修整方針、責務、打ち止めラインは [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md) を参照してください
+- 自動改善 loop の guardrail、停止条件、次フェーズ判断は [MediaPipe ラベル改善ワークフロー](docs/engineering/mediapipe-labeling-workflow.md) を参照してください
 - UI とは別に、`scripts/explore-food-labels.py` でローカル画像ディレクトリを一括ラベリングできます
 - 想定は macOS + Ollama のローカル API + `gemma4:e4b` です
 - 対応拡張子は `jpg`, `jpeg`, `png`, `webp`, `heic` です
@@ -127,6 +129,60 @@ python3 scripts/analyze-food-labels.py --input-path <label-output-dir> --output-
 ```
 
 `summary.json`, `summary.md`, `review_candidates.csv`, `unknown_candidates.csv`, `scene_dominant_candidates.csv`, `side_item_primary_candidates.csv`, `low_confidence_candidates.csv`, `broad_primary_candidates.csv` が出力されます。
+
+### ラベリング report 比較 CLI
+- `scripts/compare_labeling_reports.py` で before / after の `summary.json` を比較し、`improved` / `no_change` / `regressed` を JSON で返します
+- `config/mediapipe_labeling_goals.json` の guardrail と stop condition を使い、`unknown_primary` や `side_item_primary` の悪化を broad 改善より重く扱います
+- `broad_primary_candidates.csv` があれば、`broad_fallback:<key>` と `best_alt:<candidate>` から次 target hint も返します
+
+最小例:
+
+```bash
+python3 scripts/compare_labeling_reports.py \
+  --before-summary <before-report>/summary.json \
+  --after-summary <after-report>/summary.json \
+  --config config/mediapipe_labeling_goals.json
+```
+
+### MediaPipe ラベル改善 auto loop
+- `scripts/mediapipe_labeling_loop.py` は `summary 読み取り -> target 選定 -> bounded prompt 生成 -> Codex 実装 -> labels/report 再生成 -> compare -> 継続/停止判定` を 1 run で自動実行します
+- baseline `summary.json` が無いときは `state/mediapipe_labeling_runs/baseline/` に baseline labels/report を自動生成します
+- default guardrail では `src/` を触らず、主に `scripts/explore-food-labels.py`, `scripts/analyze-food-labels.py`, `config/*`, `prompts/*`, `docs/engineering/*` を対象にします
+- state seed は `state/mediapipe_labeling_state.json`、prompt template は `prompts/mediapipe_labeling_implementer.txt`、goal config は `config/mediapipe_labeling_goals.json` を使います
+- `--executor dry_run` で prompt / state / compare artifact だけ確認できます。dry-run cycle では実装差分が無いため、cycle 側の再ラベリングは行わず baseline summary を after として扱います
+- `--executor codex_cli` では実際に `codex exec` を呼び、cycle 側でも labels/report を再生成して before / after を比較します
+- `--explore-limit` を指定すると、実写真ディレクトリ全体ではなく先頭 N 件だけを bounded に処理できます
+
+dry-run 例:
+
+```bash
+python3 scripts/mediapipe_labeling_loop.py \
+  --input-dir <photos> \
+  --config-path config/mediapipe_labeling_goals.json \
+  --prompt-template prompts/mediapipe_labeling_implementer.txt \
+  --state-path state/mediapipe_labeling_state.json \
+  --runs-dir state/mediapipe_labeling_runs \
+  --executor dry_run \
+  --explore-limit 10
+```
+
+Codex 実行例:
+
+```bash
+python3 scripts/mediapipe_labeling_loop.py \
+  --input-dir <photos> \
+  --config-path config/mediapipe_labeling_goals.json \
+  --prompt-template prompts/mediapipe_labeling_implementer.txt \
+  --state-path state/mediapipe_labeling_state.json \
+  --runs-dir state/mediapipe_labeling_runs \
+  --executor codex_cli \
+  --explore-limit 50 \
+  --explore-model gemma4:e4b \
+  --explore-workers 2 \
+  --explore-timeout 180 \
+  --analyze-top-n 20 \
+  --analyze-min-confidence 0.5
+```
 
 ### 環境変数
 ```env
