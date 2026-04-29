@@ -2,6 +2,7 @@ import React from 'react';
 import { Alert, Platform, Share } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Sharing from 'expo-sharing';
 import { MealDetailScreen } from '../src/screens/RecordsScreen/MealDetailScreen';
 import type { RecordsStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
@@ -11,6 +12,11 @@ jest.mock('../src/database/services/MealService', () => ({
     updateMeal: jest.fn(),
     softDeleteMeal: jest.fn(),
   },
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(),
+  shareAsync: jest.fn(),
 }));
 
 type MealDetailProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
@@ -55,6 +61,8 @@ describe('MealDetailScreen', () => {
     jest.spyOn(Share, 'share').mockResolvedValue({
       action: Share.sharedAction,
     });
+    (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
+    (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
     Platform.OS = 'ios';
   });
 
@@ -106,7 +114,7 @@ describe('MealDetailScreen', () => {
     });
   });
 
-  test('uses the shared dialog title on Android', async () => {
+  test('uses expo-sharing to attach the photo on Android', async () => {
     Platform.OS = 'android';
 
     const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
@@ -114,6 +122,40 @@ describe('MealDetailScreen', () => {
     fireEvent.press(getByTestId('meal-detail-share-button'));
 
     expect(getByText('共有する前に確認')).toBeTruthy();
+    expect(getByText('写真を共有します。投稿文は共有先で調整できます。')).toBeTruthy();
+    fireEvent.press(getByTestId('share-submit-button'));
+
+    await waitFor(() => {
+      expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///full-photo.jpg', {
+        dialogTitle: '共有',
+        mimeType: 'image/jpeg',
+      });
+    });
+    expect(Share.share).not.toHaveBeenCalled();
+  });
+
+  test('falls back to the standard Android share sheet when there is no photo', async () => {
+    Platform.OS = 'android';
+
+    const props = createProps({
+      route: {
+        key: 'MealDetail-test',
+        name: 'MealDetail',
+        params: {
+          meal: {
+            ...baseMeal,
+            photo_path: '',
+            photo_thumbnail_path: undefined,
+          },
+        },
+      },
+    });
+
+    const { getByTestId, queryByText } = render(<MealDetailScreen {...props} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(queryByText('写真を共有します。投稿文は共有先で調整できます。')).toBeNull();
     fireEvent.press(getByTestId('share-submit-button'));
 
     await waitFor(() => {
@@ -127,5 +169,6 @@ describe('MealDetailScreen', () => {
         }
       );
     });
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
   });
 });

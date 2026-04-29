@@ -22,7 +22,7 @@
 | Phase 5: change AI assist to note drafts | completed | `Phase 5: change AI assist to note drafts` | `npm test -- useMealInputAssist.test.ts mealInputAssistNormalizer.test.ts mealInputAssistRuntime.test.ts CameraScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | LLM assist now produces a noteDraft card and appends to notes without touching mealName UI. |
 | Phase 6: prewarm AI input assist runtime | completed | `Phase 6: prewarm AI input assist runtime` | `npm test -- useMealInputAssist.test.ts mealInputAssistRuntime.test.ts CameraScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Provider prewarm loads local runtime before photo completion and camera screen schedules it after idle interactions. |
 | Phase 7: simplify settings for users | completed | `Phase 7: simplify settings for users` | `npm test -- StatsSettingsScreens.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Settings is organized into privacy, AI input assist, data management, and app info with technical AI details behind an explicit disclosure. |
-| Phase 8: attach photos with Android sharing | pending |  |  |  |
+| Phase 8: attach photos with Android sharing | completed | `Phase 8: attach photos with Android sharing` | `npm test -- MealDetailScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm run check:deps`; `npm test -- --runInBand`; `npm ci` | Android photo sharing now uses `expo-sharing`; no-photo Android and iOS flows keep the standard share path. |
 | Phase 9: rename cooking level to homemade style | pending |  |  |  |
 | Phase 10: rotate saved meal photos | pending |  |  |  |
 | Phase 11: improve stats reflection screen | pending |  |  |  |
@@ -63,6 +63,14 @@
 - Phase 7: `npm run type-check` passed.
 - Phase 7: `npm run lint` passed.
 - Phase 7: `npm test -- --runInBand` passed.
+- Phase 8 implementation started.
+- Phase 8: `npx expo install expo-sharing` completed.
+- Phase 8: `npm test -- MealDetailScreen.test.tsx --runInBand` passed.
+- Phase 8: `npm run type-check` passed.
+- Phase 8: `npm run lint` passed.
+- Phase 8: `npm run check:deps` passed.
+- Phase 8: `npm test -- --runInBand` passed.
+- Phase 8: `npm ci` passed.
 
 ## Unresolved Issues
 - None.

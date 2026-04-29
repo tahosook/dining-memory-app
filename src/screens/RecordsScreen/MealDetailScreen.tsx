@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as Sharing from 'expo-sharing';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
 import { Colors } from '../../constants/Colors';
 import { MealService } from '../../database/services/MealService';
@@ -147,6 +148,25 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
           message: shareText,
           url: photoUri,
         });
+      } else if (Platform.OS === 'android' && photoUri) {
+        const sharingAvailable = await Sharing.isAvailableAsync();
+
+        if (sharingAvailable) {
+          await Sharing.shareAsync(photoUri, {
+            dialogTitle: '共有',
+            mimeType: 'image/jpeg',
+          });
+        } else {
+          await Share.share(
+            {
+              title: meal.meal_name,
+              message: shareText,
+            },
+            {
+              dialogTitle: '共有',
+            }
+          );
+        }
       } else {
         await Share.share(
           {
@@ -243,9 +263,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
               multiline
               testID="share-text-input"
             />
-            {Platform.OS === 'android' ? (
+            {Platform.OS === 'android' && photoUri ? (
               <Text style={styles.shareNote}>
-                Android では共有先アプリで、必要に応じて保存済み写真を追加してください。
+                写真を共有します。投稿文は共有先で調整できます。
               </Text>
             ) : null}
             <View style={styles.shareButtonRow}>
