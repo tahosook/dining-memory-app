@@ -37,6 +37,8 @@ export type {
   MealInputAssistModelStatus,
   MealInputAssistModelStatusKind,
   MealInputAssistPolicy,
+  MealInputAssistPrewarmOptions,
+  MealInputAssistPrewarmStatus,
   MealInputAssistProvider,
   MealInputAssistProviderMode,
   MealInputAssistProviderResult,

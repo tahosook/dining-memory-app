@@ -8,6 +8,7 @@ import {
 } from './modelConfig';
 import type {
   MealInputAssistProgressUpdate,
+  MealInputAssistPrewarmOptions,
   MealInputAssistProvider,
   MealInputAssistProviderResult,
   MealInputAssistRequest,
@@ -383,6 +384,23 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
 
   constructor(modelPath: string, projectorPath: string) {
     this.contextLoader = new LlamaMultimodalContextLoader(modelPath, projectorPath);
+  }
+
+  async prewarm(options?: MealInputAssistPrewarmOptions): Promise<void> {
+    const context = await this.contextLoader.load(options?.onProgress);
+    reportSuggestProgress(options?.onProgress, {
+      stage: 'analyzing_photo',
+      message: '写真解析の前処理を事前に整えています。',
+      progress: LOCAL_RUNTIME_CLEAR_CACHE_START_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_START_ESTIMATED_REMAINING_MS,
+    });
+    await context.clearCache();
+    reportSuggestProgress(options?.onProgress, {
+      stage: 'analyzing_photo',
+      message: '写真解析の前処理を事前に整えました。',
+      progress: LOCAL_RUNTIME_CLEAR_CACHE_DONE_PROGRESS,
+      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_DONE_ESTIMATED_REMAINING_MS,
+    });
   }
 
   async suggest(

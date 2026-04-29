@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import * as ReactNative from 'react-native';
 import { Alert } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
@@ -95,6 +95,12 @@ jest.mock('react-native', () => ({
   TextInput: 'TextInput',
   Switch: 'Switch',
   ScrollView: 'ScrollView',
+  InteractionManager: {
+    runAfterInteractions: jest.fn((callback: () => void) => {
+      callback();
+      return { cancel: jest.fn() };
+    }),
+  },
   DevMenu: {
     show: jest.fn(),
     hide: jest.fn(),
@@ -208,7 +214,9 @@ type MockAiAssistState = {
     elapsedMs: number;
     estimatedRemainingMs: number | null;
   } | null;
+  prewarmStatus: 'idle' | 'running' | 'success' | 'error';
   disabledReason: string | null;
+  prewarm: jest.Mock;
   requestSuggestions: jest.Mock;
   applyNoteDraftSuggestion: jest.Mock;
   appliedMetadata: {
@@ -270,7 +278,9 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
     },
     errorMessage: null,
     progress: null,
+    prewarmStatus: 'idle',
     disabledReason: null,
+    prewarm: jest.fn(),
     requestSuggestions: jest.fn(),
     applyNoteDraftSuggestion: jest.fn(),
     appliedMetadata: null,
@@ -368,6 +378,23 @@ describe('CameraScreen', () => {
       const { findByTestId } = render(<CameraScreen />);
 
       fireEvent.press(await findByTestId('close-button'));
+    });
+
+    test('prewarms AI input assist after the camera is ready and idle', async () => {
+      jest.useFakeTimers();
+      const prewarm = jest.fn().mockResolvedValue(undefined);
+      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
+        prewarm,
+      }));
+
+      render(<CameraScreen />);
+
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+
+      expect(prewarm).toHaveBeenCalledTimes(1);
+      jest.useRealTimers();
     });
   });
 

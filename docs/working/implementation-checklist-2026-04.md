@@ -20,7 +20,7 @@
 | Phase 3: improve labeling crop diagnostics | completed | `Phase 3: improve labeling crop diagnostics` | `python3 -m unittest scripts.tests.test_compare_labeling_reports`; `python3 -m unittest scripts.tests.test_mediapipe_labeling_loop`; `python3 -m unittest scripts.tests.test_explore_food_labels scripts.tests.test_analyze_food_labels scripts.tests.test_build_review_gallery`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Shared taxonomy, targeted crop policy, normalized repair, crop diagnostics, analysis summary/CSV, and review gallery diagnostics verified. |
 | Phase 4: stabilize Android camera preview | completed | `Phase 4: stabilize Android camera preview` | `npm test -- CameraScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | ExpoCameraView is kept mounted while capture review renders as an overlay. |
 | Phase 5: change AI assist to note drafts | completed | `Phase 5: change AI assist to note drafts` | `npm test -- useMealInputAssist.test.ts mealInputAssistNormalizer.test.ts mealInputAssistRuntime.test.ts CameraScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | LLM assist now produces a noteDraft card and appends to notes without touching mealName UI. |
-| Phase 6: prewarm AI input assist runtime | pending |  |  |  |
+| Phase 6: prewarm AI input assist runtime | completed | `Phase 6: prewarm AI input assist runtime` | `npm test -- useMealInputAssist.test.ts mealInputAssistRuntime.test.ts CameraScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Provider prewarm loads local runtime before photo completion and camera screen schedules it after idle interactions. |
 | Phase 7: simplify settings for users | pending |  |  |  |
 | Phase 8: attach photos with Android sharing | pending |  |  |  |
 | Phase 9: rename cooking level to homemade style | pending |  |  |  |
@@ -53,6 +53,11 @@
 - Phase 5: `npm run type-check` passed.
 - Phase 5: `npm run lint` passed.
 - Phase 5: `npm test -- --runInBand` passed.
+- Phase 6 implementation started.
+- Phase 6: `npm test -- useMealInputAssist.test.ts mealInputAssistRuntime.test.ts CameraScreen.test.tsx --runInBand` passed.
+- Phase 6: `npm run type-check` passed.
+- Phase 6: `npm run lint` passed.
+- Phase 6: `npm test -- --runInBand` passed.
 
 ## Unresolved Issues
 - None.

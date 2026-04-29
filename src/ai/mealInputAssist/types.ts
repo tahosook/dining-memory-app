@@ -2,6 +2,7 @@ import type { CuisineTypeOption } from '../../constants/MealOptions';
 import type { AiRuntimeUnavailableCode } from '../runtime/types';
 
 export type MealInputAssistStatus = 'idle' | 'running' | 'success' | 'error' | 'disabled';
+export type MealInputAssistPrewarmStatus = 'idle' | 'running' | 'success' | 'error';
 
 export type MealInputAssistField = 'mealName' | 'cuisineType' | 'notes';
 
@@ -75,7 +76,12 @@ export interface MealInputAssistSuggestOptions {
   onProgress?: (progress: MealInputAssistProgressUpdate) => void;
 }
 
+export interface MealInputAssistPrewarmOptions {
+  onProgress?: (progress: MealInputAssistProgressUpdate) => void;
+}
+
 export interface MealInputAssistProvider {
+  prewarm?: (options?: MealInputAssistPrewarmOptions) => Promise<void>;
   suggest: (
     request: MealInputAssistRequest,
     options?: MealInputAssistSuggestOptions

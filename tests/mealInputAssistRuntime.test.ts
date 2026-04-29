@@ -248,6 +248,46 @@ describe('meal input assist runtime availability', () => {
     }
   });
 
+  test('prewarms model and multimodal context without submitting completion', async () => {
+    const progressUpdates: Array<{
+      stage: string;
+      progress: number | null;
+    }> = [];
+    const fakeContext = {
+      clearCache: jest.fn().mockResolvedValue(undefined),
+      initMultimodal: jest.fn().mockResolvedValue(true),
+      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
+      completion: jest.fn(),
+    };
+    jest.spyOn(llamaRn, 'initLlama').mockResolvedValue(fakeContext as never);
+
+    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+    expect(availability.kind).toBe('ready');
+
+    if (availability.kind !== 'ready') {
+      throw new Error('Expected local runtime availability to be ready.');
+    }
+
+    await availability.provider.prewarm?.({
+      onProgress: (update) => {
+        progressUpdates.push({
+          stage: update.stage,
+          progress: update.progress,
+        });
+      },
+    });
+
+    expect(llamaRn.initLlama).toHaveBeenCalledTimes(1);
+    expect(fakeContext.initMultimodal).toHaveBeenCalledTimes(1);
+    expect(fakeContext.clearCache).toHaveBeenCalledTimes(1);
+    expect(fakeContext.completion).not.toHaveBeenCalled();
+    expect(progressUpdates).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: 'loading_model' }),
+      expect.objectContaining({ stage: 'initializing_multimodal' }),
+      expect.objectContaining({ stage: 'analyzing_photo', progress: 0.7 }),
+    ]));
+  });
+
   test('throws a descriptive error when the runtime returns no text payload', async () => {
     const fakeContext = {
       clearCache: jest.fn().mockResolvedValue(undefined),

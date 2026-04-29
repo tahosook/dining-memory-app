@@ -12,6 +12,7 @@ import {
   type MealInputAssistCuisineSuggestion,
   type MealInputAssistPolicy,
   type MealInputAssistProgress,
+  type MealInputAssistPrewarmStatus,
   type MealInputAssistProgressUpdate,
   type MealInputAssistProvider,
   type MealInputAssistProviderResult,
@@ -136,6 +137,7 @@ export function useMealInputAssist({
   const [suggestions, setSuggestions] = useState<MealInputAssistSuggestions>(EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progress, setProgress] = useState<MealInputAssistProgress | null>(null);
+  const [prewarmStatus, setPrewarmStatus] = useState<MealInputAssistPrewarmStatus>('idle');
   const [appliedMetadata, setAppliedMetadata] = useState<AppliedMealInputAssistMetadata | null>(null);
   const [isAiInputAssistEnabled, setIsAiInputAssistEnabled] = useState<boolean | null>(provider || policy ? true : null);
   const [runtimeAvailability, setRuntimeAvailability] = useState<MealInputAssistRuntimeAvailability | null>(
@@ -146,6 +148,7 @@ export function useMealInputAssist({
   const requestStartedAtRef = useRef<number | null>(null);
   const progressUpdatedAtRef = useRef<number | null>(null);
   const latestProgressUpdateRef = useRef<MealInputAssistProgressUpdate | null>(null);
+  const isPrewarmingRef = useRef(false);
   const environmentPromiseRef = useRef<Promise<MealInputAssistEnvironment> | null>(null);
   const environmentLoaderDependenciesRef = useRef<MealInputAssistEnvironmentLoaderDependencies | null>(null);
   const appliedNoteDraftValuesRef = useRef<Set<string>>(new Set());
@@ -177,6 +180,8 @@ export function useMealInputAssist({
     requestStartedAtRef.current = null;
     progressUpdatedAtRef.current = null;
     latestProgressUpdateRef.current = null;
+    isPrewarmingRef.current = false;
+    setPrewarmStatus('idle');
     appliedNoteDraftValuesRef.current.clear();
   }, [reviewKey]);
 
@@ -441,7 +446,8 @@ export function useMealInputAssist({
       }
 
       if (!hasAnyMealInputAssistSuggestions(normalizedSuggestions)) {
-        const rawCandidateTotal = rawCandidateCounts.mealNames
+        const rawCandidateTotal = rawCandidateCounts.noteDraft
+          + rawCandidateCounts.mealNames
           + rawCandidateCounts.cuisineTypes;
 
         if (rawCandidateTotal > 0) {
@@ -469,6 +475,31 @@ export function useMealInputAssist({
       await cleanupPreparedRequest();
     }
   }, [getRequestEnvironment, policy, prepareRequestForSuggestion, request, setProgressState]);
+
+  const prewarm = useCallback(async () => {
+    if (isRunningRef.current || isPrewarmingRef.current) {
+      return;
+    }
+
+    isPrewarmingRef.current = true;
+    setPrewarmStatus('running');
+
+    try {
+      const environment = await loadEnvironment();
+      if (!environment.isAiInputAssistEnabled || environment.runtimeAvailability.kind !== 'ready') {
+        setPrewarmStatus('idle');
+        return;
+      }
+
+      await environment.runtimeAvailability.provider.prewarm?.();
+      setPrewarmStatus('success');
+    } catch {
+      console.warn('Meal input assist prewarm failed.');
+      setPrewarmStatus('error');
+    } finally {
+      isPrewarmingRef.current = false;
+    }
+  }, [loadEnvironment]);
 
   const applyMealNameSuggestion = useCallback((suggestion: MealInputAssistTextSuggestion) => {
     onCaptureReviewChange('mealName', suggestion.value);
@@ -504,8 +535,10 @@ export function useMealInputAssist({
     suggestions,
     errorMessage,
     progress,
+    prewarmStatus,
     disabledReason: availability.kind === 'disabled' ? availability.reason : null,
     hasAnySuggestions,
+    prewarm,
     requestSuggestions,
     applyMealNameSuggestion,
     applyNoteDraftSuggestion,

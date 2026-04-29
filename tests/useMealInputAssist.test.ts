@@ -55,7 +55,7 @@ function createCaptureReviewBase(): CaptureReviewState {
   };
 }
 
-function createReadyRuntimeAvailability(provider: { suggest: jest.Mock }): MealInputAssistRuntimeAvailability {
+function createReadyRuntimeAvailability(provider: { suggest: jest.Mock; prewarm?: jest.Mock }): MealInputAssistRuntimeAvailability {
   return {
     kind: 'ready',
     mode: 'override',
@@ -378,6 +378,99 @@ describe('useMealInputAssist', () => {
     await waitFor(() => {
       expect(provider.suggest).toHaveBeenCalledTimes(1);
     });
+  });
+
+  test('prewarm calls provider prewarm without requiring a photo request', async () => {
+    const provider = {
+      prewarm: jest.fn().mockResolvedValue(undefined),
+      suggest: jest.fn(),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: null,
+      onCaptureReviewChange: jest.fn(),
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await act(async () => {
+      await result.current.prewarm();
+    });
+
+    expect(provider.prewarm).toHaveBeenCalledTimes(1);
+    expect(provider.suggest).not.toHaveBeenCalled();
+    expect(result.current.prewarmStatus).toBe('success');
+    expect(result.current.status).toBe('idle');
+  });
+
+  test('prewarm is skipped while requestSuggestions is running', async () => {
+    const deferred = createDeferred<MealInputAssistProviderResult>();
+    const provider = {
+      prewarm: jest.fn().mockResolvedValue(undefined),
+      suggest: jest.fn(() => deferred.promise),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview(),
+      onCaptureReviewChange: jest.fn(),
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    let pendingRequest!: Promise<void>;
+    act(() => {
+      pendingRequest = result.current.requestSuggestions();
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('running');
+    });
+
+    await act(async () => {
+      await result.current.prewarm();
+      deferred.resolve({
+        source: 'mock-local',
+        noteDraft: { value: '料理名: 焼き魚に見える', confidence: 0.8 },
+      });
+      await pendingRequest;
+    });
+
+    expect(provider.prewarm).not.toHaveBeenCalled();
+    expect(provider.suggest).toHaveBeenCalledTimes(1);
+  });
+
+  test('prewarm failure does not move request status to error', async () => {
+    const provider = {
+      prewarm: jest.fn().mockRejectedValue(new Error('prewarm failed')),
+      suggest: jest.fn(),
+    };
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: null,
+      onCaptureReviewChange: jest.fn(),
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await act(async () => {
+      await result.current.prewarm();
+    });
+
+    expect(result.current.status).toBe('idle');
+    expect(result.current.prewarmStatus).toBe('error');
+    expect(consoleWarnSpy).toHaveBeenCalledWith('Meal input assist prewarm failed.');
   });
 
   test('reuses the mounted runtime environment across sequential requests in the same review', async () => {

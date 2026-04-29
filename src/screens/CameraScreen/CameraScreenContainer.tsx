@@ -1,4 +1,5 @@
 import React from 'react';
+import { InteractionManager } from 'react-native';
 import { CameraView } from '../../components/screens/camera';
 import { useCameraCapture, useCameraPermission, useMealInputAssist } from '../../hooks/cameraCapture';
 
@@ -30,6 +31,36 @@ const CameraScreenContainer: React.FC = () => {
     captureReview,
     onCaptureReviewChange,
   });
+  const prewarmMealInputAssist = mealInputAssist.prewarm;
+
+  React.useEffect(() => {
+    if (!cameraPermissionState.permission?.granted || captureReview || takingPhoto) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const interaction = InteractionManager.runAfterInteractions(() => {
+      timeout = setTimeout(() => {
+        if (!cancelled) {
+          prewarmMealInputAssist();
+        }
+      }, 1500);
+    });
+
+    return () => {
+      cancelled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      interaction.cancel?.();
+    };
+  }, [
+    cameraPermissionState.permission?.granted,
+    captureReview,
+    prewarmMealInputAssist,
+    takingPhoto,
+  ]);
 
   const handleCaptureReviewSave = React.useCallback(
     () => onCaptureReviewSave({ aiMetadata: mealInputAssist.appliedMetadata }),
