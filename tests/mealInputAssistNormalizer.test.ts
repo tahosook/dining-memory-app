@@ -12,6 +12,7 @@ describe('normalizeMealInputAssistResult', () => {
     });
 
     expect(normalized.source).toBe('mock-local');
+    expect(normalized.noteDraft).toBeNull();
     expect(normalized.mealNames).toEqual([
       {
         value: '親子丼',
@@ -37,8 +38,26 @@ describe('normalizeMealInputAssistResult', () => {
 
     expect(normalized).toEqual({
       source: 'mock-local',
+      noteDraft: null,
       mealNames: [],
       cuisineTypes: [],
+    });
+  });
+
+  test('normalizes noteDraft and clamps confidence', () => {
+    const normalized = normalizeMealInputAssistResult({
+      source: ' mock-local ',
+      noteDraft: {
+        value: '  料理名: 刺身盛り合わせ\nメモ: 海鮮の一皿に見える  ',
+        confidence: 1.4,
+      },
+    });
+
+    expect(normalized.noteDraft).toEqual({
+      value: '料理名: 刺身盛り合わせ\nメモ: 海鮮の一皿に見える',
+      label: '料理名: 刺身盛り合わせ\nメモ: 海鮮の一皿に見える',
+      confidence: 1,
+      source: 'mock-local',
     });
   });
 
@@ -51,6 +70,7 @@ describe('normalizeMealInputAssistResult', () => {
 
     expect(normalized).toEqual({
       source: 'mock-local',
+      noteDraft: null,
       mealNames: [
         {
           value: 'カツ丼',

@@ -22,7 +22,6 @@ import { CuisineTypeSelector } from '../../../components/common/CuisineTypeSelec
 import type { CameraPermissionUiState } from '../../../hooks/cameraCapture';
 import type { CaptureReviewEditableField, CaptureReviewState } from '../../../hooks/cameraCapture/useCameraCapture';
 import type {
-  MealInputAssistCuisineSuggestion,
   MealInputAssistProgress,
   MealInputAssistStatus,
   MealInputAssistSuggestions,
@@ -79,8 +78,7 @@ type CameraAiAssistState = {
 
 type CameraAiAssistOperations = {
   onRequestAiSuggestions: () => Promise<void>;
-  onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyCuisineSuggestion: (suggestion: MealInputAssistCuisineSuggestion) => void;
+  onApplyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
 };
 
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
@@ -89,7 +87,7 @@ export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 
   Pick<CameraReviewState, 'captureReview'> &
   Pick<CameraReviewOperations, 'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'> &
   Pick<CameraAiAssistState, 'aiAssistStatus' | 'aiAssistSuggestions' | 'aiAssistErrorMessage' | 'aiAssistProgress' | 'aiAssistDisabledReason'> &
-  Pick<CameraAiAssistOperations, 'onRequestAiSuggestions' | 'onApplyMealNameSuggestion' | 'onApplyCuisineSuggestion'>;
+  Pick<CameraAiAssistOperations, 'onRequestAiSuggestions' | 'onApplyNoteDraftSuggestion'>;
 
 const AI_ASSIST_STATUS_LABELS: Record<MealInputAssistStatus, string> = {
   idle: '未実行',
@@ -199,54 +197,7 @@ interface CaptureReviewProps {
   aiAssistProgress: MealInputAssistProgress | null;
   aiAssistDisabledReason: string | null;
   onRequestAiSuggestions: () => Promise<void>;
-  onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyCuisineSuggestion: (suggestion: MealInputAssistCuisineSuggestion) => void;
-}
-
-type SuggestionChipProps = {
-  label: string;
-  onPress: () => void;
-  testID: string;
-};
-
-const SuggestionChip: React.FC<SuggestionChipProps> = ({ label, onPress, testID }) => (
-  <TouchableOpacity style={styles.aiSuggestionChip} onPress={onPress} testID={testID}>
-    <Text style={styles.aiSuggestionChipText}>{label}</Text>
-  </TouchableOpacity>
-);
-
-type SuggestionGroupProps<TSuggestion extends { label: string }> = {
-  title: string;
-  suggestions: TSuggestion[];
-  onPress: (suggestion: TSuggestion) => void;
-  testIDPrefix: string;
-};
-
-function SuggestionGroup<TSuggestion extends { label: string }>({
-  title,
-  suggestions,
-  onPress,
-  testIDPrefix,
-}: SuggestionGroupProps<TSuggestion>) {
-  if (!suggestions.length) {
-    return null;
-  }
-
-  return (
-    <View style={styles.aiSuggestionGroup}>
-      <Text style={styles.aiSuggestionGroupTitle}>{title}</Text>
-      <View style={styles.aiSuggestionRow}>
-        {suggestions.map((suggestion, index) => (
-          <SuggestionChip
-            key={`${testIDPrefix}-${suggestion.label}-${index}`}
-            label={suggestion.label}
-            onPress={() => onPress(suggestion)}
-            testID={`${testIDPrefix}-${index}`}
-          />
-        ))}
-      </View>
-    </View>
-  );
+  onApplyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
 }
 
 interface AiAssistSectionProps {
@@ -256,8 +207,7 @@ interface AiAssistSectionProps {
   progress: MealInputAssistProgress | null;
   disabledReason: string | null;
   onRequestSuggestions: () => Promise<void>;
-  onApplyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyCuisineSuggestion: (suggestion: MealInputAssistCuisineSuggestion) => void;
+  onApplyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
 }
 
 function formatAiAssistDuration(durationMs: number | null | undefined) {
@@ -282,26 +232,25 @@ const AiAssistSection: React.FC<AiAssistSectionProps> = ({
   progress,
   disabledReason,
   onRequestSuggestions,
-  onApplyMealNameSuggestion,
-  onApplyCuisineSuggestion,
+  onApplyNoteDraftSuggestion,
 }) => {
-  const hasAnySuggestions = suggestions.mealNames.length > 0
-    || suggestions.cuisineTypes.length > 0;
+  const noteDraft = suggestions.noteDraft;
+  const hasAnySuggestions = Boolean(noteDraft);
   const actionDisabled = status === 'running' || status === 'disabled';
   const actionLabel = status === 'running'
     ? '解析中...'
     : status === 'error'
-      ? 'もう一度提案する'
-      : 'AIで候補を提案';
+      ? 'もう一度作成する'
+      : 'AIでメモを作成';
   const helperMessage = status === 'disabled'
     ? disabledReason ?? 'この端末では AI 入力補助を利用できません。'
     : status === 'error'
-      ? errorMessage ?? '候補を取得できませんでした。もう一度お試しください。'
+      ? errorMessage ?? 'メモ下書きを取得できませんでした。もう一度お試しください。'
       : status === 'running'
-        ? progress?.message ?? '写真をもとに候補を整理しています。保存はいつでも行えます。'
+        ? progress?.message ?? '写真をもとにメモ下書きを整理しています。保存はいつでも行えます。'
         : status === 'success' && !hasAnySuggestions
-          ? '候補が見つかりませんでした。手入力のまま保存できます。'
-          : '候補をタップしたときだけ、対応する入力欄へ反映されます。';
+          ? 'メモ下書きが見つかりませんでした。手入力のまま保存できます。'
+          : '作成した下書きは、ボタンを押したときだけメモ欄へ追加されます。';
   const progressLabel = typeof progress?.progress === 'number'
     ? `${Math.round(progress.progress * 100)}%`
     : null;
@@ -359,18 +308,18 @@ const AiAssistSection: React.FC<AiAssistSectionProps> = ({
         <Text style={styles.aiAssistButtonText}>{actionLabel}</Text>
       </TouchableOpacity>
 
-      <SuggestionGroup
-        title="料理名候補"
-        suggestions={suggestions.mealNames}
-        onPress={onApplyMealNameSuggestion}
-        testIDPrefix="ai-meal-name-suggestion"
-      />
-      <SuggestionGroup
-        title="料理ジャンル候補"
-        suggestions={suggestions.cuisineTypes}
-        onPress={onApplyCuisineSuggestion}
-        testIDPrefix="ai-cuisine-suggestion"
-      />
+      {noteDraft ? (
+        <View style={styles.aiNoteDraftCard} testID="ai-note-draft-card">
+          <Text style={styles.aiNoteDraftText}>{noteDraft.value}</Text>
+          <TouchableOpacity
+            style={styles.aiNoteDraftButton}
+            onPress={() => onApplyNoteDraftSuggestion(noteDraft)}
+            testID="ai-note-draft-apply-button"
+          >
+            <Text style={styles.aiNoteDraftButtonText}>メモに追加</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -386,8 +335,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
   aiAssistProgress,
   aiAssistDisabledReason,
   onRequestAiSuggestions,
-  onApplyMealNameSuggestion,
-  onApplyCuisineSuggestion,
+  onApplyNoteDraftSuggestion,
 }) => {
   const [showLocationInput, setShowLocationInput] = React.useState(Boolean(captureReview.locationName.trim()));
   const [showNotesInput, setShowNotesInput] = React.useState(Boolean(captureReview.notes.trim()));
@@ -450,8 +398,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
         progress={aiAssistProgress}
         disabledReason={aiAssistDisabledReason}
         onRequestSuggestions={onRequestAiSuggestions}
-        onApplyMealNameSuggestion={onApplyMealNameSuggestion}
-        onApplyCuisineSuggestion={onApplyCuisineSuggestion}
+        onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
       />
 
           <TextInput
@@ -550,8 +497,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   aiAssistProgress,
   aiAssistDisabledReason,
   onRequestAiSuggestions,
-  onApplyMealNameSuggestion,
-  onApplyCuisineSuggestion,
+  onApplyNoteDraftSuggestion,
 }) => {
   const isWebWithoutPermissions = Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
 
@@ -588,8 +534,7 @@ const CameraView: React.FC<CameraViewProps> = ({
               aiAssistProgress={aiAssistProgress}
               aiAssistDisabledReason={aiAssistDisabledReason}
               onRequestAiSuggestions={onRequestAiSuggestions}
-              onApplyMealNameSuggestion={onApplyMealNameSuggestion}
-              onApplyCuisineSuggestion={onApplyCuisineSuggestion}
+              onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
             />
           ) : (
             <FocusArea />
@@ -812,31 +757,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
   },
-  aiSuggestionGroup: {
-    gap: 8,
+  aiNoteDraftCard: {
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+    padding: 12,
+    gap: 10,
   },
-  aiSuggestionGroupTitle: {
+  aiNoteDraftText: {
     color: Colors.white,
     fontSize: 14,
-    fontWeight: '600',
+    lineHeight: 20,
   },
-  aiSuggestionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  aiSuggestionChip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+  aiNoteDraftButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.white,
+    borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  aiSuggestionChipText: {
-    color: Colors.white,
+  aiNoteDraftButtonText: {
+    color: Colors.primary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   reviewInput: {
     backgroundColor: Colors.white,

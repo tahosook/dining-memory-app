@@ -196,6 +196,7 @@ type MockAiAssistState = {
   status: 'idle' | 'running' | 'success' | 'error' | 'disabled';
   suggestions: {
     source: string;
+    noteDraft: { value: string; label: string; confidence?: number; source: string } | null;
     mealNames: Array<{ value: string; label: string; confidence?: number; source: string }>;
     cuisineTypes: Array<{ value: string; label: string; confidence?: number; source: string }>;
   };
@@ -209,8 +210,7 @@ type MockAiAssistState = {
   } | null;
   disabledReason: string | null;
   requestSuggestions: jest.Mock;
-  applyMealNameSuggestion: jest.Mock;
-  applyCuisineSuggestion: jest.Mock;
+  applyNoteDraftSuggestion: jest.Mock;
   appliedMetadata: {
     aiSource: string;
     aiConfidence?: number;
@@ -264,6 +264,7 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
     status: 'idle',
     suggestions: {
       source: 'mock-local',
+      noteDraft: null,
       mealNames: [],
       cuisineTypes: [],
     },
@@ -271,8 +272,7 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
     progress: null,
     disabledReason: null,
     requestSuggestions: jest.fn(),
-    applyMealNameSuggestion: jest.fn(),
-    applyCuisineSuggestion: jest.fn(),
+    applyNoteDraftSuggestion: jest.fn(),
     appliedMetadata: null,
     ...overrides,
   };
@@ -419,6 +419,7 @@ describe('CameraScreen', () => {
       expect(await findByTestId('ai-input-assist-section')).toBeTruthy();
       expect((await findByTestId('ai-input-assist-status')).props.children).toBe('未実行');
       expect(await findByTestId('ai-input-assist-button')).toBeTruthy();
+      expect(await findByText('AIでメモを作成')).toBeTruthy();
       expect(mealNameInput.props.placeholder).toBe('料理名（入力しない場合は自動で名前が付きます）');
       expect(await findByTestId('capture-review-cuisine-和食')).toBeTruthy();
       expect(await findByText('自炊')).toBeTruthy();
@@ -479,9 +480,8 @@ describe('CameraScreen', () => {
       expect(requestSuggestions).toHaveBeenCalled();
     });
 
-    test('calls the AI suggestion handlers when suggestion chips are tapped', async () => {
-      const applyMealNameSuggestion = jest.fn();
-      const applyCuisineSuggestion = jest.fn();
+    test('shows the AI note draft and applies it to notes', async () => {
+      const applyNoteDraftSuggestion = jest.fn();
       (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
         captureReview: createCaptureReview(),
       }));
@@ -489,28 +489,30 @@ describe('CameraScreen', () => {
         status: 'success',
         suggestions: {
           source: 'mock-local',
+          noteDraft: {
+            value: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
+            label: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
+            confidence: 0.91,
+            source: 'mock-local',
+          },
           mealNames: [{ value: '海鮮丼', label: '海鮮丼', confidence: 0.91, source: 'mock-local' }],
           cuisineTypes: [{ value: '和食', label: '和食', confidence: 0.8, source: 'mock-local' }],
         },
-        applyMealNameSuggestion,
-        applyCuisineSuggestion,
+        applyNoteDraftSuggestion,
       }));
 
       const { findByTestId, queryByTestId } = render(<CameraScreen />);
 
-      fireEvent.press(await findByTestId('ai-meal-name-suggestion-0'));
-      fireEvent.press(await findByTestId('ai-cuisine-suggestion-0'));
+      expect(await findByTestId('ai-note-draft-card')).toBeTruthy();
+      expect(queryByTestId('ai-meal-name-suggestion-0')).toBeNull();
+      expect(queryByTestId('ai-cuisine-suggestion-0')).toBeNull();
 
-      expect(applyMealNameSuggestion).toHaveBeenCalledWith({
-        value: '海鮮丼',
-        label: '海鮮丼',
+      fireEvent.press(await findByTestId('ai-note-draft-apply-button'));
+
+      expect(applyNoteDraftSuggestion).toHaveBeenCalledWith({
+        value: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
+        label: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
         confidence: 0.91,
-        source: 'mock-local',
-      });
-      expect(applyCuisineSuggestion).toHaveBeenCalledWith({
-        value: '和食',
-        label: '和食',
-        confidence: 0.8,
         source: 'mock-local',
       });
       expect(queryByTestId('ai-homemade-suggestion-0')).toBeNull();

@@ -72,6 +72,13 @@ function normalizeMealNameSuggestions(
     .slice(0, MAX_SUGGESTIONS_PER_GROUP);
 }
 
+function normalizeNoteDraftSuggestion(
+  candidate: MealInputAssistProviderResult['noteDraft'],
+  source: string
+) {
+  return normalizeTextCandidate(candidate, source);
+}
+
 function normalizeCuisineSuggestions(
   candidates: MealInputAssistProviderResult['cuisineTypes'],
   source: string
@@ -106,6 +113,7 @@ export function normalizeMealInputAssistResult(result: MealInputAssistProviderRe
 
   return {
     source,
+    noteDraft: normalizeNoteDraftSuggestion(result.noteDraft, source),
     mealNames: normalizeMealNameSuggestions(result.mealNames, source),
     cuisineTypes: normalizeCuisineSuggestions(result.cuisineTypes, source),
   };

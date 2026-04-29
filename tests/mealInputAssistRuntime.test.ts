@@ -53,8 +53,10 @@ describe('meal input assist runtime availability', () => {
       getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
       completion: jest.fn().mockResolvedValue({
         text: JSON.stringify({
-          mealNames: [{ value: '海鮮丼', confidence: 0.91 }],
-          cuisineTypes: [{ value: '和食', confidence: 0.82 }],
+          noteDraft: {
+            value: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの\nタグ: #海鮮 #丼',
+            confidence: 0.82,
+          },
         }),
       }),
     };
@@ -103,7 +105,7 @@ describe('meal input assist runtime availability', () => {
             content: [
               {
                 type: 'text',
-                text: expect.stringContaining('写真を見て、保存候補だけを JSON で返してください。'),
+                text: expect.stringContaining('写真を見て、notes 欄に追記できる食事メモ下書きだけを JSON で返してください。'),
               },
               {
                 type: 'image_url',
@@ -119,18 +121,19 @@ describe('meal input assist runtime availability', () => {
       expect.any(Function)
     );
     expect(fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text).toEqual(
-      expect.stringContaining('mealNames には最も可能性が高い料理名を 1 件以上、推定で必ず入れてください。')
+      expect.stringContaining('mealName 欄を埋める候補は返さないでください。')
     );
     expect(fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text).toEqual(
-      expect.stringContaining('料理ジャンルを判断できない場合のみ cuisineTypes は空配列で構いません。')
+      expect.stringContaining('noteDraft を主出力にし、value は notes にそのまま貼れる 3〜5 行程度の日本語にしてください。')
     );
     expect(fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text).toEqual(
-      expect.stringContaining('イタリアン、フレンチ、韓国料理、タイ料理、ベトナム料理、カレー、ハンバーガー、麺類なども最も近い 4 分類へ丸めてください。')
+      expect.stringContaining('「料理名:」「メモ:」「タグ:」などの見出しを使い、後で見返しやすい形にしてください。')
     );
     expect(fakeContext.completion.mock.calls[0]?.[0]?.response_format).toBeUndefined();
     expect(normalized.source).toBe('local-meal-input-assist');
-    expect(normalized.mealNames[0]?.value).toBe('海鮮丼');
-    expect(normalized.cuisineTypes[0]?.value).toBe('和食');
+    expect(normalized.noteDraft?.value).toContain('料理名: 海鮮丼に見える');
+    expect(normalized.mealNames).toEqual([]);
+    expect(normalized.cuisineTypes).toEqual([]);
   });
 
   test('reports real runtime progress boundaries through multimodal setup, cache clear, completion submit, token generation, and finalizing', async () => {
@@ -149,8 +152,7 @@ describe('meal input assist runtime availability', () => {
         onToken?.();
         return {
           text: JSON.stringify({
-            mealNames: [{ value: '海鮮丼', confidence: 0.91 }],
-            cuisineTypes: [{ value: '和食', confidence: 0.82 }],
+            noteDraft: { value: '料理名: 海鮮丼に見える\nメモ: 魚介の丼もの', confidence: 0.82 },
           }),
         };
       }),
@@ -284,7 +286,7 @@ describe('meal input assist runtime availability', () => {
     })).rejects.toThrow('Meal input assist response was empty.');
   });
 
-  test('logs a raw response preview when the model returns no provider candidates', async () => {
+  test('logs candidate counts when the model returns no provider candidates', async () => {
     const consoleInfoSpy = jest.spyOn(console, 'info').mockImplementation(jest.fn());
     const fakeContext = {
       clearCache: jest.fn().mockResolvedValue(undefined),
@@ -292,8 +294,7 @@ describe('meal input assist runtime availability', () => {
       getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
       completion: jest.fn().mockResolvedValue({
         text: JSON.stringify({
-          mealNames: [],
-          cuisineTypes: [],
+          noteDraft: null,
         }),
         tokens_predicted: 18,
         tokens_evaluated: 312,
@@ -317,6 +318,7 @@ describe('meal input assist runtime availability', () => {
       isHomemade: false,
     })).resolves.toEqual({
       source: 'local-meal-input-assist',
+      noteDraft: null,
       mealNames: [],
       cuisineTypes: [],
     });
@@ -325,12 +327,12 @@ describe('meal input assist runtime availability', () => {
       'Meal input assist model response contained no provider candidates.',
       expect.objectContaining({
         candidateCounts: {
+          noteDraft: 0,
           mealNames: 0,
           cuisineTypes: 0,
         },
         tokensPredicted: 18,
         tokensEvaluated: 312,
-        rawResponsePreview: expect.stringContaining('"mealNames":[]'),
       })
     );
 

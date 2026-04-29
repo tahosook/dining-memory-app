@@ -3,6 +3,7 @@ import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
 import type { MealInputAssistProviderResult, MealInputAssistRuntimeAvailability } from '../src/ai/mealInputAssist';
+import type { CaptureReviewState } from '../src/hooks/cameraCapture/useCameraCapture';
 
 jest.mock('../src/database/services/AppSettingsService', () => ({
   AppSettingsService: {
@@ -33,7 +34,14 @@ function createDeferred<T>() {
   return { promise, resolve, reject };
 }
 
-function createCaptureReview() {
+function createCaptureReview(overrides: Partial<CaptureReviewState> = {}): CaptureReviewState {
+  return {
+    ...createCaptureReviewBase(),
+    ...overrides,
+  };
+}
+
+function createCaptureReviewBase(): CaptureReviewState {
   return {
     photoUri: 'file:///tmp/meal-photo.jpg',
     width: 800,
@@ -44,7 +52,7 @@ function createCaptureReview() {
     notes: '',
     locationName: '',
     isHomemade: true,
-  } as const;
+  };
 }
 
 function createReadyRuntimeAvailability(provider: { suggest: jest.Mock }): MealInputAssistRuntimeAvailability {
@@ -203,22 +211,20 @@ describe('useMealInputAssist', () => {
       'Meal input assist normalized all provider candidates away.',
       expect.objectContaining({
         rawCandidateCounts: {
+          noteDraft: 0,
           mealNames: 1,
           cuisineTypes: 1,
         },
         normalizedCandidateCounts: {
+          noteDraft: 0,
           mealNames: 0,
           cuisineTypes: 0,
-        },
-        rawCandidatePreview: {
-          mealNames: [],
-          cuisineTypes: ['イタリアン'],
         },
       })
     );
   });
 
-  test('logs a contract violation when the provider omits meal-name candidates', async () => {
+  test('logs a contract violation when the provider omits a note draft', async () => {
     const provider = {
       suggest: jest.fn().mockResolvedValue({
         source: 'mock-local',
@@ -245,16 +251,13 @@ describe('useMealInputAssist', () => {
     expect(result.current.suggestions.mealNames).toEqual([]);
     expect(result.current.suggestions.cuisineTypes).toHaveLength(1);
     expect(consoleInfoSpy).toHaveBeenCalledWith(
-      'Meal input assist provider returned no meal-name candidates.',
+      'Meal input assist provider returned no note draft.',
       expect.objectContaining({
         providerSource: 'mock-local',
         rawCandidateCounts: {
+          noteDraft: 0,
           mealNames: 0,
           cuisineTypes: 1,
-        },
-        rawCandidatePreview: {
-          mealNames: [],
-          cuisineTypes: ['中華'],
         },
       })
     );
@@ -510,8 +513,10 @@ describe('useMealInputAssist', () => {
     const provider = {
       suggest: jest.fn().mockResolvedValue({
         source: 'mock-local',
-        mealNames: [{ value: '海鮮丼', confidence: 0.91 }],
-        cuisineTypes: [{ value: '和食', confidence: 0.72 }],
+        noteDraft: {
+          value: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
+          confidence: 0.91,
+        },
       }),
     };
     const onCaptureReviewChange = jest.fn();
@@ -535,21 +540,64 @@ describe('useMealInputAssist', () => {
 
     await waitFor(() => {
       expect(result.current.status).toBe('success');
-      expect(result.current.suggestions.mealNames).toHaveLength(1);
+      expect(result.current.suggestions.noteDraft?.value).toContain('料理名: 海鮮丼に見える');
     });
 
     act(() => {
-      result.current.applyMealNameSuggestion(result.current.suggestions.mealNames[0]);
-      result.current.applyCuisineSuggestion(result.current.suggestions.cuisineTypes[0]);
+      result.current.applyNoteDraftSuggestion(result.current.suggestions.noteDraft!);
     });
 
-    expect(onCaptureReviewChange).toHaveBeenNthCalledWith(1, 'mealName', '海鮮丼');
-    expect(onCaptureReviewChange).toHaveBeenNthCalledWith(2, 'cuisineType', '和食');
+    expect(onCaptureReviewChange).toHaveBeenNthCalledWith(
+      1,
+      'notes',
+      '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの'
+    );
     expect(result.current.appliedMetadata).toEqual({
       aiSource: 'mock-local',
       aiConfidence: 0.91,
-      appliedFields: ['mealName', 'cuisineType'],
+      appliedFields: ['notes'],
     });
+  });
+
+  test('appends a note draft with a blank line and avoids duplicate appends', async () => {
+    const provider = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mock-local',
+        noteDraft: {
+          value: '料理名: 焼き魚に見える\nメモ: 定食の主菜らしい一皿',
+          confidence: 0.8,
+        },
+      }),
+    };
+    const onCaptureReviewChange = jest.fn();
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const { result } = renderHook(() => useMealInputAssist({
+      captureReview: createCaptureReview({
+        notes: '先に書いたメモ',
+      }),
+      onCaptureReviewChange,
+      provider,
+      loadAiInputAssistEnabled,
+      resolveRuntimeAvailability,
+    }));
+
+    await flushEffects();
+
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    act(() => {
+      result.current.applyNoteDraftSuggestion(result.current.suggestions.noteDraft!);
+      result.current.applyNoteDraftSuggestion(result.current.suggestions.noteDraft!);
+    });
+
+    expect(onCaptureReviewChange).toHaveBeenCalledTimes(1);
+    expect(onCaptureReviewChange).toHaveBeenCalledWith(
+      'notes',
+      '先に書いたメモ\n\n料理名: 焼き魚に見える\nメモ: 定食の主菜らしい一皿'
+    );
   });
 
   test('keeps applied metadata thin when MediaPipe static-image suggestions are adopted', async () => {

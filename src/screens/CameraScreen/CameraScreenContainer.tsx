@@ -59,8 +59,7 @@ const CameraScreenContainer: React.FC = () => {
       aiAssistProgress={mealInputAssist.progress}
       aiAssistDisabledReason={mealInputAssist.disabledReason}
       onRequestAiSuggestions={mealInputAssist.requestSuggestions}
-      onApplyMealNameSuggestion={mealInputAssist.applyMealNameSuggestion}
-      onApplyCuisineSuggestion={mealInputAssist.applyCuisineSuggestion}
+      onApplyNoteDraftSuggestion={mealInputAssist.applyNoteDraftSuggestion}
     />
   );
 };

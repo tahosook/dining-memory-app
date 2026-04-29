@@ -3,7 +3,7 @@ import type { AiRuntimeUnavailableCode } from '../runtime/types';
 
 export type MealInputAssistStatus = 'idle' | 'running' | 'success' | 'error' | 'disabled';
 
-export type MealInputAssistField = 'mealName' | 'cuisineType';
+export type MealInputAssistField = 'mealName' | 'cuisineType' | 'notes';
 
 export type MealInputAssistAvailability =
   | { kind: 'enabled' }
@@ -25,6 +25,7 @@ export interface MealInputAssistTextProviderCandidate {
 
 export interface MealInputAssistProviderResult {
   source: string;
+  noteDraft?: string | MealInputAssistTextProviderCandidate | null;
   mealNames?: Array<string | MealInputAssistTextProviderCandidate | null | undefined>;
   cuisineTypes?: Array<string | MealInputAssistTextProviderCandidate | null | undefined>;
 }
@@ -40,6 +41,7 @@ export type MealInputAssistCuisineSuggestion = MealInputAssistTextSuggestion<Cui
 
 export interface MealInputAssistSuggestions {
   source: string;
+  noteDraft: MealInputAssistTextSuggestion | null;
   mealNames: MealInputAssistTextSuggestion[];
   cuisineTypes: MealInputAssistCuisineSuggestion[];
 }
@@ -139,6 +141,7 @@ export type MealInputAssistPolicy = (request: MealInputAssistRequest) => MealInp
 
 export const EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS: MealInputAssistSuggestions = {
   source: '',
+  noteDraft: null,
   mealNames: [],
   cuisineTypes: [],
 };

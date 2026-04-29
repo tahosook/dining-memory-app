@@ -62,12 +62,14 @@ function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
 }
 
 function hasAnyMealInputAssistSuggestions(suggestions: MealInputAssistSuggestions) {
-  return suggestions.mealNames.length > 0
+  return Boolean(suggestions.noteDraft)
+    || suggestions.mealNames.length > 0
     || suggestions.cuisineTypes.length > 0;
 }
 
 function countProviderResultCandidates(result: MealInputAssistProviderResult) {
   return {
+    noteDraft: result.noteDraft ? 1 : 0,
     mealNames: result.mealNames?.length ?? 0,
     cuisineTypes: result.cuisineTypes?.length ?? 0,
   };
@@ -75,48 +77,9 @@ function countProviderResultCandidates(result: MealInputAssistProviderResult) {
 
 function countNormalizedSuggestions(suggestions: MealInputAssistSuggestions) {
   return {
+    noteDraft: suggestions.noteDraft ? 1 : 0,
     mealNames: suggestions.mealNames.length,
     cuisineTypes: suggestions.cuisineTypes.length,
-  };
-}
-
-function summarizeProviderCandidate(candidate: unknown) {
-  if (typeof candidate === 'string') {
-    const value = candidate.trim();
-    return value || null;
-  }
-
-  if (typeof candidate === 'boolean') {
-    return candidate ? 'true' : 'false';
-  }
-
-  if (!candidate || typeof candidate !== 'object' || !('value' in candidate)) {
-    return null;
-  }
-
-  const value = candidate.value;
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    return trimmed || null;
-  }
-
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
-  }
-
-  return null;
-}
-
-function buildProviderResultPreview(result: MealInputAssistProviderResult) {
-  return {
-    mealNames: (result.mealNames ?? [])
-      .map((candidate) => summarizeProviderCandidate(candidate))
-      .filter((candidate): candidate is string => Boolean(candidate))
-      .slice(0, 3),
-    cuisineTypes: (result.cuisineTypes ?? [])
-      .map((candidate) => summarizeProviderCandidate(candidate))
-      .filter((candidate): candidate is string => Boolean(candidate))
-      .slice(0, 3),
   };
 }
 
@@ -185,6 +148,7 @@ export function useMealInputAssist({
   const latestProgressUpdateRef = useRef<MealInputAssistProgressUpdate | null>(null);
   const environmentPromiseRef = useRef<Promise<MealInputAssistEnvironment> | null>(null);
   const environmentLoaderDependenciesRef = useRef<MealInputAssistEnvironmentLoaderDependencies | null>(null);
+  const appliedNoteDraftValuesRef = useRef<Set<string>>(new Set());
 
   const reviewKey = captureReview?.photoUri ?? null;
 
@@ -213,6 +177,7 @@ export function useMealInputAssist({
     requestStartedAtRef.current = null;
     progressUpdatedAtRef.current = null;
     latestProgressUpdateRef.current = null;
+    appliedNoteDraftValuesRef.current.clear();
   }, [reviewKey]);
 
   const setProgressState = useCallback((update: MealInputAssistProgressUpdate | null) => {
@@ -392,6 +357,7 @@ export function useMealInputAssist({
       : status;
 
   const hasAnySuggestions = suggestions.mealNames.length > 0
+    || Boolean(suggestions.noteDraft)
     || suggestions.cuisineTypes.length > 0;
 
   const requestSuggestions = useCallback(async () => {
@@ -467,11 +433,10 @@ export function useMealInputAssist({
 
       const normalizedSuggestions = normalizeMealInputAssistResult(rawResult);
       const rawCandidateCounts = countProviderResultCandidates(rawResult);
-      if (rawCandidateCounts.mealNames === 0) {
-        console.info('Meal input assist provider returned no meal-name candidates.', {
+      if (rawCandidateCounts.noteDraft === 0) {
+        console.info('Meal input assist provider returned no note draft.', {
           providerSource: rawResult.source,
           rawCandidateCounts,
-          rawCandidatePreview: buildProviderResultPreview(rawResult),
         });
       }
 
@@ -483,7 +448,6 @@ export function useMealInputAssist({
           console.info('Meal input assist normalized all provider candidates away.', {
             rawCandidateCounts,
             normalizedCandidateCounts: countNormalizedSuggestions(normalizedSuggestions),
-            rawCandidatePreview: buildProviderResultPreview(rawResult),
           });
         }
       }
@@ -511,6 +475,25 @@ export function useMealInputAssist({
     setAppliedMetadata((current) => mergeAppliedMetadata(current, 'mealName', suggestion.source, suggestion.confidence));
   }, [onCaptureReviewChange]);
 
+  const applyNoteDraftSuggestion = useCallback((suggestion: MealInputAssistTextSuggestion) => {
+    if (!captureReview) {
+      return;
+    }
+
+    const noteDraft = suggestion.value.trim();
+    if (!noteDraft) {
+      return;
+    }
+
+    const currentNotes = captureReview.notes.trim();
+    if (!currentNotes.includes(noteDraft) && !appliedNoteDraftValuesRef.current.has(noteDraft)) {
+      const nextNotes = currentNotes ? `${currentNotes}\n\n${noteDraft}` : noteDraft;
+      onCaptureReviewChange('notes', nextNotes);
+    }
+    appliedNoteDraftValuesRef.current.add(noteDraft);
+    setAppliedMetadata((current) => mergeAppliedMetadata(current, 'notes', suggestion.source, suggestion.confidence));
+  }, [captureReview, onCaptureReviewChange]);
+
   const applyCuisineSuggestion = useCallback((suggestion: MealInputAssistCuisineSuggestion) => {
     onCaptureReviewChange('cuisineType', suggestion.value);
     setAppliedMetadata((current) => mergeAppliedMetadata(current, 'cuisineType', suggestion.source, suggestion.confidence));
@@ -525,6 +508,7 @@ export function useMealInputAssist({
     hasAnySuggestions,
     requestSuggestions,
     applyMealNameSuggestion,
+    applyNoteDraftSuggestion,
     applyCuisineSuggestion,
     appliedMetadata,
   };
