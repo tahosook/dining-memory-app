@@ -18,7 +18,7 @@ AI は capture review 上の optional な入力補助であり、manual save を
 - `scripts/explore-food-labels.py` は画像ごとの primary 候補、review reasons、broad refinement を出力する。
 - `scripts/analyze-food-labels.py` は `summary.json` と reason 別 candidate CSV を出し、どこを次に見直すかの材料を出す。
 - これまでは、人が最新 summary を読み、次に直す対象を選び、Codex へ prompt を渡す運用が前提だった。
-- 今後は 1 本の orchestration loop が `summary 読み取り -> 対象選定 -> bounded prompt 生成 -> Codex 実装 -> 再集計 -> 比較 -> 継続/停止判定` を自動で回す。
+- 今後は 1 本の orchestration loop が `summary 読み取り -> 対象選定 -> bounded prompt 生成 -> nested AI executor 実行 -> 再集計 -> 比較 -> 継続/停止判定` を自動で回す。
 
 ## Decisions / Rules
 ### この workflow で優先して直すこと
@@ -50,13 +50,22 @@ AI は capture review 上の optional な入力補助であり、manual save を
 - 1 cycle では 1 target、1 hypothesis、1 primary purpose だけ扱う。
 - 1 run あたり `max_cycles_per_run` を超えて回さない。
 - 同じ target で `no_change` が続くときは、同方向へ無限に粘らず別 hypothesis か別 target へ切り替える。
-- `src/` は原則非変更とし、主に `scripts/explore-food-labels.py`、`scripts/analyze-food-labels.py`、`prompts/*`、`config/*`、`docs/engineering/*`、必要最小限の補助 script だけを触る。
+- local executor は 1 cycle / 1 target / 1 hypothesis の bounded task だけを担当する。
+- local executor の変更範囲は原則 `scripts/explore-food-labels.py`、`scripts/analyze-food-labels.py`、`prompts/*`、`config/*`、`docs/engineering/*`、必要最小限の補助 script に限定する。
+- local executor では `src/` 配下を原則変更禁止とし、アプリ本体 UX、runtime selection、永続化契約は扱わない。
 
-### nested Codex model 方針
-- `codex_cli` executor の既定 model は `gpt-5.4-mini` とし、まず軽い bounded 修整で改善を進める。
-- `compare` 結果が `no_change` または `regressed` の cycle が連続するときだけ、fallback として `gpt-5.3-codex` を使う。
-- 既定の自動昇格条件は 2 連続 stall とする。threshold や fallback model は CLI 引数で調整できるように保つ。
-- cycle artifact には、その cycle で使った nested Codex model と strategy を残し、あとから改善経路を追えるようにする。
+### nested AI executor 方針
+- executor 種別は `local_ollama`、`codex_cli`、`manual` とする。
+- 既定 executor は `local_ollama` とし、通常の bounded cycle は local LLM で回す。
+- local model の第一候補は `qwen3-coder-next` とし、代替候補は `devstral-small-2` または `gemma4:e4b` とする。
+- `local_ollama` は script / prompt / config / engineering docs の小さな仮説検証だけを担当し、広い refactor や `src/` 配下の変更は担当しない。
+- `codex_cli` は local executor が詰まったときの cloud executor として使う。既定 model は `gpt-5.4-mini`、fallback は `gpt-5.3-codex` とする。
+- GPT-5.4 系は毎 cycle 使わず、local executor で通常サイクルを回し、詰まったときだけ上限の高い cloud executor へ escalation する。
+- escalation は失敗ではなく、高い model を節約しながら bounded task を進めるための通常ルートとして扱う。
+- `manual` executor は、人間が review gallery や CSV を見て判断するケース、または LLM だけでは分類方針や class set 判断を決めにくいケースに使う。
+- `compare` 結果が `no_change` / `regressed`、`invalid_output`、executor failure のいずれかで stall した cycle が続く場合は escalation 対象にする。
+- 既定の escalation 条件は 2 連続 stall とする。threshold、cloud model、fallback model は CLI 引数や config で調整できるように保つ。
+- cycle artifact には executor 種別、model、strategy / hypothesis、target、changed_files、validation command、compare result、escalation reason を残し、あとから改善経路を追えるようにする。
 
 ### 停止条件
 - `unknown_primary` と `side_item_primary` がごく少数で安定している。

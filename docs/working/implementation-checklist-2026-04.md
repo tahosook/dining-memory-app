@@ -16,7 +16,7 @@
 | Phase | Status | Commit | Verification | Notes |
 | --- | --- | --- | --- | --- |
 | Phase 1: docs operation cleanup | completed | `Phase 1: docs operation cleanup` | `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Stale plan/docs cleanup and sensitive camera log cleanup verified. |
-| Phase 2: update MediaPipe labeling workflow executor policy | pending |  |  |  |
+| Phase 2: update MediaPipe labeling workflow executor policy | completed | `Phase 2: update MediaPipe labeling workflow executor policy` | `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Local-first nested AI executor policy verified. |
 | Phase 3: improve labeling crop diagnostics | pending |  |  |  |
 | Phase 4: stabilize Android camera preview | pending |  |  |  |
 | Phase 5: change AI assist to note drafts | pending |  |  |  |
@@ -32,6 +32,10 @@
 - Phase 1: `npm run type-check` passed.
 - Phase 1: `npm run lint` passed.
 - Phase 1: `npm test -- --runInBand` passed.
+- Phase 2 implementation started.
+- Phase 2: `npm run type-check` passed.
+- Phase 2: `npm run lint` passed.
+- Phase 2: `npm test -- --runInBand` passed.
 
 ## Unresolved Issues
 - None.
