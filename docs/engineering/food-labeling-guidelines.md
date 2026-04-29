@@ -16,7 +16,7 @@ MediaPipe path は separate path として扱い、将来 rich classifier result
 
 ## Current State
 - `scripts/explore-food-labels.py` は、主料理を拾うためのラベル提案と、高頻度 `broad_primary` の具体化を担当する。
-- `scripts/explore-food-labels.py` の crop refinement は、`set_meal` / `multi_dish_table` / `scene_dominant` / broad primary に対して、一時 crop で主料理候補を見直す separate stage として扱う。
+- `scripts/explore-food-labels.py` の crop refinement は、broad / unknown / candidate split / side item / scene dominant / low confidence などの target case に絞り、一時 crop で主料理候補を見直す separate stage として扱う。
 - `scripts/analyze-food-labels.py` は、`unknown_primary`、`scene_dominant`、`side_item_primary`、`broad_primary` の偏りと、broad の割れ先を見える化する。
 - `scripts/build-review-gallery.py` は、人手レビューを教師データ化しやすい形で集める。アプリ本体の UX を再現することは責務に含めない。
 - このスクリプト群の目標は完璧な最終分類ではなく、MediaPipe の一次クラス候補を 8〜12 個程度に絞れる状態を作ることにある。
@@ -36,7 +36,7 @@ MediaPipe path は separate path として扱い、将来 rich classifier result
 
 ### やるべき修整
 - `explore-food-labels.py` の prompt、rubric、fallback 順序を見直し、主料理が `side_item` や `scene` に奪われにくいようにする。
-- `set_meal` / `multi_dish_table` / `scene_dominant` には full-image だけで詰めず、一時 crop による main-dish 再判定を使ってよい。
+- `set_meal` / `multi_dish_table` だけを理由に crop を走らせず、broad / unknown / candidate split / side item / scene dominant / low confidence が重なる場合に一時 crop による main-dish 再判定を使ってよい。
 - 高頻度 `broad_primary` だけを対象に compare set や review note を調整し、具体カテゴリへ寄せやすくする。
 - `scene_dominant` は、`low_confidence` や `candidate_split` など別の review reason が既に付いている場合は last-resort の fallback とみなし、scene 優勢だけを独立した理由として残す。
 - `scene_dominant` や `low_confidence` は model の raw reason をそのまま信じず、最終 `primary_dish_key` と最終 confidence から再判定し、specific dish が選べている時の stale reason は落とす。

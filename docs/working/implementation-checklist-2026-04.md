@@ -17,7 +17,7 @@
 | --- | --- | --- | --- | --- |
 | Phase 1: docs operation cleanup | completed | `Phase 1: docs operation cleanup` | `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Stale plan/docs cleanup and sensitive camera log cleanup verified. |
 | Phase 2: update MediaPipe labeling workflow executor policy | completed | `Phase 2: update MediaPipe labeling workflow executor policy` | `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Local-first nested AI executor policy verified. |
-| Phase 3: improve labeling crop diagnostics | pending |  |  |  |
+| Phase 3: improve labeling crop diagnostics | completed | `Phase 3: improve labeling crop diagnostics` | `python3 -m unittest scripts.tests.test_compare_labeling_reports`; `python3 -m unittest scripts.tests.test_mediapipe_labeling_loop`; `python3 -m unittest scripts.tests.test_explore_food_labels scripts.tests.test_analyze_food_labels scripts.tests.test_build_review_gallery`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Shared taxonomy, targeted crop policy, normalized repair, crop diagnostics, analysis summary/CSV, and review gallery diagnostics verified. |
 | Phase 4: stabilize Android camera preview | pending |  |  |  |
 | Phase 5: change AI assist to note drafts | pending |  |  |  |
 | Phase 6: prewarm AI input assist runtime | pending |  |  |  |
@@ -36,6 +36,13 @@
 - Phase 2: `npm run type-check` passed.
 - Phase 2: `npm run lint` passed.
 - Phase 2: `npm test -- --runInBand` passed.
+- Phase 3 implementation started.
+- Phase 3: `python3 -m unittest scripts.tests.test_compare_labeling_reports` passed.
+- Phase 3: `python3 -m unittest scripts.tests.test_mediapipe_labeling_loop` passed.
+- Phase 3: `python3 -m unittest scripts.tests.test_explore_food_labels scripts.tests.test_analyze_food_labels scripts.tests.test_build_review_gallery` passed.
+- Phase 3: `npm run type-check` passed.
+- Phase 3: `npm run lint` passed.
+- Phase 3: `npm test -- --runInBand` passed.
 
 ## Unresolved Issues
 - None.

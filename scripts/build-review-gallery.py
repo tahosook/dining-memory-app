@@ -17,27 +17,22 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+try:
+    from food_label_taxonomy import (
+        BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        NON_CONCRETE_PRIMARY_KEYS,
+    )
+except ImportError:
+    from scripts.food_label_taxonomy import (
+        BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        NON_CONCRETE_PRIMARY_KEYS,
+    )
+
 
 LOW_CONFIDENCE_THRESHOLD = 0.5
 UNKNOWN_VALUE = "unknown"
-BROAD_PRIMARY_KEYS = {"meat_dish", "stew", "noodles"}
-NON_CONCRETE_CANDIDATE_KEYS = BROAD_PRIMARY_KEYS | {
-    UNKNOWN_VALUE,
-    "set_meal",
-    "multi_dish_table",
-    "menu_or_text",
-    "rice",
-    "soup",
-    "miso_soup",
-    "salad",
-    "pickles",
-    "sauce",
-    "side_dish",
-    "bread",
-    "egg",
-    "drink",
-    "drinks",
-}
+BROAD_PRIMARY_KEYS = set(TAXONOMY_BROAD_PRIMARY_KEYS)
+NON_CONCRETE_CANDIDATE_KEYS = set(NON_CONCRETE_PRIMARY_KEYS)
 OUTPUT_FILENAMES = {
     "summary.json",
     "summary.md",
@@ -635,7 +630,11 @@ def build_review_records(
         broad_refinement_status = normalize_scalar(payload.get("broad_refinement_status"))
         crop_refinement_status = normalize_scalar(payload.get("crop_refinement_status"))
         broad_refinement_compare_keys = extract_string_list(payload.get("broad_refinement_compare_keys"))
+        crop_refinement_triggered = detect_crop_refinement_triggered(payload)
         crop_refinement_applied = coerce_bool(payload.get("crop_refinement_applied"))
+        crop_refinement_trigger_reason = normalize_optional_scalar(payload.get("crop_refinement_trigger_reason"))
+        crop_refinement_skip_reason = normalize_optional_scalar(payload.get("crop_refinement_skip_reason"))
+        crop_refinement_reject_reason = normalize_optional_scalar(payload.get("crop_refinement_reject_reason"))
         primary_score_info = extract_primary_candidate_scores(primary_dish_candidates)
         broad_primary_concrete_candidate = detect_broad_primary_concrete_candidate_key_from_candidates(
             primary_dish_key=primary_dish_key,
@@ -690,7 +689,9 @@ def build_review_records(
                 "primary_dish_candidates": primary_dish_candidates,
                 "primary_dish_candidates_display": format_primary_dish_candidates(primary_dish_candidates),
                 "best_concrete_candidate_key": primary_score_info["best_concrete_candidate_key"],
+                "top1_key": primary_score_info["top1_key"],
                 "top1_score_display": format_confidence(primary_score_info["top1_score"]),
+                "top2_key": primary_score_info["top2_key"],
                 "top2_score_display": format_confidence(primary_score_info["top2_score"]),
                 "score_gap_display": format_confidence(primary_score_info["score_gap"]),
                 "supporting_items": supporting_items,
@@ -705,7 +706,11 @@ def build_review_records(
                 "broad_refinement_compare_keys": broad_refinement_compare_keys,
                 "broad_refinement_compare_keys_display": format_list_for_display(broad_refinement_compare_keys),
                 "crop_refinement_status": crop_refinement_status,
+                "crop_refinement_triggered": crop_refinement_triggered,
                 "crop_refinement_applied": crop_refinement_applied,
+                "crop_refinement_trigger_reason": crop_refinement_trigger_reason,
+                "crop_refinement_skip_reason": crop_refinement_skip_reason,
+                "crop_refinement_reject_reason": crop_refinement_reject_reason,
                 "contains_can_or_bottle": coerce_bool(payload.get("contains_can_or_bottle")),
                 "needs_human_review": coerce_bool(payload.get("needs_human_review")),
                 "review_reasons": review_reasons,
@@ -754,10 +759,9 @@ def derive_candidate_group_reasons(
             reasons.append("review_reasons=unknown_primary")
         candidate_group_reasons["unknown"] = reasons
 
-    if primary_dish_key in BROAD_PRIMARY_KEYS and broad_primary_concrete_candidate:
-        candidate_group_reasons["broad_primary"] = [
-            f"broad_primary:{primary_dish_key}->{broad_primary_concrete_candidate}"
-        ]
+    if primary_dish_key in BROAD_PRIMARY_KEYS:
+        suffix = f"->{broad_primary_concrete_candidate}" if broad_primary_concrete_candidate else ""
+        candidate_group_reasons["broad_primary"] = [f"broad_primary:{primary_dish_key}{suffix}"]
 
     low_confidence_reasons: List[str] = []
     if loaded_record.analysis_confidence < LOW_CONFIDENCE_THRESHOLD:
@@ -795,7 +799,9 @@ def detect_broad_primary_concrete_candidate_key_from_candidates(
 
 
 def extract_primary_candidate_scores(candidates: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    top1_key = candidates[0]["key"] if candidates else ""
     top1_score = candidates[0]["score"] if candidates else 0.0
+    top2_key = candidates[1]["key"] if len(candidates) >= 2 else ""
     top2_score = candidates[1]["score"] if len(candidates) >= 2 else 0.0
     best_concrete_candidate_key = ""
     for candidate in candidates:
@@ -805,7 +811,9 @@ def extract_primary_candidate_scores(candidates: Sequence[Dict[str, Any]]) -> Di
         best_concrete_candidate_key = key
         break
     return {
+        "top1_key": top1_key,
         "top1_score": top1_score,
+        "top2_key": top2_key,
         "top2_score": top2_score,
         "score_gap": max(0.0, top1_score - top2_score),
         "best_concrete_candidate_key": best_concrete_candidate_key,
@@ -1561,6 +1569,20 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
       overflow: hidden;
       display: grid;
       min-width: 0;
+    }}
+
+    .card.highlight-kept-broad {{
+      border-color: #b45309;
+      box-shadow: inset 4px 0 0 #f59e0b;
+    }}
+
+    .card.highlight-crop-rejected {{
+      border-color: #7c3aed;
+      box-shadow: inset 4px 0 0 #a78bfa;
+    }}
+
+    .card.highlight-priority-broad {{
+      background: #fffaf0;
     }}
 
     .card.focus-card {{
@@ -2414,6 +2436,12 @@ def render_all_records_section(records: Sequence[Dict[str, Any]]) -> str:
 
 def render_record_card(record: Dict[str, Any], *, compact: bool) -> str:
     card_classes = "card compact-card" if compact else "card focus-card"
+    if record["broad_refinement_status"] == "kept_broad":
+        card_classes += " highlight-kept-broad"
+    if record["crop_refinement_triggered"] and not record["crop_refinement_applied"]:
+        card_classes += " highlight-crop-rejected"
+    if record["primary_dish_key"] in BROAD_PRIMARY_KEYS:
+        card_classes += " highlight-priority-broad"
     title_tag = "h4" if compact else "h3"
     predicted_label = f'{record["display_primary_dish_key"]} / {record["display_primary_dish_label_ja"]}'
     group_badges = "".join(render_group_badge(group) for group in record["candidate_groups"])
@@ -2518,6 +2546,8 @@ def render_diagnostic_badges(record: Dict[str, Any]) -> List[str]:
         badges.append(
             f'<span class="badge badge-scene">crop_{escape_html(record["crop_refinement_status"])}</span>'
         )
+    if record["crop_refinement_triggered"] and not record["crop_refinement_applied"]:
+        badges.append('<span class="badge badge-low-confidence">crop_not_applied</span>')
     return badges
 
 
@@ -2561,7 +2591,11 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
         [
             ("primary_dish_candidates", escape_code(record["primary_dish_candidates_display"])),
             ("best_concrete_candidate_key", escape_code(record["best_concrete_candidate_key"] or "(none)")),
+            ("top1", escape_code(format_candidate_score_pair(record["top1_key"], record["top1_score_display"]))),
+            ("top1_key", escape_code(record["top1_key"] or "(none)")),
             ("top1_score", escape_code(record["top1_score_display"])),
+            ("top2", escape_code(format_candidate_score_pair(record["top2_key"], record["top2_score_display"]))),
+            ("top2_key", escape_code(record["top2_key"] or "(none)")),
             ("top2_score", escape_code(record["top2_score_display"])),
             ("score_gap", escape_code(record["score_gap_display"])),
             ("supporting_items", escape_code(record["supporting_items_display"])),
@@ -2572,6 +2606,11 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
             ("analysis_confidence", escape_code(record["analysis_confidence_display"])),
             ("broad_refinement_status", escape_code(record["broad_refinement_status"])),
             ("crop_refinement_status", escape_code(record["crop_refinement_status"])),
+            ("crop_refinement_triggered", escape_code(str(record["crop_refinement_triggered"]).lower())),
+            ("crop_refinement_applied", escape_code(str(record["crop_refinement_applied"]).lower())),
+            ("crop_refinement_trigger_reason", escape_code(record["crop_refinement_trigger_reason"] or "(none)")),
+            ("crop_refinement_skip_reason", escape_code(record["crop_refinement_skip_reason"] or "(none)")),
+            ("crop_refinement_reject_reason", escape_code(record["crop_refinement_reject_reason"] or "(none)")),
             ("review_reasons", escape_code(record["review_reasons_display"])),
             ("review_note_ja", escape_html(record["review_note_ja"] or "(none)")),
         ]
@@ -2583,8 +2622,6 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
                 escape_code(record["broad_refinement_compare_keys_display"]),
             )
         )
-    if record["crop_refinement_applied"] or record["crop_refinement_status"] not in {"missing", "not_triggered"}:
-        items.append(("crop_refinement_applied", escape_code(str(record["crop_refinement_applied"]).lower())))
     if record["display_primary_overridden"] or record["container_hint"] not in {"missing", "none"}:
         items.append(("container_hint", escape_code(record["container_hint"])))
     if record["display_primary_overridden"] or record["review_bucket"] not in {"missing", "normal"}:
@@ -2716,6 +2753,19 @@ def normalize_scalar(value: Any) -> str:
     return clean_text(value).lower() or "missing"
 
 
+def normalize_optional_scalar(value: Any) -> str:
+    normalized = normalize_scalar(value)
+    return "" if normalized == "missing" else normalized
+
+
+def detect_crop_refinement_triggered(payload: Dict[str, Any]) -> bool:
+    explicit = payload.get("crop_refinement_triggered")
+    if explicit is not None:
+        return coerce_bool(explicit)
+    crop_refinement_status = normalize_scalar(payload.get("crop_refinement_status"))
+    return crop_refinement_status not in {"missing", "not_triggered"}
+
+
 def clean_text(value: Any) -> str:
     if value is None:
         return ""
@@ -2824,6 +2874,10 @@ def format_list_for_display(values: Sequence[str]) -> str:
 
 def format_confidence(value: float) -> str:
     return f"{value:.4f}"
+
+
+def format_candidate_score_pair(candidate_key: str, score_display: str) -> str:
+    return f"{candidate_key or '(none)'}|{score_display}"
 
 
 def compute_group_priority(candidate_groups: Sequence[str], review_reasons: Sequence[str]) -> Tuple[int, int]:

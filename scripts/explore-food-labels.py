@@ -19,6 +19,21 @@ from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
+try:
+    from food_label_taxonomy import (
+        BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        PRIMARY_DISH_LABEL_JA,
+        derive_boolean_flags,
+        resolve_primary_dish_label_ja,
+    )
+except ImportError:
+    from scripts.food_label_taxonomy import (
+        BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        PRIMARY_DISH_LABEL_JA,
+        derive_boolean_flags,
+        resolve_primary_dish_label_ja,
+    )
+
 
 SCHEMA_VERSION = "food_label_exploration_v3"
 PROMPT_VERSION = "food_label_exploration_prompt_v9"
@@ -42,6 +57,27 @@ CROP_STATUS_NOT_TRIGGERED = "not_triggered"
 CROP_STATUS_APPLIED = "applied"
 CROP_STATUS_KEPT_FULL_IMAGE = "kept_full_image"
 CROP_STATUS_FAILED = "failed"
+CROP_POLICY_OFF = "off"
+CROP_POLICY_TARGETED = "targeted"
+CROP_POLICY_AGGRESSIVE = "aggressive"
+CROP_SKIP_REASON_NOT_TARGET_CASE = "not_target_case"
+CROP_SKIP_REASON_HIGH_CONFIDENCE_CONCRETE_PRIMARY = "high_confidence_concrete_primary"
+CROP_SKIP_REASON_SCENE_ONLY_NOT_ENOUGH = "scene_only_not_enough"
+CROP_REJECT_REASON_NO_BETTER_CANDIDATE = "no_better_candidate"
+CROP_REJECT_REASON_CANDIDATE_NOT_CONCRETE = "candidate_not_concrete"
+CROP_REJECT_REASON_SCORE_GAP_TOO_SMALL = "score_gap_too_small"
+CROP_REJECT_REASON_CONFIDENCE_NOT_IMPROVED = "confidence_not_improved"
+CROP_REJECT_REASON_CROP_QUALITY_LOW = "crop_quality_low"
+CROP_REJECT_REASON_MODEL_RESULT_INVALID = "model_result_invalid"
+CROP_TARGET_REVIEW_REASONS = {
+    "broad_primary",
+    "unknown_primary",
+    "candidate_split",
+    "side_item_primary",
+    "scene_dominant",
+}
+CROP_TARGET_BROAD_PRIMARY_KEYS = {"stew", "meat_dish", "noodles"}
+CROP_LOW_CONFIDENCE_TRIGGER_THRESHOLD = 0.60
 MEAT_DISH_RESCUE_KEYS = {"stir_fry", "grilled_meat"}
 MEAT_DISH_RESCUE_MIN_SCORE = 0.45
 MEAT_DISH_RESCUE_MAX_SCORE_GAP = 0.10
@@ -186,11 +222,7 @@ SCENE_FALLBACK_PRIMARY_KEYS = {
     "set_meal",
     "multi_dish_table",
 }
-BROAD_PRIMARY_KEYS = {
-    "meat_dish",
-    "stew",
-    "noodles",
-}
+BROAD_PRIMARY_KEYS = set(TAXONOMY_BROAD_PRIMARY_KEYS)
 SCENE_DOMINANT_PRIMARY_KEYS = {
     "set_meal",
     "multi_dish_table",
@@ -226,14 +258,7 @@ CONTAINER_HINT_BOTTLE_NOTE_KEYWORDS = (
     "ボトル",
 )
 CONTAINER_HINT_CAN_NOTE_KEYWORDS = ("缶",)
-DEFAULT_LABEL_JA = {
-    "unknown": "不明",
-    "set_meal": "定食",
-    "bento": "弁当",
-    "dessert": "デザート",
-    "drink": "ドリンク",
-    "menu_or_text": "メニュー画像",
-}
+DEFAULT_LABEL_JA = PRIMARY_DISH_LABEL_JA
 DEFAULT_REVIEW_NOTE_JA = {
     "unknown_primary": "主料理不明",
     "scene_dominant": "scene優勢",
@@ -386,7 +411,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Gemma 4 on Ollama で食事写真をローカル一括ラベリングします。"
     )
-    parser.add_argument("--input-dir", required=True, help="入力画像ディレクトリ")
+    parser.add_argument("--input-dir", required=False, help="入力画像ディレクトリ")
     parser.add_argument("--output-dir", required=True, help="出力ディレクトリ")
     parser.add_argument(
         "--model",
@@ -422,17 +447,23 @@ def parse_args() -> argparse.Namespace:
         default=1,
         help="並列 worker 数 (default: 1)",
     )
+    parser.add_argument(
+        "--crop-policy",
+        choices=[CROP_POLICY_OFF, CROP_POLICY_TARGETED, CROP_POLICY_AGGRESSIVE],
+        default=CROP_POLICY_TARGETED,
+        help="crop refinement の実行条件 (default: targeted)",
+    )
+    parser.add_argument(
+        "--repair-normalized",
+        action="store_true",
+        help="既存 normalized JSON を再推論せず deterministic repair し、labels.jsonl を再生成する",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    input_dir = Path(args.input_dir).expanduser().resolve()
     output_dir = Path(args.output_dir).expanduser().resolve()
-
-    if not input_dir.is_dir():
-        print(f"Input directory not found: {input_dir}", file=sys.stderr)
-        return 2
 
     if args.limit is not None and args.limit < 0:
         print("--limit must be 0 or greater.", file=sys.stderr)
@@ -457,6 +488,26 @@ def main() -> int:
 
     normalized_root.mkdir(parents=True, exist_ok=True)
     raw_root.mkdir(parents=True, exist_ok=True)
+
+    if args.repair_normalized:
+        repaired_count = repair_normalized_records(normalized_root=normalized_root)
+        rebuild_labels_jsonl(normalized_root=normalized_root, labels_path=labels_path)
+        print("")
+        print("Done.")
+        print(f"- repaired_normalized: {repaired_count}")
+        print(f"- labels_jsonl: {labels_path}")
+        print(f"- normalized_dir: {normalized_root}")
+        return 0
+
+    if not args.input_dir:
+        print("--input-dir is required unless --repair-normalized is used.", file=sys.stderr)
+        return 2
+
+    input_dir = Path(args.input_dir).expanduser().resolve()
+
+    if not input_dir.is_dir():
+        print(f"Input directory not found: {input_dir}", file=sys.stderr)
+        return 2
 
     try:
         preflight_ollama(model=args.model, timeout=args.timeout)
@@ -536,6 +587,7 @@ def main() -> int:
                 raw_path=job["raw_path"],
                 model=args.model,
                 timeout=args.timeout,
+                crop_policy=args.crop_policy,
                 sleep_seconds=args.sleep_seconds,
             )
             future_to_job[future] = job
@@ -612,6 +664,7 @@ def process_single_image_job(
     raw_path: Path,
     model: str,
     timeout: float,
+    crop_policy: str,
     sleep_seconds: float,
 ) -> Optional[Dict[str, Any]]:
     try:
@@ -624,6 +677,7 @@ def process_single_image_job(
             raw_path=raw_path,
             model=model,
             timeout=timeout,
+            crop_policy=crop_policy,
         )
     finally:
         if sleep_seconds > 0:
@@ -708,6 +762,7 @@ def process_single_image(
     raw_path: Path,
     model: str,
     timeout: float,
+    crop_policy: str = CROP_POLICY_TARGETED,
 ) -> Optional[Dict[str, Any]]:
     try:
         with prepared_image_path(image_path) as prepared_path:
@@ -755,12 +810,19 @@ def process_single_image(
             crop_candidate_count = 0
             crop_selected_index: Optional[int] = None
             crop_note_ja = ""
+            crop_trigger_reasons = derive_crop_refinement_trigger_reasons(
+                coarse_normalized,
+                crop_policy=crop_policy,
+            )
+            crop_trigger_reason = crop_trigger_reasons[0] if crop_trigger_reasons else ""
+            crop_skip_reason = ""
+            crop_reject_reason = ""
 
-            if should_run_crop_refinement(coarse_normalized):
-                crop_trigger_reasons = derive_crop_refinement_trigger_reasons(coarse_normalized)
+            if should_run_crop_refinement(coarse_normalized, crop_policy=crop_policy):
                 crop_refinement_record: Dict[str, Any] = {
                     "prompt_version": CROP_REFINEMENT_PROMPT_VERSION,
                     "trigger_reasons": crop_trigger_reasons,
+                    "trigger_reason": crop_trigger_reason,
                     "candidates": [],
                     "candidate_count": 0,
                 }
@@ -841,24 +903,41 @@ def process_single_image(
                             crop_note_ja = clean_short_text(working_normalized.get("review_note_ja"))
                         else:
                             crop_status = CROP_STATUS_KEPT_FULL_IMAGE
+                            crop_reject_reason = derive_crop_refinement_reject_reason(
+                                current_normalized=working_normalized,
+                                best_crop_normalized=best_crop_result["normalized"] if best_crop_result else None,
+                                candidate_count=crop_candidate_count,
+                            )
 
                         crop_refinement_record["selected_index"] = crop_selected_index
                         crop_refinement_record["status"] = crop_status
+                        crop_refinement_record["reject_reason"] = crop_reject_reason
                         raw_record["crop_refinement"] = crop_refinement_record
                         persist_raw_record(raw_path=raw_path, raw_record=raw_record)
                 except Exception as error:
                     crop_status = CROP_STATUS_FAILED
                     crop_applied = False
                     crop_note_ja = ""
+                    crop_reject_reason = CROP_REJECT_REASON_MODEL_RESULT_INVALID
                     crop_refinement_record["status"] = crop_status
+                    crop_refinement_record["reject_reason"] = crop_reject_reason
                     crop_refinement_record["error"] = str(error)
                     raw_record["crop_refinement"] = crop_refinement_record
                     persist_raw_record(raw_path=raw_path, raw_record=raw_record)
+            else:
+                crop_skip_reason = derive_crop_refinement_skip_reason(
+                    coarse_normalized,
+                    crop_policy=crop_policy,
+                )
 
             final_normalized = apply_crop_refinement_metadata(
                 working_normalized,
                 status=crop_status,
                 applied=crop_applied,
+                triggered=bool(crop_trigger_reasons),
+                trigger_reason=crop_trigger_reason,
+                skip_reason=crop_skip_reason,
+                reject_reason=crop_reject_reason,
                 candidate_count=crop_candidate_count,
                 selected_index=crop_selected_index,
                 note_ja=crop_note_ja,
@@ -923,6 +1002,10 @@ def process_single_image(
                         final_normalized,
                         status=crop_status,
                         applied=crop_applied,
+                        triggered=bool(crop_trigger_reasons),
+                        trigger_reason=crop_trigger_reason,
+                        skip_reason=crop_skip_reason,
+                        reject_reason=crop_reject_reason,
                         candidate_count=crop_candidate_count,
                         selected_index=crop_selected_index,
                         note_ja=crop_note_ja,
@@ -946,6 +1029,10 @@ def process_single_image(
                         working_normalized,
                         status=crop_status,
                         applied=crop_applied,
+                        triggered=bool(crop_trigger_reasons),
+                        trigger_reason=crop_trigger_reason,
+                        skip_reason=crop_skip_reason,
+                        reject_reason=crop_reject_reason,
                         candidate_count=crop_candidate_count,
                         selected_index=crop_selected_index,
                         note_ja=crop_note_ja,
@@ -981,25 +1068,120 @@ def should_run_broad_refinement(coarse_normalized: Dict[str, Any]) -> bool:
     return coarse_normalized.get("primary_dish_key") in BROAD_PRIMARY_KEYS
 
 
-def should_run_crop_refinement(coarse_normalized: Dict[str, Any]) -> bool:
-    return bool(derive_crop_refinement_trigger_reasons(coarse_normalized))
+def should_run_crop_refinement(
+    coarse_normalized: Dict[str, Any],
+    *,
+    crop_policy: str = CROP_POLICY_TARGETED,
+) -> bool:
+    return bool(derive_crop_refinement_trigger_reasons(coarse_normalized, crop_policy=crop_policy))
 
 
-def derive_crop_refinement_trigger_reasons(coarse_normalized: Dict[str, Any]) -> List[str]:
+def derive_crop_refinement_trigger_reasons(
+    coarse_normalized: Dict[str, Any],
+    *,
+    crop_policy: str = CROP_POLICY_TARGETED,
+) -> List[str]:
+    if crop_policy == CROP_POLICY_OFF:
+        return []
+
     reasons: List[str] = []
-    scene_type = coarse_normalized.get("scene_type")
-    if scene_type in {"set_meal", "multi_dish_table"}:
-        reasons.append(f"scene_type:{scene_type}")
-
     review_reasons = ensure_list(coarse_normalized.get("review_reasons"))
-    if "scene_dominant" in review_reasons:
-        reasons.append("review_reason:scene_dominant")
+    for review_reason in [
+        "broad_primary",
+        "unknown_primary",
+        "candidate_split",
+        "side_item_primary",
+        "scene_dominant",
+    ]:
+        if review_reason in review_reasons:
+            reasons.append(review_reason)
+
+    analysis_confidence = clamp_score(coarse_normalized.get("analysis_confidence"))
+    if analysis_confidence is not None and analysis_confidence < CROP_LOW_CONFIDENCE_TRIGGER_THRESHOLD:
+        reasons.append("low_confidence")
 
     primary_dish_key = coarse_normalized.get("primary_dish_key")
-    if primary_dish_key in BROAD_PRIMARY_KEYS:
-        reasons.append(f"broad_primary:{primary_dish_key}")
+    if primary_dish_key in CROP_TARGET_BROAD_PRIMARY_KEYS:
+        reasons.append(f"broad_primary_key:{primary_dish_key}")
 
-    return reasons
+    if crop_policy == CROP_POLICY_AGGRESSIVE:
+        scene_type = coarse_normalized.get("scene_type")
+        meal_style = coarse_normalized.get("meal_style")
+        serving_style = coarse_normalized.get("serving_style")
+        if scene_type in {"set_meal", "multi_dish_table"}:
+            reasons.append(f"scene_type:{scene_type}")
+        if meal_style == "set_meal":
+            reasons.append("meal_style:set_meal")
+        if serving_style == "table_with_multiple_items":
+            reasons.append("serving_style:table_with_multiple_items")
+
+    deduped: List[str] = []
+    seen = set()
+    for reason in reasons:
+        if not reason or reason in seen:
+            continue
+        seen.add(reason)
+        deduped.append(reason)
+    return deduped
+
+
+def derive_crop_refinement_skip_reason(
+    coarse_normalized: Dict[str, Any],
+    *,
+    crop_policy: str = CROP_POLICY_TARGETED,
+) -> str:
+    if crop_policy == CROP_POLICY_OFF:
+        return CROP_SKIP_REASON_NOT_TARGET_CASE
+
+    scene_type = coarse_normalized.get("scene_type")
+    meal_style = coarse_normalized.get("meal_style")
+    serving_style = coarse_normalized.get("serving_style")
+    scene_only = (
+        scene_type in {"set_meal", "multi_dish_table"}
+        or meal_style == "set_meal"
+        or serving_style == "table_with_multiple_items"
+    )
+    review_reasons = ensure_list(coarse_normalized.get("review_reasons"))
+    has_target_review_reason = any(reason in CROP_TARGET_REVIEW_REASONS for reason in review_reasons)
+    primary_dish_key = str(coarse_normalized.get("primary_dish_key") or "")
+    analysis_confidence = clamp_score(coarse_normalized.get("analysis_confidence")) or 0.0
+
+    if scene_only and not has_target_review_reason and primary_dish_key not in CROP_TARGET_BROAD_PRIMARY_KEYS:
+        return CROP_SKIP_REASON_SCENE_ONLY_NOT_ENOUGH
+    if primary_dish_key not in BROAD_PRIMARY_KEYS and analysis_confidence >= CROP_LOW_CONFIDENCE_TRIGGER_THRESHOLD:
+        return CROP_SKIP_REASON_HIGH_CONFIDENCE_CONCRETE_PRIMARY
+    return CROP_SKIP_REASON_NOT_TARGET_CASE
+
+
+def derive_crop_refinement_reject_reason(
+    *,
+    current_normalized: Dict[str, Any],
+    best_crop_normalized: Optional[Dict[str, Any]],
+    candidate_count: int,
+) -> str:
+    if candidate_count <= 0:
+        return CROP_REJECT_REASON_CROP_QUALITY_LOW
+    if best_crop_normalized is None:
+        return CROP_REJECT_REASON_NO_BETTER_CANDIDATE
+
+    current_key = str(current_normalized.get("primary_dish_key") or "")
+    crop_key = str(best_crop_normalized.get("primary_dish_key") or "")
+    current_rank = classify_primary_dish_specificity(current_key)
+    crop_rank = classify_primary_dish_specificity(crop_key)
+    if crop_key in BROAD_PRIMARY_KEYS or crop_rank < 3:
+        return CROP_REJECT_REASON_CANDIDATE_NOT_CONCRETE
+    if crop_rank <= current_rank:
+        return CROP_REJECT_REASON_NO_BETTER_CANDIDATE
+
+    current_confidence = clamp_score(current_normalized.get("analysis_confidence")) or 0.0
+    crop_confidence = clamp_score(best_crop_normalized.get("analysis_confidence")) or 0.0
+    if crop_confidence < CROP_REFINEMENT_MIN_CONFIDENCE or crop_confidence <= current_confidence:
+        return CROP_REJECT_REASON_CONFIDENCE_NOT_IMPROVED
+
+    score_gap = extract_primary_candidate_score_gap(best_crop_normalized.get("primary_dish_candidates"))
+    if score_gap > 0 and score_gap < 0.03:
+        return CROP_REJECT_REASON_SCORE_GAP_TOO_SMALL
+    return CROP_REJECT_REASON_NO_BETTER_CANDIDATE
 
 
 def derive_broad_refinement_status(*, coarse_primary_dish_key: str, final_primary_dish_key: str) -> str:
@@ -1013,15 +1195,25 @@ def apply_crop_refinement_metadata(
     *,
     status: str,
     applied: bool,
+    triggered: bool,
+    trigger_reason: str,
+    skip_reason: str,
+    reject_reason: str,
     candidate_count: int,
     selected_index: Optional[int],
     note_ja: str,
 ) -> Dict[str, Any]:
     normalized = dict(final_normalized)
     normalized["crop_refinement_status"] = status
+    normalized["crop_refinement_triggered"] = bool(triggered)
     normalized["crop_refinement_applied"] = applied
+    normalized["crop_refinement_trigger_reason"] = clean_short_text(trigger_reason)
+    normalized["crop_refinement_skip_reason"] = clean_short_text(skip_reason)
+    normalized["crop_refinement_reject_reason"] = clean_short_text(reject_reason)
     normalized["crop_candidate_count"] = max(0, int(candidate_count))
+    normalized["crop_refinement_candidate_count"] = normalized["crop_candidate_count"]
     normalized["crop_selected_index"] = selected_index
+    normalized["crop_refinement_selected_index"] = selected_index
     normalized["crop_refinement_note_ja"] = clean_short_text(note_ja)
     return normalized
 
@@ -1812,6 +2004,18 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         review_note_ja = DEFAULT_REVIEW_NOTE_JA.get(review_reasons[0], "")
     if primary_dish_key in BROAD_PRIMARY_KEYS and not review_note_ja:
         review_note_ja = DEFAULT_REVIEW_NOTE_JA["broad_primary"]
+
+    primary_dish_label_ja = resolve_primary_dish_label_ja(primary_dish_key, primary_dish_label_ja)
+    repaired_flags = derive_boolean_flags(
+        primary_dish_key=primary_dish_key,
+        scene_type=scene_type,
+        meal_style=meal_style,
+        serving_style=serving_style,
+    )
+    contains_multiple_dishes = repaired_flags["contains_multiple_dishes"]
+    is_drink_only = repaired_flags["is_drink_only"]
+    is_packaged_food = repaired_flags["is_packaged_food"]
+    is_menu_or_text_only = repaired_flags["is_menu_or_text_only"]
 
     container_hint = infer_container_hint(
         visual_attributes=visual_attributes,
@@ -2682,6 +2886,90 @@ def write_json_file(path: Path, payload: Dict[str, Any]) -> None:
         if temp_path is not None and temp_path.exists():
             with contextlib.suppress(FileNotFoundError):
                 temp_path.unlink()
+
+
+def repair_normalized_records(*, normalized_root: Path) -> int:
+    if not normalized_root.exists():
+        return 0
+
+    repaired_count = 0
+    for path in sorted(normalized_root.rglob("*.json"), key=lambda item: item.as_posix().lower()):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            continue
+        repaired = repair_normalized_record(payload)
+        if repaired != payload:
+            write_json_file(path, repaired)
+            repaired_count += 1
+    return repaired_count
+
+
+def repair_normalized_record(payload: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(payload)
+    primary_dish_key = normalize_machine_key(normalized.get("primary_dish_key"), fallback="unknown")
+    scene_type = normalize_enum(normalized.get("scene_type"), SCENE_TYPE_OPTIONS) or "unknown"
+    meal_style = normalize_enum(normalized.get("meal_style"), MEAL_STYLE_OPTIONS) or "unknown"
+    serving_style = normalize_enum(normalized.get("serving_style"), SERVING_STYLE_OPTIONS) or "unknown"
+
+    normalized["primary_dish_key"] = primary_dish_key
+    normalized["primary_dish_label_ja"] = resolve_primary_dish_label_ja(
+        primary_dish_key,
+        clean_short_text(normalized.get("primary_dish_label_ja")),
+    )
+    normalized["scene_type"] = scene_type
+    normalized["meal_style"] = meal_style
+    normalized["serving_style"] = serving_style
+
+    repaired_flags = derive_boolean_flags(
+        primary_dish_key=primary_dish_key,
+        scene_type=scene_type,
+        meal_style=meal_style,
+        serving_style=serving_style,
+    )
+    normalized.update(repaired_flags)
+
+    crop_status = clean_short_text(normalized.get("crop_refinement_status")) or CROP_STATUS_NOT_TRIGGERED
+    crop_triggered = coerce_bool(normalized.get("crop_refinement_triggered"), default=None)
+    if crop_triggered is None:
+        crop_triggered = crop_status not in {"", CROP_STATUS_NOT_TRIGGERED, "missing"}
+    crop_applied = coerce_bool(normalized.get("crop_refinement_applied"), default=False) or False
+    crop_candidate_count = normalized.get("crop_refinement_candidate_count", normalized.get("crop_candidate_count", 0))
+    crop_selected_index = normalized.get("crop_refinement_selected_index", normalized.get("crop_selected_index"))
+
+    normalized["crop_refinement_status"] = crop_status
+    normalized["crop_refinement_triggered"] = bool(crop_triggered)
+    normalized["crop_refinement_applied"] = bool(crop_applied)
+    normalized["crop_refinement_trigger_reason"] = clean_short_text(normalized.get("crop_refinement_trigger_reason"))
+    normalized["crop_refinement_skip_reason"] = clean_short_text(normalized.get("crop_refinement_skip_reason"))
+    normalized["crop_refinement_reject_reason"] = clean_short_text(normalized.get("crop_refinement_reject_reason"))
+    if not normalized["crop_refinement_triggered"] and not normalized["crop_refinement_skip_reason"]:
+        normalized["crop_refinement_skip_reason"] = derive_crop_refinement_skip_reason(
+            normalized,
+            crop_policy=CROP_POLICY_TARGETED,
+        )
+    if normalized["crop_refinement_triggered"] and not normalized["crop_refinement_trigger_reason"]:
+        trigger_reasons = derive_crop_refinement_trigger_reasons(normalized, crop_policy=CROP_POLICY_TARGETED)
+        normalized["crop_refinement_trigger_reason"] = trigger_reasons[0] if trigger_reasons else ""
+    if (
+        normalized["crop_refinement_triggered"]
+        and not normalized["crop_refinement_applied"]
+        and not normalized["crop_refinement_reject_reason"]
+    ):
+        normalized["crop_refinement_reject_reason"] = CROP_REJECT_REASON_NO_BETTER_CANDIDATE
+    normalized["crop_candidate_count"] = safe_int(crop_candidate_count, default=0)
+    normalized["crop_refinement_candidate_count"] = normalized["crop_candidate_count"]
+    normalized["crop_selected_index"] = crop_selected_index if isinstance(crop_selected_index, int) else None
+    normalized["crop_refinement_selected_index"] = normalized["crop_selected_index"]
+    normalized["crop_refinement_note_ja"] = clean_short_text(normalized.get("crop_refinement_note_ja"))
+    return normalized
+
+
+def safe_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
 
 
 def append_error(

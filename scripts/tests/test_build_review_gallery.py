@@ -32,7 +32,11 @@ def make_record(
     broad_refinement_status: str = "not_applicable",
     broad_refinement_compare_keys: list[str] | None = None,
     crop_refinement_status: str = "not_triggered",
+    crop_refinement_triggered: bool = False,
     crop_refinement_applied: bool = False,
+    crop_refinement_trigger_reason: str = "",
+    crop_refinement_skip_reason: str = "high_confidence_concrete_primary",
+    crop_refinement_reject_reason: str = "",
 ) -> dict[str, object]:
     return {
         "schema_version": "food_label_exploration_v3",
@@ -67,9 +71,15 @@ def make_record(
         "broad_refinement_status": broad_refinement_status,
         "broad_refinement_compare_keys": broad_refinement_compare_keys or [],
         "crop_refinement_status": crop_refinement_status,
+        "crop_refinement_triggered": crop_refinement_triggered,
         "crop_refinement_applied": crop_refinement_applied,
+        "crop_refinement_trigger_reason": crop_refinement_trigger_reason,
+        "crop_refinement_skip_reason": "" if crop_refinement_triggered else crop_refinement_skip_reason,
+        "crop_refinement_reject_reason": crop_refinement_reject_reason,
         "crop_candidate_count": 0,
+        "crop_refinement_candidate_count": 0,
         "crop_selected_index": None,
+        "crop_refinement_selected_index": None,
         "crop_refinement_note_ja": "",
     }
 
@@ -129,6 +139,9 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
                     review_note_ja="主料理不明",
                     coarse_primary_dish_key="set_meal",
                     crop_refinement_status="kept_full_image",
+                    crop_refinement_triggered=True,
+                    crop_refinement_trigger_reason="unknown_primary",
+                    crop_refinement_reject_reason="no_better_candidate",
                 ),
                 make_record(
                     image_id="img-fish",
@@ -194,6 +207,12 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("coarse_primary_dish_key", html_text)
             self.assertIn("final_primary_dish_key", html_text)
             self.assertIn("crop_refinement_status", html_text)
+            self.assertIn("crop_refinement_trigger_reason", html_text)
+            self.assertIn("crop_refinement_reject_reason", html_text)
+            self.assertIn("no_better_candidate", html_text)
+            self.assertIn("crop_not_applied", html_text)
+            self.assertIn("top1_key", html_text)
+            self.assertIn("top2_key", html_text)
             self.assertIn("score_gap", html_text)
 
     def test_builds_from_normalized_without_labels_and_writes_provisional_jsonl(self) -> None:
@@ -221,6 +240,8 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
                 broad_refinement_status="kept_broad",
                 broad_refinement_compare_keys=["stir_fry", "grilled_meat", "meat_dish"],
                 crop_refinement_status="applied",
+                crop_refinement_triggered=True,
+                crop_refinement_trigger_reason="broad_primary_key:stew",
                 crop_refinement_applied=True,
             )
             (normalized_dir / "sample-1.jpg.json").write_text(
@@ -250,7 +271,9 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("Broad primary candidates", html_text)
             self.assertIn("broad_primary_concrete_candidate_key", html_text)
             self.assertIn("kept_broad", html_text)
+            self.assertIn("highlight-kept-broad", html_text)
             self.assertIn("crop_applied", html_text)
+            self.assertIn("crop_refinement_triggered", html_text)
             self.assertIn("broad_refinement_compare_keys", html_text)
             self.assertIn("top1_score", html_text)
             self.assertIn("top2_score", html_text)

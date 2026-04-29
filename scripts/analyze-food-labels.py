@@ -13,6 +13,27 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+try:
+    from food_label_taxonomy import (
+        BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        NON_CONCRETE_PRIMARY_KEYS,
+        PRIMARY_DISH_LABEL_JA,
+        TRAINING_CLASS_MAP,
+        derive_boolean_flags,
+        derive_design_candidate_primary_key,
+        derive_training_class_candidate,
+    )
+except ImportError:
+    from scripts.food_label_taxonomy import (
+        BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        NON_CONCRETE_PRIMARY_KEYS,
+        PRIMARY_DISH_LABEL_JA,
+        TRAINING_CLASS_MAP,
+        derive_boolean_flags,
+        derive_design_candidate_primary_key,
+        derive_training_class_candidate,
+    )
+
 
 TARGET_SCHEMA_VERSION = "food_label_exploration_v3"
 DEFAULT_TOP_N = 20
@@ -25,29 +46,14 @@ SCENE_DOMINANT_CANDIDATES_NAME = "scene_dominant_candidates.csv"
 SIDE_ITEM_PRIMARY_CANDIDATES_NAME = "side_item_primary_candidates.csv"
 LOW_CONFIDENCE_CANDIDATES_NAME = "low_confidence_candidates.csv"
 BROAD_PRIMARY_CANDIDATES_NAME = "broad_primary_candidates.csv"
+GOALS_CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "mediapipe_labeling_goals.json"
 UNKNOWN_VALUE = "unknown"
 BIAS_REASONS = {"side_item_primary", "scene_dominant", "broad_primary"}
-BROAD_PRIMARY_KEYS = {"meat_dish", "stew", "noodles"}
+BROAD_PRIMARY_KEYS = set(TAXONOMY_BROAD_PRIMARY_KEYS)
 RESOLVED_BROAD_REFINEMENT_STATUSES = {"resolved"}
 FAILED_BROAD_REFINEMENT_STATUSES = {"failed"}
 KEPT_BROAD_REFINEMENT_STATUSES = {"kept_broad"}
-NON_CONCRETE_CANDIDATE_KEYS = BROAD_PRIMARY_KEYS | {
-    UNKNOWN_VALUE,
-    "set_meal",
-    "multi_dish_table",
-    "menu_or_text",
-    "rice",
-    "soup",
-    "miso_soup",
-    "salad",
-    "pickles",
-    "sauce",
-    "side_dish",
-    "bread",
-    "egg",
-    "drink",
-    "drinks",
-}
+NON_CONCRETE_CANDIDATE_KEYS = set(NON_CONCRETE_PRIMARY_KEYS)
 
 CSV_FIELDNAMES = [
     "image_id",
@@ -55,10 +61,13 @@ CSV_FIELDNAMES = [
     "analysis_confidence",
     "coarse_primary_dish_key",
     "primary_dish_key",
+    "final_primary_dish_key",
     "primary_dish_label_ja",
     "primary_dish_candidates",
     "best_concrete_candidate_key",
+    "top1_key",
     "top1_score",
+    "top2_key",
     "top2_score",
     "score_gap",
     "supporting_items",
@@ -70,6 +79,11 @@ CSV_FIELDNAMES = [
     "review_bucket",
     "broad_refinement_status",
     "crop_refinement_status",
+    "crop_refinement_triggered",
+    "crop_refinement_applied",
+    "crop_refinement_trigger_reason",
+    "crop_refinement_skip_reason",
+    "crop_refinement_reject_reason",
     "broad_refinement_compare_keys",
     "needs_human_review",
     "review_reasons",
@@ -440,6 +454,12 @@ def analyze_records(
     broad_primary_concrete_candidate_counter = Counter()
     coarse_broad_primary_key_counter = Counter()
     broad_refinement_resolved_to_key_counter = Counter()
+    crop_refinement_trigger_reason_counter = Counter()
+    crop_refinement_skip_reason_counter = Counter()
+    crop_refinement_reject_reason_counter = Counter()
+    confidence_value_counter = Counter()
+    boolean_mismatch_counter = Counter()
+    training_class_candidate_counter = Counter()
 
     needs_human_review_count = 0
     unknown_primary_count = 0
@@ -453,7 +473,12 @@ def analyze_records(
     crop_refinement_triggered_count = 0
     crop_refinement_applied_count = 0
     crop_refinement_failed_count = 0
+    crop_refinement_skipped_count = 0
+    crop_refinement_rejected_count = 0
     low_confidence_count = 0
+    candidate_score_count = 0
+    candidate_score_zero_count = 0
+    untranslated_label_ja_count = 0
 
     for record in filtered_records:
         payload = record.payload
@@ -471,8 +496,14 @@ def analyze_records(
         review_reasons = extract_string_list(payload.get("review_reasons"))
         free_tags = extract_string_list(payload.get("free_tags"))
         broad_primary_candidate_key = detect_broad_primary_concrete_candidate_key(record)
+        crop_refinement_triggered = detect_crop_refinement_triggered(payload)
+        crop_refinement_applied = coerce_bool(payload.get("crop_refinement_applied"))
+        crop_refinement_trigger_reason = normalize_optional_scalar(payload.get("crop_refinement_trigger_reason"))
+        crop_refinement_skip_reason = normalize_optional_scalar(payload.get("crop_refinement_skip_reason"))
+        crop_refinement_reject_reason = normalize_optional_scalar(payload.get("crop_refinement_reject_reason"))
 
         primary_dish_counter[primary_dish_key] += 1
+        confidence_value_counter[format_confidence(record.analysis_confidence)] += 1
         scene_type_counter[scene_type] += 1
         supporting_items_counter.update(supporting_items)
         review_reasons_counter.update(review_reasons)
@@ -480,6 +511,18 @@ def analyze_records(
         meal_style_counter[meal_style] += 1
         serving_style_counter[serving_style] += 1
         free_tags_counter.update(free_tags)
+        score_sanity = extract_candidate_score_sanity(record)
+        candidate_score_count += score_sanity["score_count"]
+        candidate_score_zero_count += score_sanity["zero_count"]
+        boolean_mismatch_counter.update(detect_boolean_mismatches(payload))
+        if has_untranslated_label(primary_dish_key, payload.get("primary_dish_label_ja")):
+            untranslated_label_ja_count += 1
+        training_class_candidate = derive_training_class_candidate(
+            primary_dish_key,
+            review_reasons=review_reasons,
+        )
+        if training_class_candidate:
+            training_class_candidate_counter[training_class_candidate] += 1
 
         if coerce_bool(payload.get("needs_human_review")):
             needs_human_review_count += 1
@@ -505,21 +548,31 @@ def analyze_records(
             broad_refinement_kept_broad_count += 1
         if broad_refinement_status in FAILED_BROAD_REFINEMENT_STATUSES:
             broad_refinement_failed_count += 1
-        if crop_refinement_status not in {"missing", "not_triggered"}:
+        if crop_refinement_triggered:
             crop_refinement_triggered_count += 1
-        if crop_refinement_status == "applied":
+            if crop_refinement_trigger_reason:
+                crop_refinement_trigger_reason_counter[crop_refinement_trigger_reason] += 1
+        else:
+            crop_refinement_skipped_count += 1
+            if crop_refinement_skip_reason:
+                crop_refinement_skip_reason_counter[crop_refinement_skip_reason] += 1
+        if crop_refinement_applied:
             crop_refinement_applied_count += 1
         if crop_refinement_status == "failed":
             crop_refinement_failed_count += 1
+        if crop_refinement_triggered and not crop_refinement_applied:
+            crop_refinement_rejected_count += 1
+            if crop_refinement_reject_reason:
+                crop_refinement_reject_reason_counter[crop_refinement_reject_reason] += 1
         if detect_low_confidence_reasons(record):
             low_confidence_count += 1
 
-        if (
-            primary_dish_key != UNKNOWN_VALUE
-            and primary_dish_key not in BROAD_PRIMARY_KEYS
-            and not any(reason in review_reasons for reason in BIAS_REASONS)
-        ):
-            design_candidate_primary_counter[primary_dish_key] += 1
+        design_candidate_primary_key = derive_design_candidate_primary_key(
+            primary_dish_key=primary_dish_key,
+            review_reasons=review_reasons,
+        )
+        if design_candidate_primary_key:
+            design_candidate_primary_counter[design_candidate_primary_key] += 1
 
     review_candidates = [
         build_csv_row(record)
@@ -596,7 +649,14 @@ def analyze_records(
             "broad_refinement_failed": build_count_ratio(broad_refinement_failed_count, filtered_count),
             "crop_refinement_triggered": build_count_ratio(crop_refinement_triggered_count, filtered_count),
             "crop_refinement_applied": build_count_ratio(crop_refinement_applied_count, filtered_count),
+            "crop_refinement_skipped": build_count_ratio(crop_refinement_skipped_count, filtered_count),
+            "crop_refinement_rejected": build_count_ratio(crop_refinement_rejected_count, filtered_count),
             "crop_refinement_failed": build_count_ratio(crop_refinement_failed_count, filtered_count),
+            "crop_refinement_effective_rate": build_count_ratio(crop_refinement_applied_count, crop_refinement_triggered_count),
+            "crop_triggered_but_not_applied": build_count_ratio(
+                max(0, crop_refinement_triggered_count - crop_refinement_applied_count),
+                crop_refinement_triggered_count,
+            ),
             "low_confidence": build_count_ratio(low_confidence_count, filtered_count),
         },
         "schema_version_counts": dict(sorted(schema_version_counts.items())),
@@ -614,7 +674,30 @@ def analyze_records(
             "broad_primary_key": counter_to_items(broad_primary_key_counter, top_n),
             "broad_primary_concrete_candidate_key": counter_to_items(broad_primary_concrete_candidate_counter, top_n),
             "broad_refinement_resolved_to_key": counter_to_items(broad_refinement_resolved_to_key_counter, top_n),
+            "mediapipe_training_class_candidate": counter_to_items(training_class_candidate_counter, top_n),
         },
+        "sanity_checks": {
+            "candidate_score_zero_ratio": build_count_ratio(candidate_score_zero_count, candidate_score_count),
+            "candidate_score_total": candidate_score_count,
+            "confidence_unique_values": len(confidence_value_counter),
+            "confidence_most_common_values": counter_to_items(confidence_value_counter, 10),
+            "boolean_mismatch_counts": dict(sorted(boolean_mismatch_counter.items())),
+            "untranslated_label_ja_count": untranslated_label_ja_count,
+            "mediapipe_class_set_candidate_summary": build_mediapipe_class_set_summary(training_class_candidate_counter),
+        },
+        "crop_refinement_trigger_reason_counts": counter_to_items(crop_refinement_trigger_reason_counter, top_n),
+        "crop_refinement_skip_reason_counts": counter_to_items(crop_refinement_skip_reason_counter, top_n),
+        "crop_refinement_reject_reason_counts": counter_to_items(crop_refinement_reject_reason_counter, top_n),
+        "stop_condition_evaluation": evaluate_stop_conditions(
+            totals={
+                "unknown_primary": build_count_ratio(unknown_primary_count, filtered_count),
+                "side_item_primary": build_count_ratio(side_item_primary_count, filtered_count),
+                "broad_primary": build_count_ratio(broad_primary_count, filtered_count),
+                "needs_human_review": build_count_ratio(needs_human_review_count, filtered_count),
+            },
+            broad_primary_key_counter=broad_primary_key_counter,
+            training_class_candidate_counter=training_class_candidate_counter,
+        ),
         "candidate_counts": {
             "review_candidates": len(review_candidates),
             "unknown_candidates": len(unknown_candidates),
@@ -641,9 +724,11 @@ def analyze_records(
             broad_refinement_failed_count=broad_refinement_failed_count,
             crop_refinement_triggered_count=crop_refinement_triggered_count,
             crop_refinement_applied_count=crop_refinement_applied_count,
+            crop_refinement_rejected_count=crop_refinement_rejected_count,
             crop_refinement_failed_count=crop_refinement_failed_count,
             low_confidence_count=low_confidence_count,
             broad_primary_key_counter=broad_primary_key_counter,
+            crop_refinement_reject_reason_counter=crop_refinement_reject_reason_counter,
         ),
         "output_files": {
             "summary_json": str(output_dir / SUMMARY_JSON_NAME),
@@ -694,7 +779,7 @@ def build_count_ratio(count: int, total: int) -> Dict[str, Any]:
 def counter_to_items(counter: Counter, top_n: int) -> List[Dict[str, Any]]:
     return [
         {"value": value, "count": count}
-        for value, count in counter.most_common(top_n)
+        for value, count in sorted(counter.items(), key=lambda item: (-item[1], str(item[0])))[:top_n]
     ]
 
 
@@ -705,6 +790,7 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
     insights = summary_json["insights"]
     filters = summary_json["filters"]
     candidate_counts = summary_json["candidate_counts"]
+    sanity_checks = summary_json.get("sanity_checks", {})
 
     lines: List[str] = [
         "# Food Label Exploration Summary",
@@ -808,7 +894,11 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
             f"- broad_refinement_failed 件数: {totals['broad_refinement_failed']['count']} ({format_percent(totals['broad_refinement_failed']['ratio'])})",
             f"- crop_refinement_triggered 件数: {totals['crop_refinement_triggered']['count']} ({format_percent(totals['crop_refinement_triggered']['ratio'])})",
             f"- crop_refinement_applied 件数: {totals['crop_refinement_applied']['count']} ({format_percent(totals['crop_refinement_applied']['ratio'])})",
+            f"- crop_refinement_skipped 件数: {totals['crop_refinement_skipped']['count']} ({format_percent(totals['crop_refinement_skipped']['ratio'])})",
+            f"- crop_refinement_rejected 件数: {totals['crop_refinement_rejected']['count']} ({format_percent(totals['crop_refinement_rejected']['ratio'])})",
             f"- crop_refinement_failed 件数: {totals['crop_refinement_failed']['count']} ({format_percent(totals['crop_refinement_failed']['ratio'])})",
+            f"- crop_refinement_effective_rate: {format_percent(totals['crop_refinement_effective_rate']['ratio'])}",
+            f"- crop_triggered_but_not_applied 件数: {totals['crop_triggered_but_not_applied']['count']} ({format_percent(totals['crop_triggered_but_not_applied']['ratio'])})",
             f"- low_confidence 件数: {totals['low_confidence']['count']} ({format_percent(totals['low_confidence']['ratio'])})",
             f"- review_candidates.csv 件数: {candidate_counts['review_candidates']}",
             f"- unknown_candidates.csv 件数: {candidate_counts['unknown_candidates']}",
@@ -816,6 +906,34 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
             f"- side_item_primary_candidates.csv 件数: {candidate_counts['side_item_primary_candidates']}",
             f"- low_confidence_candidates.csv 件数: {candidate_counts['low_confidence_candidates']}",
             f"- broad_primary_candidates.csv 件数: {candidate_counts['broad_primary_candidates']}",
+            "",
+            "### crop_refinement_trigger_reason_counts",
+        ]
+    )
+    lines.extend(render_top_count_table(summary_json.get("crop_refinement_trigger_reason_counts", [])))
+    lines.extend(
+        [
+            "",
+            "### crop_refinement_skip_reason_counts",
+        ]
+    )
+    lines.extend(render_top_count_table(summary_json.get("crop_refinement_skip_reason_counts", [])))
+    lines.extend(
+        [
+            "",
+            "### crop_refinement_reject_reason_counts",
+        ]
+    )
+    lines.extend(render_top_count_table(summary_json.get("crop_refinement_reject_reason_counts", [])))
+    lines.extend(
+        [
+            "",
+            "## Sanity Checks",
+            f"- candidate score zero ratio: {format_percent(sanity_checks.get('candidate_score_zero_ratio', {}).get('ratio', 0.0))}",
+            f"- confidence unique values: {sanity_checks.get('confidence_unique_values', 0)}",
+            f"- untranslated label_ja count: {sanity_checks.get('untranslated_label_ja_count', 0)}",
+            f"- boolean mismatch counts: {format_counter_map(sanity_checks.get('boolean_mismatch_counts', {}))}",
+            f"- MediaPipe class candidate count: {sanity_checks.get('mediapipe_class_set_candidate_summary', {}).get('class_count', 0)}",
             "",
             "## Insights",
         ]
@@ -857,9 +975,11 @@ def build_insights(
     broad_refinement_failed_count: int,
     crop_refinement_triggered_count: int,
     crop_refinement_applied_count: int,
+    crop_refinement_rejected_count: int,
     crop_refinement_failed_count: int,
     low_confidence_count: int,
     broad_primary_key_counter: Counter,
+    crop_refinement_reject_reason_counter: Counter,
 ) -> List[str]:
     if filtered_count <= 0:
         return []
@@ -887,13 +1007,20 @@ def build_insights(
     if crop_refinement_failed_count > 0:
         insights.append("crop refinement failed があり、crop 生成か crop stage の安定性確認が必要です。")
     if crop_refinement_triggered_count > 0 and crop_refinement_applied_count / crop_refinement_triggered_count < 0.20:
-        insights.append("crop refinement は走っているが適用率が低く、crop 領域か merge 条件の見直し余地があります。")
+        insights.append("crop refinement は broad / unknown / candidate split 中心に限定され、適用率は低めです。")
+    if crop_refinement_rejected_count > 0 and crop_refinement_reject_reason_counter:
+        top_reject_reason, _count = crop_refinement_reject_reason_counter.most_common(1)[0]
+        insights.append(f"crop refinement が未適用だった理由は {top_reject_reason} に集中しています。")
     if broad_refinement_resolved_count > 0 and broad_primary_count == 0:
         insights.append("coarse broad は fine refinement で解消できており、residual broad はかなり減っています。")
     if broad_primary_key_counter.get("meat_dish", 0) / filtered_count >= 0.10:
         insights.append("meat_dish への偏りが残っており、より具体的な肉料理ラベル優先の prompt 強化が必要です。")
+    if sum(broad_primary_key_counter.get(key, 0) for key in ("noodles", "stew")) > 0:
+        insights.append("broad_primary の残件は noodles / stew に集中しているか、重点的な人手確認が必要です。")
     if low_confidence_count / filtered_count >= 0.10:
         insights.append("low_confidence が多く、confidence の出し方と review 条件の整合性を見直す余地があります。")
+    if broad_primary_count > 0:
+        insights.append("これ以上の改善は script logic より人手レビュー結果の教師データ化が効く可能性があります。")
     return insights
 
 
@@ -955,6 +1082,124 @@ def detect_low_confidence_reasons(record: LoadedRecord) -> List[str]:
     return reasons
 
 
+def detect_crop_refinement_triggered(payload: Dict[str, Any]) -> bool:
+    explicit = payload.get("crop_refinement_triggered")
+    if explicit is not None:
+        return coerce_bool(explicit)
+    crop_refinement_status = normalize_scalar(payload.get("crop_refinement_status"))
+    return crop_refinement_status not in {"missing", "not_triggered"}
+
+
+def normalize_optional_scalar(value: Any) -> str:
+    normalized = normalize_scalar(value)
+    return "" if normalized == "missing" else normalized
+
+
+def extract_candidate_score_sanity(record: LoadedRecord) -> Dict[str, int]:
+    score_count = 0
+    zero_count = 0
+    for candidate in extract_primary_dish_candidate_objects(record.payload.get("primary_dish_candidates")):
+        score_count += 1
+        if candidate["score"] == 0:
+            zero_count += 1
+    return {"score_count": score_count, "zero_count": zero_count}
+
+
+def detect_boolean_mismatches(payload: Dict[str, Any]) -> List[str]:
+    primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
+    scene_type = normalize_scalar(payload.get("scene_type"))
+    meal_style = normalize_scalar(payload.get("meal_style"))
+    serving_style = normalize_scalar(payload.get("serving_style"))
+    expected = derive_boolean_flags(
+        primary_dish_key=primary_dish_key,
+        scene_type=scene_type,
+        meal_style=meal_style,
+        serving_style=serving_style,
+    )
+    mismatches: List[str] = []
+    for key, expected_value in expected.items():
+        if coerce_bool(payload.get(key)) != expected_value:
+            mismatches.append(key)
+    return mismatches
+
+
+def has_untranslated_label(primary_dish_key: str, label_ja: Any) -> bool:
+    label = clean_text(label_ja)
+    if not label:
+        return True
+    if primary_dish_key in PRIMARY_DISH_LABEL_JA:
+        return False
+    return label == primary_dish_key or bool(re.fullmatch(r"[a-z0-9_]+", label))
+
+
+def build_mediapipe_class_set_summary(training_class_counter: Counter) -> Dict[str, Any]:
+    class_count = len(training_class_counter)
+    preferred_min = 8
+    preferred_max = 12
+    return {
+        "class_count": class_count,
+        "preferred_range": {"min": preferred_min, "max": preferred_max},
+        "within_preferred_range": preferred_min <= class_count <= preferred_max,
+        "classes": counter_to_items(training_class_counter, max(class_count, 1)),
+        "mapped_known_keys": len(TRAINING_CLASS_MAP),
+    }
+
+
+def evaluate_stop_conditions(
+    *,
+    totals: Dict[str, Dict[str, Any]],
+    broad_primary_key_counter: Counter,
+    training_class_candidate_counter: Counter,
+) -> Dict[str, Any]:
+    config = load_goals_config()
+    stop_conditions = config.get("stop_conditions", {}) if isinstance(config, dict) else {}
+    metric_rules = stop_conditions.get("metrics", {}) if isinstance(stop_conditions, dict) else {}
+    metric_results: Dict[str, Any] = {}
+    for metric_name, rule in metric_rules.items():
+        if not isinstance(rule, dict):
+            continue
+        actual = totals.get(metric_name, {"count": 0, "ratio": 0.0})
+        passed = True
+        if "max_count" in rule and actual.get("count", 0) > rule["max_count"]:
+            passed = False
+        if "max_ratio" in rule and actual.get("ratio", 0.0) > rule["max_ratio"]:
+            passed = False
+        metric_results[metric_name] = {
+            "passed": passed,
+            "actual": actual,
+            "rule": rule,
+        }
+
+    preferred_range = stop_conditions.get("preferred_primary_class_count_range", {})
+    min_count = preferred_range.get("min", 8) if isinstance(preferred_range, dict) else 8
+    max_count = preferred_range.get("max", 12) if isinstance(preferred_range, dict) else 12
+    class_count = len(training_class_candidate_counter)
+    broad_key_rules = stop_conditions.get("broad_keys", {}) if isinstance(stop_conditions, dict) else {}
+    max_residual_count = broad_key_rules.get("max_residual_count", 5) if isinstance(broad_key_rules, dict) else 5
+    broad_residual_total = sum(broad_primary_key_counter.values())
+    return {
+        "config_path": str(GOALS_CONFIG_PATH),
+        "metrics": metric_results,
+        "preferred_primary_class_count": {
+            "passed": min_count <= class_count <= max_count,
+            "actual": class_count,
+            "range": {"min": min_count, "max": max_count},
+        },
+        "broad_residual_total": {
+            "passed": broad_residual_total <= max_residual_count,
+            "actual": broad_residual_total,
+            "max_residual_count": max_residual_count,
+        },
+    }
+
+
+def load_goals_config() -> Dict[str, Any]:
+    try:
+        return json.loads(GOALS_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
 def detect_broad_primary_concrete_candidate_key(record: LoadedRecord) -> Optional[str]:
     primary_dish_key = normalize_scalar(record.payload.get("primary_dish_key"))
     if primary_dish_key not in BROAD_PRIMARY_KEYS:
@@ -972,10 +1217,14 @@ def detect_broad_primary_concrete_candidate_key(record: LoadedRecord) -> Optiona
 
 def extract_primary_candidate_scores(record: LoadedRecord) -> Dict[str, Any]:
     candidates = extract_primary_dish_candidate_objects(record.payload.get("primary_dish_candidates"))
+    top1_key = candidates[0]["key"] if candidates else ""
     top1_score = candidates[0]["score"] if candidates else 0.0
+    top2_key = candidates[1]["key"] if len(candidates) >= 2 else ""
     top2_score = candidates[1]["score"] if len(candidates) >= 2 else 0.0
     return {
+        "top1_key": top1_key,
         "top1_score": top1_score,
+        "top2_key": top2_key,
         "top2_score": top2_score,
         "score_gap": max(0.0, top1_score - top2_score),
         "best_concrete_candidate_key": detect_broad_primary_concrete_candidate_key(record) or "",
@@ -1015,9 +1264,13 @@ def build_broad_primary_candidate_reasons(record: LoadedRecord) -> List[str]:
     if broad_refinement_status != "missing":
         reasons.append(f"broad_refinement_status:{broad_refinement_status}")
 
-    crop_refinement_status = normalize_scalar(record.payload.get("crop_refinement_status"))
-    if crop_refinement_status != "missing":
-        reasons.append(f"crop_refinement_status:{crop_refinement_status}")
+    crop_refinement_reject_reason = normalize_optional_scalar(record.payload.get("crop_refinement_reject_reason"))
+    if crop_refinement_reject_reason:
+        reasons.append(f"crop_rejected:{crop_refinement_reject_reason}")
+    else:
+        crop_refinement_status = normalize_scalar(record.payload.get("crop_refinement_status"))
+        if crop_refinement_status != "missing":
+            reasons.append(f"crop_refinement_status:{crop_refinement_status}")
 
     refinement_note_ja = compact_candidate_reason_text(
         record.payload.get("broad_refinement_note_ja") or record.payload.get("review_note_ja")
@@ -1040,10 +1293,13 @@ def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str
         "analysis_confidence": format_confidence(record.analysis_confidence),
         "coarse_primary_dish_key": coarse_primary_dish_key,
         "primary_dish_key": normalize_scalar(payload.get("primary_dish_key")),
+        "final_primary_dish_key": normalize_scalar(payload.get("primary_dish_key")),
         "primary_dish_label_ja": clean_text(payload.get("primary_dish_label_ja")),
         "primary_dish_candidates": ";".join(extract_primary_dish_candidates(payload.get("primary_dish_candidates"))),
         "best_concrete_candidate_key": score_info["best_concrete_candidate_key"],
+        "top1_key": score_info["top1_key"],
         "top1_score": format_confidence(score_info["top1_score"]),
+        "top2_key": score_info["top2_key"],
         "top2_score": format_confidence(score_info["top2_score"]),
         "score_gap": format_confidence(score_info["score_gap"]),
         "supporting_items": ";".join(extract_string_list(payload.get("supporting_items"))),
@@ -1055,6 +1311,11 @@ def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str
         "review_bucket": normalize_scalar(payload.get("review_bucket")),
         "broad_refinement_status": normalize_scalar(payload.get("broad_refinement_status")),
         "crop_refinement_status": normalize_scalar(payload.get("crop_refinement_status")),
+        "crop_refinement_triggered": format_bool(detect_crop_refinement_triggered(payload)),
+        "crop_refinement_applied": format_bool(payload.get("crop_refinement_applied")),
+        "crop_refinement_trigger_reason": normalize_optional_scalar(payload.get("crop_refinement_trigger_reason")),
+        "crop_refinement_skip_reason": normalize_optional_scalar(payload.get("crop_refinement_skip_reason")),
+        "crop_refinement_reject_reason": normalize_optional_scalar(payload.get("crop_refinement_reject_reason")),
         "broad_refinement_compare_keys": ";".join(extract_string_list(payload.get("broad_refinement_compare_keys"))),
         "needs_human_review": format_bool(payload.get("needs_human_review")),
         "review_reasons": ";".join(extract_string_list(payload.get("review_reasons"))),
@@ -1129,6 +1390,7 @@ def print_console_summary(
         f"refinement_failed={totals['broad_refinement_failed']['count']} "
         f"crop_triggered={totals['crop_refinement_triggered']['count']} "
         f"crop_applied={totals['crop_refinement_applied']['count']} "
+        f"crop_rejected={totals['crop_refinement_rejected']['count']} "
         f"crop_failed={totals['crop_refinement_failed']['count']}"
     )
     print(f"Top primary_dish_key: {format_top_items(top_counts['primary_dish_key'], top_n)}")

@@ -399,13 +399,80 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             )
         )
 
-    def test_should_run_crop_refinement_depends_on_scene_review_or_broad(self) -> None:
-        self.assertTrue(
+    def test_should_run_crop_refinement_targets_broad_unknown_split_side_scene_and_low_confidence(self) -> None:
+        self.assertFalse(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "single_dish",
+                    "meal_style": "single_item",
+                    "serving_style": "single_plate",
+                    "review_reasons": [],
+                    "analysis_confidence": 0.83,
+                }
+            )
+        )
+        self.assertFalse(
             MODULE.should_run_crop_refinement(
                 {
                     "primary_dish_key": "grilled_fish",
                     "scene_type": "set_meal",
+                    "meal_style": "single_item",
+                    "serving_style": "single_plate",
                     "review_reasons": [],
+                    "analysis_confidence": 0.83,
+                }
+            )
+        )
+        self.assertFalse(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "multi_dish_table",
+                    "meal_style": "single_item",
+                    "serving_style": "single_plate",
+                    "review_reasons": [],
+                    "analysis_confidence": 0.83,
+                }
+            )
+        )
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "single_dish",
+                    "review_reasons": ["broad_primary"],
+                    "analysis_confidence": 0.83,
+                }
+            )
+        )
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "unknown",
+                    "scene_type": "single_dish",
+                    "review_reasons": ["unknown_primary"],
+                    "analysis_confidence": 0.83,
+                }
+            )
+        )
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "single_dish",
+                    "review_reasons": ["candidate_split"],
+                    "analysis_confidence": 0.83,
+                }
+            )
+        )
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "single_dish",
+                    "review_reasons": ["side_item_primary"],
+                    "analysis_confidence": 0.83,
                 }
             )
         )
@@ -415,6 +482,17 @@ class ExploreFoodLabelsTests(unittest.TestCase):
                     "primary_dish_key": "grilled_fish",
                     "scene_type": "single_dish",
                     "review_reasons": ["scene_dominant"],
+                    "analysis_confidence": 0.83,
+                }
+            )
+        )
+        self.assertTrue(
+            MODULE.should_run_crop_refinement(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "single_dish",
+                    "review_reasons": [],
+                    "analysis_confidence": 0.59,
                 }
             )
         )
@@ -424,18 +502,54 @@ class ExploreFoodLabelsTests(unittest.TestCase):
                     "primary_dish_key": "stew",
                     "scene_type": "single_dish",
                     "review_reasons": [],
+                    "analysis_confidence": 0.83,
                 }
             )
         )
-        self.assertFalse(
-            MODULE.should_run_crop_refinement(
+
+    def test_crop_refinement_skip_reason_is_set(self) -> None:
+        self.assertEqual(
+            MODULE.derive_crop_refinement_skip_reason(
+                {
+                    "primary_dish_key": "grilled_fish",
+                    "scene_type": "set_meal",
+                    "meal_style": "single_item",
+                    "serving_style": "single_plate",
+                    "review_reasons": [],
+                    "analysis_confidence": 0.82,
+                }
+            ),
+            "scene_only_not_enough",
+        )
+        self.assertEqual(
+            MODULE.derive_crop_refinement_skip_reason(
                 {
                     "primary_dish_key": "grilled_fish",
                     "scene_type": "single_dish",
+                    "meal_style": "single_item",
+                    "serving_style": "single_plate",
                     "review_reasons": [],
+                    "analysis_confidence": 0.82,
                 }
-            )
+            ),
+            "high_confidence_concrete_primary",
         )
+
+    def test_crop_refinement_reject_reason_is_set(self) -> None:
+        reason = MODULE.derive_crop_refinement_reject_reason(
+            current_normalized={"primary_dish_key": "set_meal", "analysis_confidence": 0.62},
+            best_crop_normalized={
+                "primary_dish_key": "stew",
+                "analysis_confidence": 0.44,
+                "primary_dish_candidates": [
+                    {"key": "stew", "label_ja": "煮込み", "score": 0.44},
+                    {"key": "set_meal", "label_ja": "定食", "score": 0.4},
+                ],
+            },
+            candidate_count=1,
+        )
+
+        self.assertEqual(reason, "candidate_not_concrete")
 
     def test_process_single_image_resolves_broad_primary_with_fine_stage(self) -> None:
         coarse_payload = make_raw_result(
@@ -485,6 +599,9 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertEqual(result["primary_dish_key"], "nimono")
         self.assertEqual(result["coarse_primary_dish_key"], "stew")
         self.assertEqual(result["crop_refinement_status"], "kept_full_image")
+        self.assertTrue(result["crop_refinement_triggered"])
+        self.assertEqual(result["crop_refinement_trigger_reason"], "broad_primary")
+        self.assertEqual(result["crop_refinement_reject_reason"], "candidate_not_concrete")
         self.assertEqual(result["broad_refinement_status"], "resolved")
         self.assertEqual(result["broad_refinement_compare_keys"], ["nimono", "curry_rice", "meat_and_potato_stew", "stew"])
         self.assertEqual(normalized_payload["primary_dish_key"], "nimono")
@@ -533,8 +650,11 @@ class ExploreFoodLabelsTests(unittest.TestCase):
 
         self.assertEqual(result["primary_dish_key"], "grilled_fish")
         self.assertEqual(result["crop_refinement_status"], "applied")
+        self.assertTrue(result["crop_refinement_triggered"])
         self.assertTrue(result["crop_refinement_applied"])
+        self.assertEqual(result["crop_refinement_trigger_reason"], "scene_dominant")
         self.assertEqual(result["crop_selected_index"], 0)
+        self.assertEqual(result["crop_refinement_selected_index"], 0)
         self.assertEqual(result["broad_refinement_status"], "not_applicable")
         self.assertNotIn("scene_dominant", normalized_payload["review_reasons"])
         self.assertEqual(raw_payload["crop_refinement"]["selected_index"], 0)
@@ -573,8 +693,11 @@ class ExploreFoodLabelsTests(unittest.TestCase):
 
         self.assertEqual(result["primary_dish_key"], "set_meal")
         self.assertEqual(result["crop_refinement_status"], "kept_full_image")
+        self.assertTrue(result["crop_refinement_triggered"])
         self.assertFalse(result["crop_refinement_applied"])
         self.assertEqual(result["crop_candidate_count"], 1)
+        self.assertEqual(result["crop_refinement_candidate_count"], 1)
+        self.assertEqual(result["crop_refinement_reject_reason"], "candidate_not_concrete")
         self.assertEqual(normalized_payload["primary_dish_key"], "set_meal")
         self.assertEqual(raw_payload["crop_refinement"]["status"], "kept_full_image")
 
@@ -627,8 +750,35 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertEqual(result["primary_dish_key"], "nimono")
         self.assertEqual(result["crop_refinement_status"], "applied")
         self.assertTrue(result["crop_refinement_applied"])
+        self.assertEqual(result["crop_refinement_trigger_reason"], "scene_dominant")
         self.assertEqual(normalized_payload["crop_selected_index"], 0)
         self.assertEqual(calls[2]["image_mode"], MODULE.CROP_SELECTED_IMAGE_MODE)
+
+    def test_process_single_image_skips_crop_for_high_confidence_concrete_primary(self) -> None:
+        coarse_payload = make_raw_result(
+            primary_dish_key="grilled_fish",
+            primary_dish_label_ja="焼き魚",
+            primary_dish_candidates=[
+                {"key": "grilled_fish", "label_ja": "焼き魚", "score": 0.86},
+            ],
+            scene_type="set_meal",
+            meal_style="set_meal",
+            serving_style="tray",
+            is_drink_only=False,
+            analysis_confidence=0.86,
+        )
+
+        result, normalized_payload, _raw_payload, calls = self.run_process_single_image(
+            [make_stage_result(coarse_payload)],
+            crop_candidates=[{"name": "center_large"}],
+        )
+
+        self.assertEqual(result["primary_dish_key"], "grilled_fish")
+        self.assertEqual(result["crop_refinement_status"], "not_triggered")
+        self.assertFalse(result["crop_refinement_triggered"])
+        self.assertEqual(result["crop_refinement_skip_reason"], "scene_only_not_enough")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(normalized_payload["crop_refinement_triggered"], False)
 
     def test_process_single_image_rescues_meat_dish_to_specific_candidate(self) -> None:
         coarse_payload = make_raw_result(
@@ -880,6 +1030,34 @@ class ExploreFoodLabelsTests(unittest.TestCase):
             self.assertEqual(payload["container_hint"], "bottle")
             self.assertTrue(payload["contains_can_or_bottle"])
             self.assertEqual(payload["review_bucket"], "unknown_likely_bottle")
+
+    def test_repair_normalized_record_recomputes_flags_and_crop_metadata(self) -> None:
+        repaired = MODULE.repair_normalized_record(
+            {
+                "schema_version": "food_label_exploration_v3",
+                "image_id": "img-repair",
+                "source_path": "photos/repair.jpg",
+                "analysis_confidence": 0.82,
+                "primary_dish_key": "drink",
+                "primary_dish_label_ja": "drink",
+                "scene_type": "drink_only",
+                "meal_style": "drink",
+                "serving_style": "cup_or_glass",
+                "is_drink_only": False,
+                "contains_multiple_dishes": True,
+                "is_packaged_food": True,
+                "is_menu_or_text_only": True,
+                "crop_refinement_status": "not_triggered",
+            }
+        )
+
+        self.assertEqual(repaired["primary_dish_label_ja"], "ドリンク")
+        self.assertTrue(repaired["is_drink_only"])
+        self.assertFalse(repaired["contains_multiple_dishes"])
+        self.assertFalse(repaired["is_packaged_food"])
+        self.assertFalse(repaired["is_menu_or_text_only"])
+        self.assertFalse(repaired["crop_refinement_triggered"])
+        self.assertEqual(repaired["crop_refinement_skip_reason"], "high_confidence_concrete_primary")
 
     def run_process_single_image(
         self,
