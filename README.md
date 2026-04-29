@@ -17,6 +17,7 @@
 - [実装進捗](docs/product/progress.md): 今どこまでできているか、何が未実装か
 
 ### 実装向けドキュメント
+- [Codex コンテキストマップ](docs/engineering/codex-context-map.md): Codex が task ごとに読むべき最小 context の索引
 - [技術仕様](docs/architecture/tech-spec.md): current implementation と runtime assumptions
 - [画面設計](docs/ux/screen-designs.md): current screen behavior
 - [ユーザーフロー](docs/ux/user-flows.md): current implemented flows
@@ -29,13 +30,17 @@
 
 ### ドキュメント入口
 - [docs/index.md](docs/index.md): 誰がどの文書を読むかの案内板
-- [AGENTS.md](AGENTS.md): Codex の入口と文書作成ルール
+- [AGENTS.md](AGENTS.md): Codex の固定ルール
+- [TASKS.md](TASKS.md): 現在見えている作業候補
+- [PLANS.md](PLANS.md): 大きめ作業の短い実装方針
 
 ## プロジェクト構成
 
 ```text
 dining-memory-app/
 ├── AGENTS.md
+├── TASKS.md
+├── PLANS.md
 ├── docs/
 │   ├── index.md
 │   ├── product/

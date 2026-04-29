@@ -4,12 +4,13 @@
 - Purpose: entry point for reading and maintaining project documentation.
 - Audience: Codex, contributors, and future maintainers.
 - Update trigger: add, rename, or deprecate any canonical document.
-- Related docs: [AGENTS.md](../AGENTS.md)
+- Related docs: [AGENTS.md](../AGENTS.md), [docs/engineering/codex-context-map.md](./engineering/codex-context-map.md)
 
 ## Read First
 1. [AGENTS.md](../AGENTS.md)
-2. This index
-3. The document that matches the task category
+2. [docs/engineering/codex-context-map.md](./engineering/codex-context-map.md)
+3. This index when you need the broader documentation map
+4. The document that matches the task category
 
 ## Reader Paths
 
@@ -18,6 +19,7 @@
 - [docs/product/progress.md](./product/progress.md): 今どこまでできているか、何が未実装か
 
 ### For Implementation
+- [docs/engineering/codex-context-map.md](./engineering/codex-context-map.md): task ごとに読むべき最小 context の索引
 - [docs/architecture/tech-spec.md](./architecture/tech-spec.md): current implementation and runtime assumptions
 - [docs/ux/screen-designs.md](./ux/screen-designs.md): current screen behavior
 - [docs/ux/user-flows.md](./ux/user-flows.md): current implemented flows
@@ -31,6 +33,9 @@
 
 ### Repository
 - [README.md](../README.md): setup, scripts, and high-level onboarding.
+- [AGENTS.md](../AGENTS.md): Codex fixed working rules.
+- [TASKS.md](../TASKS.md): current task candidates and rough priority.
+- [PLANS.md](../PLANS.md): short implementation plans for larger work.
 
 ### Product
 - [Overview](./product/overview.md): product vision, target user, MVP scope, and non-goals.
@@ -47,6 +52,7 @@
 - [User Flows](./ux/user-flows.md): main journeys, exception flows, and UX rules.
 
 ### Engineering
+- [Codex Context Map](./engineering/codex-context-map.md): task-specific reading map for reducing unnecessary context use.
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Codex Workflow](./engineering/codex-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
 - [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
