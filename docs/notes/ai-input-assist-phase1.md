@@ -9,10 +9,12 @@
 ## Summary
 このメモは canonical docs より下位の task-local memo です。  
 判断に迷った場合は、まず `AGENTS.md` と `docs/index.md` から辿る canonical docs、その次に現在の `src/` 実装を優先します。
+この文書は Phase 1 導入時点の historical baseline です。現在は Settings の opt-in、meal input assist model status、real local runtime path が後続タスクで追加されています。
 
 ## Current State
 - review 画面に、ユーザー起点で実行する `AIで候補を提案` セクションを追加する。
 - Phase 1 では外部 AI 送信を行わず、差し替え可能な local mock provider を使う。
+- 現在の実装では、Settings の user opt-in と app-local model / projector が揃う build で `llama.rn` の real local runtime path も使える。
 - `src/database/models/schema.ts` は現状 repo に存在しない。
 - active schema source は `src/database/services/localDatabase.ts` とする。
 
@@ -21,7 +23,7 @@
 - 候補は `料理名` `料理ジャンル` の 2 系統を扱う。
 - 候補はタップ時に対応フィールドへだけ反映し、既存入力を自動上書きしない。
 - save 時に保存してよい AI 関連情報は `ai_source` と `ai_confidence` のみとし、候補一覧や生レスポンスは保存しない。
-- `AI無効` の理由表示は review 画面だけに出し、Settings 画面は Phase 1 では増やさない。
+- Phase 1 時点では `AI無効` の理由表示は review 画面だけだったが、現在は Settings で model status と local runtime status も確認できる。
 
 ## Next Steps or Open Questions
 - 実 AI 接続時は provider と policy を差し替え、外部送信の明示的 consent gate を追加する。

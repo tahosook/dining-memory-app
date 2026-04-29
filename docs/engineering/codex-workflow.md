@@ -4,18 +4,19 @@
 - Purpose: define how Codex should work in this repository.
 - Audience: Codex and any agentic coding workflow.
 - Update trigger: when the team changes how it wants agents to read, edit, or verify work.
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/engineering/coding-standards.md](coding-standards.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/engineering/codex-context-map.md](codex-context-map.md), [docs/index.md](../index.md), [docs/engineering/coding-standards.md](coding-standards.md)
 
 ## Workflow
 1. Read `AGENTS.md`.
-2. Open `docs/index.md`.
-3. Read the smallest set of canonical docs needed for the task.
-4. Confirm the source of truth for the area you are changing.
-5. Inspect the relevant source files before editing.
-6. Identify at least one existing implementation pattern to follow when possible.
-7. Make the smallest safe change that solves the problem.
-8. Update tests and documentation when behavior changes.
-9. Verify the result.
+2. Open `docs/engineering/codex-context-map.md`.
+3. Open `docs/index.md` only when you need the broader documentation map.
+4. Read the smallest set of docs, source files, and tests needed for the task.
+5. Confirm the source of truth for the area you are changing.
+6. Inspect the relevant source files before editing.
+7. Identify at least one existing implementation pattern to follow when possible.
+8. Make the smallest safe change that solves the problem.
+9. Update tests and documentation when behavior changes.
+10. Verify the result.
 
 ## Task Shape
 - Prefer bounded tasks with one clear outcome.

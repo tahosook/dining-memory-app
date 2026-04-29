@@ -8,21 +8,20 @@
 
 ## Summary
 このスパイクでは、AI 入力補助を Settings の明示許可にぶら下げ、provider 層を `mock` と `local-runtime-prototype` で切り替えられる形にした。  
-current Expo SDK 55 / RN 0.83 の repo では、`llama.rn` を使う real on-device vision path まで接続した。  
+current Expo SDK 55 / RN 0.83 の repo では、`llama.rn` を使う meal input assist の real on-device vision path まで接続した。
 ただし `local-runtime-prototype` は supported device/runtime と app-local model / projector が揃ったときだけ `ready` を返し、それ以外は `unavailable` を返す。
-text-first の narrow path としては `llama.rn` を導入し、semantic search 向け embeddings / rerank capability を `src/ai/runtime/` に追加した。  
-model asset は repo に含めず、app-local の `documentDirectory/ai-models/semantic-search.gguf` がある場合だけ ready と判定する。
+この note には text-first / semantic search の探索内容も含まれるが、current feature path では semantic search / rerank は有効化していない。
 
 ## Current State
 - `app_settings` に `ai_input_assist_enabled` を保存する。
 - review 画面の AI 入力補助は、Settings が off の場合は `設定で未許可` として無効化する。
 - Settings が on でも、supported device/runtime と app-local model / projector が揃わない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返す。
-- Settings は `Local AI Runtime Status` で semantic search と meal input assist の ready / unavailable、reason、expected path を表示する。
+- Settings は `Local AI Runtime Status` で meal input assist の ready / unavailable、reason、expected path を表示する。
 - save flow、候補採用、`ai_source` / `ai_confidence` の保存ルールは Phase 1 と同じで維持する。
 - `llama.rn` は dependency と minimal native config に加えて、meal input assist 向けの multimodal provider まで接続した。
 - meal input assist の fixed path は `documentDirectory/ai-models/meal-input-assist.gguf` と `documentDirectory/ai-models/meal-input-assist.mmproj` を使う。
-- text embedding / rerank capability は `src/ai/runtime/` で availability 判定と provider の最小実装を持つ。
-- model asset は developer が app-local path に置く前提で、repo 同梱、app 内 download、path 上書き UI は current scope に入れない。
+- semantic search / rerank は historical / optional exploration として扱い、current app behavior では `search_vectors` を actively read / write しない。
+- meal input assist model asset は developer が app-local path に置くか Settings から明示ダウンロードする前提で、path 上書き UI は current scope に入れない。
 
 ## Runtime Comparison
 - `mock`
@@ -30,7 +29,7 @@ model asset は repo に含めず、app-local の `documentDirectory/ai-models/s
   - 実 AI ではないため、本フェーズの最終 provider にはしない。
 - `local-runtime-prototype`
   - 目標の方向性に合う。
-  - text-first path では `llama.rn` により embeddings / rerank の narrow path を持てる。
+  - historical exploration として text-first embeddings / rerank の narrow path も検討した。
   - vision input assist としても real provider を持つが、multimodal model / projector を app-local に置かない限り review 向けには blocker を返す。
 - 外部 API
   - 今回の local-first / no external send 方針に反するため、このスパイクでは対象外。

@@ -28,7 +28,7 @@
 - `Settings` for data, privacy, and app controls.
 
 ## Runtime Assumptions
-- Local development uses Node.js 20.19+.
+- Local development uses Node.js 25.9.x as the recommended runtime; CI currently runs Node.js 25.9.0.
 - Expo SDK 55 keeps the New Architecture enabled at all times.
 - App data lives primarily on the device.
 - Captured photos should be resized before save.

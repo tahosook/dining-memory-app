@@ -70,8 +70,7 @@
 - If a document is temporary or historical, place it under `docs/notes/` or `docs/deprecated/` and mark it clearly.
 
 ## Suggested Reading Paths
-- Product direction: Product Overview -> Product Progress
-- Current implementation review: Architecture -> UX -> Domain -> Engineering
-- New feature work: Product -> UX -> Domain -> Engineering
-- Bug fix: Engineering -> relevant UX or Domain doc -> notes if needed
-- Refactor: Engineering -> Architecture -> relevant implementation files
+- Codex task: AGENTS -> Codex Context Map -> only the docs, source, and tests needed for the task.
+- Product direction: Product Overview -> Product Progress.
+- Setup or scripts: README -> the task-specific canonical doc.
+- Broad documentation review: use this index after the context map when the task truly spans categories.
