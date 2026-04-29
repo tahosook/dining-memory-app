@@ -570,11 +570,8 @@ const CameraView: React.FC<CameraViewProps> = ({
   return (
     <ErrorBoundary>
       <SafeAreaView style={styles.container} edges={safeAreaEdges}>
-        {!captureReview ? (
-          <ExpoCameraView style={styles.camera} facing={facing} mode="picture" ratio="16:9" ref={cameraRef} />
-        ) : (
-          <View style={styles.cameraReviewBackdrop} />
-        )}
+        <ExpoCameraView style={styles.camera} facing={facing} mode="picture" ratio="16:9" ref={cameraRef} />
+        {captureReview ? <View style={styles.cameraReviewBackdrop} pointerEvents="none" /> : null}
 
         <View style={styles.overlay}>
           <TopBar onClosePress={onClose} onFlipPress={onFlipCamera} />
@@ -645,10 +642,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   camera: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   cameraReviewBackdrop: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundColor: Colors.black,
   },
   overlay: {

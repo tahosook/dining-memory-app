@@ -33,10 +33,14 @@ jest.mock('../src/hooks/cameraCapture', () => ({
   useMealInputAssist: jest.fn(),
 }));
 
-jest.mock('expo-camera', () => ({
-  CameraView: ({ children }: { children: React.ReactNode }) => <div data-testid="camera-view">{children}</div>,
-  useCameraPermissions: jest.fn(),
-}));
+jest.mock('expo-camera', () => {
+  const ReactModule = require('react');
+
+  return {
+    CameraView: jest.fn(({ children, ...props }) => ReactModule.createElement('View', { ...props, testID: 'camera-view' }, children)),
+    useCameraPermissions: jest.fn(),
+  };
+});
 
 const mockCameraRef: { current: unknown } = {
   current: null,
@@ -425,7 +429,7 @@ describe('CameraScreen', () => {
       expect(queryByText('料理名やメニュー名を入れておくと、あとで探しやすくなります。')).toBeNull();
       expect(queryByText('店名・施設名・自宅など、食べた場所を記録できます。')).toBeNull();
       expect(queryByText('ボタンをタップして撮影')).toBeNull();
-      expect(queryByTestId('camera-view')).toBeNull();
+      expect(queryByTestId('camera-view')).toBeTruthy();
     });
 
     test('calls cuisine type change handler when a cuisine option is pressed', async () => {
