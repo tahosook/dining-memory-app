@@ -52,6 +52,7 @@
 - Do not add new OS permissions without documenting the feature need, data stored, and user value.
 - Keep local storage minimal: store only data needed for the user-facing feature or an explicitly planned capability.
 - Do not log secrets, photo URIs, location data, full search text, or raw AI output in production-like code.
+- When changing capture, location, export, sharing, or AI paths, check logs with a targeted search such as `rg -n "console\\.(log|warn|error)" src`.
 - If external AI, backup, or export behavior is added, make data transfer explicit and opt-in by default.
 - Prefer existing platform or project capabilities before adding security-related dependencies with broad native access.
 
@@ -61,6 +62,8 @@
 - Avoid one-off helpers and wrapper layers that make the code harder to trace.
 - Keep behavior changes, cleanup changes, and formatting changes separate when possible.
 - Make the changed path easier to understand, not just different.
+- Keep historical plans and improvement notes clearly marked when they become stale; current rules belong in canonical docs linked from `docs/index.md`.
+- Keep `README.md` as a short entry point and put detailed rules in the matching canonical doc.
 
 ## Testing Rules
 - Add or update tests when behavior changes.

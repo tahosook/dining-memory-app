@@ -1,31 +1,33 @@
 # MVP Completion Plan
 
+> **古い計画です。現在は実装済み / 方針変更済みの内容を含みます。**
+>
+> この文書は historical reference として残しています。current source of truth は
+> [docs/index.md](docs/index.md) から辿る canonical docs と `src/` の実装です。
+> 特に Search は現在、結果カードから Records stack の `MealDetail` へ navigation する実装です。
+> Search Alert 前提、新規詳細画面なし前提、共通モーダル化計画を current plan として扱わないでください。
+
 ## Meta
-- Purpose: MVP 完了に向けた直近の実装計画をまとめる。
+- Purpose: MVP 完了に向けた過去の実装計画を historical reference として残す。
 - Audience: オーナー、実装担当、Codex。
 - Update trigger: 次の実装優先順位または実装方針が変わったとき。
 - Related docs: [AGENTS.md](AGENTS.md), [docs/product/overview.md](docs/product/overview.md), [docs/product/progress.md](docs/product/progress.md), [docs/ux/user-flows.md](docs/ux/user-flows.md), [docs/ux/screen-designs.md](docs/ux/screen-designs.md)
 
 ## Summary
-MVP の「撮る -> 探す -> 開く -> 直す」と「失敗時に詰まらない」を締めるため、次の 2 項目を実装する。
+この計画で扱っていた MVP の「撮る -> 探す -> 開く -> 直す」と「失敗時に詰まらない」は、現在の実装では Records stack の詳細画面、Search / Stats の state 表示として反映済みです。
 
-1. Search 結果から記録を開けるようにする
-2. Search / Stats の loading / error / zero-result 表示を整える
-
-この計画では、新しい詳細画面や新規 DB スキーマは追加しない。既存の Records の編集・削除体験を Search に広げ、状態表示を明示することで MVP を完成形に近づける。
+この文書の個別実装案は current task list ではありません。必要な場合は [docs/product/progress.md](docs/product/progress.md)、[docs/ux/screen-designs.md](docs/ux/screen-designs.md)、[docs/ux/user-flows.md](docs/ux/user-flows.md) を確認してください。
 
 ## Current State
-- Search は検索実行と一覧表示まではできるが、結果カードから記録を開けない。
-- Search は失敗時のユーザー向けエラー表示がなく、初回 loading と zero-result の区別も弱い。
-- Stats は集計表示はできるが、失敗時は console 出力だけで、ユーザー向け回復導線がない。
-- Records には Alert ベースの記録操作と編集モーダルがあり、Search 側で再利用できる土台がある。
+- Search の結果カードは Records stack の `MealDetail` へ navigation する。
+- Search は loading / error / zero-result を区別し、更新失敗時も前回結果を残す。
+- Stats は loading / error を表示し、更新失敗時も前回 summary を残す。
+- Records には専用の詳細画面があり、編集・削除・共有は detail screen で行う。
 
 ## Decisions / Rules
-- Search からの「開く」は新しい詳細画面ではなく、Records と同等の Alert + 編集 / 削除で実装する。
-- 編集 UI は Search と Records で同じものを使うため、共通の `MealEditModal` に切り出す。
-- Search / Stats の状態表示は、`loading` `error` `zero-result` を区別し、初回ロード前の誤表示を避ける。
-- Service / DB schema / navigation shell の変更は行わない。
-- 新規依存は追加しない。
+- この文書の Decisions は過去の実装判断であり、current rules ではありません。
+- 現在の Search からの「開く」は Records stack の `MealDetail` navigation を使います。
+- Service / DB schema / navigation shell を不用意に変えない方針は引き続き canonical docs 側を優先します。
 
 ## Implementation Plan
 ### 1. Search 結果から記録を開く

@@ -81,12 +81,15 @@
 - Backup or export flows exposing more data than the user expects.
 
 ## Documentation Update Rules
+- Keep `README.md` as an onboarding entry point; move detailed operational rules to the matching canonical document and link to it.
+- Mark historical plans or improvement notes as stale, done, or obsolete when implementation catches up so they are not mistaken for current rules.
 - If product scope changes, update `docs/product/overview.md`.
 - If a screen or interaction changes, update `docs/ux/*`.
 - If schema or storage changes, update `docs/domain/database-design.md`.
 - If coding conventions change, update `docs/engineering/coding-standards.md`.
 - If the way Codex should work changes, update this file and `AGENTS.md`.
 - If a change affects permissions, local storage, export, backup, or external data transfer, update `docs/architecture/tech-spec.md`.
+- If a change touches photo paths, location, notes, raw AI output, export, or sharing, verify production-like logs do not expose sensitive user data.
 
 ## Definition of Done
 - Summarize what changed.

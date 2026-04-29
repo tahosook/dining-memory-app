@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import * as MediaLibrary from 'expo-media-library';
@@ -49,25 +49,13 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   // 撮影中の状態管理
   const isTakingPhoto = takingPhoto;
 
-  // Cleanup on unmount
-  useEffect(() => {
-    const cameraCurrent = cameraRef.current;
-    return () => {
-      if (cameraCurrent) {
-        console.log('Camera cleanup on hook unmount');
-      }
-    };
-  }, []);
-
   // メディアライブラリへの保存
   const savePhotoToMediaLibrary = useCallback(async (photoUri: string): Promise<boolean> => {
     try {
-      console.log('Saving photo to MediaLibrary...');
       await MediaLibrary.createAssetAsync(photoUri);
-      console.log('✅ Successfully saved photo to user\'s photo gallery!');
       return true;
-    } catch (mediaError: unknown) {
-      console.warn('Media library save failed:', mediaError instanceof Error ? mediaError.message : mediaError);
+    } catch {
+      console.warn('Media library save failed.');
       return false;
     }
   }, []);
@@ -76,9 +64,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   const cleanupTempFile = useCallback(async (photoUri: string) => {
     try {
       await deleteAsync(photoUri);
-      console.log('Temp file cleaned up');
-    } catch (cleanupError: unknown) {
-      console.warn('Cleanup failed:', cleanupError instanceof Error ? cleanupError.message : cleanupError);
+    } catch {
+      console.warn('Temporary photo cleanup failed.');
     }
   }, []);
 
@@ -177,8 +164,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         latitude: currentPosition.coords.latitude,
         longitude: currentPosition.coords.longitude,
       };
-    } catch (locationError: unknown) {
-      console.warn('Location lookup skipped:', locationError instanceof Error ? locationError.message : locationError);
+    } catch {
+      console.warn('Location lookup skipped.');
       return {};
     }
   }, []);
@@ -229,13 +216,10 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
       if (!photo) throw new Error('写真の撮影に失敗しました');
 
-      console.log('Photo captured successfully:', photo.uri);
-      console.log('Photo details:', { width: photo.width, height: photo.height });
-
       beginReview(photo);
 
-    } catch (error) {
-      console.error('写真撮影エラー:', error);
+    } catch {
+      console.error('Photo capture failed.');
       Alert.alert('エラー', '写真の撮影に失敗しました。再度お試しください。');
     } finally {
       setTakingPhoto(false);
@@ -324,11 +308,11 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
       setCaptureReview(null);
       navigateToRecords();
-    } catch (error) {
+    } catch {
       if (stablePhotoUri && stablePhotoUri !== captureReview.photoUri) {
         await cleanupTempFile(stablePhotoUri);
       }
-      console.error('記録保存エラー:', error);
+      console.error('Meal save failed.');
       Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
     }
   }, [

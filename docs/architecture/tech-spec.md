@@ -8,7 +8,7 @@
 
 ## Current Stack
 - Expo SDK 55 on React Native 0.83 / React 19.2
-- TypeScript 6
+- TypeScript 5.9.x
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
 - Expo Camera, expo-file-system, expo-location, expo-media-library, and related native modules

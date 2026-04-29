@@ -23,13 +23,13 @@ export const useCameraPermission = (): CameraPermissionState => {
   const requestMediaLibraryPermission = useCallback(async (): Promise<void> => {
     try {
       await MediaLibrary.getPermissionsAsync();
-    } catch (mediaError) {
-      console.warn('Media library permission check failed (expected on some Expo Go versions):', mediaError);
+    } catch {
+      console.warn('Media library permission check failed.');
     }
   }, []);
 
   const handlePermissionError = useCallback((error: unknown): void => {
-    console.error('Permission request error:', error);
+    console.error('Permission request failed.');
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage.includes('camera')) {
@@ -47,7 +47,6 @@ export const useCameraPermission = (): CameraPermissionState => {
     }
 
     try {
-      console.log('Requesting camera permission...');
       const permissionResult = await requestPermission();
 
       if (permissionResult.granted) {
