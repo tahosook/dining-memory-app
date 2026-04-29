@@ -87,6 +87,7 @@ describe('RecordsScreen', () => {
         meal_name: 'カレー',
         meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
         is_homemade: true,
+        cooking_level: 'quick',
         photo_path: 'file:///curry.jpg',
         is_deleted: false,
         created_at: 1,
@@ -94,10 +95,12 @@ describe('RecordsScreen', () => {
       },
     ]);
 
-    const { findByTestId } = render(<RecordsScreen />);
+    const { findByTestId, findByText, queryByText } = render(<RecordsScreen />);
     await triggerLatestFocus();
 
     expect(await findByTestId('meal-image-1')).toBeTruthy();
+    expect(await findByText('時短')).toBeTruthy();
+    expect(queryByText('quick')).toBeNull();
   });
 
   test('reloads meals when focus is regained', async () => {

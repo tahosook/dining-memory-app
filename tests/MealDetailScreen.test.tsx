@@ -32,7 +32,7 @@ const baseMeal = {
   location_name: '自宅',
   cuisine_type: '和食',
   notes: '焼き加減がよかった',
-  cooking_level: 'easy' as const,
+  cooking_level: 'quick' as const,
   is_deleted: false,
   created_at: 1,
   updated_at: 1,
@@ -76,6 +76,31 @@ describe('MealDetailScreen', () => {
     expect(getByTestId('meal-detail-image').props.source).toEqual({ uri: 'file:///full-photo.jpg' });
   });
 
+  test('shows homemade style labels and legacy values safely', () => {
+    const firstRender = render(<MealDetailScreen {...createProps()} />);
+
+    expect(firstRender.getByText('自炊スタイル')).toBeTruthy();
+    expect(firstRender.getByText('時短')).toBeTruthy();
+
+    firstRender.unmount();
+
+    const secondRender = render(<MealDetailScreen {...createProps({
+      route: {
+        key: 'MealDetail-test',
+        name: 'MealDetail',
+        params: {
+          meal: {
+            ...baseMeal,
+            cooking_level: 'hard' as unknown as typeof baseMeal.cooking_level,
+          },
+        },
+      },
+    })}
+    />);
+
+    expect(secondRender.getByText('本格')).toBeTruthy();
+  });
+
   test('deletes the meal from the detail screen and returns to the list', async () => {
     const props = createProps();
     (MealService.softDeleteMeal as jest.Mock).mockResolvedValue(undefined);
@@ -92,6 +117,31 @@ describe('MealDetailScreen', () => {
 
     expect(MealService.softDeleteMeal).toHaveBeenCalledWith('meal-1');
     expect(props.navigation.goBack).toHaveBeenCalled();
+  });
+
+  test('saves the selected homemade style from the edit modal', async () => {
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      cooking_level: 'gourmet',
+    });
+
+    const { getAllByText, getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+
+    expect(getAllByText('自炊スタイル').length).toBeGreaterThan(0);
+    expect(getByTestId('detail-edit-cooking-level-quick')).toBeTruthy();
+    expect(getByText('日常')).toBeTruthy();
+    expect(getByText('本格')).toBeTruthy();
+
+    fireEvent.press(getByTestId('detail-edit-cooking-level-gourmet'));
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', expect.objectContaining({
+        cooking_level: 'gourmet',
+      }));
+    });
   });
 
   test('opens the share composer with photo preview and shares the edited text', async () => {

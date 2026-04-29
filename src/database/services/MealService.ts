@@ -1,5 +1,6 @@
 import { getDatabase, getInMemoryMeals, initializeDatabase, isUsingNativeDatabase, mapRowToMeal, setInMemoryMeals, type PersistedMealRow } from './localDatabase';
-import type { Meal } from '../../types/MealTypes';
+import type { CookingLevel, Meal } from '../../types/MealTypes';
+import { inferCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 
 export interface CreateMealData {
   meal_name: string;
@@ -8,7 +9,7 @@ export interface CreateMealData {
   ai_confidence?: number;
   ai_source?: string;
   notes?: string;
-  cooking_level?: string;
+  cooking_level?: CookingLevel | string;
   is_homemade: boolean;
   photo_path: string; // Caller must provide a stable, displayable URI.
   photo_thumbnail_path?: string;
@@ -25,7 +26,7 @@ export interface SearchFilters {
   dateTo?: Date;
   cuisine_type?: string;
   is_homemade?: boolean;
-  cooking_level?: string;
+  cooking_level?: CookingLevel | string;
   location_name?: string;
   text?: string;
 }
@@ -58,7 +59,7 @@ function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): Persis
     ai_confidence: data.ai_confidence ?? null,
     ai_source: data.ai_source ?? null,
     notes: data.notes ?? null,
-    cooking_level: data.cooking_level ?? null,
+    cooking_level: resolveCookingLevelForSave(data) ?? null,
     is_homemade: data.is_homemade ? 1 : 0,
     photo_path: data.photo_path,
     photo_thumbnail_path: data.photo_thumbnail_path ?? null,
@@ -178,6 +179,19 @@ function resolveNearbyLocationName(rows: PersistedMealRow[], data: CreateMealDat
   return nearbyRow?.location_name ?? data.location_name;
 }
 
+function resolveCookingLevelForSave(data: Pick<CreateMealData, 'cooking_level' | 'is_homemade' | 'meal_name' | 'cuisine_type' | 'notes'>): CookingLevel | undefined {
+  if (!data.is_homemade) {
+    return undefined;
+  }
+
+  return normalizeCookingLevel(data.cooking_level) ?? inferCookingLevel({
+    mealName: data.meal_name,
+    cuisineType: data.cuisine_type,
+    notes: data.notes,
+    isHomemade: data.is_homemade,
+  });
+}
+
 async function getAllRows(): Promise<PersistedMealRow[]> {
   await initializeDatabase();
 
@@ -269,8 +283,11 @@ function applyNonTextFilters(rows: PersistedMealRow[], filters: SearchFilters): 
       return false;
     }
 
-    if (filters.cooking_level && row.cooking_level !== filters.cooking_level) {
-      return false;
+    if (filters.cooking_level) {
+      const filterCookingLevel = normalizeCookingLevel(filters.cooking_level);
+      if (!filterCookingLevel || normalizeCookingLevel(row.cooking_level) !== filterCookingLevel) {
+        return false;
+      }
     }
 
     if (filters.location_name && !(row.location_name ?? '').toLowerCase().includes(filters.location_name.toLowerCase())) {

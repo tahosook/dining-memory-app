@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { CuisineTypeSelector } from './CuisineTypeSelector';
+import type { CookingLevel } from '../../types/MealTypes';
+import { formatCookingLevel } from '../../utils/cookingLevel';
 
 export type MealEditDraft = {
   mealName: string;
@@ -18,6 +20,7 @@ export type MealEditDraft = {
   location: string;
   notes: string;
   isHomemade: boolean;
+  cookingLevel: CookingLevel | '';
 };
 
 export type MealEditModalProps = {
@@ -41,6 +44,13 @@ export function MealEditModal({
 }: MealEditModalProps) {
   const updateDraft = <Key extends keyof MealEditDraft,>(key: Key, value: MealEditDraft[Key]) => {
     onChange({ ...draft, [key]: value });
+  };
+  const updateHomemade = (value: boolean) => {
+    onChange({
+      ...draft,
+      isHomemade: value,
+      cookingLevel: value ? draft.cookingLevel : '',
+    });
   };
 
   return (
@@ -79,10 +89,32 @@ export function MealEditModal({
             <Text style={styles.switchLabel}>自炊として記録</Text>
             <Switch
               value={draft.isHomemade}
-              onValueChange={(value) => updateDraft('isHomemade', value)}
+              onValueChange={updateHomemade}
               testID={`${testIDPrefix}-homemade-switch`}
             />
           </View>
+          {draft.isHomemade ? (
+            <View style={styles.styleBlock}>
+              <Text style={styles.fieldLabel}>自炊スタイル</Text>
+              <View style={styles.segmentedRow}>
+                {(['quick', 'daily', 'gourmet'] as const).map((level) => {
+                  const selected = draft.cookingLevel === level;
+                  return (
+                    <TouchableOpacity
+                      key={level}
+                      style={[styles.segmentButton, selected ? styles.segmentButtonSelected : null]}
+                      onPress={() => updateDraft('cookingLevel', level)}
+                      testID={`${testIDPrefix}-cooking-level-${level}`}
+                    >
+                      <Text style={[styles.segmentButtonText, selected ? styles.segmentButtonTextSelected : null]}>
+                        {formatCookingLevel(level)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
           <View style={styles.buttonRow}>
             <TouchableOpacity
               style={styles.cancelButton}
@@ -152,6 +184,40 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 15,
     color: Colors.text,
+  },
+  styleBlock: {
+    gap: 8,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  segmentedRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  segmentButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d9d9d9',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+  },
+  segmentButtonSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: '#eaf4ff',
+  },
+  segmentButtonText: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  segmentButtonTextSelected: {
+    color: Colors.primary,
+    fontWeight: '700',
   },
   buttonRow: {
     flexDirection: 'row',

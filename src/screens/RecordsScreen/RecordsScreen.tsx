@@ -17,6 +17,7 @@ import { MealService } from '../../database/services/MealService';
 import type { Meal } from '../../types/MealTypes';
 import type { RecordsStackParamList } from '../../navigation/types';
 import { getMealListImageUri } from '../../utils/mealImage';
+import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 
 interface MealGroup {
   date: string;
@@ -48,6 +49,7 @@ const MealGroupHeader: React.FC<{ item: MealGroup }> = ({ item }) => (
 
 const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
   const imageUri = getMealListImageUri(item);
+  const cookingLevel = item.is_homemade ? normalizeCookingLevel(item.cooking_level) : undefined;
 
   return (
     <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)} testID={`meal-card-${item.id}`}>
@@ -99,9 +101,9 @@ const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
             </Text>
           </View>
 
-          {item.cooking_level ? (
+          {cookingLevel ? (
             <View style={[styles.tag, styles.cookingLevelTag]}>
-              <Text style={styles.tagText}>{item.cooking_level}</Text>
+              <Text style={styles.tagText}>{formatCookingLevel(cookingLevel)}</Text>
             </View>
           ) : null}
         </View>

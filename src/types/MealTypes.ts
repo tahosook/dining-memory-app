@@ -146,7 +146,7 @@ export interface AppSetting {
 // Union Types
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
-export type CookingLevel = 'easy' | 'medium' | 'hard';
+export type CookingLevel = 'quick' | 'daily' | 'gourmet';
 
 export type PriceRange = 'low' | 'medium' | 'high';
 

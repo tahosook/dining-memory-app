@@ -20,6 +20,7 @@ import { MealService } from '../../database/services/MealService';
 import type { Meal } from '../../types/MealTypes';
 import type { RecordsStackParamList } from '../../navigation/types';
 import { getMealDetailImageUri } from '../../utils/mealImage';
+import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 
 type MealDetailScreenProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
 
@@ -29,6 +30,7 @@ const emptyEditDraft: MealEditDraft = {
   location: '',
   notes: '',
   isHomemade: true,
+  cookingLevel: '',
 };
 
 function createMealEditDraft(meal: Meal): MealEditDraft {
@@ -38,6 +40,7 @@ function createMealEditDraft(meal: Meal): MealEditDraft {
     location: meal.location_name ?? '',
     notes: meal.notes ?? '',
     isHomemade: meal.is_homemade,
+    cookingLevel: normalizeCookingLevel(meal.cooking_level) ?? '',
   };
 }
 
@@ -102,6 +105,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         location_name: editDraft.location || undefined,
         notes: editDraft.notes || undefined,
         is_homemade: editDraft.isHomemade,
+        cooking_level: editDraft.isHomemade ? editDraft.cookingLevel || undefined : undefined,
       });
 
       if (updatedMeal) {
@@ -225,7 +229,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
           <DetailRow label="料理ジャンル" value={meal.cuisine_type ?? '未設定'} />
           <DetailRow label="メモ" value={meal.notes?.trim() ? meal.notes : '未設定'} />
           <DetailRow label="食事タイプ" value={meal.is_homemade ? '自家製' : '外食'} />
-          <DetailRow label="調理レベル" value={meal.cooking_level ?? '未設定'} />
+          <DetailRow label="自炊スタイル" value={meal.is_homemade ? formatCookingLevel(meal.cooking_level) : '未設定'} />
         </View>
       </ScrollView>
 

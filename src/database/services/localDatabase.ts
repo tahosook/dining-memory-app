@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { openDatabaseSync, type SQLiteDatabase } from 'expo-sqlite';
 import type { Meal } from '../../types/MealTypes';
+import { normalizeCookingLevel } from '../../utils/cookingLevel';
 
 export interface PersistedMealRow {
   id: string;
@@ -235,7 +236,7 @@ export function mapRowToMeal(row: PersistedMealRow): Meal {
     ai_confidence: row.ai_confidence ?? undefined,
     ai_source: row.ai_source ?? undefined,
     notes: row.notes ?? undefined,
-    cooking_level: (row.cooking_level ?? undefined) as Meal['cooking_level'],
+    cooking_level: normalizeCookingLevel(row.cooking_level),
     is_homemade: Boolean(row.is_homemade),
     photo_path: row.photo_path,
     photo_thumbnail_path: row.photo_thumbnail_path ?? undefined,

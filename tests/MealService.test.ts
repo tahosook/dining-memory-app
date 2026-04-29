@@ -174,4 +174,56 @@ describe('MealService', () => {
     expect(updated?.notes).toBe('更新後');
     expect(updated?.tags).toBe('スパイス');
   });
+
+  test('does not save cooking level for eating out meals', async () => {
+    const meal = await MealService.createMeal({
+      meal_name: 'カレー',
+      is_homemade: false,
+      cooking_level: 'daily',
+      photo_path: 'file:///outside-curry.jpg',
+      meal_datetime: new Date('2026-04-15T19:00:00+09:00'),
+    });
+
+    expect(meal.cooking_level).toBeUndefined();
+  });
+
+  test('infers homemade style for common homemade meals', async () => {
+    const curry = await MealService.createMeal({
+      meal_name: 'カレー',
+      is_homemade: true,
+      photo_path: 'file:///curry-style.jpg',
+      meal_datetime: new Date('2026-04-16T19:00:00+09:00'),
+    });
+    const natto = await MealService.createMeal({
+      meal_name: '納豆ご飯',
+      is_homemade: true,
+      photo_path: 'file:///natto.jpg',
+      meal_datetime: new Date('2026-04-17T07:00:00+09:00'),
+    });
+    const roastBeef = await MealService.createMeal({
+      meal_name: 'ローストビーフ',
+      is_homemade: true,
+      photo_path: 'file:///roast-beef.jpg',
+      meal_datetime: new Date('2026-04-18T19:00:00+09:00'),
+    });
+
+    expect(curry.cooking_level).toBe('daily');
+    expect(natto.cooking_level).toBe('quick');
+    expect(roastBeef.cooking_level).toBe('gourmet');
+  });
+
+  test('clears cooking level when a homemade meal is updated to eating out', async () => {
+    const created = await MealService.createMeal({
+      meal_name: 'カレー',
+      is_homemade: true,
+      photo_path: 'file:///curry-clear.jpg',
+      meal_datetime: new Date('2026-04-19T19:00:00+09:00'),
+    });
+
+    const updated = await MealService.updateMeal(created.id, {
+      is_homemade: false,
+    });
+
+    expect(updated?.cooking_level).toBeUndefined();
+  });
 });
