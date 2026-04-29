@@ -41,6 +41,7 @@
 - Tapping a record card should move directly to a dedicated detail screen instead of opening an alert.
 - The detail screen should show a visibly larger photo than the list card, preferring `photo_path` over `photo_thumbnail_path`.
 - Edit and delete entry points should live on the detail screen.
+- The detail edit modal should show the saved photo and allow a user-triggered right 90-degree rotation that updates the saved image file.
 - The detail screen should also provide an explicit user-triggered share path for posting to X through the OS share sheet.
 
 ## Search Screen

@@ -6,6 +6,7 @@ import * as Sharing from 'expo-sharing';
 import { MealDetailScreen } from '../src/screens/RecordsScreen/MealDetailScreen';
 import type { RecordsStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
+import { rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
@@ -19,7 +20,22 @@ jest.mock('expo-sharing', () => ({
   shareAsync: jest.fn(),
 }));
 
+jest.mock('../src/utils/mealPhotoRotation', () => ({
+  deleteMealPhotoFileIfSafe: jest.fn(() => Promise.resolve()),
+  rotateMealPhotoClockwise: jest.fn(),
+}));
+
 type MealDetailProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 const baseMeal = {
   id: 'meal-1',
@@ -58,11 +74,13 @@ describe('MealDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    jest.spyOn(console, 'error').mockImplementation(jest.fn());
     jest.spyOn(Share, 'share').mockResolvedValue({
       action: Share.sharedAction,
     });
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
+    (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-photo.jpg');
     Platform.OS = 'ios';
   });
 
@@ -142,6 +160,81 @@ describe('MealDetailScreen', () => {
         cooking_level: 'gourmet',
       }));
     });
+  });
+
+  test('shows the saved image preview and rotate action in the edit modal', () => {
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+
+    expect(getByTestId('detail-edit-image-preview').props.source).toEqual({ uri: 'file:///full-photo.jpg' });
+    expect(getByTestId('detail-edit-rotate-image-button')).toBeTruthy();
+  });
+
+  test('rotates the current photo and refreshes the detail image', async () => {
+    (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-photo.jpg');
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      photo_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+    });
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+
+    await waitFor(() => {
+      expect(rotateMealPhotoClockwise).toHaveBeenCalledWith('file:///full-photo.jpg');
+    });
+    expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
+      photo_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+    });
+    await waitFor(() => {
+      expect(getByTestId('meal-detail-image').props.source).toEqual({ uri: 'file:///rotated-photo.jpg' });
+    });
+  });
+
+  test('disables the rotate action while rotation is running', async () => {
+    const deferred = createDeferred<string>();
+    (rotateMealPhotoClockwise as jest.Mock).mockReturnValue(deferred.promise);
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      photo_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+    });
+
+    const { findByText, getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+
+    expect(await findByText('回転中...')).toBeTruthy();
+    expect(getByTestId('detail-edit-rotate-image-button').props.accessibilityState?.disabled).toBe(true);
+
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+    expect(rotateMealPhotoClockwise).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      deferred.resolve('file:///rotated-photo.jpg');
+      await Promise.resolve();
+    });
+  });
+
+  test('shows an alert and keeps the meal unchanged when rotation fails', async () => {
+    (rotateMealPhotoClockwise as jest.Mock).mockRejectedValue(new Error('rotate failed'));
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '写真の回転に失敗しました。');
+    });
+    expect(MealService.updateMeal).not.toHaveBeenCalled();
+    expect(getByTestId('meal-detail-image').props.source).toEqual({ uri: 'file:///full-photo.jpg' });
   });
 
   test('opens the share composer with photo preview and shares the edited text', async () => {

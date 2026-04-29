@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   StyleSheet,
   Switch,
@@ -31,6 +32,9 @@ export type MealEditModalProps = {
   onClose: () => void;
   saving?: boolean;
   testIDPrefix?: string;
+  imageUri?: string;
+  onRotateImage?: () => void | Promise<void>;
+  rotatingImage?: boolean;
 };
 
 export function MealEditModal({
@@ -41,6 +45,9 @@ export function MealEditModal({
   onClose,
   saving = false,
   testIDPrefix = 'meal-edit',
+  imageUri,
+  onRotateImage,
+  rotatingImage = false,
 }: MealEditModalProps) {
   const updateDraft = <Key extends keyof MealEditDraft,>(key: Key, value: MealEditDraft[Key]) => {
     onChange({ ...draft, [key]: value });
@@ -58,6 +65,26 @@ export function MealEditModal({
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <Text style={styles.title}>記録を編集</Text>
+          {imageUri ? (
+            <View style={styles.imageBlock}>
+              <Image
+                source={{ uri: imageUri }}
+                style={styles.previewImage}
+                resizeMode="cover"
+                testID={`${testIDPrefix}-image-preview`}
+              />
+              {onRotateImage ? (
+                <TouchableOpacity
+                  style={[styles.rotateButton, (saving || rotatingImage) ? styles.rotateButtonDisabled : null]}
+                  onPress={onRotateImage}
+                  disabled={saving || rotatingImage}
+                  testID={`${testIDPrefix}-rotate-image-button`}
+                >
+                  <Text style={styles.rotateButtonText}>{rotatingImage ? '回転中...' : '右に90°回転'}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ) : null}
           <TextInput
             style={styles.input}
             value={draft.mealName}
@@ -163,6 +190,29 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
+  },
+  imageBlock: {
+    gap: 8,
+  },
+  previewImage: {
+    width: '100%',
+    height: 180,
+    borderRadius: 10,
+    backgroundColor: '#e9ecef',
+  },
+  rotateButton: {
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  rotateButtonDisabled: {
+    opacity: 0.6,
+  },
+  rotateButtonText: {
+    color: Colors.primary,
+    fontWeight: '700',
   },
   input: {
     borderWidth: 1,

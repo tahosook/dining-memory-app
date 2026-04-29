@@ -21,6 +21,7 @@ import type { Meal } from '../../types/MealTypes';
 import type { RecordsStackParamList } from '../../navigation/types';
 import { getMealDetailImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
+import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils/mealPhotoRotation';
 
 type MealDetailScreenProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
 
@@ -76,6 +77,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [editDraft, setEditDraft] = useState<MealEditDraft>(emptyEditDraft);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [rotatingPhoto, setRotatingPhoto] = useState(false);
   const [shareComposerVisible, setShareComposerVisible] = useState(false);
   const [shareText, setShareText] = useState(() => buildInitialShareText(route.params.meal));
 
@@ -120,6 +122,45 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       setSavingEdit(false);
     }
   }, [editDraft, editingMeal]);
+
+  const rotatePhotoClockwise = useCallback(async () => {
+    if (!photoUri || rotatingPhoto) {
+      return;
+    }
+
+    setRotatingPhoto(true);
+    let rotatedUri: string | null = null;
+
+    try {
+      rotatedUri = await rotateMealPhotoClockwise(photoUri);
+      const updatedMeal = await MealService.updateMeal(meal.id, {
+        photo_path: rotatedUri,
+        photo_thumbnail_path: rotatedUri,
+      });
+
+      if (!updatedMeal) {
+        await deleteMealPhotoFileIfSafe(rotatedUri);
+        Alert.alert('エラー', '写真の回転に失敗しました。');
+        return;
+      }
+
+      const previousPhotoUri = photoUri;
+      const previousThumbnailUri = meal.photo_thumbnail_path;
+      setMeal(updatedMeal);
+      await deleteMealPhotoFileIfSafe(previousPhotoUri, rotatedUri).catch(() => undefined);
+      if (previousThumbnailUri && previousThumbnailUri !== previousPhotoUri) {
+        await deleteMealPhotoFileIfSafe(previousThumbnailUri, rotatedUri).catch(() => undefined);
+      }
+    } catch {
+      if (rotatedUri) {
+        await deleteMealPhotoFileIfSafe(rotatedUri).catch(() => undefined);
+      }
+      console.error('Failed to rotate meal photo.');
+      Alert.alert('エラー', '写真の回転に失敗しました。');
+    } finally {
+      setRotatingPhoto(false);
+    }
+  }, [meal.id, meal.photo_thumbnail_path, photoUri, rotatingPhoto]);
 
   const confirmDelete = useCallback(() => {
     Alert.alert(
@@ -241,6 +282,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         onClose={() => setEditingMeal(null)}
         saving={savingEdit}
         testIDPrefix="detail-edit"
+        imageUri={photoUri}
+        onRotateImage={rotatePhotoClockwise}
+        rotatingImage={rotatingPhoto}
       />
 
       <Modal
