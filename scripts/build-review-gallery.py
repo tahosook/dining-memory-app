@@ -51,6 +51,13 @@ GROUP_ORDER = [
     "side_item_primary",
     "review",
 ]
+DEFAULT_FOCUS_GROUPS = [
+    "unknown",
+    "broad_primary",
+    "low_confidence",
+    "scene_dominant",
+    "side_item_primary",
+]
 GROUP_METADATA = {
     "unknown": {
         "label": "UNKNOWN",
@@ -174,7 +181,7 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         choices=GROUP_ORDER + ["all"],
-        help="重点 review group で OR フィルタ。未指定なら全セクションを出力。",
+        help="重点 review group で OR フィルタ。未指定なら既定の重点セクションを出力。",
     )
     parser.add_argument(
         "--write-provisional-jsonl",
@@ -197,6 +204,16 @@ def parse_args() -> argparse.Namespace:
             "解決できた画像を file:// ではなく data URI として HTML に埋め込みます。"
             " Safari の local file 制約回避に有効ですが、HTML サイズは大きくなります。"
         ),
+    )
+    parser.add_argument(
+        "--include-all-records",
+        action="store_true",
+        help="All records セクションを出力します。未指定時は HTML サイズ削減のため省略します。",
+    )
+    parser.add_argument(
+        "--include-review-targets",
+        action="store_true",
+        help="Review targets セクションを出力します。未指定時は HTML サイズ削減のため省略します。",
     )
     parser.add_argument(
         "--candidate-csv-dir",
@@ -229,6 +246,19 @@ def main() -> int:
         print(f"--candidate-csv-dir not found: {candidate_csv_dir}", file=sys.stderr)
         return 2
 
+    filters = {
+        "primary_dish_keys": normalize_filter_values(args.primary_dish_key),
+        "review_reasons": normalize_filter_values(args.review_reason),
+        "candidate_groups": normalize_candidate_group_filters(args.candidate_group),
+        "limit": args.limit,
+    }
+    if "review" in filters["candidate_groups"] and not args.include_review_targets:
+        print(
+            "--candidate-group review requires --include-review-targets.",
+            file=sys.stderr,
+        )
+        return 2
+
     selection = resolve_input_source(input_path)
     load_result = load_records(selection)
 
@@ -255,12 +285,6 @@ def main() -> int:
         candidate_csv_records=candidate_csv_records,
     )
 
-    filters = {
-        "primary_dish_keys": normalize_filter_values(args.primary_dish_key),
-        "review_reasons": normalize_filter_values(args.review_reason),
-        "candidate_groups": normalize_candidate_group_filters(args.candidate_group),
-        "limit": args.limit,
-    }
     filtered_records = filter_records(review_records, filters)
     summary_records = list(filtered_records)
     display_records = list(filtered_records)
@@ -277,6 +301,9 @@ def main() -> int:
         display_records=display_records,
         candidate_csvs=candidate_csvs,
         provisional_path=provisional_path,
+        include_all_records=args.include_all_records,
+        include_review_targets=args.include_review_targets,
+        embed_images=args.embed_images,
     )
     html_content = render_gallery_html(page_data)
     output_html.parent.mkdir(parents=True, exist_ok=True)
@@ -287,6 +314,9 @@ def main() -> int:
     print(f"Parseable records: {len(load_result['records'])}")
     print(f"Filtered records: {len(summary_records)}")
     print(f"Displayed records: {len(display_records)}")
+    print(f"Image mode: {'embedded data URI' if args.embed_images else 'file URI'}")
+    print(f"All records section: {'included' if args.include_all_records else 'omitted'}")
+    print(f"Review targets section: {'included' if args.include_review_targets else 'omitted'}")
     print(f"Broken JSON: {load_result['broken_json_count']}")
     print(f"Invalid shapes: {load_result['invalid_record_shape_count']}")
     if provisional_path is not None:
@@ -1079,11 +1109,18 @@ def build_page_data(
     display_records: Sequence[Dict[str, Any]],
     candidate_csvs: Dict[str, Path],
     provisional_path: Optional[Path],
+    include_all_records: bool,
+    include_review_targets: bool,
+    embed_images: bool,
 ) -> Dict[str, Any]:
     selected_candidate_groups = filters["candidate_groups"]
-    section_groups = selected_candidate_groups or GROUP_ORDER
+    section_groups = selected_candidate_groups or list(DEFAULT_FOCUS_GROUPS)
+    if not selected_candidate_groups and include_review_targets:
+        section_groups.append("review")
     focus_sections: List[Dict[str, Any]] = []
     for group in section_groups:
+        if group == "review" and not include_review_targets:
+            continue
         section_records = [
             record for record in display_records if group in record["candidate_groups"]
         ]
@@ -1107,6 +1144,9 @@ def build_page_data(
         filters=filters,
         candidate_csvs=candidate_csvs,
         provisional_path=provisional_path,
+        include_all_records=include_all_records,
+        include_review_targets=include_review_targets,
+        embed_images=embed_images,
     )
     storage_key = build_storage_key(
         selection=selection,
@@ -1142,8 +1182,12 @@ def build_page_data(
         "title": "Gemma 4 Review Gallery",
         "summary": summary,
         "focus_sections": focus_sections,
-        "all_records": sort_records_for_all_section(display_records),
-        "section_index_items": build_section_index_items(focus_sections),
+        "all_records": sort_records_for_all_section(display_records) if include_all_records else [],
+        "include_all_records": include_all_records,
+        "section_index_items": build_section_index_items(
+            focus_sections,
+            include_all_records=include_all_records,
+        ),
         "storage_key": storage_key,
         "record_index": record_index,
         "known_primary_keys": known_primary_keys,
@@ -1156,11 +1200,16 @@ def build_page_data(
     }
 
 
-def build_section_index_items(focus_sections: Sequence[Dict[str, Any]]) -> List[Dict[str, str]]:
+def build_section_index_items(
+    focus_sections: Sequence[Dict[str, Any]],
+    *,
+    include_all_records: bool,
+) -> List[Dict[str, str]]:
     items = [{"id": "section-summary", "label": "Summary"}]
     for section in focus_sections:
         items.append({"id": section["section_id"], "label": section["title"]})
-    items.append({"id": "section-all-records", "label": "All records"})
+    if include_all_records:
+        items.append({"id": "section-all-records", "label": "All records"})
     return items
 
 
@@ -1173,6 +1222,9 @@ def build_summary(
     filters: Dict[str, Any],
     candidate_csvs: Dict[str, Path],
     provisional_path: Optional[Path],
+    include_all_records: bool,
+    include_review_targets: bool,
+    embed_images: bool,
 ) -> Dict[str, Any]:
     primary_dish_counter = Counter(record["primary_dish_key"] for record in summary_records)
     review_reasons_counter = Counter(
@@ -1223,6 +1275,11 @@ def build_summary(
             "candidate_groups": list(filters["candidate_groups"]),
             "limit": filters["limit"],
         },
+        "output_options": {
+            "image_mode": "embedded data URI" if embed_images else "file URI",
+            "all_records_section": "included" if include_all_records else "omitted",
+            "review_targets_section": "included" if include_review_targets else "omitted",
+        },
         "candidate_csvs": {group: str(path) for group, path in candidate_csvs.items()},
         "provisional_jsonl": str(provisional_path) if provisional_path is not None else "",
         "error_samples": list(load_result["error_samples"]),
@@ -1258,7 +1315,11 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
     section_index_html = render_section_index(page_data["section_index_items"])
     summary_html = render_summary(page_data["summary"])
     focus_sections_html = "\n".join(render_focus_section(section) for section in page_data["focus_sections"])
-    all_records_html = render_all_records_section(page_data["all_records"])
+    all_records_html = (
+        render_all_records_section(page_data["all_records"])
+        if page_data["include_all_records"]
+        else ""
+    )
     datalist_html = render_primary_key_datalist(page_data["known_primary_keys"])
     app_data_json = serialize_json_for_script(
         {
@@ -2294,9 +2355,27 @@ def render_summary(summary: Dict[str, Any]) -> str:
                 ),
                 (
                     "candidate_group",
-                    escape_code(", ".join(summary["filters"]["candidate_groups"]) or "(all sections)"),
+                    escape_code(
+                        ", ".join(summary["filters"]["candidate_groups"])
+                        or "(default focus sections)"
+                    ),
                 ),
                 ("limit", escape_code(str(summary["filters"]["limit"]))),
+            ],
+            trusted_html=True,
+        ),
+        render_meta_box(
+            "Output options",
+            [
+                ("image_mode", escape_code(summary["output_options"]["image_mode"])),
+                (
+                    "all_records_section",
+                    escape_code(summary["output_options"]["all_records_section"]),
+                ),
+                (
+                    "review_targets_section",
+                    escape_code(summary["output_options"]["review_targets_section"]),
+                ),
             ],
             trusted_html=True,
         ),

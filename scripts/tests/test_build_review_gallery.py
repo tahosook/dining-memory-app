@@ -190,11 +190,11 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("Section index", html_text)
             self.assertIn("href=\"#section-summary\"", html_text)
             self.assertIn("href=\"#section-unknown\"", html_text)
-            self.assertIn("href=\"#section-review\"", html_text)
-            self.assertIn("href=\"#section-all-records\"", html_text)
+            self.assertNotIn("href=\"#section-review\"", html_text)
+            self.assertNotIn("href=\"#section-all-records\"", html_text)
             self.assertIn("Unknown candidates", html_text)
-            self.assertIn("Review targets", html_text)
-            self.assertIn("All records", html_text)
+            self.assertNotIn("<h2>Review targets</h2>", html_text)
+            self.assertNotIn("<h2>All records</h2>", html_text)
             self.assertIn("Export review JSON", html_text)
             self.assertIn("Import review JSON", html_text)
             self.assertIn("localStorage", html_text)
@@ -203,6 +203,7 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("REVIEW_TARGET", html_text)
             self.assertIn("img-unknown::photos/unknown.jpg", html_text)
             self.assertIn("file://", html_text)
+            self.assertNotIn("data:image/jpeg;base64,", html_text)
             self.assertIn("csv:unknown", html_text)
             self.assertIn("coarse_primary_dish_key", html_text)
             self.assertIn("final_primary_dish_key", html_text)
@@ -214,6 +215,8 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("top1_key", html_text)
             self.assertIn("top2_key", html_text)
             self.assertIn("score_gap", html_text)
+            self.assertIn("All records section: omitted", result.stdout)
+            self.assertIn("Review targets section: omitted", result.stdout)
 
     def test_builds_from_normalized_without_labels_and_writes_provisional_jsonl(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -366,10 +369,96 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
             self.assertIn("href=\"#section-unknown\"", html_text)
             self.assertNotIn("href=\"#section-scene_dominant\"", html_text)
             self.assertIn("Unknown candidates", html_text)
-            self.assertIn("All records", html_text)
+            self.assertNotIn("<h2>All records</h2>", html_text)
             self.assertNotIn("Scene dominant candidates", html_text)
             self.assertNotIn("img-scene", html_text)
             self.assertIn("img-unknown", html_text)
+
+    def test_include_review_targets_outputs_review_section(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "run_output"
+            output_html = input_dir / "review_gallery.html"
+            labels_path = input_dir / "labels.jsonl"
+            input_dir.mkdir(parents=True, exist_ok=True)
+
+            records = [
+                make_record(
+                    image_id="img-review-only",
+                    source_path="photos/review.jpg",
+                    primary_dish_key="fried_cutlet",
+                    primary_dish_label_ja="とんかつ",
+                    analysis_confidence=0.88,
+                    needs_human_review=True,
+                )
+            ]
+            write_jsonl(labels_path, records)
+
+            result = run_cli(
+                "--input-path",
+                str(labels_path),
+                "--output-html",
+                str(output_html),
+                "--include-review-targets",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            html_text = output_html.read_text(encoding="utf-8")
+            self.assertIn("href=\"#section-review\"", html_text)
+            self.assertIn("<h2>Review targets</h2>", html_text)
+            self.assertIn("img-review-only", html_text)
+            self.assertIn("Review targets section: included", result.stdout)
+
+    def test_candidate_group_review_requires_include_review_targets(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "run_output"
+            output_html = input_dir / "review_gallery.html"
+            labels_path = input_dir / "labels.jsonl"
+            input_dir.mkdir(parents=True, exist_ok=True)
+
+            records = [
+                make_record(
+                    image_id="img-review-filter",
+                    source_path="photos/review-filter.jpg",
+                    primary_dish_key="fried_cutlet",
+                    primary_dish_label_ja="とんかつ",
+                    needs_human_review=True,
+                )
+            ]
+            write_jsonl(labels_path, records)
+
+            result = run_cli(
+                "--input-path",
+                str(labels_path),
+                "--output-html",
+                str(output_html),
+                "--candidate-group",
+                "review",
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn(
+                "--candidate-group review requires --include-review-targets.",
+                result.stderr,
+            )
+            self.assertFalse(output_html.exists())
+
+            included_result = run_cli(
+                "--input-path",
+                str(labels_path),
+                "--output-html",
+                str(output_html),
+                "--candidate-group",
+                "review",
+                "--include-review-targets",
+            )
+
+            self.assertEqual(included_result.returncode, 0, msg=included_result.stderr)
+            html_text = output_html.read_text(encoding="utf-8")
+            self.assertIn("href=\"#section-review\"", html_text)
+            self.assertIn("<h2>Review targets</h2>", html_text)
+            self.assertIn("img-review-filter", html_text)
 
     def test_missing_image_and_review_app_primitives_are_present(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -400,10 +489,13 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
                 str(labels_path),
                 "--output-html",
                 str(output_html),
+                "--include-all-records",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             html_text = output_html.read_text(encoding="utf-8")
+            self.assertIn("href=\"#section-all-records\"", html_text)
+            self.assertIn("<h2>All records</h2>", html_text)
             self.assertIn("画像未解決", html_text)
             self.assertIn("--image-root /path/to/photo/root", html_text)
             self.assertIn("data-review-field=\"human_judgment\"", html_text)
@@ -446,6 +538,7 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
                 str(output_html),
                 "--image-root",
                 str(image_root),
+                "--include-all-records",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
@@ -488,6 +581,7 @@ class BuildReviewGalleryCliTests(unittest.TestCase):
                 "--image-root",
                 str(image_root),
                 "--embed-images",
+                "--include-all-records",
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)

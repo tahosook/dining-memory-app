@@ -107,6 +107,15 @@ python3 scripts/analyze-food-labels.py --input-path <label-output-dir> --output-
 ```
 
 ```bash
+python3 scripts/build-review-gallery.py \
+  --input-path <label-output-dir> \
+  --output-html <analysis-out>/review_gallery.html \
+  --image-root <photos>
+```
+
+`build-review-gallery.py` は既定で重点候補セクションのみを出力します。全件一覧や Review targets も見たい場合は `--include-all-records` / `--include-review-targets` を追加します。HTML 1 ファイルだけを別デバイスに渡す場合は `--embed-images` を追加します。
+
+```bash
 python3 scripts/compare_labeling_reports.py \
   --before-summary <before-report>/summary.json \
   --after-summary <after-report>/summary.json \
