@@ -55,8 +55,10 @@
 ## Stats Screen
 - Use summaries and compact cards instead of dense dashboards.
 - Keep insights readable and practical, not decorative.
-- The current MVP only shows totals, homemade ratio, favorite cuisine, and favorite location.
+- The current MVP shows period tabs for 7 days, this month, last month, and all time.
+- The screen should include a short reflection sentence, summary cards, a homemade/eating-out balance bar, top cuisine ranking, and top location ranking.
 - Show explicit loading and retryable error states, while keeping the previous summary visible during refresh failures.
+- Later candidates include a record calendar, day/time trends, photo highlights, and recently increasing genres; they are not part of the current MVP.
 
 ## Settings Screen
 - Prioritize privacy, current scope, local data deletion, and app information.

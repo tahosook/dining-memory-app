@@ -25,7 +25,7 @@
 | Phase 8: attach photos with Android sharing | completed | `Phase 8: attach photos with Android sharing` | `npm test -- MealDetailScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm run check:deps`; `npm test -- --runInBand`; `npm ci` | Android photo sharing now uses `expo-sharing`; no-photo Android and iOS flows keep the standard share path. |
 | Phase 9: rename cooking level to homemade style | completed | `Phase 9: rename cooking level to homemade style` | `npm test -- cookingLevel.test.ts MealService.test.ts MealDetailScreen.test.tsx RecordsScreen.test.tsx --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Existing `cooking_level` column now stores/normalizes `quick` / `daily` / `gourmet`, displays 自炊スタイル labels, and clears values for eating-out meals. |
 | Phase 10: rotate saved meal photos | completed | `Phase 10: rotate saved meal photos` | `npm test -- MealDetailScreen.test.tsx mealPhotoRotation.test.ts --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Detail edit modal can rotate the saved photo right 90 degrees, persist the rotated file, update both detail/list image paths, and clean safe local old files. |
-| Phase 11: improve stats reflection screen | pending |  |  |  |
+| Phase 11: improve stats reflection screen | completed | `Phase 11: improve stats reflection screen` | `npm test -- StatsSettingsScreens.test.tsx MealService.test.ts --runInBand`; `npm run type-check`; `npm run lint`; `npm test -- --runInBand` | Stats now supports periods, reflection text, summary cards, homemade balance bar, and Top 3 cuisine/location rankings. |
 | Phase 12: make search photo grid first | pending |  |  |  |
 
 ## Verification Log
@@ -83,6 +83,11 @@
 - Phase 10: `npm run type-check` passed.
 - Phase 10: `npm run lint` passed.
 - Phase 10: `npm test -- --runInBand` passed.
+- Phase 11 implementation started.
+- Phase 11: `npm test -- StatsSettingsScreens.test.tsx MealService.test.ts --runInBand` passed.
+- Phase 11: `npm run type-check` passed.
+- Phase 11: `npm run lint` passed.
+- Phase 11: `npm test -- --runInBand` passed.
 
 ## Unresolved Issues
 - None.

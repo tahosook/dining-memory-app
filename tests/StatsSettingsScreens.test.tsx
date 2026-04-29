@@ -191,6 +191,8 @@ describe('StatsScreen', () => {
         takeoutMeals: 2,
         favoriteCuisine: '和食',
         favoriteLocation: '自宅',
+        topCuisines: [{ label: '和食', count: 3 }],
+        topLocations: [{ label: '自宅', count: 3 }],
       })
       .mockRejectedValueOnce(new Error('refresh failed'));
 
@@ -222,6 +224,64 @@ describe('StatsScreen', () => {
     await waitFor(() => {
       expect(MealService.getStatistics).toHaveBeenCalledTimes(2);
     });
+  });
+
+  test('shows period selector, reflection text, balance bar, and top rankings', async () => {
+    (MealService.getStatistics as jest.Mock).mockResolvedValue({
+      totalMeals: 18,
+      homemadeMeals: 12,
+      takeoutMeals: 6,
+      favoriteCuisine: '和食',
+      favoriteLocation: '自宅',
+      topCuisines: [
+        { label: '和食', count: 8 },
+        { label: '洋食', count: 5 },
+        { label: '中華', count: 3 },
+      ],
+      topLocations: [
+        { label: '自宅', count: 10 },
+        { label: '神田', count: 4 },
+        { label: '銀座', count: 2 },
+      ],
+    });
+
+    const { findByText, getByTestId } = render(<StatsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText(/今月は18件の食事を記録しました。/)).toBeTruthy();
+    expect(await findByText('自炊 12件 / 外食 6件（自炊 67%）')).toBeTruthy();
+    expect(await findByText('よく食べたジャンル Top 3')).toBeTruthy();
+    expect(await findByText('1. 和食')).toBeTruthy();
+    expect(await findByText('8件')).toBeTruthy();
+    expect(await findByText('よく行った場所 Top 3')).toBeTruthy();
+    expect(await findByText('1. 自宅')).toBeTruthy();
+    expect(MealService.getStatistics).toHaveBeenCalledWith(expect.objectContaining({
+      dateFrom: expect.any(Date),
+      dateTo: expect.any(Date),
+    }));
+
+    fireEvent.press(getByTestId('stats-period-all'));
+
+    await waitFor(() => {
+      expect(MealService.getStatistics).toHaveBeenCalledWith({});
+    });
+  });
+
+  test('shows empty reflection and ranking copy when there are no meals in the period', async () => {
+    (MealService.getStatistics as jest.Mock).mockResolvedValue({
+      totalMeals: 0,
+      homemadeMeals: 0,
+      takeoutMeals: 0,
+      topCuisines: [],
+      topLocations: [],
+    });
+
+    const { findByText } = render(<StatsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('この期間の食事記録はまだありません。')).toBeTruthy();
+    expect(await findByText('まだ集計できるジャンルがありません')).toBeTruthy();
+    expect(await findByText('まだ集計できる場所がありません')).toBeTruthy();
   });
 });
 

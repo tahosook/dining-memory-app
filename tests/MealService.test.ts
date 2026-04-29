@@ -134,6 +134,101 @@ describe('MealService', () => {
     expect(stats.favoriteLocation).toBeDefined();
   });
 
+  test('excludes deleted meals from statistics', async () => {
+    const kept = await MealService.createMeal({
+      meal_name: 'パスタ',
+      cuisine_type: '洋食',
+      is_homemade: true,
+      photo_path: 'file:///stats-kept.jpg',
+      meal_datetime: new Date('2026-04-09T19:00:00+09:00'),
+      location_name: '自宅',
+    });
+    const deleted = await MealService.createMeal({
+      meal_name: 'ラーメン',
+      cuisine_type: '中華',
+      is_homemade: false,
+      photo_path: 'file:///stats-deleted.jpg',
+      meal_datetime: new Date('2026-04-08T19:00:00+09:00'),
+      location_name: '神田',
+    });
+    await MealService.softDeleteMeal(deleted.id);
+
+    const stats = await MealService.getStatistics();
+
+    expect(kept.id).toBeDefined();
+    expect(stats.totalMeals).toBe(1);
+    expect(stats.favoriteCuisine).toBe('洋食');
+  });
+
+  test('filters statistics by meal_datetime period', async () => {
+    await MealService.createMeal({
+      meal_name: '今月のカレー',
+      cuisine_type: '洋食',
+      is_homemade: true,
+      photo_path: 'file:///stats-this-month.jpg',
+      meal_datetime: new Date('2026-04-10T19:00:00+09:00'),
+    });
+    await MealService.createMeal({
+      meal_name: '先月のラーメン',
+      cuisine_type: '中華',
+      is_homemade: false,
+      photo_path: 'file:///stats-last-month.jpg',
+      meal_datetime: new Date('2026-03-10T19:00:00+09:00'),
+    });
+
+    const stats = await MealService.getStatistics({
+      dateFrom: new Date('2026-04-01T00:00:00+09:00'),
+      dateTo: new Date('2026-04-30T23:59:59.999+09:00'),
+    });
+
+    expect(stats.totalMeals).toBe(1);
+    expect(stats.favoriteCuisine).toBe('洋食');
+  });
+
+  test('returns top cuisine and location rankings with stable ordering and blank values ignored', async () => {
+    const meals = [
+      ['カレー1', '洋食', '自宅'],
+      ['カレー2', '洋食', '自宅'],
+      ['寿司', '和食', '銀座'],
+      ['そば', '和食', '銀座'],
+      ['ラーメン', '中華', '神田'],
+      ['不明', '   ', '   '],
+      ['タイ料理', 'タイ', '渋谷'],
+    ] as const;
+
+    for (const [mealName, cuisineType, locationName] of meals) {
+      await MealService.createMeal({
+        meal_name: mealName,
+        cuisine_type: cuisineType,
+        location_name: locationName,
+        is_homemade: false,
+        photo_path: `file:///${mealName}.jpg`,
+        meal_datetime: new Date('2026-04-20T19:00:00+09:00'),
+      });
+    }
+
+    const stats = await MealService.getStatistics();
+
+    expect(stats.topCuisines).toEqual([
+      { label: '洋食', count: 2 },
+      { label: '和食', count: 2 },
+      { label: 'タイ', count: 1 },
+    ]);
+    expect(stats.topLocations).toEqual([
+      { label: '銀座', count: 2 },
+      { label: '自宅', count: 2 },
+      { label: '渋谷', count: 1 },
+    ]);
+  });
+
+  test('returns empty ranking arrays when there is no statistics data', async () => {
+    const stats = await MealService.getStatistics();
+
+    expect(stats.totalMeals).toBe(0);
+    expect(stats.topCuisines).toEqual([]);
+    expect(stats.topLocations).toEqual([]);
+  });
+
   test('reuses a nearby saved location name when a new meal is within 100m and location text is empty', async () => {
     await MealService.createMeal({
       meal_name: '寿司',
