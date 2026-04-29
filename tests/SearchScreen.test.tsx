@@ -69,6 +69,7 @@ describe('SearchScreen', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     consoleErrorSpy.mockRestore();
   });
 
@@ -119,15 +120,15 @@ describe('SearchScreen', () => {
       .mockResolvedValueOnce([createMeal()])
       .mockRejectedValueOnce(new Error('refresh failed'));
 
-    const { findByText, findByTestId } = render(<SearchScreen />);
+    const { findByTestId } = render(<SearchScreen />);
     await triggerLatestFocus();
 
-    expect(await findByText('ラーメン')).toBeTruthy();
+    expect(await findByTestId('search-result-1')).toBeTruthy();
 
     await triggerLatestFocus();
 
     expect(await findByTestId('search-error')).toBeTruthy();
-    expect(await findByText('ラーメン')).toBeTruthy();
+    expect(await findByTestId('search-result-1')).toBeTruthy();
   });
 
   test('opens a result in the shared detail screen', async () => {
@@ -147,21 +148,96 @@ describe('SearchScreen', () => {
     });
   });
 
-  test('passes cuisine type filter to the search service', async () => {
+  test('shows only the text search and filter toggle by default', async () => {
     (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
 
-    const { findByTestId, getByText } = render(<SearchScreen />);
+    const { getByTestId, queryByPlaceholderText, queryByTestId, queryByText } = render(<SearchScreen />);
     await triggerLatestFocus();
 
-    fireEvent.press(await findByTestId('search-cuisine-和食'));
-    fireEvent.press(getByText('検索する'));
+    expect(getByTestId('search-input')).toBeTruthy();
+    expect(getByTestId('search-filter-toggle')).toBeTruthy();
+    expect(queryByTestId('search-cuisine-和食')).toBeNull();
+    expect(queryByPlaceholderText('場所フィルター')).toBeNull();
+    expect(queryByText('自炊のみ')).toBeNull();
+    expect(queryByText('検索する')).toBeNull();
+  });
 
-    await waitFor(() => {
-      expect(MealService.searchMeals).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          cuisine_type: '和食',
-        })
-      );
+  test('automatically searches after text input changes', async () => {
+    jest.useFakeTimers();
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
+
+    const { getByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.changeText(getByTestId('search-input'), 'カレー');
+
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+      await Promise.resolve();
     });
+
+    expect(MealService.searchMeals).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        text: 'カレー',
+      })
+    );
+    jest.useRealTimers();
+  });
+
+  test('opens optional filters and automatically searches with filter values', async () => {
+    jest.useFakeTimers();
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
+
+    const { findByTestId, getByTestId, getByText } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(getByTestId('search-filter-toggle'));
+
+    expect(await findByTestId('search-cuisine-和食')).toBeTruthy();
+    expect(getByTestId('search-location-input')).toBeTruthy();
+    expect(getByTestId('search-homemade-switch')).toBeTruthy();
+
+    fireEvent.press(await findByTestId('search-cuisine-和食'));
+    fireEvent.changeText(getByTestId('search-location-input'), '神田');
+    fireEvent(getByTestId('search-homemade-switch'), 'valueChange', true);
+
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+      await Promise.resolve();
+    });
+
+    expect(MealService.searchMeals).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        cuisine_type: '和食',
+        location_name: '神田',
+        is_homemade: true,
+      })
+    );
+    expect(getByText('条件あり')).toBeTruthy();
+    jest.useRealTimers();
+  });
+
+  test('renders search results as a photo grid', async () => {
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([
+      createMeal({
+        id: '1',
+        photo_path: 'file:///full-photo.jpg',
+        photo_thumbnail_path: 'file:///thumb-photo.jpg',
+      }),
+      createMeal({
+        id: '2',
+        meal_name: '写真なし',
+        photo_path: '',
+        photo_thumbnail_path: undefined,
+      }),
+    ]);
+
+    const { findByTestId, queryByText } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    expect((await findByTestId('search-result-image-1')).props.source).toEqual({ uri: 'file:///thumb-photo.jpg' });
+    expect(await findByTestId('search-result-placeholder-2')).toBeTruthy();
+    expect(queryByText('ラーメン')).toBeNull();
+    expect(queryByText('神田')).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { FlatList, Image, StyleSheet, Switch, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { CuisineTypeSelector } from '../../components/common/CuisineTypeSelector';
@@ -9,28 +9,53 @@ import { GlobalStyles } from '../../constants/Styles';
 import { MealService } from '../../database/services/MealService';
 import type { Meal } from '../../types/MealTypes';
 import type { RootTabParamList } from '../../navigation/types';
+import { getMealListImageUri } from '../../utils/mealImage';
+
+type SearchFilterState = {
+  searchQuery: string;
+  cuisineFilter: string;
+  locationFilter: string;
+  homemadeOnly: boolean;
+};
 
 export const SearchScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp<RootTabParamList>>();
+  const { width: windowWidth } = useWindowDimensions();
   const [searchQuery, setSearchQuery] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [homemadeOnly, setHomemadeOnly] = useState(false);
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const [results, setResults] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const filtersRef = useRef<SearchFilterState>({
+    searchQuery: '',
+    cuisineFilter: '',
+    locationFilter: '',
+    homemadeOnly: false,
+  });
 
-  const runSearch = useCallback(async () => {
+  useEffect(() => {
+    filtersRef.current = {
+      searchQuery,
+      cuisineFilter,
+      locationFilter,
+      homemadeOnly,
+    };
+  }, [cuisineFilter, homemadeOnly, locationFilter, searchQuery]);
+
+  const runSearch = useCallback(async (filters: SearchFilterState = filtersRef.current) => {
     setLoading(true);
     setErrorMessage(null);
 
     try {
       const meals = await MealService.searchMeals({
-        text: searchQuery.trim() || undefined,
-        cuisine_type: cuisineFilter || undefined,
-        location_name: locationFilter.trim() || undefined,
-        is_homemade: homemadeOnly || undefined,
+        text: filters.searchQuery.trim() || undefined,
+        cuisine_type: filters.cuisineFilter || undefined,
+        location_name: filters.locationFilter.trim() || undefined,
+        is_homemade: filters.homemadeOnly || undefined,
       });
       setResults(meals);
     } catch (error) {
@@ -40,13 +65,31 @@ export const SearchScreen: React.FC = () => {
       setHasLoadedOnce(true);
       setLoading(false);
     }
-  }, [cuisineFilter, homemadeOnly, locationFilter, searchQuery]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       runSearch();
     }, [runSearch])
   );
+
+  useEffect(() => {
+    if (!hasLoadedOnce) {
+      return undefined;
+    }
+
+    const nextFilters = {
+      searchQuery,
+      cuisineFilter,
+      locationFilter,
+      homemadeOnly,
+    };
+    const timeoutId = setTimeout(() => {
+      runSearch(nextFilters).catch(() => undefined);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [cuisineFilter, hasLoadedOnce, homemadeOnly, locationFilter, runSearch, searchQuery]);
 
   const handleMealPress = useCallback((meal: Meal) => {
     navigation.navigate('Records', {
@@ -62,36 +105,50 @@ export const SearchScreen: React.FC = () => {
   const showInlineError = Boolean(errorMessage) && results.length > 0;
   const showZeroState = hasLoadedOnce && !loading && !errorMessage && results.length === 0;
   const resultsCountText = loading ? '読み込み中...' : errorMessage ? '更新失敗' : `${results.length}件`;
+  const hasActiveFilters = Boolean(cuisineFilter || locationFilter.trim() || homemadeOnly);
+  const gridGap = 3;
+  const gridHorizontalPadding = 16;
+  const cellSize = Math.floor((windowWidth - gridHorizontalPadding * 2 - gridGap * 2) / 3);
 
   return (
     <View style={GlobalStyles.screen}>
-      <View style={styles.searchBar}>
-        <Ionicons name="search-outline" size={20} color={Colors.gray} style={styles.searchIcon} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="料理名・メモ・場所を検索"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          testID="search-input"
-        />
-      </View>
-
-      <View style={styles.filtersCard}>
-        <CuisineTypeSelector value={cuisineFilter} onChange={setCuisineFilter} testIDPrefix="search-cuisine" />
-        <TextInput
-          style={styles.filterInput}
-          placeholder="場所フィルター"
-          value={locationFilter}
-          onChangeText={setLocationFilter}
-        />
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>自炊のみ</Text>
-          <Switch value={homemadeOnly} onValueChange={setHomemadeOnly} />
+      <View style={styles.searchRow}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={20} color={Colors.gray} style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="料理名・メモ・場所を検索"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            testID="search-input"
+          />
         </View>
-        <TouchableOpacity style={styles.searchButton} onPress={runSearch}>
-          <Text style={styles.searchButtonText}>検索する</Text>
+        <TouchableOpacity
+          style={[styles.filterToggle, filtersVisible ? styles.filterToggleActive : null]}
+          onPress={() => setFiltersVisible((current) => !current)}
+          testID="search-filter-toggle"
+        >
+          <Ionicons name="options-outline" size={20} color={filtersVisible ? Colors.primary : Colors.text} />
         </TouchableOpacity>
       </View>
+      {hasActiveFilters ? <Text style={styles.activeFilterText}>条件あり</Text> : null}
+
+      {filtersVisible ? (
+        <View style={styles.filtersCard}>
+          <CuisineTypeSelector value={cuisineFilter} onChange={setCuisineFilter} testIDPrefix="search-cuisine" />
+          <TextInput
+            style={styles.filterInput}
+            placeholder="場所フィルター"
+            value={locationFilter}
+            onChangeText={setLocationFilter}
+            testID="search-location-input"
+          />
+          <View style={styles.switchRow}>
+            <Text style={styles.switchLabel}>自炊のみ</Text>
+            <Switch value={homemadeOnly} onValueChange={setHomemadeOnly} testID="search-homemade-switch" />
+          </View>
+        </View>
+      ) : null}
 
       <View style={styles.resultsHeader}>
         <Text style={styles.resultsTitle}>検索結果</Text>
@@ -151,19 +208,26 @@ export const SearchScreen: React.FC = () => {
           data={results}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.resultsList}
+          columnWrapperStyle={styles.resultGridRow}
+          numColumns={3}
           renderItem={({ item }) => (
             <TouchableOpacity
-              style={styles.resultCard}
+              style={[styles.photoCell, { width: cellSize, height: cellSize }]}
               onPress={() => handleMealPress(item)}
               testID={`search-result-${item.id}`}
             >
-              <Text style={styles.resultName}>{item.meal_name}</Text>
-              <Text style={styles.resultMeta}>
-                {new Date(item.meal_datetime).toLocaleString('ja-JP')}
-                {item.location_name ? ` ・ ${item.location_name}` : ''}
-              </Text>
-              {item.notes ? <Text style={styles.resultNotes}>{item.notes}</Text> : null}
-              <Text style={styles.resultType}>{item.is_homemade ? '自炊' : '外食'}</Text>
+              {getMealListImageUri(item) ? (
+                <Image
+                  source={{ uri: getMealListImageUri(item) }}
+                  style={styles.photo}
+                  resizeMode="cover"
+                  testID={`search-result-image-${item.id}`}
+                />
+              ) : (
+                <View style={styles.photoPlaceholder} testID={`search-result-placeholder-${item.id}`}>
+                  <Ionicons name="camera-outline" size={22} color={Colors.gray} />
+                </View>
+              )}
             </TouchableOpacity>
           )}
         />
@@ -173,10 +237,17 @@ export const SearchScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  searchBar: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     margin: 16,
+    marginBottom: 8,
+    gap: 8,
+  },
+  searchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: Colors.white,
@@ -189,11 +260,32 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
   },
+  filterToggle: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#d9d9d9',
+  },
+  filterToggleActive: {
+    borderColor: Colors.primary,
+    backgroundColor: '#eaf4ff',
+  },
+  activeFilterText: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
   filtersCard: {
     marginHorizontal: 16,
     padding: 16,
     backgroundColor: Colors.white,
-    borderRadius: 12,
+    borderRadius: 8,
     gap: 12,
   },
   filterInput: {
@@ -211,17 +303,6 @@ const styles = StyleSheet.create({
   },
   switchLabel: {
     ...GlobalStyles.body,
-  },
-  searchButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  searchButtonText: {
-    color: Colors.white,
-    fontWeight: '600',
-    fontSize: 16,
   },
   resultsHeader: {
     flexDirection: 'row',
@@ -250,31 +331,24 @@ const styles = StyleSheet.create({
   resultsList: {
     paddingHorizontal: 16,
     paddingBottom: 24,
-    gap: 12,
+    gap: 3,
   },
-  resultCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 14,
-    gap: 6,
+  resultGridRow: {
+    gap: 3,
+    marginBottom: 3,
   },
-  resultName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
+  photoCell: {
+    backgroundColor: '#eceff1',
+    overflow: 'hidden',
   },
-  resultMeta: {
-    fontSize: 13,
-    color: Colors.gray,
+  photo: {
+    width: '100%',
+    height: '100%',
   },
-  resultNotes: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.text,
-  },
-  resultType: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '600',
+  photoPlaceholder: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f1f3f4',
   },
 });

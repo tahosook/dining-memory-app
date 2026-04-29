@@ -45,9 +45,10 @@
 - The detail screen should also provide an explicit user-triggered share path for posting to X through the OS share sheet.
 
 ## Search Screen
-- Search bar and filter area should be the first things the user sees.
-- Results should remain scannable and support quick refinement.
-- The current filters are text, cuisine type, location, and homemade-only.
+- Search bar should be the first thing the user sees; optional filters stay collapsed behind a compact conditions toggle.
+- Text input changes should automatically refresh search results with a short debounce; there is no separate search button.
+- Results should browse like a photo-first three-column grid, using thumbnails before full photo paths.
+- The current optional filters are cuisine type, location, and homemade-only.
 - Search は current text/filter match だけを使い、semantic search は current scope に含めない。
 - Result cards should open the same saved-record detail screen used from Records.
 - Use explicit loading, error, and zero-result states, and keep the previous results visible if only a refresh fails.
