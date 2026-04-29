@@ -7,8 +7,8 @@
 - Related docs: [AGENTS.md](AGENTS.md), [PLANS.md](PLANS.md), [docs/engineering/codex-context-map.md](docs/engineering/codex-context-map.md), [docs/product/progress.md](docs/product/progress.md)
 
 ## Now
-- AI候補生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
-- AI候補の面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、候補の実用性と表現を改善する。
+- AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
+- AIメモ下書きの面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、下書きの実用性と表現を改善する。
 - AIコード品質・セキュリティガードレール: 候補。raw AI output、photo path、location、notes の保存・ログ出力を増やさない方針を維持する。
 
 ## Next
@@ -26,7 +26,7 @@
 
 ## Done / Historical Notes
 - 基本の capture -> save -> records / search / stats flow は実装済み。
-- review 画面の tap-to-apply AI 入力補助は一部実装済み。
+- review 画面の tap-to-apply AI 入力補助は一部実装済みで、current visible UI は `noteDraft` を notes に追記する形。
 - Settings の local AI opt-in、model status、runtime status は実装済み。
 - MediaPipe static-image path は Android native bridge まで groundwork 済み。ただし default runtime / Settings readiness への接続は未接続。
 - Records detail からの明示的な X共有導線は実装済み。

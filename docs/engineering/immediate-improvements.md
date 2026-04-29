@@ -13,10 +13,10 @@
 ## High
 ### `.env` の追跡と `EXPO_PUBLIC_*` の扱いを整理する
 - status: done
-- 問題点: `.env` が git 管理されており、README の環境変数例も実装の `EXPO_PUBLIC_GEMINI_API_KEY` とずれています。
+- 解消済みの問題: 以前は `.env` が git 管理されており、README の環境変数例も実装の `EXPO_PUBLIC_GEMINI_API_KEY` とずれていました。
 - 現状: `.env` は git 管理外で、`.gitignore` は `.env` / `.env.local` / `.env*.local` を ignore しています。共有テンプレートは `.env.example` です。
-- リスク: 将来の鍵や公開前の値を誤って commit しやすくなり、設定ミスも起きやすいです。
-- 推奨修正: `.env.example` を唯一の共有テンプレートとして維持し、`.env` は ignore 対象に寄せるか、追跡するならダミー値のみとする運用を明文化します。
+- 残るリスク: 将来の鍵や公開前の値を誤って commit しないよう、ignore とテンプレート運用を維持する必要があります。
+- 維持方針: `.env.example` を唯一の共有テンプレートとして維持し、`.env` はローカル専用ファイルとして扱います。
 - 関連ファイル: `.env`, `.env.example`, [README.md](../../README.md), [.gitignore](../../.gitignore)
 - 導入後の確認方法: `git status --short` で実値の `.env` が不用意に差分化しないこと、README の env 例が実装名と一致することを確認します。
 

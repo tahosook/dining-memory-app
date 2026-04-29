@@ -36,17 +36,17 @@
 - On Android, captured photos should keep an app-local stable file for in-app display and also be added to a dedicated `Pictures / Dining Memory` album so future backup targeting stays possible without mixing unrelated media.
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
-- Phase 1 の AI 入力補助は capture review 上の明示的なユーザー操作でのみ実行し、local mock provider を使って UI 統合を確認する。
+- AI 入力補助は capture review 上の明示的なユーザー操作でのみ実行し、current default は `llama.rn` local-runtime prototype の `noteDraft` path とする。mock / override provider は tests や injection 用に留める。
 - `src/ai/runtime/` は meal input assist 向けの最小 runtime status helper を持ち、feature 固有ロジックは `src/ai/mealInputAssist/` 配下に残す。
 - ready な runtime と unavailable / noop helper は明確に分け、production path の default fallback に noop provider を使わない。
 - Search は current text/filter path だけを使い、semantic search は current scope に含めない。
 - meal input assist は `llama.rn` の multimodal path を使い、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
 - MediaPipe custom food classifier 向けの static-image groundwork は `src/ai/mealInputAssist/` 配下の separate path として追加してよく、current active runtime selection や Settings の readiness source of truth を直ちに置き換えない。
 - MediaPipe static-image path は Android native bridge で real inference まで持ってよいが、current default runtime は引き続き `llama.rn` path とし、hidden separate path として扱う。
-- MediaPipe static-image path が将来 rich classifier result を返しても、review UI へ渡す shape は既存の `mealNames` / `cuisineTypes` suggestions に正規化し、保存時の persistent AI metadata は引き続き thin に保つ。
+- MediaPipe static-image path が rich classifier result を返しても、provider contract では `mealNames` / `cuisineTypes` suggestions へ正規化し、current Camera の visible UI は `noteDraft` path のまま扱う。保存時の persistent AI metadata は引き続き thin に保つ。
 - meal input assist は captured original をそのまま渡さず、AI 解析前に一時的な downsized JPEG を作って推論へ渡し、終了後に削除して初回 token までの待ち時間と memory pressure を抑える。
 - capture review では AI 解析中に live camera preview を止め、captured image と review overlay だけを残して余分な camera memory pressure を増やさない。
-- meal input assist の running state は `準備 / model 読み込み / 画像解析 / 候補整形` の近似 stage を UI に返し、進捗の目安と残り時間の目安を表示する。
+- meal input assist の running state は `準備 / model 読み込み / 画像解析 / 下書き整形` の近似 stage を UI に返し、進捗の目安と残り時間の目安を表示する。
 - meal input assist の real runtime 条件を満たさない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返し、review の disabled reason を維持する。
 - meal input assist model の配布は app bundle ではなく Settings からの明示ダウンロードとし、direct URL は TypeScript config で固定管理する。
 - Settings は meal input assist の model status と local AI runtime status を表示し、`未導入 / ダウンロード中 / 利用可能 / エラー`、reason、expected path を確認できる。
@@ -65,7 +65,7 @@
 - Write GPS EXIF only when save-time location permission is granted and coordinates are actually available; otherwise save the JPEG without GPS metadata.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
-- Phase 1 の AI 入力補助では写真やメモを外部送信せず、候補採用時だけ最小限の AI metadata を meal record に残す。
+- AI 入力補助では写真やメモを外部送信せず、メモ下書き採用時だけ最小限の AI metadata を meal record に残す。
 - local AI spike でも写真やメモの外部送信は行わず、Settings の user opt-in がない限り AI 入力補助を無効にする。
 - Settings の runtime status も外部照会を行わず、端末内で native module / supported ABI / app-local model path の存在だけを確認する。
 - Records detail may hand off the current meal to the OS share sheet, but should not store posting state or send data automatically.

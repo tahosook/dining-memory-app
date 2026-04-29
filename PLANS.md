@@ -9,10 +9,10 @@
 この file は Codex が毎回読む固定ルールではありません。
 該当する大きめ作業を実施するときだけ、対象 plan の `Read First` から読み始めます。
 
-## AI候補生成の待ち時間短縮
+## AIメモ下書き生成の待ち時間短縮
 
 ### Goal
-Review 画面で AI 候補を要求してから候補表示までの体感待ち時間を短くし、manual save の邪魔をしない状態を維持する。
+Review 画面で AI メモ下書きを要求してから表示までの体感待ち時間を短くし、manual save の邪魔をしない状態を維持する。
 
 ### Constraints
 - 外部送信を default にしない。
@@ -39,29 +39,33 @@ Review 画面で AI 候補を要求してから候補表示までの体感待ち
 - 実測方法は要確認。
 - model / projector の配布や差し替え UI は current scope ではない。
 
-## AI候補の品質改善
+## AIメモ下書きの品質改善
 
 ### Goal
-料理名と料理ジャンルの候補を、ユーザーが採用したくなる実用的な候補に改善する。
+写真から notes に追記できるメモ下書きを、ユーザーが採用したくなる実用的な内容と表現に改善する。
 
 ### Constraints
-- 候補は自動確定しない。
+- 下書きは自動確定しない。
 - 既存入力を自動上書きしない。
 - 保存する AI metadata は thin に保つ。
 - MediaPipe の rich result や raw categories を DB に保存しない。
+- `mealNames` / `cuisineTypes` は hidden separate path / normalizer contract として扱い、current Camera UI の主表示へ勝手に戻さない。
 
 ### Suggested Steps
-- 現在の provider / normalizer / policy の責務を確認する。
-- 候補の重複、曖昧さ、genre 丸め、confidence 表示の扱いを小さく改善する。
-- `mealNames` / `cuisineTypes` の既存 contract を維持する。
+- 現在の provider / prompt / normalizer / policy / Camera UI の責務を確認する。
+- メモ下書きの過剰な断定、長さ、見出し、タグ表現、notes 追記時の重複を小さく改善する。
+- `noteDraft` の provider contract を維持する。
 - 採用時 metadata が最小のままか確認する。
 
 ### Read First
 - [docs/notes/ai-input-assist-phase1.md](docs/notes/ai-input-assist-phase1.md)
 - [docs/architecture/tech-spec.md](docs/architecture/tech-spec.md)
 - [docs/ux/screen-designs.md](docs/ux/screen-designs.md)
+- `src/ai/mealInputAssist/localRuntimePrototype.ts`
 - `src/ai/mealInputAssist/normalizer.ts`
 - `src/ai/mealInputAssist/policy.ts`
+- `src/components/screens/camera/CameraView.tsx`
+- `tests/CameraScreen.test.tsx`
 - `tests/mealInputAssistNormalizer.test.ts`
 
 ### Notes

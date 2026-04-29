@@ -11,7 +11,7 @@
 - This document explains the intent and responsibilities of that schema.
 
 ## Current Tables
-- `meals`: primary meal record with name, type, cuisine, minimal AI metadata, notes, location, time, image paths, derived `search_text`, tags, and deletion flags.
+- `meals`: primary meal record with name, type, cuisine, minimal AI metadata, notes, homemade flag, homemade style `cooking_level`, location, time, image paths, derived `search_text`, tags, and deletion flags.
 - `app_settings`: persistent app preferences and local feature flags such as `ai_input_assist_enabled`, `meal_input_assist_model_version`, `meal_input_assist_model_status`, `meal_input_assist_model_downloaded_at`, and `meal_input_assist_model_error_message`.
 - `search_vectors`: legacy additive table kept only for migration compatibility. current app behavior does not actively read or write semantic-search vectors.
 
@@ -23,7 +23,8 @@
 - Store images as files and keep file paths in the database.
 - Use indexed columns for high-frequency lookups such as meal date, meal name, location, and deletion state.
 - Keep optional fields optional; do not force data where the user did not provide it.
-- Phase 1 の AI 入力補助は、ユーザーが候補を採用したときだけ `meals.ai_source` と `meals.ai_confidence` を保存し、生レスポンスや候補一覧は保存しない。
+- `meals.cooking_level` stores homemade style as `quick` / `daily` / `gourmet`; eating-out records keep it unset.
+- AI 入力補助は、ユーザーがメモ下書きや provider suggestion を採用したときだけ `meals.ai_source` と `meals.ai_confidence` を保存し、生レスポンスや候補一覧は保存しない。
 - `app_settings` は user-controlled feature flags や meal input assist model の導入状態を保存し、実際の ready 判定は app-local fixed path の file existence を優先する。
 - Preserve latitude and longitude when available, and allow service-layer logic to reuse an existing place name when a new record is captured within roughly 100 meters of a known location.
 
@@ -37,6 +38,7 @@
 ## Current Implementation Notes
 - The active schema is intentionally small while capture, save, search, and settings behavior stabilizes.
 - `search_text` は current text and filter search path を支える field として扱う。
+- `cooking_level` は legacy `easy` / `medium` / `hard` を service layer で `quick` / `daily` / `gourmet` に正規化し、自炊記録では明示入力または保存時推論で設定する。
 - `search_vectors` は既存 install の migration 互換性のため残し、current feature path では更新しない。
 
 ## Schema Versioning

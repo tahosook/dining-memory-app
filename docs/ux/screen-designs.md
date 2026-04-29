@@ -26,7 +26,8 @@
 - Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
 - AI suggestion section should show `未実行 / 解析中 / 成功 / 失敗 / 無効` and keep the save and cancel actions available in every state.
 - AI suggestion section の `解析中` では、少なくとも current stage、進捗の目安、経過時間、残り時間の目安を表示する。
-- AI candidates should appear as tappable chips for meal name and cuisine type only, and should update a field only when the user taps a candidate.
+- Current visible AI output is a `noteDraft` card, and `メモに追加` should append it to notes only when the user taps the action.
+- Meal name / cuisine candidate chips are not part of the current visible Camera UI; MediaPipe or test-only providers may still use those fields behind the provider contract.
 - AI suggestion section の `無効` 理由は、少なくとも `設定で未許可` `この build では未対応` `model / projector 未準備` を区別できるようにする。
 - capture review を開いたら live camera preview は止め、review 中の端末負荷を抑える。
 - AI 入力補助は captured original をそのまま解析せず、端末内で一時的に downsized image を作ってから推論し、終わったら一時 file を片付ける。
@@ -36,12 +37,13 @@
 
 ## Records Screen
 - Shows meal records grouped by date.
-- Card layout should keep the meal name, time, location, and note visible at a glance.
+- Card layout should keep the meal name, time, location, cuisine tag, homemade/eating-out tag, and homemade style tag visible when available.
 - If a thumbnail is missing, fall back to the saved photo path instead of showing an empty placeholder.
 - Tapping a record card should move directly to a dedicated detail screen instead of opening an alert.
 - The detail screen should show a visibly larger photo than the list card, preferring `photo_path` over `photo_thumbnail_path`.
+- The detail screen should show meal details including cuisine, note, homemade/eating-out type, and homemade style.
 - Edit and delete entry points should live on the detail screen.
-- The detail edit modal should show the saved photo and allow a user-triggered right 90-degree rotation that updates the saved image file.
+- The detail edit modal should show the saved photo, allow a user-triggered right 90-degree rotation that updates the saved image file, and expose homemade style when the record is homemade.
 - The detail screen should also provide an explicit user-triggered share path for posting to X through the OS share sheet.
 
 ## Search Screen
