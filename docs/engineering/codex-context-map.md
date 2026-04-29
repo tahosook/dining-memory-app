@@ -91,6 +91,19 @@
 - Prefer links over duplication.
 - Use Japanese for project-facing docs unless English is clearer for code or external APIs.
 
+## Doc Sync Targets
+When source changes, check the smallest matching canonical docs before finishing.
+
+- `src/ai/mealInputAssist/`, `src/ai/runtime/`, `src/screens/SettingsScreen/`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/product/progress.md](../product/progress.md), relevant `docs/notes/ai-input-*`
+- `src/hooks/cameraCapture/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
+- `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/product/progress.md](../product/progress.md)
+- `src/screens/StatsScreen/`, stats aggregation in `src/database/services/MealService.ts`: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/domain/database-design.md](../domain/database-design.md)
+- `src/database/services/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
+- `scripts/*food-labels.py`, `scripts/mediapipe_*`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md)
+- `app.json`, `eas.json`, `.github/workflows/ci.yml`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/codex-workflow.md](codex-workflow.md)
+
+Run `bash scripts/check-doc-drift.sh` when a change touches current behavior docs, AI input assist, MediaPipe, storage, runtime, or UX descriptions.
+
 ## Codex Working Rules
 - 変更前に読む予定ファイルを明確にする。
 - 今回のタスクに必要なファイルだけ読む。

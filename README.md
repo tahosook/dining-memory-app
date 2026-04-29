@@ -154,6 +154,7 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 - ユニットテスト: 個別ロジックやサービス
 - 統合テスト: 撮影から保存、表示までの一連フロー
 - 自動テスト: Jest + React Native Testing Library
+- ドキュメント同期確認: `bash scripts/check-doc-drift.sh`
 - 詳細な検証ルールは [docs/engineering/codex-workflow.md](docs/engineering/codex-workflow.md) を参照
 
 ## APK ビルド

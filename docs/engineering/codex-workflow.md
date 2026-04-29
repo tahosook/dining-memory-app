@@ -57,6 +57,27 @@
 - If dependency install only passes on a different Node/npm version than CI, update the CI runtime and the setup docs in the same task or regenerate the lockfile for the existing CI version.
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
 - Add a security review pass when changes touch permissions, file storage, location, export, backup, or external AI calls.
+- Run `bash scripts/check-doc-drift.sh` when a task changes AI input assist, MediaPipe labeling, Records, Search, Stats, Settings, storage, runtime assumptions, or documentation about current behavior.
+
+## Doc Sync Gate
+- Before editing, identify the source area and the canonical docs that describe it.
+- After editing source, check the matching canonical docs even if the task did not explicitly ask for docs.
+- If source changed but docs did not, state why the current docs still match.
+- If docs changed but source did not, verify the docs describe current behavior and not a planned or historical behavior.
+- Use `docs/engineering/codex-context-map.md` to choose the smallest doc set to check.
+- Treat `docs/deprecated/` and `docs/working/` as history; do not use them as proof of current behavior.
+- Keep historical notes explicit when they mention old behavior.
+- For current-behavior drift phrases, run `bash scripts/check-doc-drift.sh` and review any matches before finishing.
+
+### Source Area to Canonical Docs
+- AI input assist / local AI runtime: `docs/architecture/tech-spec.md`, `docs/ux/screen-designs.md`, `docs/product/progress.md`, and relevant `docs/notes/ai-input-*`.
+- MediaPipe labeling scripts or classifier path: `docs/engineering/food-labeling-guidelines.md`, `docs/engineering/mediapipe-labeling-workflow.md`, `docs/architecture/tech-spec.md`, and relevant notes.
+- Camera / save / EXIF / GPS / file paths: `docs/architecture/tech-spec.md`, `docs/domain/database-design.md`, `docs/ux/user-flows.md`.
+- Records / Search / X share: `docs/ux/screen-designs.md`, `docs/ux/user-flows.md`, `docs/domain/database-design.md`, `docs/product/progress.md`.
+- Stats: `docs/product/progress.md`, `docs/ux/screen-designs.md`, and `docs/domain/database-design.md` when aggregation contracts change.
+- Settings / privacy / local data deletion: `docs/architecture/tech-spec.md`, `docs/ux/screen-designs.md`, `docs/product/progress.md`.
+- Schema or persistence services: `docs/domain/database-design.md` and `docs/architecture/tech-spec.md`.
+- Runtime, dependencies, CI, Expo, Android build: `README.md`, `docs/architecture/tech-spec.md`, `.github/workflows/ci.yml` when relevant.
 
 ## When to Run What
 - Docs-only changes: verify links, filenames, and document consistency.
