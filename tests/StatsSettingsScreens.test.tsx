@@ -245,33 +245,71 @@ describe('SettingsScreen', () => {
     jest.restoreAllMocks();
   });
 
-  test('shows AI toggle, meal input assist model status, runtime status, and no semantic search entry', async () => {
+  test('shows user-facing settings sections without technical details by default', async () => {
     const { getByText, getByTestId, queryAllByText, queryByText, queryByTestId } = render(<SettingsScreen />);
     await triggerLatestFocus();
 
-    expect(getByText('端末内 AI 入力補助を有効にする')).toBeTruthy();
-    expect(getByText('AI model ダウンロード')).toBeTruthy();
+    expect(getByText('プライバシー')).toBeTruthy();
+    expect(getByText('AI入力補助')).toBeTruthy();
+    expect(getByText('データ管理')).toBeTruthy();
+    expect(getByText('アプリ情報')).toBeTruthy();
+    expect(getByText('自動的な外部送信はしない設計です。Records 詳細などからユーザーが明示的に共有した場合のみ、外部アプリに渡ります。')).toBeTruthy();
+    expect(getByText('AI入力補助は写真を外部送信しません。ただし、AI入力補助のモデルデータをダウンロードする時だけ外部通信が発生します。')).toBeTruthy();
+    expect(getByText('状態: 未準備')).toBeTruthy();
+    expect(getByText('モデルをダウンロードすると利用できます。')).toBeTruthy();
+    expect(getByTestId('meal-input-assist-model-download-button')).toBeTruthy();
+    expect(queryByTestId('ai-input-assist-toggle')).toBeNull();
+    expect(queryByText('Local AI Runtime Status')).toBeNull();
+    expect(queryByText('現在の機能範囲')).toBeNull();
+    expect(queryByText('クラウドバックアップ')).toBeNull();
+    expect(queryByText('Qwen2.5-VL-3B-Instruct (meal input assist)')).toBeNull();
+    expect(queryAllByText('file:///documents/ai-models/meal-input-assist.gguf')).toHaveLength(0);
+
+    fireEvent.press(getByText('すべての食事記録を削除'));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'すべての食事記録を削除',
+      '端末内の食事記録をすべて削除します。この操作は元に戻せません。',
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'キャンセル', style: 'cancel' }),
+        expect.objectContaining({ text: '削除する', style: 'destructive' }),
+      ])
+    );
+  });
+
+  test('shows model and runtime technical details only after opening details', async () => {
+    const { getByText, getByTestId, queryAllByText, queryByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(queryByText('Local AI Runtime Status')).toBeNull();
+    expect(queryByText('Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf')).toBeNull();
+    expect(queryAllByText('file:///documents/ai-models/meal-input-assist.gguf')).toHaveLength(0);
+
+    fireEvent.press(getByTestId('toggle-ai-details-button'));
+
+    expect(getByTestId('ai-details')).toBeTruthy();
     expect(getByText('Local AI Runtime Status')).toBeTruthy();
-    expect(getByText('未導入')).toBeTruthy();
-    expect(getByText('Qwen2.5-VL-3B-Instruct (meal input assist)')).toBeTruthy();
     expect(getByText('Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf')).toBeTruthy();
     expect(getByText('mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf')).toBeTruthy();
-    expect(getByTestId('meal-input-assist-model-download-button')).toBeTruthy();
-    expect(getByText('meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj')).toBeTruthy();
     expect(queryAllByText('file:///documents/ai-models/meal-input-assist.gguf').length).toBeGreaterThan(0);
-    expect(queryByText('セマンティック検索')).toBeNull();
-    expect(queryByTestId('semantic-search-runtime-status')).toBeNull();
+    expect(getByText('meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj')).toBeTruthy();
+  });
+
+  test('enables the AI input assist switch only when model and runtime are ready', async () => {
+    (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
+    (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(createModelStatus('ready'));
+    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue(createRuntimeStatus('ready'));
+
+    const { getByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('状態: 利用可能')).toBeTruthy();
+    expect(getByTestId('ai-input-assist-toggle').props.disabled).toBe(false);
+    expect(getByTestId('meal-input-assist-model-redownload-button')).toBeTruthy();
 
     fireEvent(getByTestId('ai-input-assist-toggle'), 'valueChange', true);
     await waitFor(() => {
       expect(AppSettingsService.setAiInputAssistEnabled).toHaveBeenCalledWith(true);
-    });
-
-    expect(getByText('クラウドバックアップ')).toBeTruthy();
-    fireEvent.press(getByText('ローカルデータを削除'));
-
-    await waitFor(() => {
-      expect(Alert.alert).toHaveBeenCalled();
     });
   });
 
@@ -293,7 +331,7 @@ describe('SettingsScreen', () => {
 
     fireEvent.press(getByTestId('meal-input-assist-model-download-button'));
 
-    expect(await findByText('ダウンロード中')).toBeTruthy();
+    expect(await findByText('状態: ダウンロード中')).toBeTruthy();
     expect(await findByText('進捗の目安: 25%')).toBeTruthy();
     expect(await findByText('現在: Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf')).toBeTruthy();
 
@@ -302,24 +340,30 @@ describe('SettingsScreen', () => {
       await Promise.resolve();
     });
 
-    expect(await findByText('利用可能')).toBeTruthy();
-    expect(await findByText('端末内 AI 入力補助 runtime を利用できます。')).toBeTruthy();
+    expect(await findByText('状態: 利用可能')).toBeTruthy();
+    expect(await findByText('写真を外部送信せず、端末内で食事メモの下書きを作成できます。')).toBeTruthy();
+    expect(getByTestId('ai-input-assist-toggle')).toBeTruthy();
   });
 
-  test('shows error state for a failed model status lookup result', async () => {
+  test('shows a redownload action for model error and keeps details collapsed by default', async () => {
     (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(createModelStatus('error'));
 
-    const { findByText, getByTestId } = render(<SettingsScreen />);
+    const { findByText, getByTestId, queryByText } = render(<SettingsScreen />);
     await triggerLatestFocus();
 
-    expect(await findByText('エラー')).toBeTruthy();
-    expect(await findByText('meal input assist model のダウンロードに失敗しました。')).toBeTruthy();
+    expect(await findByText('状態: エラー')).toBeTruthy();
+    expect(await findByText('AI入力補助の準備に問題があります。再ダウンロードを試してください。')).toBeTruthy();
     expect(getByTestId('meal-input-assist-model-redownload-button')).toBeTruthy();
+    expect(queryByText('meal input assist model のダウンロードに失敗しました。')).toBeNull();
+
+    fireEvent.press(getByTestId('toggle-ai-details-button'));
+
+    expect(await findByText('meal input assist model のダウンロードに失敗しました。')).toBeTruthy();
   });
 
-  test('shows redownload action on ready status and reloads after delete', async () => {
+  test('shows redownload action on ready status and reloads after deleting downloaded model data', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
-      if (title === 'ダウンロード済み AI model を全て削除') {
+      if (title === 'ダウンロード済みモデルを削除') {
         buttons?.[1]?.onPress?.();
       }
     });
@@ -345,7 +389,7 @@ describe('SettingsScreen', () => {
     await waitFor(() => {
       expect(deleteAllDownloadedLocalAiModels).toHaveBeenCalledTimes(1);
     });
-    expect(await findByText('未導入')).toBeTruthy();
+    expect(await findByText('状態: 未準備')).toBeTruthy();
 
     alertSpy.mockRestore();
   });
