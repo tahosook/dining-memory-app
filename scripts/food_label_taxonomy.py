@@ -62,6 +62,61 @@ TRAINING_CLASS_MAP: Dict[str, str] = {
     "salad": "salad",
 }
 
+MEDIAPIPE_TRAINING_CLASSES = (
+    "bento",
+    "curry_rice",
+    "dessert",
+    "drink",
+    "fish_dish",
+    "meat_dish",
+    "nimono_or_stew",
+    "noodles",
+    "other_food",
+    "packaged_food",
+    "pasta",
+    "set_meal_or_multi_dish",
+)
+
+MEDIAPIPE_TRAINING_CLASS_MAP: Dict[str, str] = {
+    "bento": "bento",
+    "curry_rice": "curry_rice",
+    "dessert": "dessert",
+    "drink": "drink",
+    "drinks": "drink",
+    "grilled_fish": "fish_dish",
+    "fried_cutlet": "meat_dish",
+    "grilled_meat": "meat_dish",
+    "meat_dish": "meat_dish",
+    "stir_fry": "meat_dish",
+    "meat_and_potato_stew": "nimono_or_stew",
+    "nimono": "nimono_or_stew",
+    "stew": "nimono_or_stew",
+    "noodles": "noodles",
+    "ramen": "noodles",
+    "soba": "noodles",
+    "udon": "noodles",
+    "bread": "other_food",
+    "egg": "other_food",
+    "miso_soup": "other_food",
+    "rice": "other_food",
+    "rice_bowl": "other_food",
+    "salad": "other_food",
+    "side_dish": "other_food",
+    "soup": "other_food",
+    "sushi": "other_food",
+    "packaged_food": "packaged_food",
+    "pasta": "pasta",
+    "multi_dish_table": "set_meal_or_multi_dish",
+    "set_meal": "set_meal_or_multi_dish",
+}
+
+MEDIAPIPE_EXCLUDED_PRIMARY_KEYS = {
+    "missing",
+    "non_food",
+    "unknown",
+    "menu_or_text",
+}
+
 NON_CONCRETE_PRIMARY_KEYS = BROAD_PRIMARY_KEYS | {
     "unknown",
     "set_meal",
@@ -136,6 +191,32 @@ def derive_training_class_candidate(
     if review_reasons and "side_item_primary" in review_reasons:
         return ""
     return TRAINING_CLASS_MAP.get(primary_dish_key, primary_dish_key)
+
+
+def derive_mediapipe_training_class(
+    primary_dish_key: str,
+    *,
+    review_reasons: Optional[Sequence[str]] = None,
+    is_food_related: bool = True,
+    scene_type: str = "",
+    allow_direct_training_class: bool = True,
+) -> str:
+    key = str(primary_dish_key or "").strip().lower()
+    normalized_scene_type = str(scene_type or "").strip().lower()
+    reason_set = {
+        str(reason or "").strip().lower()
+        for reason in (review_reasons or [])
+        if str(reason or "").strip()
+    }
+    if not is_food_related or normalized_scene_type == "non_food":
+        return ""
+    if key in MEDIAPIPE_EXCLUDED_PRIMARY_KEYS:
+        return ""
+    if "side_item_primary" in reason_set:
+        return ""
+    if allow_direct_training_class and key in MEDIAPIPE_TRAINING_CLASSES:
+        return key
+    return MEDIAPIPE_TRAINING_CLASS_MAP.get(key, "")
 
 
 def resolve_primary_dish_label_ja(primary_dish_key: str, fallback: Any = "") -> str:

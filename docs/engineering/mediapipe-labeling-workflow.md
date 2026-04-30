@@ -80,6 +80,22 @@ AI は capture review 上の optional な入力補助であり、manual save を
 - `review UI / correction UX`: 致命指標は下がったが、review や correction の運用面が次の律速になっている。
 - `MediaPipe class set finalization`: 一次クラス候補が 8〜12 個程度に収まり、class set を固定してよい状態になった。
 
+### teacher-data curation 実行例
+`scripts/export-mediapipe-dataset.py` は `labels.jsonl` と任意の review export を読み、MediaPipe static-image classifier 用の class-directory dataset を作る。
+
+```bash
+python scripts/export-mediapipe-dataset.py \
+  --labels-jsonl state/labeling/latest/labels.jsonl \
+  --review-json state/labeling/latest/review_export.json \
+  --image-root /path/to/photos \
+  --output-dir state/mediapipe-dataset/latest \
+  --val-ratio 0.15 \
+  --test-ratio 0.15 \
+  --seed 42
+```
+
+review correction がある場合は AI の `primary_dish_key` より `corrected_primary_dish_key` を優先する。出力は `train/`、`val/`、`test/`、`excluded/excluded_manifest.jsonl`、`label_map.json`、`labels.txt`、`dataset_summary.json`、`dataset_summary.md` で確認する。
+
 ## Next Steps or Open Questions
 - loop が `no_change` / `regressed` を出したときにどこまで自動 rollback するかは、必要になった時点で別途判断する。
 - teacher-data curation phase に移る際の export shape は、実データ投入タスクに入る時点で別文書へ分離する。

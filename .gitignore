@@ -68,4 +68,6 @@ node_modules/
 .eslintcache
 
 # MediaPipe labeling loop runtime artifacts
+state/labeling/
+state/mediapipe-dataset/
 state/mediapipe_labeling_runs/
