@@ -50,20 +50,25 @@ const LOCAL_RUNTIME_MODEL_LOAD_PROGRESS_RANGE =
   LOCAL_RUNTIME_MODEL_LOAD_END_PROGRESS - LOCAL_RUNTIME_MODEL_LOAD_START_PROGRESS;
 const LOCAL_RUNTIME_GENERATION_PROGRESS_RANGE =
   LOCAL_RUNTIME_GENERATION_END_PROGRESS - LOCAL_RUNTIME_GENERATION_START_PROGRESS;
+let sharedLocalRuntimeProvider: {
+  modelPath: string;
+  projectorPath: string;
+  provider: LocalRuntimePrototypeMealInputAssistProvider;
+} | null = null;
 
 type LocalRuntimePrototypeAvailability =
   | {
-    kind: 'ready';
-    mode: 'local-runtime-prototype';
-    description: string;
-    provider: MealInputAssistProvider;
-  }
+      kind: 'ready';
+      mode: 'local-runtime-prototype';
+      description: string;
+      provider: MealInputAssistProvider;
+    }
   | {
-    kind: 'unavailable';
-    mode: 'local-runtime-prototype';
-    code: MealInputAssistRuntimeUnavailableCode;
-    reason: string;
-  };
+      kind: 'unavailable';
+      mode: 'local-runtime-prototype';
+      code: MealInputAssistRuntimeUnavailableCode;
+      reason: string;
+    };
 
 function createLocalRuntimeUnavailableAvailability(
   code: MealInputAssistRuntimeUnavailableCode,
@@ -83,7 +88,9 @@ type PlatformConstantsWithSupportedAbis = {
 };
 
 function getSupportedAndroidAbis() {
-  const constants = NativeModules.PlatformConstants as PlatformConstantsWithSupportedAbis | undefined;
+  const constants = NativeModules.PlatformConstants as
+    | PlatformConstantsWithSupportedAbis
+    | undefined;
   return constants?.SupportedAbis ?? constants?.supportedAbis ?? [];
 }
 
@@ -93,7 +100,7 @@ function hasSupportedAndroidAbi() {
     return true;
   }
 
-  return supportedAbis.some((abi) => SUPPORTED_ANDROID_ABIS.has(abi));
+  return supportedAbis.some(abi => SUPPORTED_ANDROID_ABIS.has(abi));
 }
 
 function hasLlamaNativeModule() {
@@ -138,7 +145,8 @@ function buildMealInputAssistMessages(request: MealInputAssistRequest) {
   return [
     {
       role: 'system' as const,
-      content: 'あなたは食事記録アプリの AI 入力補助です。返答は JSON オブジェクトだけにしてください。',
+      content:
+        'あなたは食事記録アプリの AI 入力補助です。返答は JSON オブジェクトだけにしてください。',
     },
     {
       role: 'user' as const,
@@ -165,7 +173,10 @@ function extractJsonText(text: string | null | undefined) {
 
   const trimmed = text.trim();
   const withoutFences = trimmed.startsWith('```')
-    ? trimmed.replace(/^```(?:json)?\s*/i, '').replace(/```$/i, '').trim()
+    ? trimmed
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/```$/i, '')
+        .trim()
     : trimmed;
   const start = withoutFences.indexOf('{');
   const end = withoutFences.lastIndexOf('}');
@@ -177,25 +188,30 @@ function extractJsonText(text: string | null | undefined) {
   return withoutFences.slice(start, end + 1);
 }
 
-function parseMealInputAssistResponse(text: string | null | undefined): MealInputAssistProviderResult {
+function parseMealInputAssistResponse(
+  text: string | null | undefined
+): MealInputAssistProviderResult {
   const parsed = JSON.parse(extractJsonText(text)) as {
     noteDraft?: string | { value?: string; confidence?: number } | null;
     mealNames?: Array<{ value?: string; confidence?: number }>;
     cuisineTypes?: Array<{ value?: string; confidence?: number }>;
   };
-  const noteDraft = typeof parsed.noteDraft === 'string'
-    ? parsed.noteDraft
-    : parsed.noteDraft && typeof parsed.noteDraft.value === 'string'
-      ? {
-        value: parsed.noteDraft.value,
-        confidence: parsed.noteDraft.confidence,
-      }
-      : null;
+  const noteDraft =
+    typeof parsed.noteDraft === 'string'
+      ? parsed.noteDraft
+      : parsed.noteDraft && typeof parsed.noteDraft.value === 'string'
+        ? {
+            value: parsed.noteDraft.value,
+            confidence: parsed.noteDraft.confidence,
+          }
+        : null;
   const mealNames = (parsed.mealNames ?? []).filter(
-    (candidate): candidate is { value: string; confidence?: number } => typeof candidate.value === 'string'
+    (candidate): candidate is { value: string; confidence?: number } =>
+      typeof candidate.value === 'string'
   );
   const cuisineTypes = (parsed.cuisineTypes ?? []).filter(
-    (candidate): candidate is { value: string; confidence?: number } => typeof candidate.value === 'string'
+    (candidate): candidate is { value: string; confidence?: number } =>
+      typeof candidate.value === 'string'
   );
 
   return {
@@ -232,8 +248,9 @@ function getCompletionResponseText(completion: {
   stopped_word?: string;
   stopping_word?: string;
 }) {
-  const responseText = [completion.content, completion.text]
-    .find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  const responseText = [completion.content, completion.text].find(
+    (value): value is string => typeof value === 'string' && value.trim().length > 0
+  );
 
   if (responseText) {
     return responseText;
@@ -276,14 +293,10 @@ function reportSuggestProgress(
 function estimateModelLoadRemainingMs(progressPercentage: number) {
   const normalizedProgress = Math.max(0, Math.min(100, progressPercentage));
   const remainingMs =
-    LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS
-    - (
-      (normalizedProgress / 100)
-      * (
-        LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS
-        - LOCAL_RUNTIME_MODEL_LOAD_END_ESTIMATED_REMAINING_MS
-      )
-    );
+    LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS -
+    (normalizedProgress / 100) *
+      (LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS -
+        LOCAL_RUNTIME_MODEL_LOAD_END_ESTIMATED_REMAINING_MS);
 
   return Math.round(remainingMs);
 }
@@ -313,21 +326,25 @@ class LlamaMultimodalContextLoader {
       estimatedRemainingMs: LOCAL_RUNTIME_MODEL_LOAD_START_ESTIMATED_REMAINING_MS,
     });
 
-    const context = await initLlama({
-      model: this.modelPath,
-      n_ctx: LOCAL_RUNTIME_CONTEXT_SIZE,
-      n_batch: LOCAL_RUNTIME_BATCH_SIZE,
-      ctx_shift: false,
-      use_mmap: true,
-    }, (progress) => {
-      reportSuggestProgress(onProgress, {
-        stage: 'loading_model',
-        message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
-        progress: LOCAL_RUNTIME_MODEL_LOAD_START_PROGRESS
-          + (progress / 100) * LOCAL_RUNTIME_MODEL_LOAD_PROGRESS_RANGE,
-        estimatedRemainingMs: estimateModelLoadRemainingMs(progress),
-      });
-    });
+    const context = await initLlama(
+      {
+        model: this.modelPath,
+        n_ctx: LOCAL_RUNTIME_CONTEXT_SIZE,
+        n_batch: LOCAL_RUNTIME_BATCH_SIZE,
+        ctx_shift: false,
+        use_mmap: true,
+      },
+      progress => {
+        reportSuggestProgress(onProgress, {
+          stage: 'loading_model',
+          message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+          progress:
+            LOCAL_RUNTIME_MODEL_LOAD_START_PROGRESS +
+            (progress / 100) * LOCAL_RUNTIME_MODEL_LOAD_PROGRESS_RANGE,
+          estimatedRemainingMs: estimateModelLoadRemainingMs(progress),
+        });
+      }
+    );
 
     reportSuggestProgress(onProgress, {
       stage: 'initializing_multimodal',
@@ -361,7 +378,7 @@ class LlamaMultimodalContextLoader {
 
   async load(onProgress?: (progress: MealInputAssistProgressUpdate) => void) {
     if (!this.contextPromise) {
-      this.contextPromise = this.createContext(onProgress).catch((error) => {
+      this.contextPromise = this.createContext(onProgress).catch(error => {
         this.contextPromise = null;
         this.isContextReady = false;
         throw error;
@@ -381,25 +398,37 @@ class LlamaMultimodalContextLoader {
 
 export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAssistProvider {
   private readonly contextLoader: LlamaMultimodalContextLoader;
+  private operationQueue: Promise<void> = Promise.resolve();
 
   constructor(modelPath: string, projectorPath: string) {
     this.contextLoader = new LlamaMultimodalContextLoader(modelPath, projectorPath);
   }
 
+  private runExclusive<T>(operation: () => Promise<T>): Promise<T> {
+    const queuedOperation = this.operationQueue.then(operation, operation);
+    this.operationQueue = queuedOperation.then(
+      () => undefined,
+      () => undefined
+    );
+    return queuedOperation;
+  }
+
   async prewarm(options?: MealInputAssistPrewarmOptions): Promise<void> {
-    const context = await this.contextLoader.load(options?.onProgress);
-    reportSuggestProgress(options?.onProgress, {
-      stage: 'analyzing_photo',
-      message: '写真解析の前処理を事前に整えています。',
-      progress: LOCAL_RUNTIME_CLEAR_CACHE_START_PROGRESS,
-      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_START_ESTIMATED_REMAINING_MS,
-    });
-    await context.clearCache();
-    reportSuggestProgress(options?.onProgress, {
-      stage: 'analyzing_photo',
-      message: '写真解析の前処理を事前に整えました。',
-      progress: LOCAL_RUNTIME_CLEAR_CACHE_DONE_PROGRESS,
-      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_DONE_ESTIMATED_REMAINING_MS,
+    return this.runExclusive(async () => {
+      const context = await this.contextLoader.load(options?.onProgress);
+      reportSuggestProgress(options?.onProgress, {
+        stage: 'analyzing_photo',
+        message: '写真解析の前処理を事前に整えています。',
+        progress: LOCAL_RUNTIME_CLEAR_CACHE_START_PROGRESS,
+        estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_START_ESTIMATED_REMAINING_MS,
+      });
+      await context.clearCache();
+      reportSuggestProgress(options?.onProgress, {
+        stage: 'analyzing_photo',
+        message: '写真解析の前処理を事前に整えました。',
+        progress: LOCAL_RUNTIME_CLEAR_CACHE_DONE_PROGRESS,
+        estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_DONE_ESTIMATED_REMAINING_MS,
+      });
     });
   }
 
@@ -407,66 +436,94 @@ export class LocalRuntimePrototypeMealInputAssistProvider implements MealInputAs
     request: MealInputAssistRequest,
     options?: MealInputAssistSuggestOptions
   ): Promise<MealInputAssistProviderResult> {
-    const context = await this.contextLoader.load(options?.onProgress);
-    reportSuggestProgress(options?.onProgress, {
-      stage: 'analyzing_photo',
-      message: '写真解析の前処理を始めています。',
-      progress: LOCAL_RUNTIME_CLEAR_CACHE_START_PROGRESS,
-      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_START_ESTIMATED_REMAINING_MS,
-    });
-    await context.clearCache();
-
-    reportSuggestProgress(options?.onProgress, {
-      stage: 'analyzing_photo',
-      message: '写真解析の前処理が完了しました。',
-      progress: LOCAL_RUNTIME_CLEAR_CACHE_DONE_PROGRESS,
-      estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_DONE_ESTIMATED_REMAINING_MS,
-    });
-
-    reportSuggestProgress(options?.onProgress, {
-      stage: 'analyzing_photo',
-      message: '写真を解析しています。候補生成を開始しました。',
-      progress: LOCAL_RUNTIME_COMPLETION_SUBMITTED_PROGRESS,
-      estimatedRemainingMs: LOCAL_RUNTIME_COMPLETION_SUBMITTED_ESTIMATED_REMAINING_MS,
-    });
-
-    let emittedTokens = 0;
-    const completion = await context.completion({
-      messages: buildMealInputAssistMessages(request),
-      temperature: 0.2,
-      n_predict: LOCAL_RUNTIME_MAX_PREDICT,
-    }, () => {
-      emittedTokens += 1;
-      const tokenProgress = Math.min(emittedTokens / LOCAL_RUNTIME_EXPECTED_TOKEN_COUNT, 1);
+    return this.runExclusive(async () => {
+      const context = await this.contextLoader.load(options?.onProgress);
       reportSuggestProgress(options?.onProgress, {
-        stage: 'generating_response',
-        message: '候補を整理しています。',
-        progress: LOCAL_RUNTIME_GENERATION_START_PROGRESS
-          + tokenProgress * LOCAL_RUNTIME_GENERATION_PROGRESS_RANGE,
-        estimatedRemainingMs: estimateGenerationRemainingMs(tokenProgress),
+        stage: 'analyzing_photo',
+        message: '写真解析の前処理を始めています。',
+        progress: LOCAL_RUNTIME_CLEAR_CACHE_START_PROGRESS,
+        estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_START_ESTIMATED_REMAINING_MS,
       });
-    });
+      await context.clearCache();
 
-    reportSuggestProgress(options?.onProgress, {
-      stage: 'finalizing',
-      message: '候補を整形しています。',
-      progress: LOCAL_RUNTIME_FINALIZING_PROGRESS,
-      estimatedRemainingMs: LOCAL_RUNTIME_FINALIZING_ESTIMATED_REMAINING_MS,
-    });
-
-    const responseText = getCompletionResponseText(completion);
-    const parsedResponse = parseMealInputAssistResponse(responseText);
-
-    if (!hasAnyProviderCandidates(parsedResponse)) {
-      console.info('Meal input assist model response contained no provider candidates.', {
-        candidateCounts: countProviderCandidates(parsedResponse),
-        tokensPredicted: completion.tokens_predicted ?? null,
-        tokensEvaluated: completion.tokens_evaluated ?? null,
+      reportSuggestProgress(options?.onProgress, {
+        stage: 'analyzing_photo',
+        message: '写真解析の前処理が完了しました。',
+        progress: LOCAL_RUNTIME_CLEAR_CACHE_DONE_PROGRESS,
+        estimatedRemainingMs: LOCAL_RUNTIME_CLEAR_CACHE_DONE_ESTIMATED_REMAINING_MS,
       });
-    }
 
-    return parsedResponse;
+      reportSuggestProgress(options?.onProgress, {
+        stage: 'analyzing_photo',
+        message: '写真を解析しています。候補生成を開始しました。',
+        progress: LOCAL_RUNTIME_COMPLETION_SUBMITTED_PROGRESS,
+        estimatedRemainingMs: LOCAL_RUNTIME_COMPLETION_SUBMITTED_ESTIMATED_REMAINING_MS,
+      });
+
+      let emittedTokens = 0;
+      const completion = await context.completion(
+        {
+          messages: buildMealInputAssistMessages(request),
+          temperature: 0.2,
+          n_predict: LOCAL_RUNTIME_MAX_PREDICT,
+        },
+        () => {
+          emittedTokens += 1;
+          const tokenProgress = Math.min(emittedTokens / LOCAL_RUNTIME_EXPECTED_TOKEN_COUNT, 1);
+          reportSuggestProgress(options?.onProgress, {
+            stage: 'generating_response',
+            message: '候補を整理しています。',
+            progress:
+              LOCAL_RUNTIME_GENERATION_START_PROGRESS +
+              tokenProgress * LOCAL_RUNTIME_GENERATION_PROGRESS_RANGE,
+            estimatedRemainingMs: estimateGenerationRemainingMs(tokenProgress),
+          });
+        }
+      );
+
+      reportSuggestProgress(options?.onProgress, {
+        stage: 'finalizing',
+        message: '候補を整形しています。',
+        progress: LOCAL_RUNTIME_FINALIZING_PROGRESS,
+        estimatedRemainingMs: LOCAL_RUNTIME_FINALIZING_ESTIMATED_REMAINING_MS,
+      });
+
+      const responseText = getCompletionResponseText(completion);
+      const parsedResponse = parseMealInputAssistResponse(responseText);
+
+      if (!hasAnyProviderCandidates(parsedResponse)) {
+        console.info('Meal input assist model response contained no provider candidates.', {
+          candidateCounts: countProviderCandidates(parsedResponse),
+          tokensPredicted: completion.tokens_predicted ?? null,
+          tokensEvaluated: completion.tokens_evaluated ?? null,
+        });
+      }
+
+      return parsedResponse;
+    });
   }
+}
+
+function getSharedLocalRuntimeProvider(modelPath: string, projectorPath: string) {
+  if (
+    sharedLocalRuntimeProvider &&
+    sharedLocalRuntimeProvider.modelPath === modelPath &&
+    sharedLocalRuntimeProvider.projectorPath === projectorPath
+  ) {
+    return sharedLocalRuntimeProvider.provider;
+  }
+
+  const provider = new LocalRuntimePrototypeMealInputAssistProvider(modelPath, projectorPath);
+  sharedLocalRuntimeProvider = {
+    modelPath,
+    projectorPath,
+    provider,
+  };
+  return provider;
+}
+
+export function resetLocalRuntimePrototypeProviderCacheForTests() {
+  sharedLocalRuntimeProvider = null;
 }
 
 async function getRequiredPathAvailability(path: string | null, missingReason: string) {
@@ -529,16 +586,16 @@ export async function getLocalRuntimePrototypeAvailability(): Promise<LocalRunti
   }
 
   if (projectorAvailability.kind === 'unavailable') {
-    return createLocalRuntimeUnavailableAvailability('model_unavailable', projectorAvailability.reason);
+    return createLocalRuntimeUnavailableAvailability(
+      'model_unavailable',
+      projectorAvailability.reason
+    );
   }
 
   return {
     kind: 'ready',
     mode: 'local-runtime-prototype',
     description: 'Local multimodal meal input assist provider',
-    provider: new LocalRuntimePrototypeMealInputAssistProvider(
-      modelAvailability.path,
-      projectorAvailability.path
-    ),
+    provider: getSharedLocalRuntimeProvider(modelAvailability.path, projectorAvailability.path),
   };
 }

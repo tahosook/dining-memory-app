@@ -2,7 +2,10 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
-import type { MealInputAssistProviderResult, MealInputAssistRuntimeAvailability } from '../src/ai/mealInputAssist';
+import type {
+  MealInputAssistProviderResult,
+  MealInputAssistRuntimeAvailability,
+} from '../src/ai/mealInputAssist';
 import type { CaptureReviewState } from '../src/hooks/cameraCapture/useCameraCapture';
 
 jest.mock('../src/database/services/AppSettingsService', () => ({
@@ -55,7 +58,10 @@ function createCaptureReviewBase(): CaptureReviewState {
   };
 }
 
-function createReadyRuntimeAvailability(provider: { suggest: jest.Mock; prewarm?: jest.Mock }): MealInputAssistRuntimeAvailability {
+function createReadyRuntimeAvailability(provider: {
+  suggest: jest.Mock;
+  prewarm?: jest.Mock;
+}): MealInputAssistRuntimeAvailability {
   return {
     kind: 'ready',
     mode: 'override',
@@ -104,13 +110,15 @@ describe('useMealInputAssist', () => {
     const onCaptureReviewChange = jest.fn();
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange,
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange,
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -150,9 +158,12 @@ describe('useMealInputAssist', () => {
         onlyScaleDown: true,
       }
     );
-    expect(provider.suggest).toHaveBeenCalledWith(expect.objectContaining({
-      photoUri: 'file:///tmp/meal-photo-ai.jpg',
-    }), expect.any(Object));
+    expect(provider.suggest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        photoUri: 'file:///tmp/meal-photo-ai.jpg',
+      }),
+      expect.any(Object)
+    );
     expect(deleteAsync).toHaveBeenCalledWith('file:///tmp/meal-photo-ai.jpg', { idempotent: true });
   });
 
@@ -162,12 +173,14 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -177,7 +190,9 @@ describe('useMealInputAssist', () => {
 
     await waitFor(() => {
       expect(result.current.status).toBe('error');
-      expect(result.current.errorMessage).toBe('端末内解析に失敗しました。もう一度お試しください。');
+      expect(result.current.errorMessage).toBe(
+        '端末内解析に失敗しました。もう一度お試しください。'
+      );
     });
     expect(deleteAsync).toHaveBeenCalledWith('file:///tmp/meal-photo-ai.jpg', { idempotent: true });
   });
@@ -192,12 +207,14 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -234,12 +251,14 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -272,18 +291,22 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => false;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
     await waitFor(() => {
       expect(result.current.status).toBe('disabled');
-      expect(result.current.disabledReason).toBe('設定画面でAI入力補助をオンにすると利用できます。');
+      expect(result.current.disabledReason).toBe(
+        '設定画面でAI入力補助をオンにすると利用できます。'
+      );
     });
 
     await act(async () => {
@@ -304,19 +327,23 @@ describe('useMealInputAssist', () => {
       code: 'runtime_unavailable' as const,
       reason: 'この build には端末内 AI runtime がまだ組み込まれていません。',
     });
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
     await waitFor(() => {
       expect(result.current.status).toBe('disabled');
-      expect(result.current.disabledReason).toBe('この build には端末内 AI runtime がまだ組み込まれていません。');
+      expect(result.current.disabledReason).toBe(
+        'この build には端末内 AI runtime がまだ組み込まれていません。'
+      );
     });
 
     await act(async () => {
@@ -335,15 +362,18 @@ describe('useMealInputAssist', () => {
       kind: 'unavailable' as const,
       mode: 'local-runtime-prototype' as const,
       code: 'model_unavailable' as const,
-      reason: 'meal input assist model が見つかりません: file:///documents/ai-models/meal-input-assist.gguf',
+      reason:
+        'meal input assist model が見つかりません: file:///documents/ai-models/meal-input-assist.gguf',
     });
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -360,13 +390,15 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -387,13 +419,15 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: null,
-      onCaptureReviewChange: jest.fn(),
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: null,
+        onCaptureReviewChange: jest.fn(),
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -407,6 +441,30 @@ describe('useMealInputAssist', () => {
     expect(result.current.status).toBe('idle');
   });
 
+  test('does not load the default runtime environment before a review or prewarm exists', async () => {
+    const loadAiInputAssistEnabled = jest.fn().mockResolvedValue(true);
+    const resolveRuntimeAvailability = jest.fn().mockResolvedValue({
+      kind: 'unavailable',
+      mode: 'local-runtime-prototype',
+      code: 'runtime_unavailable',
+      reason: 'not ready',
+    });
+
+    renderHook(() =>
+      useMealInputAssist({
+        captureReview: null,
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
+
+    await flushEffects();
+
+    expect(loadAiInputAssistEnabled).not.toHaveBeenCalled();
+    expect(resolveRuntimeAvailability).not.toHaveBeenCalled();
+  });
+
   test('prewarm is skipped while requestSuggestions is running', async () => {
     const deferred = createDeferred<MealInputAssistProviderResult>();
     const provider = {
@@ -415,13 +473,15 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -454,13 +514,15 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: null,
-      onCaptureReviewChange: jest.fn(),
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: null,
+        onCaptureReviewChange: jest.fn(),
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -482,13 +544,17 @@ describe('useMealInputAssist', () => {
       }),
     };
     const loadAiInputAssistEnabled = async () => true;
-    const resolveRuntimeAvailability = jest.fn(async () => createReadyRuntimeAvailability(provider));
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const resolveRuntimeAvailability = jest.fn(async () =>
+      createReadyRuntimeAvailability(provider)
+    );
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -518,12 +584,14 @@ describe('useMealInputAssist', () => {
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = jest.fn(() => environmentDeferred.promise);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     let pendingRequest!: Promise<void>;
     act(() => {
@@ -547,32 +615,39 @@ describe('useMealInputAssist', () => {
   test('exposes analysis progress while the provider is running and clears it after success', async () => {
     const deferred = createDeferred<MealInputAssistProviderResult>();
     const provider = {
-      suggest: jest.fn((_request, options?: {
-        onProgress?: (progress: {
-          stage: 'loading_model';
-          message: string;
-          progress: number;
-          estimatedRemainingMs: number;
-        }) => void;
-      }) => {
-        options?.onProgress?.({
-          stage: 'loading_model',
-          message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
-          progress: 0.4,
-          estimatedRemainingMs: 25000,
-        });
-        return deferred.promise;
-      }),
+      suggest: jest.fn(
+        (
+          _request,
+          options?: {
+            onProgress?: (progress: {
+              stage: 'loading_model';
+              message: string;
+              progress: number;
+              estimatedRemainingMs: number;
+            }) => void;
+          }
+        ) => {
+          options?.onProgress?.({
+            stage: 'loading_model',
+            message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+            progress: 0.4,
+            estimatedRemainingMs: 25000,
+          });
+          return deferred.promise;
+        }
+      ),
     };
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange: jest.fn(),
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -615,13 +690,15 @@ describe('useMealInputAssist', () => {
     const onCaptureReviewChange = jest.fn();
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange,
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange,
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -665,15 +742,17 @@ describe('useMealInputAssist', () => {
     const onCaptureReviewChange = jest.fn();
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview({
-        notes: '先に書いたメモ',
-      }),
-      onCaptureReviewChange,
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview({
+          notes: '先に書いたメモ',
+        }),
+        onCaptureReviewChange,
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 
@@ -704,13 +783,15 @@ describe('useMealInputAssist', () => {
     const onCaptureReviewChange = jest.fn();
     const loadAiInputAssistEnabled = async () => true;
     const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
-    const { result } = renderHook(() => useMealInputAssist({
-      captureReview: createCaptureReview(),
-      onCaptureReviewChange,
-      provider,
-      loadAiInputAssistEnabled,
-      resolveRuntimeAvailability,
-    }));
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange,
+        provider,
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
 
     await flushEffects();
 

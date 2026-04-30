@@ -63,9 +63,11 @@ function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
 }
 
 function hasAnyMealInputAssistSuggestions(suggestions: MealInputAssistSuggestions) {
-  return Boolean(suggestions.noteDraft)
-    || suggestions.mealNames.length > 0
-    || suggestions.cuisineTypes.length > 0;
+  return (
+    Boolean(suggestions.noteDraft) ||
+    suggestions.mealNames.length > 0 ||
+    suggestions.cuisineTypes.length > 0
+  );
 }
 
 function countProviderResultCandidates(result: MealInputAssistProviderResult) {
@@ -94,11 +96,12 @@ function mergeAppliedMetadata(
     ? current.appliedFields
     : [...(current?.appliedFields ?? []), field];
 
-  const nextConfidence = typeof confidence === 'number'
-    ? typeof current?.aiConfidence === 'number'
-      ? Math.max(current.aiConfidence, confidence)
-      : confidence
-    : current?.aiConfidence;
+  const nextConfidence =
+    typeof confidence === 'number'
+      ? typeof current?.aiConfidence === 'number'
+        ? Math.max(current.aiConfidence, confidence)
+        : confidence
+      : current?.aiConfidence;
 
   return {
     aiSource: source,
@@ -114,9 +117,10 @@ function toProgressSnapshot(
 ): MealInputAssistProgress {
   const now = Date.now();
   const elapsedMs = Math.max(now - startedAt, 0);
-  const estimatedRemainingMs = update.estimatedRemainingMs === null
-    ? null
-    : Math.max(update.estimatedRemainingMs - (now - updatedAt), 0);
+  const estimatedRemainingMs =
+    update.estimatedRemainingMs === null
+      ? null
+      : Math.max(update.estimatedRemainingMs - (now - updatedAt), 0);
 
   return {
     ...update,
@@ -134,15 +138,22 @@ export function useMealInputAssist({
   resolveRuntimeAvailability,
 }: UseMealInputAssistParams) {
   const [status, setStatus] = useState<Exclude<MealInputAssistStatus, 'disabled'>>('idle');
-  const [suggestions, setSuggestions] = useState<MealInputAssistSuggestions>(EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS);
+  const [suggestions, setSuggestions] = useState<MealInputAssistSuggestions>(
+    EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [progress, setProgress] = useState<MealInputAssistProgress | null>(null);
   const [prewarmStatus, setPrewarmStatus] = useState<MealInputAssistPrewarmStatus>('idle');
-  const [appliedMetadata, setAppliedMetadata] = useState<AppliedMealInputAssistMetadata | null>(null);
-  const [isAiInputAssistEnabled, setIsAiInputAssistEnabled] = useState<boolean | null>(provider || policy ? true : null);
-  const [runtimeAvailability, setRuntimeAvailability] = useState<MealInputAssistRuntimeAvailability | null>(
-    provider ? createOverrideRuntimeAvailability(provider) : null
+  const [appliedMetadata, setAppliedMetadata] = useState<AppliedMealInputAssistMetadata | null>(
+    null
   );
+  const [isAiInputAssistEnabled, setIsAiInputAssistEnabled] = useState<boolean | null>(
+    provider || policy ? true : null
+  );
+  const [runtimeAvailability, setRuntimeAvailability] =
+    useState<MealInputAssistRuntimeAvailability | null>(
+      provider ? createOverrideRuntimeAvailability(provider) : null
+    );
   const requestIdRef = useRef(0);
   const isRunningRef = useRef(false);
   const requestStartedAtRef = useRef<number | null>(null);
@@ -150,22 +161,25 @@ export function useMealInputAssist({
   const latestProgressUpdateRef = useRef<MealInputAssistProgressUpdate | null>(null);
   const isPrewarmingRef = useRef(false);
   const environmentPromiseRef = useRef<Promise<MealInputAssistEnvironment> | null>(null);
-  const environmentLoaderDependenciesRef = useRef<MealInputAssistEnvironmentLoaderDependencies | null>(null);
+  const environmentLoaderDependenciesRef =
+    useRef<MealInputAssistEnvironmentLoaderDependencies | null>(null);
   const appliedNoteDraftValuesRef = useRef<Set<string>>(new Set());
 
   const reviewKey = captureReview?.photoUri ?? null;
 
   const loadAiInputAssistEnabledSetting = useMemo(
-    () => loadAiInputAssistEnabled ?? (provider || policy
-      ? async () => true
-      : () => AppSettingsService.getAiInputAssistEnabled()),
+    () =>
+      loadAiInputAssistEnabled ??
+      (provider || policy ? async () => true : () => AppSettingsService.getAiInputAssistEnabled()),
     [loadAiInputAssistEnabled, policy, provider]
   );
 
   const loadRuntimeAvailability = useMemo(
-    () => resolveRuntimeAvailability ?? (provider
-      ? async () => createOverrideRuntimeAvailability(provider)
-      : () => loadMealInputAssistRuntimeAvailability('local-runtime-prototype')),
+    () =>
+      resolveRuntimeAvailability ??
+      (provider
+        ? async () => createOverrideRuntimeAvailability(provider)
+        : () => loadMealInputAssistRuntimeAvailability('local-runtime-prototype')),
     [provider, resolveRuntimeAvailability]
   );
 
@@ -223,9 +237,11 @@ export function useMealInputAssist({
   }, [status]);
 
   const loadEnvironment = useCallback(async () => {
-    const shouldReloadEnvironment = !environmentPromiseRef.current
-      || environmentLoaderDependenciesRef.current?.loadAiInputAssistEnabledSetting !== loadAiInputAssistEnabledSetting
-      || environmentLoaderDependenciesRef.current?.loadRuntimeAvailability !== loadRuntimeAvailability;
+    const shouldReloadEnvironment =
+      !environmentPromiseRef.current ||
+      environmentLoaderDependenciesRef.current?.loadAiInputAssistEnabledSetting !==
+        loadAiInputAssistEnabledSetting ||
+      environmentLoaderDependenciesRef.current?.loadRuntimeAvailability !== loadRuntimeAvailability;
 
     if (shouldReloadEnvironment) {
       environmentLoaderDependenciesRef.current = {
@@ -269,14 +285,16 @@ export function useMealInputAssist({
   }, [loadAiInputAssistEnabledSetting, loadRuntimeAvailability]);
 
   const getRequestEnvironment = useCallback(async () => {
-    const hasMatchingEnvironmentDependencies = !environmentLoaderDependenciesRef.current
-      || (
-        environmentLoaderDependenciesRef.current.loadAiInputAssistEnabledSetting === loadAiInputAssistEnabledSetting
-        && environmentLoaderDependenciesRef.current.loadRuntimeAvailability === loadRuntimeAvailability
-      );
-    const hasCurrentEnvironment = isAiInputAssistEnabled !== null
-      && runtimeAvailability !== null
-      && hasMatchingEnvironmentDependencies;
+    const hasMatchingEnvironmentDependencies =
+      !environmentLoaderDependenciesRef.current ||
+      (environmentLoaderDependenciesRef.current.loadAiInputAssistEnabledSetting ===
+        loadAiInputAssistEnabledSetting &&
+        environmentLoaderDependenciesRef.current.loadRuntimeAvailability ===
+          loadRuntimeAvailability);
+    const hasCurrentEnvironment =
+      isAiInputAssistEnabled !== null &&
+      runtimeAvailability !== null &&
+      hasMatchingEnvironmentDependencies;
 
     if (hasCurrentEnvironment) {
       return {
@@ -295,47 +313,57 @@ export function useMealInputAssist({
   ]);
 
   useEffect(() => {
-    loadEnvironment().catch(() => undefined);
-  }, [loadEnvironment]);
-
-  const cleanupPreparedPhoto = useCallback(async (preparedPhotoUri: string, originalPhotoUri: string) => {
-    if (preparedPhotoUri === originalPhotoUri) {
+    if (!captureReview && !provider && !policy) {
       return;
     }
 
-    try {
-      await deleteAsync(preparedPhotoUri, { idempotent: true });
-    } catch (error) {
-      console.warn('Failed to clean up AI analysis photo:', error);
-    }
-  }, []);
+    loadEnvironment().catch(() => undefined);
+  }, [captureReview, loadEnvironment, policy, provider]);
 
-  const prepareRequestForSuggestion = useCallback(async (
-    currentRequest: ReturnType<typeof buildMealInputAssistRequest>
-  ): Promise<PreparedMealInputAssistRequest> => {
-    const resizedPhoto = await ImageResizer.createResizedImage(
-      currentRequest.photoUri,
-      CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_WIDTH,
-      CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_HEIGHT,
-      'JPEG',
-      CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_QUALITY_PERCENT,
-      0,
-      undefined,
-      true,
-      {
-        mode: 'contain',
-        onlyScaleDown: true,
+  const cleanupPreparedPhoto = useCallback(
+    async (preparedPhotoUri: string, originalPhotoUri: string) => {
+      if (preparedPhotoUri === originalPhotoUri) {
+        return;
       }
-    );
 
-    return {
-      request: {
-        ...currentRequest,
-        photoUri: resizedPhoto.uri,
-      },
-      cleanup: async () => cleanupPreparedPhoto(resizedPhoto.uri, currentRequest.photoUri),
-    };
-  }, [cleanupPreparedPhoto]);
+      try {
+        await deleteAsync(preparedPhotoUri, { idempotent: true });
+      } catch (error) {
+        console.warn('Failed to clean up AI analysis photo:', error);
+      }
+    },
+    []
+  );
+
+  const prepareRequestForSuggestion = useCallback(
+    async (
+      currentRequest: ReturnType<typeof buildMealInputAssistRequest>
+    ): Promise<PreparedMealInputAssistRequest> => {
+      const resizedPhoto = await ImageResizer.createResizedImage(
+        currentRequest.photoUri,
+        CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_WIDTH,
+        CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_HEIGHT,
+        'JPEG',
+        CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_QUALITY_PERCENT,
+        0,
+        undefined,
+        true,
+        {
+          mode: 'contain',
+          onlyScaleDown: true,
+        }
+      );
+
+      return {
+        request: {
+          ...currentRequest,
+          photoUri: resizedPhoto.uri,
+        },
+        cleanup: async () => cleanupPreparedPhoto(resizedPhoto.uri, currentRequest.photoUri),
+      };
+    },
+    [cleanupPreparedPhoto]
+  );
 
   const request = useMemo(
     () => (captureReview ? buildMealInputAssistRequest(captureReview) : null),
@@ -343,10 +371,12 @@ export function useMealInputAssist({
   );
 
   const effectivePolicy = useMemo(
-    () => policy ?? createMealInputAssistPolicy({
-      isEnabled: isAiInputAssistEnabled,
-      runtimeAvailability,
-    }),
+    () =>
+      policy ??
+      createMealInputAssistPolicy({
+        isEnabled: isAiInputAssistEnabled,
+        runtimeAvailability,
+      }),
     [isAiInputAssistEnabled, policy, runtimeAvailability]
   );
 
@@ -361,9 +391,10 @@ export function useMealInputAssist({
       ? 'disabled'
       : status;
 
-  const hasAnySuggestions = suggestions.mealNames.length > 0
-    || Boolean(suggestions.noteDraft)
-    || suggestions.cuisineTypes.length > 0;
+  const hasAnySuggestions =
+    suggestions.mealNames.length > 0 ||
+    Boolean(suggestions.noteDraft) ||
+    suggestions.cuisineTypes.length > 0;
 
   const requestSuggestions = useCallback(async () => {
     if (!request || isRunningRef.current) {
@@ -379,10 +410,12 @@ export function useMealInputAssist({
       estimatedRemainingMs: 60000,
     });
     const environment = await getRequestEnvironment();
-    const nextPolicy = policy ?? createMealInputAssistPolicy({
-      isEnabled: environment.isAiInputAssistEnabled,
-      runtimeAvailability: environment.runtimeAvailability,
-    });
+    const nextPolicy =
+      policy ??
+      createMealInputAssistPolicy({
+        isEnabled: environment.isAiInputAssistEnabled,
+        runtimeAvailability: environment.runtimeAvailability,
+      });
     const nextAvailability = nextPolicy(request);
 
     if (nextAvailability.kind === 'disabled') {
@@ -393,9 +426,10 @@ export function useMealInputAssist({
       return;
     }
 
-    const activeProvider = environment.runtimeAvailability.kind === 'ready'
-      ? environment.runtimeAvailability.provider
-      : null;
+    const activeProvider =
+      environment.runtimeAvailability.kind === 'ready'
+        ? environment.runtimeAvailability.provider
+        : null;
     if (!activeProvider) {
       isRunningRef.current = false;
       setStatus('error');
@@ -446,9 +480,10 @@ export function useMealInputAssist({
       }
 
       if (!hasAnyMealInputAssistSuggestions(normalizedSuggestions)) {
-        const rawCandidateTotal = rawCandidateCounts.noteDraft
-          + rawCandidateCounts.mealNames
-          + rawCandidateCounts.cuisineTypes;
+        const rawCandidateTotal =
+          rawCandidateCounts.noteDraft +
+          rawCandidateCounts.mealNames +
+          rawCandidateCounts.cuisineTypes;
 
         if (rawCandidateTotal > 0) {
           console.info('Meal input assist normalized all provider candidates away.', {
@@ -501,34 +536,49 @@ export function useMealInputAssist({
     }
   }, [loadEnvironment]);
 
-  const applyMealNameSuggestion = useCallback((suggestion: MealInputAssistTextSuggestion) => {
-    onCaptureReviewChange('mealName', suggestion.value);
-    setAppliedMetadata((current) => mergeAppliedMetadata(current, 'mealName', suggestion.source, suggestion.confidence));
-  }, [onCaptureReviewChange]);
+  const applyMealNameSuggestion = useCallback(
+    (suggestion: MealInputAssistTextSuggestion) => {
+      onCaptureReviewChange('mealName', suggestion.value);
+      setAppliedMetadata(current =>
+        mergeAppliedMetadata(current, 'mealName', suggestion.source, suggestion.confidence)
+      );
+    },
+    [onCaptureReviewChange]
+  );
 
-  const applyNoteDraftSuggestion = useCallback((suggestion: MealInputAssistTextSuggestion) => {
-    if (!captureReview) {
-      return;
-    }
+  const applyNoteDraftSuggestion = useCallback(
+    (suggestion: MealInputAssistTextSuggestion) => {
+      if (!captureReview) {
+        return;
+      }
 
-    const noteDraft = suggestion.value.trim();
-    if (!noteDraft) {
-      return;
-    }
+      const noteDraft = suggestion.value.trim();
+      if (!noteDraft) {
+        return;
+      }
 
-    const currentNotes = captureReview.notes.trim();
-    if (!currentNotes.includes(noteDraft) && !appliedNoteDraftValuesRef.current.has(noteDraft)) {
-      const nextNotes = currentNotes ? `${currentNotes}\n\n${noteDraft}` : noteDraft;
-      onCaptureReviewChange('notes', nextNotes);
-    }
-    appliedNoteDraftValuesRef.current.add(noteDraft);
-    setAppliedMetadata((current) => mergeAppliedMetadata(current, 'notes', suggestion.source, suggestion.confidence));
-  }, [captureReview, onCaptureReviewChange]);
+      const currentNotes = captureReview.notes.trim();
+      if (!currentNotes.includes(noteDraft) && !appliedNoteDraftValuesRef.current.has(noteDraft)) {
+        const nextNotes = currentNotes ? `${currentNotes}\n\n${noteDraft}` : noteDraft;
+        onCaptureReviewChange('notes', nextNotes);
+      }
+      appliedNoteDraftValuesRef.current.add(noteDraft);
+      setAppliedMetadata(current =>
+        mergeAppliedMetadata(current, 'notes', suggestion.source, suggestion.confidence)
+      );
+    },
+    [captureReview, onCaptureReviewChange]
+  );
 
-  const applyCuisineSuggestion = useCallback((suggestion: MealInputAssistCuisineSuggestion) => {
-    onCaptureReviewChange('cuisineType', suggestion.value);
-    setAppliedMetadata((current) => mergeAppliedMetadata(current, 'cuisineType', suggestion.source, suggestion.confidence));
-  }, [onCaptureReviewChange]);
+  const applyCuisineSuggestion = useCallback(
+    (suggestion: MealInputAssistCuisineSuggestion) => {
+      onCaptureReviewChange('cuisineType', suggestion.value);
+      setAppliedMetadata(current =>
+        mergeAppliedMetadata(current, 'cuisineType', suggestion.source, suggestion.confidence)
+      );
+    },
+    [onCaptureReviewChange]
+  );
 
   return {
     status: effectiveStatus,
