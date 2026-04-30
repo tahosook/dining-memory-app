@@ -15,6 +15,7 @@ PRIMARY_DISH_LABEL_JA: Dict[str, str] = {
     "menu_or_text": "メニュー画像",
     "packaged_food": "包装食品",
     "meat_dish": "肉料理",
+    "fried_meat": "肉の揚げ物",
     "stew": "煮込み",
     "noodles": "麺類",
     "nimono": "煮物",
@@ -23,13 +24,25 @@ PRIMARY_DISH_LABEL_JA: Dict[str, str] = {
     "stir_fry": "炒め物",
     "grilled_meat": "焼肉・グリル肉",
     "pasta": "パスタ",
+    "pizza": "ピザ",
     "grilled_fish": "焼き魚",
     "fried_cutlet": "とんかつ",
+    "fried_chicken": "唐揚げ",
+    "fried_fish": "魚フライ",
+    "fried_rice": "チャーハン",
+    "fried_dumplings": "揚げ餃子",
+    "fried_dumpling": "揚げ餃子",
     "rice_bowl": "丼もの",
+    "rice_dish": "ご飯もの",
     "sushi": "寿司",
+    "grilled_sushi": "焼き寿司",
+    "sashimi": "刺身",
     "ramen": "ラーメン",
     "udon": "うどん",
     "soba": "そば",
+    "sandwich": "サンドイッチ",
+    "dim_sum": "点心",
+    "breakfast": "朝食",
     "salad": "サラダ",
     "soup": "スープ",
     "miso_soup": "味噌汁",
@@ -63,59 +76,94 @@ TRAINING_CLASS_MAP: Dict[str, str] = {
 }
 
 MEDIAPIPE_TRAINING_CLASSES = (
-    "bento",
     "curry_rice",
-    "dessert",
     "drink",
     "fish_dish",
+    "fried_dish",
     "meat_dish",
-    "nimono_or_stew",
     "noodles",
-    "other_food",
-    "packaged_food",
-    "pasta",
-    "set_meal_or_multi_dish",
+    "other_or_exclude",
+    "simmered_dish",
+    "stir_fry",
 )
 
 MEDIAPIPE_TRAINING_CLASS_MAP: Dict[str, str] = {
-    "bento": "bento",
+    "breakfast": "other_or_exclude",
+    "bento": "other_or_exclude",
+    "bread": "other_or_exclude",
     "curry_rice": "curry_rice",
-    "dessert": "dessert",
+    "dessert": "other_or_exclude",
+    "dim_sum": "other_or_exclude",
     "drink": "drink",
     "drinks": "drink",
+    "egg": "other_or_exclude",
+    "fried_chicken": "fried_dish",
+    "fried_cutlet": "fried_dish",
+    "fried_dumpling": "fried_dish",
+    "fried_dumplings": "fried_dish",
+    "fried_fish": "fried_dish",
+    "fried_meat": "fried_dish",
+    "fried_rice": "other_or_exclude",
     "grilled_fish": "fish_dish",
-    "fried_cutlet": "meat_dish",
+    "grilled_sushi": "other_or_exclude",
     "grilled_meat": "meat_dish",
     "meat_dish": "meat_dish",
-    "stir_fry": "meat_dish",
-    "meat_and_potato_stew": "nimono_or_stew",
-    "nimono": "nimono_or_stew",
-    "stew": "nimono_or_stew",
+    "meat_and_potato_stew": "simmered_dish",
+    "menu_or_text": "other_or_exclude",
+    "miso_soup": "other_or_exclude",
+    "multi_dish_table": "other_or_exclude",
+    "nimono": "simmered_dish",
+    "non_food": "other_or_exclude",
     "noodles": "noodles",
+    "packaged_food": "other_or_exclude",
+    "pasta": "noodles",
+    "pickles": "other_or_exclude",
+    "pizza": "other_or_exclude",
     "ramen": "noodles",
+    "rice": "other_or_exclude",
+    "rice_bowl": "other_or_exclude",
+    "rice_dish": "other_or_exclude",
+    "salad": "other_or_exclude",
+    "sandwich": "other_or_exclude",
+    "sauce": "other_or_exclude",
+    "sashimi": "fish_dish",
+    "set_meal": "other_or_exclude",
+    "side_dish": "other_or_exclude",
+    "soup": "other_or_exclude",
     "soba": "noodles",
+    "stew": "simmered_dish",
+    "stir_fry": "stir_fry",
+    "sushi": "other_or_exclude",
     "udon": "noodles",
-    "bread": "other_food",
-    "egg": "other_food",
-    "miso_soup": "other_food",
-    "rice": "other_food",
-    "rice_bowl": "other_food",
-    "salad": "other_food",
-    "side_dish": "other_food",
-    "soup": "other_food",
-    "sushi": "other_food",
-    "packaged_food": "packaged_food",
-    "pasta": "pasta",
-    "multi_dish_table": "set_meal_or_multi_dish",
-    "set_meal": "set_meal_or_multi_dish",
+    "unknown": "other_or_exclude",
 }
 
 MEDIAPIPE_EXCLUDED_PRIMARY_KEYS = {
     "missing",
-    "non_food",
     "unknown",
-    "menu_or_text",
 }
+
+MEDIAPIPE_OTHER_OR_EXCLUDE_CLASS = "other_or_exclude"
+MEDIAPIPE_EXCLUDE_CANDIDATE_PRIMARY_KEYS = {
+    "menu_or_text",
+    "multi_dish_table",
+    "non_food",
+    "packaged_food",
+    "set_meal",
+    "unknown",
+}
+MEDIAPIPE_UNRESOLVED_PRIMARY_KEYS = {
+    "missing",
+    "unknown",
+}
+REVIEW_PRIORITY_BUCKETS = (
+    "p1_unknown_candidates",
+    "p2_broad_stew_meat_dish",
+    "p3_side_item_primary",
+    "p4_low_confidence",
+    "p5_broad_noodles",
+    "p9_other_review",
+)
 
 NON_CONCRETE_PRIMARY_KEYS = BROAD_PRIMARY_KEYS | {
     "unknown",
@@ -201,6 +249,25 @@ def derive_mediapipe_training_class(
     scene_type: str = "",
     allow_direct_training_class: bool = True,
 ) -> str:
+    return derive_mediapipe_training_class_coarse(
+        primary_dish_key,
+        review_reasons=review_reasons,
+        is_food_related=is_food_related,
+        scene_type=scene_type,
+        allow_direct_training_class=allow_direct_training_class,
+        include_unresolved=False,
+    )
+
+
+def derive_mediapipe_training_class_coarse(
+    primary_dish_key: str,
+    *,
+    review_reasons: Optional[Sequence[str]] = None,
+    is_food_related: bool = True,
+    scene_type: str = "",
+    allow_direct_training_class: bool = True,
+    include_unresolved: bool = True,
+) -> str:
     key = str(primary_dish_key or "").strip().lower()
     normalized_scene_type = str(scene_type or "").strip().lower()
     reason_set = {
@@ -208,15 +275,96 @@ def derive_mediapipe_training_class(
         for reason in (review_reasons or [])
         if str(reason or "").strip()
     }
+    unresolved_class = MEDIAPIPE_OTHER_OR_EXCLUDE_CLASS if include_unresolved else ""
     if not is_food_related or normalized_scene_type == "non_food":
-        return ""
-    if key in MEDIAPIPE_EXCLUDED_PRIMARY_KEYS:
-        return ""
+        return MEDIAPIPE_OTHER_OR_EXCLUDE_CLASS
+    if key in MEDIAPIPE_UNRESOLVED_PRIMARY_KEYS:
+        return unresolved_class
     if "side_item_primary" in reason_set:
-        return ""
+        return unresolved_class
     if allow_direct_training_class and key in MEDIAPIPE_TRAINING_CLASSES:
         return key
-    return MEDIAPIPE_TRAINING_CLASS_MAP.get(key, "")
+    mapped = MEDIAPIPE_TRAINING_CLASS_MAP.get(key)
+    if mapped:
+        return mapped
+    return unresolved_class
+
+
+def is_mediapipe_training_target_unresolved(
+    *,
+    primary_dish_key: str,
+    review_reasons: Optional[Sequence[str]] = None,
+    is_food_related: bool = True,
+    scene_type: str = "",
+) -> bool:
+    key = str(primary_dish_key or "").strip().lower()
+    normalized_scene_type = str(scene_type or "").strip().lower()
+    reason_set = {
+        str(reason or "").strip().lower()
+        for reason in (review_reasons or [])
+        if str(reason or "").strip()
+    }
+    if key in MEDIAPIPE_UNRESOLVED_PRIMARY_KEYS:
+        return True
+    if "unknown_primary" in reason_set or "side_item_primary" in reason_set:
+        return True
+    return derive_mediapipe_training_class(
+        key,
+        review_reasons=review_reasons,
+        is_food_related=is_food_related,
+        scene_type=normalized_scene_type,
+    ) == ""
+
+
+def is_mediapipe_exclude_candidate_primary(
+    *,
+    primary_dish_key: str,
+    is_food_related: bool = True,
+    scene_type: str = "",
+    meal_style: str = "",
+) -> bool:
+    key = str(primary_dish_key or "").strip().lower()
+    normalized_scene_type = str(scene_type or "").strip().lower()
+    normalized_meal_style = str(meal_style or "").strip().lower()
+    if not is_food_related or normalized_scene_type == "non_food":
+        return True
+    if key in MEDIAPIPE_EXCLUDE_CANDIDATE_PRIMARY_KEYS:
+        return True
+    return normalized_scene_type in {"menu_or_text", "packaged_food"} or normalized_meal_style == "packaged"
+
+
+def derive_review_priority_bucket(
+    *,
+    primary_dish_key: str,
+    review_reasons: Optional[Sequence[str]] = None,
+    needs_human_review: bool = False,
+) -> str:
+    key = str(primary_dish_key or "").strip().lower()
+    reason_set = {
+        str(reason or "").strip().lower()
+        for reason in (review_reasons or [])
+        if str(reason or "").strip()
+    }
+    if key == "unknown" or "unknown_primary" in reason_set:
+        return "p1_unknown_candidates"
+    if "broad_primary" in reason_set and key in {"stew", "meat_dish"}:
+        return "p2_broad_stew_meat_dish"
+    if "side_item_primary" in reason_set:
+        return "p3_side_item_primary"
+    if "low_confidence" in reason_set:
+        return "p4_low_confidence"
+    if "broad_primary" in reason_set and key == "noodles":
+        return "p5_broad_noodles"
+    if needs_human_review or reason_set:
+        return "p9_other_review"
+    return ""
+
+
+def review_priority_rank(review_priority_bucket: str) -> int:
+    try:
+        return REVIEW_PRIORITY_BUCKETS.index(review_priority_bucket) + 1
+    except ValueError:
+        return 99
 
 
 def resolve_primary_dish_label_ja(primary_dish_key: str, fallback: Any = "") -> str:

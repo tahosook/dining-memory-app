@@ -343,6 +343,31 @@ class MediaPipeLabelingLoopTests(unittest.TestCase):
         self.assertEqual(target["target_key"], "stew")
         self.assertIn("nimono", target["hypothesis_text"])
 
+    def test_stop_condition_uses_coarse_class_count_and_unmapped_broad(self) -> None:
+        config = make_config()
+        summary = make_summary(
+            filtered_v3_records=100,
+            broad_primary=(40, 0.04),
+            broad_primary_key=[
+                {"value": "noodles", "count": 20},
+                {"value": "stew", "count": 12},
+                {"value": "meat_dish", "count": 8},
+            ],
+        )
+        summary["totals"]["broad_primary_unmapped_training_class"] = {"count": 0, "ratio": 0.0}
+        summary["sanity_checks"] = {
+            "mediapipe_class_set_coarse_summary": {
+                "class_count": 9,
+                "within_preferred_range": True,
+            }
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            stop = MODULE.evaluate_stop_conditions(summary, config, Path(temp_dir))
+
+        self.assertTrue(stop["met"])
+        self.assertEqual(stop["coarse_mediapipe_training_class_count"], 9)
+        self.assertEqual(stop["broad_checks"][0]["residual_basis"], "broad_primary_unmapped_training_class")
+
     def test_run_loop_bootstraps_baseline_and_skips_cycle_relabel_with_dry_run_executor(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -308,6 +308,18 @@ def count_design_candidate_primary_keys(summary: Dict[str, Any]) -> int:
     return len(items or [])
 
 
+def count_coarse_mediapipe_training_classes(summary: Dict[str, Any]) -> int:
+    sanity_checks = ensure_dict(summary.get("sanity_checks"))
+    coarse_summary = ensure_dict(sanity_checks.get("mediapipe_class_set_coarse_summary"))
+    class_count = coarse_summary.get("class_count")
+    if class_count is not None:
+        return coerce_int(class_count)
+    items = extract_top_count_items(summary, "mediapipe_training_class_coarse")
+    if items is not None:
+        return len(items)
+    return count_design_candidate_primary_keys(summary)
+
+
 def metric_needs_work(metric_name: str, metric_value: Dict[str, Optional[float]], config: Dict[str, Any]) -> bool:
     stop_metrics = ensure_dict(ensure_dict(config.get("stop_conditions")).get("metrics"))
     thresholds = ensure_dict(stop_metrics.get(metric_name))
@@ -376,6 +388,9 @@ def build_next_target_hints(
     broad_stats = load_broad_candidate_stats(report_dir)
     broad_stop = ensure_dict(ensure_dict(config.get("stop_conditions")).get("broad_keys"))
     broad_max_residual = coerce_int(broad_stop.get("max_residual_count"))
+    broad_unmapped_metric = extract_total_metric(summary, "broad_primary_unmapped_training_class")
+    if broad_unmapped_metric is not None and coerce_int(broad_unmapped_metric.get("count")) <= broad_max_residual:
+        broad_map = {}
     broad_share_threshold = coerce_float(broad_stop.get("dominant_candidate_share_threshold"))
     if broad_share_threshold is None:
         broad_share_threshold = 0.6
@@ -498,37 +513,52 @@ def evaluate_stop_conditions(
 
     broad_checks: List[Dict[str, Any]] = []
     all_broad_checks_passed = True
-    for broad_key in ensure_list(config.get("priority_broad_keys")):
-        normalized_key = str(broad_key)
-        residual_count = coerce_int(broad_map.get(normalized_key))
-        stats = ensure_dict(broad_stats.get(normalized_key))
-        dominant_candidate_key = stats.get("dominant_candidate_key")
-        dominant_candidate_share = coerce_float(stats.get("dominant_candidate_share")) or 0.0
-        satisfied = residual_count <= max_residual_count
-        if (
-            residual_count >= min_residual_count_for_dominant_share
-            and dominant_candidate_key
-            and dominant_candidate_share >= dominant_candidate_share_threshold
-        ):
-            satisfied = True
+    broad_unmapped_metric = extract_total_metric(summary, "broad_primary_unmapped_training_class")
+    if broad_unmapped_metric is not None:
+        broad_unmapped_count = coerce_int(broad_unmapped_metric.get("count"))
+        all_broad_checks_passed = broad_unmapped_count <= max_residual_count
         broad_checks.append(
             {
-                "broad_key": normalized_key,
-                "residual_count": residual_count,
-                "dominant_candidate_key": dominant_candidate_key,
-                "dominant_candidate_share": dominant_candidate_share,
-                "satisfied": satisfied,
+                "broad_key": "*",
+                "residual_count": broad_unmapped_count,
+                "residual_basis": "broad_primary_unmapped_training_class",
+                "dominant_candidate_key": None,
+                "dominant_candidate_share": None,
+                "satisfied": all_broad_checks_passed,
             }
         )
-        all_broad_checks_passed = all_broad_checks_passed and satisfied
+    else:
+        for broad_key in ensure_list(config.get("priority_broad_keys")):
+            normalized_key = str(broad_key)
+            residual_count = coerce_int(broad_map.get(normalized_key))
+            stats = ensure_dict(broad_stats.get(normalized_key))
+            dominant_candidate_key = stats.get("dominant_candidate_key")
+            dominant_candidate_share = coerce_float(stats.get("dominant_candidate_share")) or 0.0
+            satisfied = residual_count <= max_residual_count
+            if (
+                residual_count >= min_residual_count_for_dominant_share
+                and dominant_candidate_key
+                and dominant_candidate_share >= dominant_candidate_share_threshold
+            ):
+                satisfied = True
+            broad_checks.append(
+                {
+                    "broad_key": normalized_key,
+                    "residual_count": residual_count,
+                    "dominant_candidate_key": dominant_candidate_key,
+                    "dominant_candidate_share": dominant_candidate_share,
+                    "satisfied": satisfied,
+                }
+            )
+            all_broad_checks_passed = all_broad_checks_passed and satisfied
 
     preferred_range = ensure_dict(stop_conditions.get("preferred_primary_class_count_range"))
-    design_candidate_count = count_design_candidate_primary_keys(summary)
+    coarse_training_class_count = count_coarse_mediapipe_training_classes(summary)
     min_classes = coerce_int(preferred_range.get("min"))
     max_classes = coerce_int(preferred_range.get("max"))
-    design_count_in_range = min_classes <= design_candidate_count <= max_classes
+    coarse_count_in_range = min_classes <= coarse_training_class_count <= max_classes
 
-    met = all_metric_checks_passed and all_broad_checks_passed
+    met = all_metric_checks_passed and all_broad_checks_passed and coarse_count_in_range
     next_phase = determine_recommended_next_phase(
         summary=summary,
         config=config,
@@ -539,8 +569,10 @@ def evaluate_stop_conditions(
         "met": met,
         "metric_checks": metric_checks,
         "broad_checks": broad_checks,
-        "design_candidate_primary_class_count": design_candidate_count,
-        "design_candidate_primary_class_count_in_range": design_count_in_range,
+        "design_candidate_primary_class_count": count_design_candidate_primary_keys(summary),
+        "design_candidate_primary_class_count_in_range": coarse_count_in_range,
+        "coarse_mediapipe_training_class_count": coarse_training_class_count,
+        "coarse_mediapipe_training_class_count_in_range": coarse_count_in_range,
         "next_phase": next_phase,
     }
 
@@ -557,10 +589,10 @@ def determine_recommended_next_phase(
 
     stop_conditions = ensure_dict(config.get("stop_conditions"))
     preferred_range = ensure_dict(stop_conditions.get("preferred_primary_class_count_range"))
-    design_candidate_count = count_design_candidate_primary_keys(summary)
+    coarse_training_class_count = count_coarse_mediapipe_training_classes(summary)
     min_classes = coerce_int(preferred_range.get("min"))
     max_classes = coerce_int(preferred_range.get("max"))
-    if min_classes <= design_candidate_count <= max_classes:
+    if min_classes <= coarse_training_class_count <= max_classes:
         return "MediaPipe class set finalization"
 
     needs_review = extract_total_metric(summary, "needs_human_review") or {"count": 0, "ratio": 0.0}

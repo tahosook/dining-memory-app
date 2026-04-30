@@ -16,22 +16,38 @@ from typing import Any, Dict, List, Optional, Sequence
 try:
     from food_label_taxonomy import (
         BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        MEDIAPIPE_TRAINING_CLASSES,
         NON_CONCRETE_PRIMARY_KEYS,
         PRIMARY_DISH_LABEL_JA,
         TRAINING_CLASS_MAP,
+        derive_mediapipe_training_class,
+        derive_mediapipe_training_class_coarse,
         derive_boolean_flags,
         derive_design_candidate_primary_key,
+        derive_review_priority_bucket,
         derive_training_class_candidate,
+        is_mediapipe_exclude_candidate_primary,
+        is_mediapipe_training_target_unresolved,
+        resolve_primary_dish_label_ja,
+        review_priority_rank,
     )
 except ImportError:
     from scripts.food_label_taxonomy import (
         BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        MEDIAPIPE_TRAINING_CLASSES,
         NON_CONCRETE_PRIMARY_KEYS,
         PRIMARY_DISH_LABEL_JA,
         TRAINING_CLASS_MAP,
+        derive_mediapipe_training_class,
+        derive_mediapipe_training_class_coarse,
         derive_boolean_flags,
         derive_design_candidate_primary_key,
+        derive_review_priority_bucket,
         derive_training_class_candidate,
+        is_mediapipe_exclude_candidate_primary,
+        is_mediapipe_training_target_unresolved,
+        resolve_primary_dish_label_ja,
+        review_priority_rank,
     )
 
 
@@ -63,6 +79,8 @@ CSV_FIELDNAMES = [
     "primary_dish_key",
     "final_primary_dish_key",
     "primary_dish_label_ja",
+    "mediapipe_training_class_candidate_raw",
+    "mediapipe_training_class_coarse",
     "primary_dish_candidates",
     "best_concrete_candidate_key",
     "top1_key",
@@ -76,6 +94,8 @@ CSV_FIELDNAMES = [
     "meal_style",
     "serving_style",
     "container_hint",
+    "review_priority",
+    "review_priority_bucket",
     "review_bucket",
     "broad_refinement_status",
     "crop_refinement_status",
@@ -460,6 +480,10 @@ def analyze_records(
     confidence_value_counter = Counter()
     boolean_mismatch_counter = Counter()
     training_class_candidate_counter = Counter()
+    training_class_candidate_raw_counter = Counter()
+    training_class_coarse_counter = Counter()
+    training_exclude_candidate_counter = Counter()
+    review_priority_bucket_counter = Counter()
 
     needs_human_review_count = 0
     unknown_primary_count = 0
@@ -476,6 +500,11 @@ def analyze_records(
     crop_refinement_skipped_count = 0
     crop_refinement_rejected_count = 0
     low_confidence_count = 0
+    broad_primary_mapped_training_class_count = 0
+    broad_primary_unmapped_training_class_count = 0
+    training_target_unresolved_count = 0
+    unknown_training_target_unresolved_count = 0
+    drink_menu_or_text_suppressed_count = 0
     candidate_score_count = 0
     candidate_score_zero_count = 0
     untranslated_label_ja_count = 0
@@ -492,9 +521,11 @@ def analyze_records(
         cuisine_type = normalize_scalar(payload.get("cuisine_type"))
         meal_style = normalize_scalar(payload.get("meal_style"))
         serving_style = normalize_scalar(payload.get("serving_style"))
+        is_food_related = True if payload.get("is_food_related") is None else coerce_bool(payload.get("is_food_related"))
         supporting_items = extract_string_list(payload.get("supporting_items"))
         review_reasons = extract_string_list(payload.get("review_reasons"))
         free_tags = extract_string_list(payload.get("free_tags"))
+        needs_human_review = coerce_bool(payload.get("needs_human_review"))
         broad_primary_candidate_key = detect_broad_primary_concrete_candidate_key(record)
         crop_refinement_triggered = detect_crop_refinement_triggered(payload)
         crop_refinement_applied = coerce_bool(payload.get("crop_refinement_applied"))
@@ -517,14 +548,54 @@ def analyze_records(
         boolean_mismatch_counter.update(detect_boolean_mismatches(payload))
         if has_untranslated_label(primary_dish_key, payload.get("primary_dish_label_ja")):
             untranslated_label_ja_count += 1
-        training_class_candidate = derive_training_class_candidate(
+        training_class_candidate_raw = derive_training_class_candidate(
             primary_dish_key,
             review_reasons=review_reasons,
         )
-        if training_class_candidate:
-            training_class_candidate_counter[training_class_candidate] += 1
+        if training_class_candidate_raw:
+            training_class_candidate_raw_counter[training_class_candidate_raw] += 1
+            training_class_candidate_counter[training_class_candidate_raw] += 1
+        training_class_coarse = derive_mediapipe_training_class_coarse(
+            primary_dish_key,
+            review_reasons=review_reasons,
+            is_food_related=is_food_related,
+            scene_type=scene_type,
+        )
+        if training_class_coarse:
+            training_class_coarse_counter[training_class_coarse] += 1
+        mapped_training_class = derive_mediapipe_training_class(
+            primary_dish_key,
+            review_reasons=review_reasons,
+            is_food_related=is_food_related,
+            scene_type=scene_type,
+        )
+        if is_mediapipe_exclude_candidate_primary(
+            primary_dish_key=primary_dish_key,
+            is_food_related=is_food_related,
+            scene_type=scene_type,
+            meal_style=meal_style,
+        ):
+            training_exclude_candidate_counter[primary_dish_key] += 1
+        if is_mediapipe_training_target_unresolved(
+            primary_dish_key=primary_dish_key,
+            review_reasons=review_reasons,
+            is_food_related=is_food_related,
+            scene_type=scene_type,
+        ):
+            training_target_unresolved_count += 1
+            if primary_dish_key == UNKNOWN_VALUE or "unknown_primary" in review_reasons:
+                unknown_training_target_unresolved_count += 1
+        review_priority_bucket = derive_review_priority_bucket(
+            primary_dish_key=primary_dish_key,
+            review_reasons=review_reasons,
+            needs_human_review=needs_human_review,
+        )
+        if review_priority_bucket:
+            review_priority_bucket_counter[review_priority_bucket] += 1
+        if should_suppress_drink_menu_or_text_review_trigger(payload):
+            drink_menu_or_text_suppressed_count += 1
 
-        if coerce_bool(payload.get("needs_human_review")):
+        if needs_human_review:
             needs_human_review_count += 1
         if "unknown_primary" in review_reasons:
             unknown_primary_count += 1
@@ -535,6 +606,10 @@ def analyze_records(
         if primary_dish_key in BROAD_PRIMARY_KEYS:
             broad_primary_count += 1
             broad_primary_key_counter[primary_dish_key] += 1
+            if mapped_training_class:
+                broad_primary_mapped_training_class_count += 1
+            else:
+                broad_primary_unmapped_training_class_count += 1
             if broad_primary_candidate_key is not None:
                 broad_primary_concrete_candidate_counter[broad_primary_candidate_key] += 1
         if coarse_primary_dish_key in BROAD_PRIMARY_KEYS:
@@ -658,6 +733,20 @@ def analyze_records(
                 crop_refinement_triggered_count,
             ),
             "low_confidence": build_count_ratio(low_confidence_count, filtered_count),
+            "broad_primary_mapped_training_class": build_count_ratio(
+                broad_primary_mapped_training_class_count,
+                broad_primary_count,
+            ),
+            "broad_primary_unmapped_training_class": build_count_ratio(
+                broad_primary_unmapped_training_class_count,
+                broad_primary_count,
+            ),
+            "training_target_unresolved": build_count_ratio(training_target_unresolved_count, filtered_count),
+            "unknown_training_target_unresolved": build_count_ratio(
+                unknown_training_target_unresolved_count,
+                filtered_count,
+            ),
+            "drink_menu_or_text_suppressed": build_count_ratio(drink_menu_or_text_suppressed_count, filtered_count),
         },
         "schema_version_counts": dict(sorted(schema_version_counts.items())),
         "top_counts": {
@@ -675,6 +764,10 @@ def analyze_records(
             "broad_primary_concrete_candidate_key": counter_to_items(broad_primary_concrete_candidate_counter, top_n),
             "broad_refinement_resolved_to_key": counter_to_items(broad_refinement_resolved_to_key_counter, top_n),
             "mediapipe_training_class_candidate": counter_to_items(training_class_candidate_counter, top_n),
+            "mediapipe_training_class_candidate_raw": counter_to_items(training_class_candidate_raw_counter, top_n),
+            "mediapipe_training_class_coarse": counter_to_items(training_class_coarse_counter, top_n),
+            "mediapipe_training_exclude_candidate_key": counter_to_items(training_exclude_candidate_counter, top_n),
+            "review_priority_bucket": review_priority_counter_to_items(review_priority_bucket_counter),
         },
         "sanity_checks": {
             "candidate_score_zero_ratio": build_count_ratio(candidate_score_zero_count, candidate_score_count),
@@ -684,6 +777,9 @@ def analyze_records(
             "boolean_mismatch_counts": dict(sorted(boolean_mismatch_counter.items())),
             "untranslated_label_ja_count": untranslated_label_ja_count,
             "mediapipe_class_set_candidate_summary": build_mediapipe_class_set_summary(training_class_candidate_counter),
+            "mediapipe_class_set_candidate_raw_summary": build_mediapipe_class_set_summary(training_class_candidate_raw_counter),
+            "mediapipe_class_set_coarse_summary": build_mediapipe_class_set_summary(training_class_coarse_counter),
+            "available_mediapipe_training_classes": list(MEDIAPIPE_TRAINING_CLASSES),
         },
         "crop_refinement_trigger_reason_counts": counter_to_items(crop_refinement_trigger_reason_counter, top_n),
         "crop_refinement_skip_reason_counts": counter_to_items(crop_refinement_skip_reason_counter, top_n),
@@ -694,9 +790,15 @@ def analyze_records(
                 "side_item_primary": build_count_ratio(side_item_primary_count, filtered_count),
                 "broad_primary": build_count_ratio(broad_primary_count, filtered_count),
                 "needs_human_review": build_count_ratio(needs_human_review_count, filtered_count),
+                "broad_primary_unmapped_training_class": build_count_ratio(
+                    broad_primary_unmapped_training_class_count,
+                    broad_primary_count,
+                ),
+                "training_target_unresolved": build_count_ratio(training_target_unresolved_count, filtered_count),
             },
             broad_primary_key_counter=broad_primary_key_counter,
-            training_class_candidate_counter=training_class_candidate_counter,
+            training_class_candidate_counter=training_class_coarse_counter,
+            broad_primary_unmapped_training_class_count=broad_primary_unmapped_training_class_count,
         ),
         "candidate_counts": {
             "review_candidates": len(review_candidates),
@@ -706,6 +808,7 @@ def analyze_records(
             "low_confidence_candidates": len(low_confidence_candidates),
             "broad_primary_candidates": len(broad_primary_candidates),
         },
+        "review_priority_bucket_counts": review_priority_counter_to_items(review_priority_bucket_counter),
         "errors": {
             "broken_json_count": broken_json_count,
             "invalid_record_shape_count": invalid_record_shape_count,
@@ -780,6 +883,13 @@ def counter_to_items(counter: Counter, top_n: int) -> List[Dict[str, Any]]:
     return [
         {"value": value, "count": count}
         for value, count in sorted(counter.items(), key=lambda item: (-item[1], str(item[0])))[:top_n]
+    ]
+
+
+def review_priority_counter_to_items(counter: Counter) -> List[Dict[str, Any]]:
+    return [
+        {"value": value, "count": counter[value]}
+        for value in sorted(counter, key=lambda item: (review_priority_rank(item), item))
     ]
 
 
@@ -882,6 +992,20 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
     lines.extend(
         [
             "",
+            "### mediapipe_training_class_coarse",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts.get("mediapipe_training_class_coarse", [])))
+    lines.extend(
+        [
+            "",
+            "### review_priority_bucket",
+        ]
+    )
+    lines.extend(render_top_count_table(top_counts.get("review_priority_bucket", [])))
+    lines.extend(
+        [
+            "",
             "## Review & Design Signals",
             f"- 人手レビュー推奨件数: {totals['needs_human_review']['count']} ({format_percent(totals['needs_human_review']['ratio'])})",
             f"- unknown_primary 件数: {totals['unknown_primary']['count']} ({format_percent(totals['unknown_primary']['ratio'])})",
@@ -900,6 +1024,11 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
             f"- crop_refinement_effective_rate: {format_percent(totals['crop_refinement_effective_rate']['ratio'])}",
             f"- crop_triggered_but_not_applied 件数: {totals['crop_triggered_but_not_applied']['count']} ({format_percent(totals['crop_triggered_but_not_applied']['ratio'])})",
             f"- low_confidence 件数: {totals['low_confidence']['count']} ({format_percent(totals['low_confidence']['ratio'])})",
+            f"- broad_primary mapped training class 件数: {totals['broad_primary_mapped_training_class']['count']} ({format_percent(totals['broad_primary_mapped_training_class']['ratio'])})",
+            f"- broad_primary unmapped training class 件数: {totals['broad_primary_unmapped_training_class']['count']} ({format_percent(totals['broad_primary_unmapped_training_class']['ratio'])})",
+            f"- training target unresolved 件数: {totals['training_target_unresolved']['count']} ({format_percent(totals['training_target_unresolved']['ratio'])})",
+            f"- unknown training target unresolved 件数: {totals['unknown_training_target_unresolved']['count']} ({format_percent(totals['unknown_training_target_unresolved']['ratio'])})",
+            f"- drink/menu_or_text suppressed 件数: {totals['drink_menu_or_text_suppressed']['count']} ({format_percent(totals['drink_menu_or_text_suppressed']['ratio'])})",
             f"- review_candidates.csv 件数: {candidate_counts['review_candidates']}",
             f"- unknown_candidates.csv 件数: {candidate_counts['unknown_candidates']}",
             f"- scene_dominant_candidates.csv 件数: {candidate_counts['scene_dominant_candidates']}",
@@ -934,6 +1063,8 @@ def build_summary_markdown(summary_json: Dict[str, Any]) -> str:
             f"- untranslated label_ja count: {sanity_checks.get('untranslated_label_ja_count', 0)}",
             f"- boolean mismatch counts: {format_counter_map(sanity_checks.get('boolean_mismatch_counts', {}))}",
             f"- MediaPipe class candidate count: {sanity_checks.get('mediapipe_class_set_candidate_summary', {}).get('class_count', 0)}",
+            f"- MediaPipe coarse class count: {sanity_checks.get('mediapipe_class_set_coarse_summary', {}).get('class_count', 0)}",
+            f"- MediaPipe coarse class preferred range: {format_bool(sanity_checks.get('mediapipe_class_set_coarse_summary', {}).get('within_preferred_range', False))}",
             "",
             "## Insights",
         ]
@@ -1090,6 +1221,23 @@ def detect_crop_refinement_triggered(payload: Dict[str, Any]) -> bool:
     return crop_refinement_status not in {"missing", "not_triggered"}
 
 
+def should_suppress_drink_menu_or_text_review_trigger(payload: Dict[str, Any]) -> bool:
+    primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
+    scene_type = normalize_scalar(payload.get("scene_type"))
+    meal_style = normalize_scalar(payload.get("meal_style"))
+    review_reasons = extract_string_list(payload.get("review_reasons"))
+    explicit_suppressed = extract_string_list(payload.get("review_trigger_suppressed_reasons"))
+    if "menu_or_text" in explicit_suppressed:
+        return True
+    return (
+        primary_dish_key == "drink"
+        and "menu_or_text" in review_reasons
+        and (scene_type == "drink_only" or meal_style == "drink")
+        and scene_type != "menu_or_text"
+        and not coerce_bool(payload.get("is_menu_or_text_only"))
+    )
+
+
 def normalize_optional_scalar(value: Any) -> str:
     normalized = normalize_scalar(value)
     return "" if normalized == "missing" else normalized
@@ -1150,6 +1298,7 @@ def evaluate_stop_conditions(
     totals: Dict[str, Dict[str, Any]],
     broad_primary_key_counter: Counter,
     training_class_candidate_counter: Counter,
+    broad_primary_unmapped_training_class_count: int = 0,
 ) -> Dict[str, Any]:
     config = load_goals_config()
     stop_conditions = config.get("stop_conditions", {}) if isinstance(config, dict) else {}
@@ -1176,7 +1325,7 @@ def evaluate_stop_conditions(
     class_count = len(training_class_candidate_counter)
     broad_key_rules = stop_conditions.get("broad_keys", {}) if isinstance(stop_conditions, dict) else {}
     max_residual_count = broad_key_rules.get("max_residual_count", 5) if isinstance(broad_key_rules, dict) else 5
-    broad_residual_total = sum(broad_primary_key_counter.values())
+    broad_residual_total = broad_primary_unmapped_training_class_count
     return {
         "config_path": str(GOALS_CONFIG_PATH),
         "metrics": metric_results,
@@ -1184,11 +1333,17 @@ def evaluate_stop_conditions(
             "passed": min_count <= class_count <= max_count,
             "actual": class_count,
             "range": {"min": min_count, "max": max_count},
+            "basis": "mediapipe_training_class_coarse",
         },
         "broad_residual_total": {
             "passed": broad_residual_total <= max_residual_count,
             "actual": broad_residual_total,
             "max_residual_count": max_residual_count,
+            "basis": "broad_primary_unmapped_training_class",
+        },
+        "broad_primary_key_counts": {
+            key: broad_primary_key_counter[key]
+            for key in sorted(broad_primary_key_counter)
         },
     }
 
@@ -1287,14 +1442,39 @@ def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str
     coarse_primary_dish_key = normalize_scalar(payload.get("coarse_primary_dish_key"))
     if coarse_primary_dish_key == "missing":
         coarse_primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
+    primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
+    review_reasons = extract_string_list(payload.get("review_reasons"))
+    is_food_related = True if payload.get("is_food_related") is None else coerce_bool(payload.get("is_food_related"))
+    scene_type = normalize_scalar(payload.get("scene_type"))
+    needs_human_review = coerce_bool(payload.get("needs_human_review"))
+    training_class_candidate_raw = derive_training_class_candidate(
+        primary_dish_key,
+        review_reasons=review_reasons,
+    )
+    training_class_coarse = derive_mediapipe_training_class_coarse(
+        primary_dish_key,
+        review_reasons=review_reasons,
+        is_food_related=is_food_related,
+        scene_type=scene_type,
+    )
+    review_priority_bucket = derive_review_priority_bucket(
+        primary_dish_key=primary_dish_key,
+        review_reasons=review_reasons,
+        needs_human_review=needs_human_review,
+    )
     row = {
         "image_id": clean_text(payload.get("image_id")),
         "source_path": record.source_path,
         "analysis_confidence": format_confidence(record.analysis_confidence),
         "coarse_primary_dish_key": coarse_primary_dish_key,
-        "primary_dish_key": normalize_scalar(payload.get("primary_dish_key")),
-        "final_primary_dish_key": normalize_scalar(payload.get("primary_dish_key")),
-        "primary_dish_label_ja": clean_text(payload.get("primary_dish_label_ja")),
+        "primary_dish_key": primary_dish_key,
+        "final_primary_dish_key": primary_dish_key,
+        "primary_dish_label_ja": resolve_primary_dish_label_ja(
+            primary_dish_key,
+            clean_text(payload.get("primary_dish_label_ja")),
+        ),
+        "mediapipe_training_class_candidate_raw": training_class_candidate_raw,
+        "mediapipe_training_class_coarse": training_class_coarse,
         "primary_dish_candidates": ";".join(extract_primary_dish_candidates(payload.get("primary_dish_candidates"))),
         "best_concrete_candidate_key": score_info["best_concrete_candidate_key"],
         "top1_key": score_info["top1_key"],
@@ -1303,11 +1483,13 @@ def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str
         "top2_score": format_confidence(score_info["top2_score"]),
         "score_gap": format_confidence(score_info["score_gap"]),
         "supporting_items": ";".join(extract_string_list(payload.get("supporting_items"))),
-        "scene_type": normalize_scalar(payload.get("scene_type")),
+        "scene_type": scene_type,
         "cuisine_type": normalize_scalar(payload.get("cuisine_type")),
         "meal_style": normalize_scalar(payload.get("meal_style")),
         "serving_style": normalize_scalar(payload.get("serving_style")),
         "container_hint": normalize_scalar(payload.get("container_hint")),
+        "review_priority": str(review_priority_rank(review_priority_bucket)) if review_priority_bucket else "",
+        "review_priority_bucket": review_priority_bucket,
         "review_bucket": normalize_scalar(payload.get("review_bucket")),
         "broad_refinement_status": normalize_scalar(payload.get("broad_refinement_status")),
         "crop_refinement_status": normalize_scalar(payload.get("crop_refinement_status")),
@@ -1317,8 +1499,8 @@ def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str
         "crop_refinement_skip_reason": normalize_optional_scalar(payload.get("crop_refinement_skip_reason")),
         "crop_refinement_reject_reason": normalize_optional_scalar(payload.get("crop_refinement_reject_reason")),
         "broad_refinement_compare_keys": ";".join(extract_string_list(payload.get("broad_refinement_compare_keys"))),
-        "needs_human_review": format_bool(payload.get("needs_human_review")),
-        "review_reasons": ";".join(extract_string_list(payload.get("review_reasons"))),
+        "needs_human_review": format_bool(needs_human_review),
+        "review_reasons": ";".join(review_reasons),
         "uncertainty_reasons": ";".join(extract_string_list(payload.get("uncertainty_reasons"))),
         "free_tags": ";".join(extract_string_list(payload.get("free_tags"))),
         "review_note_ja": clean_text(payload.get("review_note_ja")),
@@ -1331,6 +1513,7 @@ def build_csv_row(record: LoadedRecord, candidate_reasons: Optional[Sequence[str
 def sort_candidate_rows(rows: List[Dict[str, str]]) -> None:
     rows.sort(
         key=lambda row: (
+            int(row.get("review_priority") or 99),
             safe_float(row.get("analysis_confidence"), default=999.0),
             row.get("image_id", ""),
             row.get("source_path", ""),
@@ -1384,6 +1567,7 @@ def print_console_summary(
         f"low_confidence={totals['low_confidence']['count']} "
         f"unknown_primary={totals['unknown_primary']['count']} "
         f"broad_primary={totals['broad_primary']['count']} "
+        f"broad_unmapped={totals.get('broad_primary_unmapped_training_class', {}).get('count', 0)} "
         f"coarse_broad_primary={totals['coarse_broad_primary']['count']} "
         f"refined={totals['broad_refinement_resolved']['count']} "
         f"kept_broad={totals['broad_refinement_kept_broad']['count']} "
@@ -1403,6 +1587,10 @@ def print_console_summary(
     print(
         "Top broad_refinement_resolved_to_key: "
         f"{format_top_items(top_counts['broad_refinement_resolved_to_key'], top_n)}"
+    )
+    print(
+        "Top mediapipe_training_class_coarse: "
+        f"{format_top_items(top_counts.get('mediapipe_training_class_coarse', []), top_n)}"
     )
     print(f"Top scene_type: {format_top_items(top_counts['scene_type'], top_n)}")
     print("Outputs:")

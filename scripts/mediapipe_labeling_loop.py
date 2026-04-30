@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 from mediapipe_labeling_common import (
     build_next_target_hints,
     compare_reports,
-    count_design_candidate_primary_keys,
+    count_coarse_mediapipe_training_classes,
     coerce_float,
     coerce_int,
     determine_recommended_next_phase,
@@ -599,19 +599,19 @@ def decide_next_phase_on_stop(
     unknown_primary = extract_total_metric(summary, "unknown_primary") or {"count": 0, "ratio": 0.0}
     side_item_primary = extract_total_metric(summary, "side_item_primary") or {"count": 0, "ratio": 0.0}
     needs_review = extract_total_metric(summary, "needs_human_review") or {"count": 0, "ratio": 0.0}
-    broad_primary = extract_total_metric(summary, "broad_primary") or {"count": 0, "ratio": 0.0}
+    broad_unmapped = extract_total_metric(summary, "broad_primary_unmapped_training_class") or {"count": 0, "ratio": 0.0}
 
     unknown_ratio = coerce_float(unknown_primary.get("ratio")) or 0.0
     side_ratio = coerce_float(side_item_primary.get("ratio")) or 0.0
     needs_review_ratio = coerce_float(needs_review.get("ratio")) or 0.0
-    broad_ratio = coerce_float(broad_primary.get("ratio")) or 0.0
-    design_candidate_count = count_design_candidate_primary_keys(summary)
+    broad_unmapped_count = coerce_int(broad_unmapped.get("count"))
+    coarse_training_class_count = count_coarse_mediapipe_training_classes(summary)
     preferred_range = ensure_dict(
         ensure_dict(config.get("stop_conditions")).get("preferred_primary_class_count_range")
     )
     if (
-        coerce_int(preferred_range.get("min")) <= design_candidate_count <= coerce_int(preferred_range.get("max"))
-        and broad_ratio <= 0.12
+        coerce_int(preferred_range.get("min")) <= coarse_training_class_count <= coerce_int(preferred_range.get("max"))
+        and broad_unmapped_count <= 5
     ):
         return "MediaPipe class set finalization"
     if unknown_ratio <= 0.03 and side_ratio <= 0.03 and needs_review_ratio > 0.0:

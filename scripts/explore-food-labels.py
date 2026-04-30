@@ -1992,7 +1992,17 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
     )
 
     review_reasons = review_reasons[:MAX_REVIEW_REASONS]
-    needs_human_review = any(reason in REVIEW_TRIGGER_REASONS for reason in review_reasons)
+    review_trigger_suppressed_reasons = derive_suppressed_review_trigger_reasons(
+        primary_dish_key=primary_dish_key,
+        scene_type=scene_type,
+        meal_style=meal_style,
+        is_menu_or_text_only=is_menu_or_text_only,
+        review_reasons=review_reasons,
+    )
+    needs_human_review = any(
+        reason in REVIEW_TRIGGER_REASONS and reason not in review_trigger_suppressed_reasons
+        for reason in review_reasons
+    )
 
     broad_refinement_note_ja = clean_short_text(raw_result.get("broad_refinement_note_ja"))
     review_note_ja = clean_short_text(raw_result.get("review_note_ja"))
@@ -2053,6 +2063,7 @@ def normalize_result(raw_result: Dict[str, Any], *, image_id: str, source_path: 
         "visual_attributes": visual_attributes,
         "uncertainty_reasons": uncertainty_reasons,
         "review_reasons": review_reasons,
+        "review_trigger_suppressed_reasons": review_trigger_suppressed_reasons,
         "free_tags": free_tags,
         "review_note_ja": review_note_ja,
         "needs_human_review": needs_human_review,
@@ -2511,6 +2522,25 @@ def normalize_review_reasons(value: Any) -> List[str]:
         if len(normalized) >= MAX_REVIEW_REASONS:
             break
     return normalized
+
+
+def derive_suppressed_review_trigger_reasons(
+    *,
+    primary_dish_key: str,
+    scene_type: str,
+    meal_style: str,
+    is_menu_or_text_only: bool,
+    review_reasons: Sequence[str],
+) -> List[str]:
+    if (
+        primary_dish_key == "drink"
+        and "menu_or_text" in review_reasons
+        and (scene_type == "drink_only" or meal_style == "drink")
+        and scene_type != "menu_or_text"
+        and not is_menu_or_text_only
+    ):
+        return ["menu_or_text"]
+    return []
 
 
 def infer_container_hint(

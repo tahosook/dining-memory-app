@@ -30,6 +30,18 @@
       "better": "lower"
     },
     {
+      "name": "broad_primary_unmapped_training_class",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
+      "name": "training_target_unresolved",
+      "source": "totals",
+      "kind": "count_ratio",
+      "better": "lower"
+    },
+    {
       "name": "coarse_broad_primary",
       "source": "totals",
       "kind": "count_ratio",
@@ -82,6 +94,12 @@
       "source": "top_counts",
       "kind": "top_count_map",
       "better": "higher"
+    },
+    {
+      "name": "mediapipe_training_class_coarse",
+      "source": "top_counts",
+      "kind": "top_count_map",
+      "better": "stable"
     }
   ],
   "max_cycles_per_run": 5,
@@ -150,8 +168,12 @@
         "max_count": 5,
         "max_ratio": 0.03
       },
-      "broad_primary": {
-        "max_ratio": 0.12
+      "broad_primary_unmapped_training_class": {
+        "max_count": 5,
+        "max_ratio": 0.03
+      },
+      "training_target_unresolved": {
+        "max_ratio": 0.03
       },
       "needs_human_review": {
         "max_ratio": 0.15
@@ -171,7 +193,9 @@
     "weights": {
       "unknown_primary": 5,
       "side_item_primary": 5,
-      "broad_primary": 4,
+      "broad_primary": 1,
+      "broad_primary_unmapped_training_class": 4,
+      "training_target_unresolved": 4,
       "broad_refinement_failed": 4,
       "scene_dominant": 3,
       "needs_human_review": 3,
@@ -199,6 +223,6 @@
   "verification_commands": [
     "python3 -m unittest scripts.tests.test_compare_labeling_reports",
     "python3 -m unittest scripts.tests.test_mediapipe_labeling_loop",
-    "python3 -m unittest scripts.tests.test_explore_food_labels scripts.tests.test_analyze_food_labels scripts.tests.test_build_review_gallery"
+    "python3 -m unittest scripts.tests.test_food_label_taxonomy scripts.tests.test_explore_food_labels scripts.tests.test_analyze_food_labels scripts.tests.test_build_review_gallery"
   ]
 }

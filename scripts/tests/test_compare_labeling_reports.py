@@ -35,6 +35,8 @@ def make_summary(
     unknown_primary: tuple[int, float] = (0, 0.0),
     side_item_primary: tuple[int, float] = (0, 0.0),
     broad_primary: tuple[int, float] = (0, 0.0),
+    broad_primary_unmapped_training_class: tuple[int, float] = (0, 0.0),
+    training_target_unresolved: tuple[int, float] = (0, 0.0),
     coarse_broad_primary: tuple[int, float] = (0, 0.0),
     broad_refinement_resolved: tuple[int, float] = (0, 0.0),
     broad_refinement_failed: tuple[int, float] = (0, 0.0),
@@ -59,6 +61,14 @@ def make_summary(
             "unknown_primary": {"count": unknown_primary[0], "ratio": unknown_primary[1]},
             "side_item_primary": {"count": side_item_primary[0], "ratio": side_item_primary[1]},
             "broad_primary": {"count": broad_primary[0], "ratio": broad_primary[1]},
+            "broad_primary_unmapped_training_class": {
+                "count": broad_primary_unmapped_training_class[0],
+                "ratio": broad_primary_unmapped_training_class[1],
+            },
+            "training_target_unresolved": {
+                "count": training_target_unresolved[0],
+                "ratio": training_target_unresolved[1],
+            },
             "coarse_broad_primary": {"count": coarse_broad_primary[0], "ratio": coarse_broad_primary[1]},
             "broad_refinement_resolved": {"count": broad_refinement_resolved[0], "ratio": broad_refinement_resolved[1]},
             "broad_refinement_failed": {"count": broad_refinement_failed[0], "ratio": broad_refinement_failed[1]},
@@ -70,7 +80,18 @@ def make_summary(
             "broad_primary_key": broad_primary_key or [],
             "broad_primary_concrete_candidate_key": broad_primary_concrete_candidate_key or [],
             "broad_refinement_resolved_to_key": broad_refinement_resolved_to_key or [],
-            "design_candidate_primary_dish_key": design_candidate_primary_dish_key or []
+            "design_candidate_primary_dish_key": design_candidate_primary_dish_key or [],
+            "mediapipe_training_class_coarse": [
+                {"value": "fried_dish", "count": 5},
+                {"value": "fish_dish", "count": 4},
+                {"value": "meat_dish", "count": 3},
+                {"value": "simmered_dish", "count": 3},
+                {"value": "curry_rice", "count": 3},
+                {"value": "stir_fry", "count": 2},
+                {"value": "noodles", "count": 2},
+                {"value": "drink", "count": 2},
+                {"value": "other_or_exclude", "count": 1},
+            ],
         }
     }
 
@@ -95,6 +116,7 @@ class CompareLabelingReportsCliTests(unittest.TestCase):
                 before_path,
                 make_summary(
                     broad_primary=(6, 0.24),
+                    broad_primary_unmapped_training_class=(8, 0.32),
                     coarse_broad_primary=(8, 0.32),
                     broad_refinement_resolved=(1, 0.04),
                     needs_human_review=(4, 0.16),
@@ -115,6 +137,7 @@ class CompareLabelingReportsCliTests(unittest.TestCase):
                 after_path,
                 make_summary(
                     broad_primary=(3, 0.12),
+                    broad_primary_unmapped_training_class=(6, 0.24),
                     coarse_broad_primary=(7, 0.28),
                     broad_refinement_resolved=(4, 0.16),
                     needs_human_review=(3, 0.12),
@@ -279,6 +302,7 @@ class CompareLabelingReportsCliTests(unittest.TestCase):
                 before_path,
                 make_summary(
                     broad_primary=(4, 0.16),
+                    broad_primary_unmapped_training_class=(6, 0.24),
                     broad_primary_key=[{"value": "meat_dish", "count": 4}]
                 ),
             )
@@ -286,6 +310,7 @@ class CompareLabelingReportsCliTests(unittest.TestCase):
                 after_path,
                 make_summary(
                     broad_primary=(4, 0.16),
+                    broad_primary_unmapped_training_class=(6, 0.24),
                     broad_primary_key=[{"value": "meat_dish", "count": 4}]
                 ),
             )

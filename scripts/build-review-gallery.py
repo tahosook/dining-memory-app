@@ -20,12 +20,22 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 try:
     from food_label_taxonomy import (
         BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        MEDIAPIPE_TRAINING_CLASSES,
         NON_CONCRETE_PRIMARY_KEYS,
+        derive_mediapipe_training_class_coarse,
+        derive_review_priority_bucket,
+        resolve_primary_dish_label_ja,
+        review_priority_rank,
     )
 except ImportError:
     from scripts.food_label_taxonomy import (
         BROAD_PRIMARY_KEYS as TAXONOMY_BROAD_PRIMARY_KEYS,
+        MEDIAPIPE_TRAINING_CLASSES,
         NON_CONCRETE_PRIMARY_KEYS,
+        derive_mediapipe_training_class_coarse,
+        derive_review_priority_bucket,
+        resolve_primary_dish_label_ja,
+        review_priority_rank,
     )
 
 
@@ -46,17 +56,17 @@ OUTPUT_FILENAMES = {
 GROUP_ORDER = [
     "unknown",
     "broad_primary",
+    "side_item_primary",
     "low_confidence",
     "scene_dominant",
-    "side_item_primary",
     "review",
 ]
 DEFAULT_FOCUS_GROUPS = [
     "unknown",
     "broad_primary",
+    "side_item_primary",
     "low_confidence",
     "scene_dominant",
-    "side_item_primary",
 ]
 GROUP_METADATA = {
     "unknown": {
@@ -642,7 +652,10 @@ def build_review_records(
         source_path = clean_text(loaded_record.source_path)
         record_key = build_record_key(image_id, source_path)
         primary_dish_key = normalize_scalar(payload.get("primary_dish_key"))
-        primary_dish_label_ja = clean_text(payload.get("primary_dish_label_ja")) or "(missing)"
+        primary_dish_label_ja = resolve_primary_dish_label_ja(
+            primary_dish_key,
+            clean_text(payload.get("primary_dish_label_ja")),
+        ) or "(missing)"
         container_hint = normalize_scalar(payload.get("container_hint"))
         review_bucket = normalize_scalar(payload.get("review_bucket"))
         display_primary_dish_key, display_primary_dish_label_ja = derive_display_primary(
@@ -654,9 +667,24 @@ def build_review_records(
         primary_dish_candidates = extract_primary_dish_candidate_objects(payload.get("primary_dish_candidates"))
         supporting_items = extract_string_list(payload.get("supporting_items"))
         review_reasons = extract_string_list(payload.get("review_reasons"))
+        is_food_related = True if payload.get("is_food_related") is None else coerce_bool(payload.get("is_food_related"))
         coarse_primary_dish_key = normalize_scalar(payload.get("coarse_primary_dish_key"))
         if coarse_primary_dish_key == "missing":
             coarse_primary_dish_key = primary_dish_key
+        scene_type = normalize_scalar(payload.get("scene_type"))
+        needs_human_review = coerce_bool(payload.get("needs_human_review"))
+        mediapipe_training_class_coarse = derive_mediapipe_training_class_coarse(
+            primary_dish_key,
+            review_reasons=review_reasons,
+            is_food_related=is_food_related,
+            scene_type=scene_type,
+        )
+        review_priority_bucket = derive_review_priority_bucket(
+            primary_dish_key=primary_dish_key,
+            review_reasons=review_reasons,
+            needs_human_review=needs_human_review,
+        )
+        review_priority = review_priority_rank(review_priority_bucket) if review_priority_bucket else 99
         broad_refinement_status = normalize_scalar(payload.get("broad_refinement_status"))
         crop_refinement_status = normalize_scalar(payload.get("crop_refinement_status"))
         broad_refinement_compare_keys = extract_string_list(payload.get("broad_refinement_compare_keys"))
@@ -726,7 +754,10 @@ def build_review_records(
                 "score_gap_display": format_confidence(primary_score_info["score_gap"]),
                 "supporting_items": supporting_items,
                 "supporting_items_display": format_list_for_display(supporting_items),
-                "scene_type": normalize_scalar(payload.get("scene_type")),
+                "mediapipe_training_class_coarse": mediapipe_training_class_coarse,
+                "review_priority": review_priority,
+                "review_priority_bucket": review_priority_bucket,
+                "scene_type": scene_type,
                 "cuisine_type": normalize_scalar(payload.get("cuisine_type")),
                 "meal_style": normalize_scalar(payload.get("meal_style")),
                 "serving_style": normalize_scalar(payload.get("serving_style")),
@@ -742,7 +773,7 @@ def build_review_records(
                 "crop_refinement_skip_reason": crop_refinement_skip_reason,
                 "crop_refinement_reject_reason": crop_refinement_reject_reason,
                 "contains_can_or_bottle": coerce_bool(payload.get("contains_can_or_bottle")),
-                "needs_human_review": coerce_bool(payload.get("needs_human_review")),
+                "needs_human_review": needs_human_review,
                 "review_reasons": review_reasons,
                 "review_reasons_display": format_list_for_display(review_reasons),
                 "review_note_ja": clean_text(payload.get("review_note_ja")) or "",
@@ -758,7 +789,7 @@ def build_review_records(
                 "image_missing": image_resolution["missing"],
                 "image_missing_reason": image_resolution["reason"],
                 "review_flags": review_reasons,
-                "group_priority": compute_group_priority(candidate_groups, review_reasons),
+                "group_priority": compute_group_priority(candidate_groups, review_reasons, review_priority),
                 "all_sort_key": (
                     primary_dish_key,
                     image_id.lower(),
@@ -1159,8 +1190,11 @@ def build_page_data(
             "image_id": record["image_id"],
             "source_path": record["source_path"],
             "predicted_primary_dish_key": record["primary_dish_key"],
+            "predicted_training_class": record["mediapipe_training_class_coarse"],
             "candidate_groups": record["candidate_groups"],
             "review_flags": record["review_flags"],
+            "review_priority": record["review_priority"],
+            "review_priority_bucket": record["review_priority_bucket"],
         }
         for record in display_records
     }
@@ -1191,6 +1225,7 @@ def build_page_data(
         "storage_key": storage_key,
         "record_index": record_index,
         "known_primary_keys": known_primary_keys,
+        "known_training_classes": list(MEDIAPIPE_TRAINING_CLASSES),
         "input_metadata": {
             "input_path": str(selection.input_path),
             "resolved_kind": selection.kind,
@@ -1242,6 +1277,11 @@ def build_summary(
         group: sum(1 for record in summary_records if group in record["candidate_groups"])
         for group in GROUP_ORDER
     }
+    review_priority_counter = Counter(
+        record["review_priority_bucket"]
+        for record in summary_records
+        if record["review_priority_bucket"]
+    )
     missing_image_count = sum(1 for record in summary_records if record["image_missing"])
 
     return {
@@ -1264,6 +1304,7 @@ def build_summary(
         "top_scene_type": counter_to_items(scene_type_counter, 8),
         "top_broad_primary_key": counter_to_items(broad_primary_key_counter, 8),
         "candidate_group_counts": candidate_group_counts,
+        "review_priority_counts": review_priority_counter_to_items(review_priority_counter),
         "review_status_counts": {
             "unreviewed": len(display_records),
             "correct": 0,
@@ -1320,7 +1361,10 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
         if page_data["include_all_records"]
         else ""
     )
-    datalist_html = render_primary_key_datalist(page_data["known_primary_keys"])
+    datalist_html = (
+        render_primary_key_datalist(page_data["known_primary_keys"])
+        + render_training_class_datalist(page_data["known_training_classes"])
+    )
     app_data_json = serialize_json_for_script(
         {
             "storage_key": page_data["storage_key"],
@@ -1935,8 +1979,13 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
 
   const STATUS_LABELS = {{
     unreviewed: '未判定',
-    correct: '合っている',
-    incorrect: '間違っている',
+    ok: 'OK',
+    wrong_primary: 'wrong_primary',
+    exclude_non_food: 'exclude_non_food',
+    exclude_menu_or_text: 'exclude_menu_or_text',
+    exclude_packaged: 'exclude_packaged',
+    correct: 'OK',
+    incorrect: 'wrong_primary',
   }};
 
   const state = loadState();
@@ -2010,7 +2059,9 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
     }}
     const review = getReview(recordKey);
     if (field === 'human_judgment') {{
-      review.human_judgment = input.value || 'unreviewed';
+      review.human_judgment = normalizeHumanJudgment(input.value || 'unreviewed');
+    }} else if (field === 'corrected_training_class') {{
+      review.corrected_training_class = input.value || '';
     }} else if (field === 'corrected_primary_dish_key') {{
       review.corrected_primary_dish_key = input.value || '';
     }} else if (field === 'review_note') {{
@@ -2032,7 +2083,8 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
     const current = state.reviews[recordKey];
     if (current && typeof current === 'object') {{
       return {{
-        human_judgment: current.human_judgment || 'unreviewed',
+        human_judgment: normalizeHumanJudgment(current.human_judgment || 'unreviewed'),
+        corrected_training_class: current.corrected_training_class || '',
         corrected_primary_dish_key: current.corrected_primary_dish_key || '',
         review_note: current.review_note || '',
         reviewed_at: current.reviewed_at || '',
@@ -2041,6 +2093,7 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
     }}
     return {{
       human_judgment: 'unreviewed',
+      corrected_training_class: '',
       corrected_primary_dish_key: '',
       review_note: '',
       reviewed_at: '',
@@ -2064,10 +2117,14 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
     const review = getReview(recordKey);
     document.querySelectorAll(`[data-record-key="${{cssEscape(recordKey)}}"]`).forEach((card) => {{
       const judgmentInput = card.querySelector('[data-review-field="human_judgment"]');
+      const correctedTrainingInput = card.querySelector('[data-review-field="corrected_training_class"]');
       const correctedInput = card.querySelector('[data-review-field="corrected_primary_dish_key"]');
       const noteInput = card.querySelector('[data-review-field="review_note"]');
       if (judgmentInput) {{
         judgmentInput.value = review.human_judgment || 'unreviewed';
+      }}
+      if (correctedTrainingInput) {{
+        correctedTrainingInput.value = review.corrected_training_class || '';
       }}
       if (correctedInput) {{
         correctedInput.value = review.corrected_primary_dish_key || '';
@@ -2079,7 +2136,7 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
       const statusBadge = card.querySelector('[data-review-status-badge]');
       if (statusBadge) {{
         const status = normalizeReviewStatus(review);
-        statusBadge.textContent = STATUS_LABELS[status];
+        statusBadge.textContent = STATUS_LABELS[review.human_judgment] || STATUS_LABELS[status];
         statusBadge.className = `badge ${{statusBadge.dataset.baseClass}} badge-status-${{status}}`;
       }}
 
@@ -2096,18 +2153,30 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
   }}
 
   function normalizeReviewStatus(review) {{
-    if (review.human_judgment === 'correct') {{
+    const judgment = normalizeHumanJudgment(review.human_judgment || 'unreviewed');
+    if (judgment === 'ok') {{
       return 'correct';
     }}
-    if (review.human_judgment === 'incorrect') {{
+    if (judgment && judgment !== 'unreviewed') {{
       return 'incorrect';
     }}
     return 'unreviewed';
   }}
 
+  function normalizeHumanJudgment(value) {{
+    if (value === 'correct') {{
+      return 'ok';
+    }}
+    if (value === 'incorrect') {{
+      return 'wrong_primary';
+    }}
+    return value || 'unreviewed';
+  }}
+
   function isReviewed(review) {{
     return Boolean(
       (review.human_judgment && review.human_judgment !== 'unreviewed') ||
+      review.corrected_training_class ||
       review.corrected_primary_dish_key ||
       review.review_note
     );
@@ -2149,11 +2218,15 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
       'image_id',
       'source_path',
       'predicted_primary_dish_key',
+      'predicted_training_class',
       'human_judgment',
+      'corrected_training_class',
       'corrected_primary_dish_key',
       'review_note',
       'review_flags',
       'candidate_groups',
+      'review_priority',
+      'review_priority_bucket',
       'reviewed_at',
       'reviewer',
     ];
@@ -2163,11 +2236,15 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
         record.image_id,
         record.source_path,
         record.predicted_primary_dish_key,
+        record.predicted_training_class,
         record.human_judgment,
+        record.corrected_training_class,
         record.corrected_primary_dish_key,
         record.review_note,
         (record.review_flags || []).join(';'),
         (record.candidate_groups || []).join(';'),
+        record.review_priority || '',
+        record.review_priority_bucket || '',
         record.reviewed_at || '',
         record.reviewer || '',
       ].map(csvEscape).join(','));
@@ -2188,11 +2265,15 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
         image_id: base.image_id,
         source_path: base.source_path,
         predicted_primary_dish_key: base.predicted_primary_dish_key,
+        predicted_training_class: base.predicted_training_class || '',
         human_judgment: review.human_judgment || 'unreviewed',
+        corrected_training_class: review.corrected_training_class || '',
         corrected_primary_dish_key: review.corrected_primary_dish_key || '',
         review_note: review.review_note || '',
         review_flags: base.review_flags || [],
         candidate_groups: base.candidate_groups || [],
+        review_priority: base.review_priority || '',
+        review_priority_bucket: base.review_priority_bucket || '',
         reviewed_at: review.reviewed_at || '',
         reviewer: review.reviewer || state.reviewer || '',
       }};
@@ -2231,7 +2312,8 @@ def render_gallery_html(page_data: Dict[str, Any]) -> str:
             return;
           }}
           state.reviews[recordKey] = {{
-            human_judgment: record.human_judgment || 'unreviewed',
+            human_judgment: normalizeHumanJudgment(record.human_judgment || 'unreviewed'),
+            corrected_training_class: record.corrected_training_class || record.training_class || record.mediapipe_training_class || '',
             corrected_primary_dish_key: record.corrected_primary_dish_key || '',
             review_note: record.review_note || '',
             reviewed_at: record.reviewed_at || '',
@@ -2331,6 +2413,7 @@ def render_summary(summary: Dict[str, Any]) -> str:
                 for group in GROUP_ORDER
             ],
         ),
+        render_summary_box("Review priority counts", summary["review_priority_counts"]),
         render_meta_box(
             "Review status counts",
             [
@@ -2654,6 +2737,8 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
         ("coarse_primary_dish_key", escape_code(record["coarse_primary_dish_key"])),
         ("final_primary_dish_key", escape_code(record["primary_dish_key"])),
         ("final_primary_dish_label_ja", escape_html(record["primary_dish_label_ja"])),
+        ("mediapipe_training_class_coarse", escape_code(record["mediapipe_training_class_coarse"])),
+        ("review_priority_bucket", escape_code(record["review_priority_bucket"] or "(none)")),
     ]
     if record["display_primary_overridden"]:
         items.extend(
@@ -2732,8 +2817,11 @@ def render_record_meta_grid(record: Dict[str, Any]) -> str:
 def render_review_form(record: Dict[str, Any], *, compact: bool) -> str:
     judgment_options = [
         ("unreviewed", "未判定"),
-        ("correct", "合っている"),
-        ("incorrect", "間違っている"),
+        ("ok", "OK"),
+        ("wrong_primary", "wrong_primary"),
+        ("exclude_non_food", "exclude_non_food"),
+        ("exclude_menu_or_text", "exclude_menu_or_text"),
+        ("exclude_packaged", "exclude_packaged"),
     ]
     select_html = (
         f'<select data-review-input data-record-key="{escape_attr(record["record_key"])}" '
@@ -2751,6 +2839,14 @@ def render_review_form(record: Dict[str, Any], *, compact: bool) -> str:
         '<div class="toolbar-group">'
         '<label>判定</label>'
         f'{select_html}'
+        '</div>'
+        '<div class="toolbar-group">'
+        '<label>corrected_training_class</label>'
+        f'<input type="text" list="known-training-classes" '
+        f'data-review-input data-record-key="{escape_attr(record["record_key"])}" '
+        'data-review-field="corrected_training_class" '
+        'placeholder="例: fish_dish">'
+        '<span class="input-caption">空欄なら corrected_primary_dish_key か予測 class を使います。</span>'
         '</div>'
         '<div class="toolbar-group">'
         '<label>corrected_primary_dish_key</label>'
@@ -2779,6 +2875,14 @@ def render_primary_key_datalist(known_primary_keys: Sequence[str]) -> str:
     return f'<datalist id="known-primary-dish-keys">{options}</datalist>'
 
 
+def render_training_class_datalist(known_training_classes: Sequence[str]) -> str:
+    options = "".join(
+        f'<option value="{escape_attr(value)}"></option>'
+        for value in known_training_classes
+    )
+    return f'<datalist id="known-training-classes">{options}</datalist>'
+
+
 def serialize_json_for_script(value: Any) -> str:
     return (
         json.dumps(value, ensure_ascii=False, sort_keys=True)
@@ -2790,6 +2894,13 @@ def serialize_json_for_script(value: Any) -> str:
 
 def counter_to_items(counter: Counter, top_n: int) -> List[Dict[str, Any]]:
     return [{"value": value, "count": count} for value, count in counter.most_common(top_n)]
+
+
+def review_priority_counter_to_items(counter: Counter) -> List[Dict[str, Any]]:
+    return [
+        {"value": value, "count": counter[value]}
+        for value in sorted(counter, key=lambda item: (review_priority_rank(item), item))
+    ]
 
 
 def derive_image_id_from_source(source_path: str) -> str:
@@ -2959,10 +3070,11 @@ def format_candidate_score_pair(candidate_key: str, score_display: str) -> str:
     return f"{candidate_key or '(none)'}|{score_display}"
 
 
-def compute_group_priority(candidate_groups: Sequence[str], review_reasons: Sequence[str]) -> Tuple[int, int]:
+def compute_group_priority(candidate_groups: Sequence[str], review_reasons: Sequence[str], review_priority: int = 99) -> Tuple[int, int, int]:
     group_ranks = [GROUP_ORDER.index(group) for group in candidate_groups if group in GROUP_ORDER]
     reason_ranks = [REVIEW_REASON_SORT_ORDER[reason] for reason in review_reasons if reason in REVIEW_REASON_SORT_ORDER]
     return (
+        review_priority,
         min(group_ranks) if group_ranks else len(GROUP_ORDER) + 1,
         min(reason_ranks) if reason_ranks else len(REVIEW_REASON_SORT_ORDER) + 1,
     )

@@ -157,6 +157,46 @@ class ExploreFoodLabelsTests(unittest.TestCase):
         self.assertFalse(normalized["needs_human_review"])
         self.assertEqual(normalized["review_bucket"], "normal")
 
+    def test_drink_only_menu_or_text_reason_is_not_review_trigger_by_itself(self) -> None:
+        normalized = MODULE.normalize_result(
+            make_raw_result(
+                primary_dish_key="drink",
+                primary_dish_label_ja="ドリンク",
+                scene_type="drink_only",
+                meal_style="drink",
+                is_drink_only=True,
+                is_menu_or_text_only=False,
+                review_reasons=["menu_or_text"],
+                analysis_confidence=0.88,
+            ),
+            image_id="img-drink-menu-noise",
+            source_path="photos/drink.jpg",
+        )
+
+        self.assertIn("menu_or_text", normalized["review_reasons"])
+        self.assertEqual(normalized["review_trigger_suppressed_reasons"], ["menu_or_text"])
+        self.assertFalse(normalized["needs_human_review"])
+
+    def test_menu_page_drink_still_needs_review(self) -> None:
+        normalized = MODULE.normalize_result(
+            make_raw_result(
+                primary_dish_key="drink",
+                primary_dish_label_ja="ドリンク",
+                scene_type="menu_or_text",
+                meal_style="drink",
+                is_drink_only=True,
+                is_menu_or_text_only=True,
+                review_reasons=["menu_or_text"],
+                analysis_confidence=0.4,
+            ),
+            image_id="img-drink-menu-page",
+            source_path="photos/menu.jpg",
+        )
+
+        self.assertIn("menu_or_text", normalized["review_reasons"])
+        self.assertEqual(normalized["review_trigger_suppressed_reasons"], [])
+        self.assertTrue(normalized["needs_human_review"])
+
     def test_normalize_result_preserves_existing_scene_inference(self) -> None:
         normalized = MODULE.normalize_result(
             make_raw_result(

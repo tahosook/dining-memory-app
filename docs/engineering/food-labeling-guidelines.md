@@ -19,29 +19,28 @@ MediaPipe path は separate path として扱い、将来 rich classifier result
 - `scripts/explore-food-labels.py` の crop refinement は、broad / unknown / candidate split / side item / scene dominant / low confidence などの target case に絞り、一時 crop で主料理候補を見直す separate stage として扱う。
 - `scripts/analyze-food-labels.py` は、`unknown_primary`、`scene_dominant`、`side_item_primary`、`broad_primary` の偏りと、broad の割れ先を見える化する。
 - `scripts/build-review-gallery.py` は、人手レビューを教師データ化しやすい形で集める。アプリ本体の UX を再現することは責務に含めない。
-- このスクリプト群の目標は完璧な最終分類ではなく、MediaPipe の一次クラス候補を 8〜12 個程度に絞れる状態を作ることにある。
+- このスクリプト群の目標は完璧な最終分類ではなく、MediaPipe の一次分類 dataset を 8〜12 個程度の coarse class で作れる状態にすることにある。
 
 ## Decisions / Rules
 ### 修整優先度
 1. 主料理を副菜や scene に奪われにくくする。
-2. `broad_primary` を高頻度・高価値クラスに限って具体カテゴリへ割る。
+2. `broad_primary` は coarse training class に map できるかを優先し、細かすぎる料理名分類へ寄せすぎない。
 3. 人手レビュー結果を教師データ化しやすくする。
 4. `broad` の中身がどこに割れるか可視化する。
 
-### 高頻度 broad 改善の既定候補
-- `stew -> nimono / meat_and_potato_stew / curry_rice`
-- `meat_dish -> stir_fry / grilled_meat`
-- `noodles -> pasta / noodles`
-- 高頻度 broad の改善はやる価値が高い。一方で、少数クラスや説明しにくい境界のためにスクリプトを複雑化しすぎない。
+### coarse training class の既定扱い
+- 一次分類 class は `fried_dish`、`fish_dish`、`meat_dish`、`simmered_dish`、`curry_rice`、`stir_fry`、`noodles`、`drink`、`other_or_exclude` を既定にする。
+- `stew` / `nimono` / `meat_and_potato_stew` は `simmered_dish`、`pasta` は `noodles`、`fried_chicken` / `fried_fish` は `fried_dish` へ寄せる。
+- `noodles`、`meat_dish`、`simmered_dish` のような broad class は、coarse class に map できていれば失敗ではない。
 
 ### やるべき修整
 - `explore-food-labels.py` の prompt、rubric、fallback 順序を見直し、主料理が `side_item` や `scene` に奪われにくいようにする。
 - `set_meal` / `multi_dish_table` だけを理由に crop を走らせず、broad / unknown / candidate split / side item / scene dominant / low confidence が重なる場合に一時 crop による main-dish 再判定を使ってよい。
-- 高頻度 `broad_primary` だけを対象に compare set や review note を調整し、具体カテゴリへ寄せやすくする。
+- 高頻度 `broad_primary` は、具体カテゴリへの自動分割よりも coarse class mapping と review priority を見えるようにする。
 - `scene_dominant` は、`low_confidence` や `candidate_split` など別の review reason が既に付いている場合は last-resort の fallback とみなし、scene 優勢だけを独立した理由として残す。
 - `scene_dominant` や `low_confidence` は model の raw reason をそのまま信じず、最終 `primary_dish_key` と最終 confidence から再判定し、specific dish が選べている時の stale reason は落とす。
-- `analyze-food-labels.py` の集計で、`broad_primary` の残件と、その中身がどの具体クラスに割れそうかを見えるように保つ。
-- `build-review-gallery.py` の review candidate 整理や export を、教師データ化しやすい shape に寄せる。
+- `analyze-food-labels.py` の集計で、`broad_primary` の残件を training class に map できるものと未解決のものに分ける。
+- `build-review-gallery.py` の review candidate 整理や export を、`ok`、`wrong_primary`、exclude 系 judgment、`corrected_training_class` を保存できる shape に寄せる。
 - crop / broad refinement の追加 metadata は review と診断に必要な最小限だけを normalized JSON に残し、crop 画像そのものや厚い中間 state は保存しない。
 - 出力契約を変えるのは、ラベル設計や教師データ化に直接効くときに限る。
 
@@ -63,13 +62,13 @@ MediaPipe path は separate path として扱い、将来 rich classifier result
 - `explore-food-labels.py`: `labels.jsonl`、`normalized/**/*.json`、`primary_dish_key`、`primary_dish_candidates`、`supporting_items`、`review_reasons`、`needs_human_review`
 - `explore-food-labels.py`: crop は run 中の一時ファイルだけで扱い、永続化は thin metadata と raw response の stage 記録に留める
 - `analyze-food-labels.py`: `summary.json`、`summary.md`、`review_candidates.csv`、`unknown_candidates.csv`、`scene_dominant_candidates.csv`、`side_item_primary_candidates.csv`、`low_confidence_candidates.csv`、`broad_primary_candidates.csv`
-- `build-review-gallery.py`: `predicted_primary_dish_key`、`human_judgment`、`corrected_primary_dish_key`、`review_note`、`review_flags`、`candidate_groups` を中心にした review export
+- `build-review-gallery.py`: `predicted_primary_dish_key`、`predicted_training_class`、`human_judgment`、`corrected_training_class`、`corrected_primary_dish_key`、`review_note`、`review_flags`、`candidate_groups` を中心にした review export
 
 ### 打ち止めライン
 - `unknown_primary` と `side_item_primary` がごく少数になっている。
-- `broad_primary` が、主に本当に曖昧なものだけになっている。
-- 高頻度 broad の中身が、どの具体クラスに割れるか見えている。
-- MediaPipe の一次クラス候補を 8〜12 個程度に絞れる見通しが立っている。
+- `broad_primary` の総数ではなく、coarse training class に map できない broad がごく少数になっている。
+- `unknown`、`side_item_primary`、`low_confidence`、`stew`、`meat_dish` を priority bucket で review できる。
+- MediaPipe の coarse 一次クラス候補が 8〜12 個程度に収まっている。
 - それ以上の改善は、スクリプト改修より教師データ追加や UI 側改善の方が効く状態になっている。
 
 ## Next Steps or Open Questions

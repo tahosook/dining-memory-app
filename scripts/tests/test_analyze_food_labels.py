@@ -24,6 +24,10 @@ def make_record(
     needs_human_review: bool = False,
     primary_dish_candidates: list[dict[str, object]] | None = None,
     review_note_ja: str = "",
+    is_food_related: bool = True,
+    scene_type: str = "single_dish",
+    meal_style: str = "single_item",
+    is_menu_or_text_only: bool = False,
     coarse_primary_dish_key: str | None = None,
     coarse_primary_dish_label_ja: str | None = None,
     broad_refinement_status: str = "not_applicable",
@@ -40,21 +44,21 @@ def make_record(
         "schema_version": "food_label_exploration_v3",
         "image_id": image_id,
         "source_path": source_path,
-        "is_food_related": True,
+        "is_food_related": is_food_related,
         "analysis_confidence": analysis_confidence,
         "primary_dish_key": primary_dish_key,
         "primary_dish_label_ja": primary_dish_label_ja,
         "primary_dish_candidates": primary_dish_candidates or [],
         "supporting_items": [],
-        "scene_type": "single_dish",
+        "scene_type": scene_type,
         "cuisine_type": "japanese",
-        "meal_style": "single_item",
+        "meal_style": meal_style,
         "serving_style": "single_plate",
         "contains_multiple_dishes": False,
         "is_drink_only": False,
         "is_sweets_or_dessert": False,
         "is_packaged_food": False,
-        "is_menu_or_text_only": False,
+        "is_menu_or_text_only": is_menu_or_text_only,
         "is_takeout_or_delivery": False,
         "visual_attributes": [],
         "uncertainty_reasons": [],
@@ -265,6 +269,95 @@ class AnalyzeFoodLabelsCliTests(unittest.TestCase):
             resolved_top = summary_json["top_counts"]["broad_refinement_resolved_to_key"]
             self.assertEqual(resolved_top[0]["value"], "nimono")
             self.assertEqual(resolved_top[0]["count"], 1)
+
+    def test_coarse_training_class_stop_condition_and_broad_mapping_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "run_output"
+            output_dir = root / "analysis"
+            labels_path = input_dir / "labels.jsonl"
+
+            records = [
+                make_record(image_id="img-fried", source_path="fried.jpg", primary_dish_key="fried_chicken", primary_dish_label_ja="fried_chicken"),
+                make_record(image_id="img-fish", source_path="fish.jpg", primary_dish_key="sashimi", primary_dish_label_ja="sashimi"),
+                make_record(image_id="img-meat", source_path="meat.jpg", primary_dish_key="meat_dish", primary_dish_label_ja="肉料理", review_reasons=["broad_primary"], needs_human_review=True),
+                make_record(image_id="img-simmered", source_path="stew.jpg", primary_dish_key="stew", primary_dish_label_ja="煮込み", review_reasons=["broad_primary"], needs_human_review=True),
+                make_record(image_id="img-curry", source_path="curry.jpg", primary_dish_key="curry_rice", primary_dish_label_ja="カレーライス"),
+                make_record(image_id="img-stir", source_path="stir.jpg", primary_dish_key="stir_fry", primary_dish_label_ja="炒め物"),
+                make_record(image_id="img-noodles", source_path="noodles.jpg", primary_dish_key="noodles", primary_dish_label_ja="麺類", review_reasons=["broad_primary"], needs_human_review=True),
+                make_record(image_id="img-drink", source_path="drink.jpg", primary_dish_key="drink", primary_dish_label_ja="ドリンク"),
+                make_record(image_id="img-other", source_path="pizza.jpg", primary_dish_key="pizza", primary_dish_label_ja="pizza"),
+            ]
+            write_jsonl(labels_path, records)
+
+            result = run_cli("--input-path", str(input_dir), "--output-dir", str(output_dir))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary_json = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+            coarse_summary = summary_json["sanity_checks"]["mediapipe_class_set_coarse_summary"]
+            self.assertEqual(coarse_summary["class_count"], 9)
+            self.assertTrue(coarse_summary["within_preferred_range"])
+            self.assertEqual(summary_json["totals"]["broad_primary"]["count"], 3)
+            self.assertEqual(summary_json["totals"]["broad_primary_mapped_training_class"]["count"], 3)
+            self.assertEqual(summary_json["totals"]["broad_primary_unmapped_training_class"]["count"], 0)
+            self.assertTrue(summary_json["stop_condition_evaluation"]["broad_residual_total"]["passed"])
+            self.assertTrue(summary_json["stop_condition_evaluation"]["preferred_primary_class_count"]["passed"])
+
+    def test_review_candidates_include_priority_bucket_and_sort_by_priority(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "run_output"
+            output_dir = root / "analysis"
+            labels_path = input_dir / "labels.jsonl"
+            records = [
+                make_record(image_id="img-low", source_path="low.jpg", primary_dish_key="fried_cutlet", primary_dish_label_ja="とんかつ", review_reasons=["low_confidence"], needs_human_review=True),
+                make_record(image_id="img-noodles", source_path="noodles.jpg", primary_dish_key="noodles", primary_dish_label_ja="麺類", review_reasons=["broad_primary"], needs_human_review=True),
+                make_record(image_id="img-side", source_path="side.jpg", primary_dish_key="rice", primary_dish_label_ja="ご飯", review_reasons=["side_item_primary"], needs_human_review=True),
+                make_record(image_id="img-meat", source_path="meat.jpg", primary_dish_key="meat_dish", primary_dish_label_ja="肉料理", review_reasons=["broad_primary"], needs_human_review=True),
+                make_record(image_id="img-unknown", source_path="unknown.jpg", primary_dish_key="unknown", primary_dish_label_ja="不明", review_reasons=["unknown_primary"], needs_human_review=True),
+            ]
+            write_jsonl(labels_path, records)
+
+            result = run_cli("--input-path", str(input_dir), "--output-dir", str(output_dir))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            review_rows = read_csv_rows(output_dir / "review_candidates.csv")
+            self.assertEqual(
+                [row["review_priority_bucket"] for row in review_rows],
+                [
+                    "p1_unknown_candidates",
+                    "p2_broad_stew_meat_dish",
+                    "p3_side_item_primary",
+                    "p4_low_confidence",
+                    "p5_broad_noodles",
+                ],
+            )
+
+    def test_summary_counts_drink_menu_or_text_suppression(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "run_output"
+            output_dir = root / "analysis"
+            labels_path = input_dir / "labels.jsonl"
+            records = [
+                make_record(
+                    image_id="img-drink",
+                    source_path="drink.jpg",
+                    primary_dish_key="drink",
+                    primary_dish_label_ja="ドリンク",
+                    scene_type="drink_only",
+                    meal_style="drink",
+                    review_reasons=["menu_or_text"],
+                    needs_human_review=False,
+                )
+            ]
+            write_jsonl(labels_path, records)
+
+            result = run_cli("--input-path", str(input_dir), "--output-dir", str(output_dir))
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary_json = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary_json["totals"]["drink_menu_or_text_suppressed"]["count"], 1)
 
 
 if __name__ == "__main__":

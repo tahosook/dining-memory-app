@@ -62,6 +62,7 @@ def write_review_csv(path: Path, rows: list[dict[str, str]]) -> None:
         "source_path",
         "predicted_primary_dish_key",
         "human_judgment",
+        "corrected_training_class",
         "corrected_primary_dish_key",
     ]
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
@@ -228,6 +229,63 @@ class ExportMediaPipeDatasetTests(unittest.TestCase):
             self.assertTrue((output_dir / "train" / "curry_rice").is_dir())
             self.assertFalse((output_dir / "train" / "fish_dish").exists())
 
+    def test_corrected_training_class_and_exclude_judgments_are_supported(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            image_root = root / "images"
+            labels_path = root / "labels.jsonl"
+            review_json = root / "review.json"
+            output_dir = root / "dataset"
+            touch_image(image_root, "photos/corrected-class.jpg")
+            touch_image(image_root, "photos/excluded-menu.jpg")
+            write_jsonl(
+                labels_path,
+                [
+                    make_record(
+                        image_id="img-corrected-class",
+                        source_path="photos/corrected-class.jpg",
+                        primary_dish_key="grilled_fish",
+                    ),
+                    make_record(
+                        image_id="img-excluded-menu",
+                        source_path="photos/excluded-menu.jpg",
+                        primary_dish_key="drink",
+                    ),
+                ],
+            )
+            write_review_json(
+                review_json,
+                [
+                    {
+                        "image_id": "img-corrected-class",
+                        "source_path": "photos/corrected-class.jpg",
+                        "human_judgment": "wrong_primary",
+                        "corrected_training_class": "fried_dish",
+                    },
+                    {
+                        "image_id": "img-excluded-menu",
+                        "source_path": "photos/excluded-menu.jpg",
+                        "human_judgment": "exclude_menu_or_text",
+                    },
+                ],
+            )
+
+            result = run_cli(
+                "--labels-jsonl",
+                str(labels_path),
+                "--image-root",
+                str(image_root),
+                "--output-dir",
+                str(output_dir),
+                "--review-json",
+                str(review_json),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = read_summary(output_dir)
+            self.assertEqual(summary["class_counts"], {"fried_dish": 1})
+            self.assertEqual(summary["excluded_reason_counts"], {"review_excluded": 1})
+
     def test_excludes_unknown_missing_unmappable_and_unknown_correction(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -385,7 +443,7 @@ class ExportMediaPipeDatasetTests(unittest.TestCase):
                 summary["min_class_count_excluded_classes"],
                 [
                     {"class": "curry_rice", "count": 1},
-                    {"class": "pasta", "count": 1},
+                    {"class": "noodles", "count": 1},
                 ],
             )
 

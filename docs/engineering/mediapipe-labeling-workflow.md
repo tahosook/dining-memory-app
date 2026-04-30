@@ -22,16 +22,23 @@ AI は capture review 上の optional な入力補助であり、manual save を
 
 ## Decisions / Rules
 ### この workflow で優先して直すこと
-1. `unknown_primary` と `side_item_primary` のような致命的な primary 崩れを減らす。
-2. 高頻度 `broad_primary` を、教師データ化しやすい具体カテゴリへ寄せる。
-3. `scene_dominant` と `low_confidence` を実用ラインまで減らし、人手 review を本当に必要なものへ絞る。
-4. MediaPipe の一次クラス候補を 8〜12 個程度へ絞れる見通しを作る。
+1. `unknown_primary` と `side_item_primary` のような教師データ汚染につながる primary 崩れを優先 review へ回す。
+2. MediaPipe の一次分類用 dataset を 8〜12 個程度の coarse class に抑える。
+3. `stew` / `meat_dish` / `noodles` のような broad class は、coarse training class に map できていれば失敗扱いしない。
+4. これ以上の LLM 自動分類改善より、人手 review 結果を教師データへ反映できる状態を優先する。
 
-### 高頻度 broad の既定扱い
-- `stew -> nimono / meat_and_potato_stew / curry_rice`
-- `meat_dish -> stir_fry / grilled_meat`
-- `noodles -> pasta / noodles`
-- 高頻度 broad は優先して改善するが、少数クラスや境界の曖昧な例外のために script を複雑化しすぎない。
+### MediaPipe 一次 class set
+- 現段階の目的は細かい料理名分類ではなく、MediaPipe static-image classifier 向けの一次分類 dataset を作ること。
+- 既定 class は `fried_dish`、`fish_dish`、`meat_dish`、`simmered_dish`、`curry_rice`、`stir_fry`、`noodles`、`drink`、`other_or_exclude`。
+- `fried_chicken` / `fried_fish` / `fried_dumplings` は `fried_dish`、`nimono` / `stew` / `meat_and_potato_stew` は `simmered_dish`、`pasta` は `noodles` へ寄せる。
+- `pizza`、`sushi`、`bento`、`bread`、`dessert`、`packaged_food`、`unknown` などは初期分類で独立 class 化せず、`other_or_exclude` または review / exclude 対象として扱う。
+
+### review 優先順位
+- `unknown_candidates` を最優先にする。
+- 次に `broad_primary` のうち `stew` / `meat_dish` を確認する。
+- 次に `side_item_primary`、`low_confidence`、`broad_primary` の `noodles` の順で見る。
+- `noodles` は coarse class として成立しやすいため、細分化が必要かどうかの確認に留める。
+- `drink_only` の `drink` に付いた `menu_or_text` reason は保持してよいが、メニュー表・ラベル・看板などの明示的な不適切画像でなければ主 review trigger から抑制する。
 
 ### やりすぎになる修整
 - broad を減らすためだけに多段 heuristic や説明しにくい分岐を増やすこと。
@@ -67,11 +74,11 @@ AI は capture review 上の optional な入力補助であり、manual save を
 - 既定の escalation 条件は 2 連続 stall とする。threshold、cloud model、fallback model は CLI 引数や config で調整できるように保つ。
 - cycle artifact には executor 種別、model、strategy / hypothesis、target、changed_files、validation command、compare result、escalation reason を残し、あとから改善経路を追えるようにする。
 
-### 停止条件
 - `unknown_primary` と `side_item_primary` がごく少数で安定している。
-- `broad_primary` が実用ラインまで下がり、高頻度 broad の割れ先が十分見えている。
-- `needs_human_review` が実用ラインまで下がり、review 対象が本当に必要なものに寄っている。
-- MediaPipe の一次クラス候補を 8〜12 個程度に絞れる見通しが立っている。
+- `broad_primary` の総数ではなく、coarse training class に map できない broad 件数がごく少数になっている。
+- `needs_human_review` が実用ラインまで下がり、review 対象が priority bucket で追える。
+- coarse MediaPipe training class count が 8〜12 個程度に収まっている。
+- `unknown`、`menu_or_text`、`packaged_food`、`non_food` などが training target の未解決件数と exclude candidate として分離されている。
 - それ以上の改善は code 修整より教師データ追加の方が効くと判断できる。
 - もしくは `max_cycles_per_run`、target 枯渇、executor failure、比較不能などの打ち止め条件に達した。
 
@@ -94,9 +101,9 @@ python scripts/export-mediapipe-dataset.py \
   --seed 42
 ```
 
-review correction がある場合は AI の `primary_dish_key` より `corrected_primary_dish_key` を優先する。出力は `train/`、`val/`、`test/`、`excluded/excluded_manifest.jsonl`、`label_map.json`、`labels.txt`、`dataset_summary.json`、`dataset_summary.md` で確認する。
+review correction がある場合は AI の `primary_dish_key` より `corrected_training_class` または `corrected_primary_dish_key` を優先する。`human_judgment` は `ok`、`wrong_primary`、`exclude_non_food`、`exclude_menu_or_text`、`exclude_packaged` を使う。出力は `train/`、`val/`、`test/`、`excluded/excluded_manifest.jsonl`、`label_map.json`、`labels.txt`、`dataset_summary.json`、`dataset_summary.md` で確認する。
 
 ## Next Steps or Open Questions
 - loop が `no_change` / `regressed` を出したときにどこまで自動 rollback するかは、必要になった時点で別途判断する。
-- teacher-data curation phase に移る際の export shape は、実データ投入タスクに入る時点で別文書へ分離する。
+- 次フェーズは LLM 自動分類改善を続けるより、priority bucket に沿った人手 review と教師データ export を進める。
 - MediaPipe class set finalization の判断後に `src/ai/mealInputAssist/` 側の正規化契約をどう固定するかは別タスクで扱う。

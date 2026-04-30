@@ -31,14 +31,15 @@ except ImportError:
 
 SPLITS = ("train", "val", "test")
 REVIEW_CORRECTION_FIELDS = (
+    "corrected_training_class",
+    "mediapipe_training_class",
+    "training_class",
     "corrected_primary_dish_key",
     "final_primary_dish_key",
     "corrected_primary",
     "corrected_label",
     "final_label",
     "final_label_key",
-    "mediapipe_training_class",
-    "training_class",
 )
 REVIEW_JUDGMENT_FIELDS = (
     "human_judgment",
@@ -57,6 +58,9 @@ EXCLUDE_JUDGMENTS = {
     "excluded",
     "ignore",
     "ignored",
+    "exclude_non_food",
+    "exclude_menu_or_text",
+    "exclude_packaged",
     "non_food",
     "not_food",
     "reject",
@@ -70,6 +74,7 @@ INCORRECT_JUDGMENTS = {
     "ng",
     "no",
     "wrong",
+    "wrong_primary",
 }
 EXCLUDE_LABEL_VALUES = EXCLUDE_JUDGMENTS | {"not_a_meal"}
 
