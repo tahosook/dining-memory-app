@@ -177,6 +177,15 @@ describe('meal input assist runtime availability', () => {
         '「料理名:」「メモ:」「タグ:」などの見出しを使い、後で見返しやすい形にしてください。'
       )
     );
+    expect(fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text).toEqual(
+      expect.stringContaining('入力状態そのものを下書きに書かないでください。')
+    );
+    expect(
+      fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text
+    ).not.toEqual(expect.stringContaining('- 料理名: 未入力'));
+    expect(
+      fakeContext.completion.mock.calls[0]?.[0]?.messages?.[1]?.content?.[0]?.text
+    ).not.toEqual(expect.stringContaining('- メモ: 未入力'));
     expect(fakeContext.completion.mock.calls[0]?.[0]?.response_format).toBeUndefined();
     expect(normalized.source).toBe('local-meal-input-assist');
     expect(normalized.noteDraft?.value).toContain('料理名: 海鮮丼に見える');

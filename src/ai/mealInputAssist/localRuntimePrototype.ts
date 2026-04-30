@@ -116,10 +116,12 @@ function getUnsupportedRuntimeReason() {
 }
 
 function buildMealInputAssistUserPrompt(request: MealInputAssistRequest) {
-  const currentMealName = request.mealName?.trim() || '未入力';
-  const currentCuisineType = request.cuisineType?.trim() || '未入力';
-  const currentLocationName = request.locationName?.trim() || '未入力';
-  const currentNotes = request.notes?.trim() || '未入力';
+  const currentInputs = [
+    request.mealName?.trim() ? `- 料理名: ${request.mealName.trim()}` : null,
+    request.cuisineType?.trim() ? `- 料理ジャンル: ${request.cuisineType.trim()}` : null,
+    request.locationName?.trim() ? `- 場所: ${request.locationName.trim()}` : null,
+    request.notes?.trim() ? `- 既存メモ: ${request.notes.trim()}` : null,
+  ].filter((line): line is string => Boolean(line));
 
   return [
     'あなたは食事記録アプリの AI 入力補助です。',
@@ -128,16 +130,16 @@ function buildMealInputAssistUserPrompt(request: MealInputAssistRequest) {
     'mealName 欄を埋める候補は返さないでください。',
     'noteDraft を主出力にし、value は notes にそのまま貼れる 3〜5 行程度の日本語にしてください。',
     '「料理名:」「メモ:」「タグ:」などの見出しを使い、後で見返しやすい形にしてください。',
+    '現在の入力が空欄でも、「未入力」「空欄」「なし」など入力状態そのものを下書きに書かないでください。',
     '写真から断定できないことは断定せず、「〜に見える」「種類までは不明」など控えめに書いてください。',
     '食事・酒・旅行・外食・自炊・店っぽさ・季節感・量感など、写真から自然に読み取れる範囲だけを反映してください。',
     '返答フォーマット:',
     '{"noteDraft":{"value":"料理名: 刺身盛り合わせ\\nメモ: 日本酒に合いそうな海鮮居酒屋の一皿\\nタグ: #海鮮 #居酒屋 #晩酌","confidence":0.0}}',
-    '現在の入力:',
-    `- 料理名: ${currentMealName}`,
-    `- 料理ジャンル: ${currentCuisineType}`,
+    currentInputs.length > 0
+      ? '現在の入力:'
+      : '現在の入力: 追記済みの文字情報はありません。写真だけをもとに下書きしてください。',
+    ...currentInputs,
     `- 利用可能な料理ジャンル参考値: ${CUISINE_TYPE_OPTIONS.join(' / ')}`,
-    `- 場所: ${currentLocationName}`,
-    `- メモ: ${currentNotes}`,
   ].join('\n');
 }
 
