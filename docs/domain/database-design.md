@@ -24,7 +24,7 @@
 - Use indexed columns for high-frequency lookups such as meal date, meal name, location, and deletion state.
 - Keep optional fields optional; do not force data where the user did not provide it.
 - `meals.cooking_level` stores homemade style as `quick` / `daily` / `gourmet`; eating-out records keep it unset.
-- AI 入力補助は、ユーザーがメモ下書きや provider suggestion を採用したときだけ `meals.ai_source` と `meals.ai_confidence` を保存し、生レスポンスや候補一覧は保存しない。
+- AI 入力補助は、新規保存時にユーザーがメモ下書きや provider suggestion を採用したときだけ `meals.ai_source` と `meals.ai_confidence` を保存し、生レスポンスや候補一覧は保存しない。detail edit modal の AI 補助は notes 追記だけを行い、新しい AI metadata は保存しない。
 - `app_settings` は user-controlled feature flags や meal input assist model の導入状態を保存し、実際の ready 判定は app-local fixed path の file existence を優先する。
 - Preserve latitude and longitude when available, and allow service-layer logic to reuse an existing place name when a new record is captured within roughly 100 meters of a known location.
 

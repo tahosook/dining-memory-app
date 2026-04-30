@@ -21,7 +21,7 @@
 2. Browse the grouped list, which refreshes when the tab becomes active again.
 3. Open a record card.
 4. Review the larger photo and saved details on the dedicated detail screen.
-5. Edit or delete the record, or open the explicit X share path.
+5. Edit or delete the record, optionally use AI note-draft assist inside the edit modal when a saved photo exists, or open the explicit X share path.
 
 ## Search Flow
 1. Open Search.
@@ -56,7 +56,7 @@
 - Capture failure: let the user retry or return to the camera.
 - Local persistence failure: do not create the meal record and show a retry path.
 - Android photo-save permission denied during capture review: do not create the meal record, keep the review inputs intact, and offer a direct path to the system settings screen.
-- AI suggestion failure during capture review: keep manual input and save available, explain the failure briefly, show the last known running stage only while active, and offer a retry path without resetting the review.
+- AI suggestion failure during capture review or detail edit: keep manual input and save available, explain the failure briefly, show the last known running stage only while active, and offer a retry path without resetting the current form.
 - AI input assist disabled by setting or runtime blocker: keep manual input and save available, explain why AI is unavailable, and do not silently fall back to an external or mock provider. Model / projector 未配置や unsupported ABI もこの系統で扱う。
 - Share handoff failure: keep the current record visible, show a retryable error, and let the user reopen the share sheet.
 - Search refresh failure: keep the last successful results when possible and show a retry action.

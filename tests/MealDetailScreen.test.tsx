@@ -6,6 +6,7 @@ import * as Sharing from 'expo-sharing';
 import { MealDetailScreen } from '../src/screens/RecordsScreen/MealDetailScreen';
 import type { RecordsStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
+import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
 import { rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
 
 jest.mock('../src/database/services/MealService', () => ({
@@ -13,6 +14,10 @@ jest.mock('../src/database/services/MealService', () => ({
     updateMeal: jest.fn(),
     softDeleteMeal: jest.fn(),
   },
+}));
+
+jest.mock('../src/hooks/cameraCapture/useMealInputAssist', () => ({
+  useMealInputAssist: jest.fn(),
 }));
 
 jest.mock('expo-sharing', () => ({
@@ -54,6 +59,41 @@ const baseMeal = {
   updated_at: 1,
 };
 
+type MockAiAssistState = {
+  status: 'idle' | 'running' | 'success' | 'error' | 'disabled';
+  suggestions: {
+    source: string;
+    noteDraft: { value: string; label: string; confidence?: number; source: string } | null;
+    mealNames: Array<{ value: string; label: string; confidence?: number; source: string }>;
+    cuisineTypes: Array<{ value: string; label: string; confidence?: number; source: string }>;
+  };
+  errorMessage: string | null;
+  progress: null;
+  disabledReason: string | null;
+  requestSuggestions: jest.Mock;
+  applyNoteDraftSuggestion:
+    | jest.Mock
+    | ((suggestion: { value: string; label: string; confidence?: number; source: string }) => void);
+};
+
+function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAiAssistState {
+  return {
+    status: 'idle',
+    suggestions: {
+      source: 'mock-local',
+      noteDraft: null,
+      mealNames: [],
+      cuisineTypes: [],
+    },
+    errorMessage: null,
+    progress: null,
+    disabledReason: null,
+    requestSuggestions: jest.fn().mockResolvedValue(undefined),
+    applyNoteDraftSuggestion: jest.fn(),
+    ...overrides,
+  };
+}
+
 function createProps(overrides: Partial<MealDetailProps> = {}): MealDetailProps {
   return {
     route: {
@@ -81,6 +121,7 @@ describe('MealDetailScreen', () => {
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
     (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-photo.jpg');
+    (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState());
     Platform.OS = 'ios';
   });
 
@@ -91,7 +132,9 @@ describe('MealDetailScreen', () => {
   test('shows the larger detail image using photo_path first', () => {
     const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
 
-    expect(getByTestId('meal-detail-image').props.source).toEqual({ uri: 'file:///full-photo.jpg' });
+    expect(getByTestId('meal-detail-image').props.source).toEqual({
+      uri: 'file:///full-photo.jpg',
+    });
   });
 
   test('shows homemade style labels and legacy values safely', () => {
@@ -102,19 +145,22 @@ describe('MealDetailScreen', () => {
 
     firstRender.unmount();
 
-    const secondRender = render(<MealDetailScreen {...createProps({
-      route: {
-        key: 'MealDetail-test',
-        name: 'MealDetail',
-        params: {
-          meal: {
-            ...baseMeal,
-            cooking_level: 'hard' as unknown as typeof baseMeal.cooking_level,
+    const secondRender = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: {
+                ...baseMeal,
+                cooking_level: 'hard' as unknown as typeof baseMeal.cooking_level,
+              },
+            },
           },
-        },
-      },
-    })}
-    />);
+        })}
+      />
+    );
 
     expect(secondRender.getByText('本格')).toBeTruthy();
   });
@@ -127,10 +173,13 @@ describe('MealDetailScreen', () => {
 
     fireEvent.press(getByTestId('meal-detail-delete-button'));
 
-    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as { text: string; onPress?: () => void }[];
+    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as {
+      text: string;
+      onPress?: () => void;
+    }[];
 
     await act(async () => {
-      buttons.find((button) => button.text === '削除')?.onPress?.();
+      buttons.find(button => button.text === '削除')?.onPress?.();
     });
 
     expect(MealService.softDeleteMeal).toHaveBeenCalledWith('meal-1');
@@ -143,7 +192,9 @@ describe('MealDetailScreen', () => {
       cooking_level: 'gourmet',
     });
 
-    const { getAllByText, getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
+    const { getAllByText, getByTestId, getByText } = render(
+      <MealDetailScreen {...createProps()} />
+    );
 
     fireEvent.press(getByTestId('meal-detail-edit-button'));
 
@@ -156,10 +207,120 @@ describe('MealDetailScreen', () => {
     fireEvent.press(getByTestId('detail-edit-save-button'));
 
     await waitFor(() => {
-      expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', expect.objectContaining({
-        cooking_level: 'gourmet',
-      }));
+      expect(MealService.updateMeal).toHaveBeenCalledWith(
+        'meal-1',
+        expect.objectContaining({
+          cooking_level: 'gourmet',
+        })
+      );
     });
+  });
+
+  test('shows AI input assist in the edit modal and requests suggestions', () => {
+    const requestSuggestions = jest.fn().mockResolvedValue(undefined);
+    (useMealInputAssist as jest.Mock).mockReturnValue(
+      createAiAssistState({
+        requestSuggestions,
+      })
+    );
+
+    const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+
+    expect(getByTestId('detail-edit-ai-input-assist-section')).toBeTruthy();
+    expect(getByText('AIでメモを作成')).toBeTruthy();
+
+    fireEvent.press(getByTestId('detail-edit-ai-input-assist-button'));
+
+    expect(requestSuggestions).toHaveBeenCalledTimes(1);
+  });
+
+  test('appends an AI note draft to edit notes and saves it only through the save button', async () => {
+    const noteDraft: NonNullable<MockAiAssistState['suggestions']['noteDraft']> = {
+      value: '料理名: 焼き魚定食に見える\nメモ: 魚の焼き目がはっきりした定食',
+      label: '料理名: 焼き魚定食に見える\nメモ: 魚の焼き目がはっきりした定食',
+      confidence: 0.91,
+      source: 'mock-local',
+    };
+    const applyNoteDraftSuggestion = jest.fn();
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      notes: `${baseMeal.notes}\n\n${noteDraft.value}`,
+    });
+    (useMealInputAssist as jest.Mock).mockImplementation(
+      ({
+        captureReview,
+        onCaptureReviewChange,
+      }: {
+        captureReview: { notes: string } | null;
+        onCaptureReviewChange: (field: 'notes', value: string) => void;
+      }) =>
+        createAiAssistState({
+          status: 'success',
+          suggestions: {
+            source: 'mock-local',
+            noteDraft,
+            mealNames: [],
+            cuisineTypes: [],
+          },
+          applyNoteDraftSuggestion: (suggestion: typeof noteDraft) => {
+            applyNoteDraftSuggestion(suggestion);
+            const trimmedNoteDraft = suggestion.value.trim();
+            const currentNotes = captureReview?.notes.trim() ?? '';
+            onCaptureReviewChange(
+              'notes',
+              currentNotes ? `${currentNotes}\n\n${trimmedNoteDraft}` : trimmedNoteDraft
+            );
+          },
+        })
+    );
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-ai-note-draft-apply-button'));
+
+    const expectedNotes = `${baseMeal.notes}\n\n${noteDraft.value}`;
+    await waitFor(() => {
+      expect(getByTestId('detail-edit-notes-input').props.value).toBe(expectedNotes);
+    });
+
+    expect(applyNoteDraftSuggestion).toHaveBeenCalledWith(noteDraft);
+    expect(MealService.updateMeal).not.toHaveBeenCalled();
+
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(MealService.updateMeal).toHaveBeenCalledWith(
+        'meal-1',
+        expect.objectContaining({
+          notes: expectedNotes,
+        })
+      );
+    });
+  });
+
+  test('hides AI input assist in the edit modal when the meal has no photo', () => {
+    const props = createProps({
+      route: {
+        key: 'MealDetail-test',
+        name: 'MealDetail',
+        params: {
+          meal: {
+            ...baseMeal,
+            photo_path: '',
+            photo_thumbnail_path: undefined,
+          },
+        },
+      },
+    });
+
+    const { getByTestId, queryByTestId } = render(<MealDetailScreen {...props} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+
+    expect(queryByTestId('detail-edit-ai-input-assist-section')).toBeNull();
   });
 
   test('shows the saved image preview and rotate action in the edit modal', () => {
@@ -167,7 +328,9 @@ describe('MealDetailScreen', () => {
 
     fireEvent.press(getByTestId('meal-detail-edit-button'));
 
-    expect(getByTestId('detail-edit-image-preview').props.source).toEqual({ uri: 'file:///full-photo.jpg' });
+    expect(getByTestId('detail-edit-image-preview').props.source).toEqual({
+      uri: 'file:///full-photo.jpg',
+    });
     expect(getByTestId('detail-edit-rotate-image-button')).toBeTruthy();
   });
 
@@ -192,7 +355,9 @@ describe('MealDetailScreen', () => {
       photo_thumbnail_path: 'file:///rotated-photo.jpg',
     });
     await waitFor(() => {
-      expect(getByTestId('meal-detail-image').props.source).toEqual({ uri: 'file:///rotated-photo.jpg' });
+      expect(getByTestId('meal-detail-image').props.source).toEqual({
+        uri: 'file:///rotated-photo.jpg',
+      });
     });
   });
 
@@ -211,7 +376,9 @@ describe('MealDetailScreen', () => {
     fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
 
     expect(await findByText('回転中...')).toBeTruthy();
-    expect(getByTestId('detail-edit-rotate-image-button').props.accessibilityState?.disabled).toBe(true);
+    expect(getByTestId('detail-edit-rotate-image-button').props.accessibilityState?.disabled).toBe(
+      true
+    );
 
     fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
     expect(rotateMealPhotoClockwise).toHaveBeenCalledTimes(1);
@@ -234,7 +401,9 @@ describe('MealDetailScreen', () => {
       expect(Alert.alert).toHaveBeenCalledWith('エラー', '写真の回転に失敗しました。');
     });
     expect(MealService.updateMeal).not.toHaveBeenCalled();
-    expect(getByTestId('meal-detail-image').props.source).toEqual({ uri: 'file:///full-photo.jpg' });
+    expect(getByTestId('meal-detail-image').props.source).toEqual({
+      uri: 'file:///full-photo.jpg',
+    });
   });
 
   test('opens the share composer with photo preview and shares the edited text', async () => {
@@ -243,9 +412,14 @@ describe('MealDetailScreen', () => {
     fireEvent.press(getByTestId('meal-detail-share-button'));
 
     expect(getByText('共有する前に確認')).toBeTruthy();
-    expect(getByTestId('share-preview-image').props.source).toEqual({ uri: 'file:///full-photo.jpg' });
+    expect(getByTestId('share-preview-image').props.source).toEqual({
+      uri: 'file:///full-photo.jpg',
+    });
 
-    fireEvent.changeText(getByTestId('share-text-input'), '食事記録: 焼き魚定食\n料理ジャンル: 和食');
+    fireEvent.changeText(
+      getByTestId('share-text-input'),
+      '食事記録: 焼き魚定食\n料理ジャンル: 和食'
+    );
     fireEvent.press(getByTestId('share-submit-button'));
 
     await waitFor(() => {

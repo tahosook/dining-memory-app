@@ -17,7 +17,12 @@ import * as Sharing from 'expo-sharing';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
 import { Colors } from '../../constants/Colors';
 import { MealService } from '../../database/services/MealService';
+import { useMealInputAssist } from '../../hooks/cameraCapture/useMealInputAssist';
 import type { Meal } from '../../types/MealTypes';
+import type {
+  CaptureReviewEditableField,
+  CaptureReviewState,
+} from '../../hooks/cameraCapture/useCameraCapture';
 import type { RecordsStackParamList } from '../../navigation/types';
 import { getMealDetailImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
@@ -82,6 +87,62 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   const [shareText, setShareText] = useState(() => buildInitialShareText(route.params.meal));
 
   const photoUri = useMemo(() => getMealDetailImageUri(meal), [meal]);
+  const editCaptureReview = useMemo<CaptureReviewState | null>(() => {
+    if (!editingMeal || !photoUri) {
+      return null;
+    }
+
+    return {
+      photoUri,
+      width: 0,
+      height: 0,
+      capturedAtMs: editingMeal.meal_datetime,
+      mealName: editDraft.mealName,
+      cuisineType: editDraft.cuisineType as CaptureReviewState['cuisineType'],
+      notes: editDraft.notes,
+      locationName: editDraft.location,
+      isHomemade: editDraft.isHomemade,
+    };
+  }, [editDraft, editingMeal, photoUri]);
+
+  const handleEditCaptureReviewChange = useCallback(
+    (field: CaptureReviewEditableField, value: string | boolean) => {
+      setEditDraft(current => {
+        if (field === 'mealName') {
+          return { ...current, mealName: String(value) };
+        }
+
+        if (field === 'cuisineType') {
+          return { ...current, cuisineType: String(value) };
+        }
+
+        if (field === 'notes') {
+          return { ...current, notes: String(value) };
+        }
+
+        if (field === 'locationName') {
+          return { ...current, location: String(value) };
+        }
+
+        if (field === 'isHomemade') {
+          const isHomemade = Boolean(value);
+          return {
+            ...current,
+            isHomemade,
+            cookingLevel: isHomemade ? current.cookingLevel : '',
+          };
+        }
+
+        return current;
+      });
+    },
+    []
+  );
+
+  const editMealInputAssist = useMealInputAssist({
+    captureReview: editCaptureReview,
+    onCaptureReviewChange: handleEditCaptureReviewChange,
+  });
 
   const openEditModal = useCallback(() => {
     setEditingMeal(meal);
@@ -163,26 +224,22 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   }, [meal.id, meal.photo_thumbnail_path, photoUri, rotatingPhoto]);
 
   const confirmDelete = useCallback(() => {
-    Alert.alert(
-      '削除確認',
-      `${meal.meal_name} を削除してもよろしいですか？`,
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await MealService.softDeleteMeal(meal.id);
-              navigation.goBack();
-            } catch (error) {
-              console.error('Failed to delete meal:', error);
-              Alert.alert('エラー', '削除に失敗しました。');
-            }
-          },
+    Alert.alert('削除確認', `${meal.meal_name} を削除してもよろしいですか？`, [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await MealService.softDeleteMeal(meal.id);
+            navigation.goBack();
+          } catch (error) {
+            console.error('Failed to delete meal:', error);
+            Alert.alert('エラー', '削除に失敗しました。');
+          }
         },
-      ]
-    );
+      },
+    ]);
   }, [meal.id, meal.meal_name, navigation]);
 
   const submitShare = useCallback(async () => {
@@ -242,7 +299,10 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             testID="meal-detail-image"
           />
         ) : (
-          <View style={[styles.heroImage, styles.noImageHero]} testID="meal-detail-image-placeholder">
+          <View
+            style={[styles.heroImage, styles.noImageHero]}
+            testID="meal-detail-image-placeholder"
+          >
             <Text style={styles.noImageText}>写真はありません</Text>
           </View>
         )}
@@ -253,13 +313,25 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         </View>
 
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={openEditModal} testID="meal-detail-edit-button">
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={openEditModal}
+            testID="meal-detail-edit-button"
+          >
             <Text style={styles.secondaryButtonText}>編集</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.primaryButton} onPress={openShareComposer} testID="meal-detail-share-button">
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={openShareComposer}
+            testID="meal-detail-share-button"
+          >
             <Text style={styles.primaryButtonText}>共有</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.dangerButton} onPress={confirmDelete} testID="meal-detail-delete-button">
+          <TouchableOpacity
+            style={styles.dangerButton}
+            onPress={confirmDelete}
+            testID="meal-detail-delete-button"
+          >
             <Text style={styles.dangerButtonText}>削除</Text>
           </TouchableOpacity>
         </View>
@@ -270,7 +342,10 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
           <DetailRow label="料理ジャンル" value={meal.cuisine_type ?? '未設定'} />
           <DetailRow label="メモ" value={meal.notes?.trim() ? meal.notes : '未設定'} />
           <DetailRow label="食事タイプ" value={meal.is_homemade ? '自家製' : '外食'} />
-          <DetailRow label="自炊スタイル" value={meal.is_homemade ? formatCookingLevel(meal.cooking_level) : '未設定'} />
+          <DetailRow
+            label="自炊スタイル"
+            value={meal.is_homemade ? formatCookingLevel(meal.cooking_level) : '未設定'}
+          />
         </View>
       </ScrollView>
 
@@ -285,6 +360,13 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         imageUri={photoUri}
         onRotateImage={rotatePhotoClockwise}
         rotatingImage={rotatingPhoto}
+        aiAssistStatus={editMealInputAssist.status}
+        aiAssistSuggestions={editMealInputAssist.suggestions}
+        aiAssistErrorMessage={editMealInputAssist.errorMessage}
+        aiAssistProgress={editMealInputAssist.progress}
+        aiAssistDisabledReason={editMealInputAssist.disabledReason}
+        onRequestAiSuggestions={editMealInputAssist.requestSuggestions}
+        onApplyNoteDraftSuggestion={editMealInputAssist.applyNoteDraftSuggestion}
       />
 
       <Modal
@@ -312,9 +394,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
               testID="share-text-input"
             />
             {Platform.OS === 'android' && photoUri ? (
-              <Text style={styles.shareNote}>
-                写真を共有します。投稿文は共有先で調整できます。
-              </Text>
+              <Text style={styles.shareNote}>写真を共有します。投稿文は共有先で調整できます。</Text>
             ) : null}
             <View style={styles.shareButtonRow}>
               <TouchableOpacity

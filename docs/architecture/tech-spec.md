@@ -36,7 +36,7 @@
 - On Android, captured photos should keep an app-local stable file for in-app display and also be added to a dedicated `Pictures / Dining Memory` album so future backup targeting stays possible without mixing unrelated media.
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
-- AI 入力補助は capture review 上の明示的なユーザー操作でのみ実行し、current default は `llama.rn` local-runtime prototype の `noteDraft` path とする。mock / override provider は tests や injection 用に留める。
+- AI 入力補助は capture review または saved record の detail edit modal 上の明示的なユーザー操作でのみ実行し、current default は `llama.rn` local-runtime prototype の `noteDraft` path とする。mock / override provider は tests や injection 用に留める。
 - `src/ai/runtime/` は meal input assist 向けの最小 runtime status helper を持ち、feature 固有ロジックは `src/ai/mealInputAssist/` 配下に残す。
 - ready な runtime と unavailable / noop helper は明確に分け、production path の default fallback に noop provider を使わない。
 - Search は current text/filter path だけを使い、semantic search は current scope に含めない。
@@ -47,7 +47,7 @@
 - meal input assist は captured original をそのまま渡さず、AI 解析前に一時的な downsized JPEG を作って推論へ渡し、終了後に削除して初回 token までの待ち時間と memory pressure を抑える。
 - capture review では AI 解析中に live camera preview を止め、captured image と review overlay だけを残して余分な camera memory pressure を増やさない。
 - meal input assist の running state は `準備 / model 読み込み / 画像解析 / 下書き整形` の近似 stage を UI に返し、進捗の目安と残り時間の目安を表示する。
-- meal input assist の real runtime 条件を満たさない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返し、review の disabled reason を維持する。
+- meal input assist の real runtime 条件を満たさない build では `runtime_unavailable` / `model_unavailable` / `unsupported_architecture` を返し、AI UI の disabled reason を維持する。
 - meal input assist model の配布は app bundle ではなく Settings からの明示ダウンロードとし、direct URL は TypeScript config で固定管理する。
 - Settings は meal input assist の model status と local AI runtime status を表示し、`未導入 / ダウンロード中 / 利用可能 / エラー`、reason、expected path を確認できる。
 - local AI model の document picker や user-configurable path は current scope に入れず、app-local fixed path だけを前提にする。
@@ -65,7 +65,7 @@
 - Write GPS EXIF only when save-time location permission is granted and coordinates are actually available; otherwise save the JPEG without GPS metadata.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
-- AI 入力補助では写真やメモを外部送信せず、メモ下書き採用時だけ最小限の AI metadata を meal record に残す。
+- AI 入力補助では写真やメモを外部送信せず、新規保存時のメモ下書き採用では最小限の AI metadata だけを meal record に残す。detail edit modal では v1 として notes の追記だけを行い、新しい AI metadata は保存しない。
 - local AI spike でも写真やメモの外部送信は行わず、Settings の user opt-in がない限り AI 入力補助を無効にする。
 - Settings の runtime status も外部照会を行わず、端末内で native module / supported ABI / app-local model path の存在だけを確認する。
 - Records detail may hand off the current meal to the OS share sheet, but should not store posting state or send data automatically.
@@ -88,5 +88,5 @@
 - Search and stats exist as first-class tabs rather than hidden tools.
 - The project keeps a strong privacy and local-storage bias.
 - The current MVP does not ship cloud backup, export, or external AI transfer behavior.
-- Phase 1 の AI 入力補助は save flow の外側に置き、失敗時でも手入力保存を妨げない。
+- AI 入力補助は save / update flow の外側に置き、失敗時でも手入力保存を妨げない。
 - local AI runtime が未組み込みの build では、review に disabled reason を出し、mock 候補で自動的に置き換えない。

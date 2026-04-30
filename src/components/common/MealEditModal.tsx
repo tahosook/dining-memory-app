@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -12,6 +13,13 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { CuisineTypeSelector } from './CuisineTypeSelector';
+import { MealInputAssistSection } from './MealInputAssistSection';
+import type {
+  MealInputAssistProgress,
+  MealInputAssistStatus,
+  MealInputAssistSuggestions,
+  MealInputAssistTextSuggestion,
+} from '../../ai/mealInputAssist';
 import type { CookingLevel } from '../../types/MealTypes';
 import { formatCookingLevel } from '../../utils/cookingLevel';
 
@@ -35,6 +43,13 @@ export type MealEditModalProps = {
   imageUri?: string;
   onRotateImage?: () => void | Promise<void>;
   rotatingImage?: boolean;
+  aiAssistStatus?: MealInputAssistStatus;
+  aiAssistSuggestions?: MealInputAssistSuggestions;
+  aiAssistErrorMessage?: string | null;
+  aiAssistProgress?: MealInputAssistProgress | null;
+  aiAssistDisabledReason?: string | null;
+  onRequestAiSuggestions?: () => Promise<void>;
+  onApplyNoteDraftSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
 };
 
 export function MealEditModal({
@@ -48,8 +63,15 @@ export function MealEditModal({
   imageUri,
   onRotateImage,
   rotatingImage = false,
+  aiAssistStatus,
+  aiAssistSuggestions,
+  aiAssistErrorMessage = null,
+  aiAssistProgress = null,
+  aiAssistDisabledReason = null,
+  onRequestAiSuggestions,
+  onApplyNoteDraftSuggestion,
 }: MealEditModalProps) {
-  const updateDraft = <Key extends keyof MealEditDraft,>(key: Key, value: MealEditDraft[Key]) => {
+  const updateDraft = <Key extends keyof MealEditDraft>(key: Key, value: MealEditDraft[Key]) => {
     onChange({ ...draft, [key]: value });
   };
   const updateHomemade = (value: boolean) => {
@@ -59,89 +81,140 @@ export function MealEditModal({
       cookingLevel: value ? draft.cookingLevel : '',
     });
   };
+  const canShowAiAssist = Boolean(
+    imageUri &&
+    aiAssistStatus &&
+    aiAssistSuggestions &&
+    onRequestAiSuggestions &&
+    onApplyNoteDraftSuggestion
+  );
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <Text style={styles.title}>記録を編集</Text>
-          {imageUri ? (
-            <View style={styles.imageBlock}>
-              <Image
-                source={{ uri: imageUri }}
-                style={styles.previewImage}
-                resizeMode="cover"
-                testID={`${testIDPrefix}-image-preview`}
-              />
-              {onRotateImage ? (
-                <TouchableOpacity
-                  style={[styles.rotateButton, (saving || rotatingImage) ? styles.rotateButtonDisabled : null]}
-                  onPress={onRotateImage}
-                  disabled={saving || rotatingImage}
-                  testID={`${testIDPrefix}-rotate-image-button`}
-                >
-                  <Text style={styles.rotateButtonText}>{rotatingImage ? '回転中...' : '右に90°回転'}</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          ) : null}
-          <TextInput
-            style={styles.input}
-            value={draft.mealName}
-            onChangeText={(value) => updateDraft('mealName', value)}
-            placeholder="料理名"
-            testID={`${testIDPrefix}-meal-name-input`}
-          />
-          <TextInput
-            style={styles.input}
-            value={draft.location}
-            onChangeText={(value) => updateDraft('location', value)}
-            placeholder="場所"
-            testID={`${testIDPrefix}-location-input`}
-          />
-          <CuisineTypeSelector
-            value={draft.cuisineType}
-            onChange={(value) => updateDraft('cuisineType', value)}
-            testIDPrefix={`${testIDPrefix}-cuisine`}
-          />
-          <TextInput
-            style={[styles.input, styles.notesInput]}
-            value={draft.notes}
-            onChangeText={(value) => updateDraft('notes', value)}
-            placeholder="メモ"
-            multiline
-            testID={`${testIDPrefix}-notes-input`}
-          />
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>自炊として記録</Text>
-            <Switch
-              value={draft.isHomemade}
-              onValueChange={updateHomemade}
-              testID={`${testIDPrefix}-homemade-switch`}
-            />
-          </View>
-          {draft.isHomemade ? (
-            <View style={styles.styleBlock}>
-              <Text style={styles.fieldLabel}>自炊スタイル</Text>
-              <View style={styles.segmentedRow}>
-                {(['quick', 'daily', 'gourmet'] as const).map((level) => {
-                  const selected = draft.cookingLevel === level;
-                  return (
-                    <TouchableOpacity
-                      key={level}
-                      style={[styles.segmentButton, selected ? styles.segmentButtonSelected : null]}
-                      onPress={() => updateDraft('cookingLevel', level)}
-                      testID={`${testIDPrefix}-cooking-level-${level}`}
-                    >
-                      <Text style={[styles.segmentButtonText, selected ? styles.segmentButtonTextSelected : null]}>
-                        {formatCookingLevel(level)}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+          <ScrollView
+            style={styles.formScroll}
+            contentContainerStyle={styles.formContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {imageUri ? (
+              <View style={styles.imageBlock}>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.previewImage}
+                  resizeMode="cover"
+                  testID={`${testIDPrefix}-image-preview`}
+                />
+                {onRotateImage ? (
+                  <TouchableOpacity
+                    style={[
+                      styles.rotateButton,
+                      saving || rotatingImage ? styles.rotateButtonDisabled : null,
+                    ]}
+                    onPress={onRotateImage}
+                    disabled={saving || rotatingImage}
+                    testID={`${testIDPrefix}-rotate-image-button`}
+                  >
+                    <Text style={styles.rotateButtonText}>
+                      {rotatingImage ? '回転中...' : '右に90°回転'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
+            ) : null}
+            <TextInput
+              style={styles.input}
+              value={draft.mealName}
+              onChangeText={value => updateDraft('mealName', value)}
+              placeholder="料理名"
+              testID={`${testIDPrefix}-meal-name-input`}
+            />
+            <TextInput
+              style={styles.input}
+              value={draft.location}
+              onChangeText={value => updateDraft('location', value)}
+              placeholder="場所"
+              testID={`${testIDPrefix}-location-input`}
+            />
+            <CuisineTypeSelector
+              value={draft.cuisineType}
+              onChange={value => updateDraft('cuisineType', value)}
+              testIDPrefix={`${testIDPrefix}-cuisine`}
+            />
+            {canShowAiAssist &&
+            aiAssistStatus &&
+            aiAssistSuggestions &&
+            onRequestAiSuggestions &&
+            onApplyNoteDraftSuggestion ? (
+              <MealInputAssistSection
+                status={aiAssistStatus}
+                suggestions={aiAssistSuggestions}
+                errorMessage={aiAssistErrorMessage}
+                progress={aiAssistProgress}
+                disabledReason={aiAssistDisabledReason}
+                onRequestSuggestions={onRequestAiSuggestions}
+                onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
+                variant="light"
+                testIDs={{
+                  section: `${testIDPrefix}-ai-input-assist-section`,
+                  status: `${testIDPrefix}-ai-input-assist-status`,
+                  button: `${testIDPrefix}-ai-input-assist-button`,
+                  progress: `${testIDPrefix}-ai-input-assist-progress`,
+                  noteDraftCard: `${testIDPrefix}-ai-note-draft-card`,
+                  noteDraftApplyButton: `${testIDPrefix}-ai-note-draft-apply-button`,
+                }}
+              />
+            ) : null}
+            <TextInput
+              style={[styles.input, styles.notesInput]}
+              value={draft.notes}
+              onChangeText={value => updateDraft('notes', value)}
+              placeholder="メモ"
+              multiline
+              testID={`${testIDPrefix}-notes-input`}
+            />
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>自炊として記録</Text>
+              <Switch
+                value={draft.isHomemade}
+                onValueChange={updateHomemade}
+                testID={`${testIDPrefix}-homemade-switch`}
+              />
             </View>
-          ) : null}
+            {draft.isHomemade ? (
+              <View style={styles.styleBlock}>
+                <Text style={styles.fieldLabel}>自炊スタイル</Text>
+                <View style={styles.segmentedRow}>
+                  {(['quick', 'daily', 'gourmet'] as const).map(level => {
+                    const selected = draft.cookingLevel === level;
+                    return (
+                      <TouchableOpacity
+                        key={level}
+                        style={[
+                          styles.segmentButton,
+                          selected ? styles.segmentButtonSelected : null,
+                        ]}
+                        onPress={() => updateDraft('cookingLevel', level)}
+                        testID={`${testIDPrefix}-cooking-level-${level}`}
+                      >
+                        <Text
+                          style={[
+                            styles.segmentButtonText,
+                            selected ? styles.segmentButtonTextSelected : null,
+                          ]}
+                        >
+                          {formatCookingLevel(level)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
+          </ScrollView>
           <View style={styles.buttonRow}>
             <TouchableOpacity
               style={styles.cancelButton}
@@ -185,11 +258,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     gap: 12,
+    maxHeight: '90%',
   },
   title: {
     fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
+  },
+  formScroll: {
+    flexShrink: 1,
+  },
+  formContent: {
+    gap: 12,
+    paddingBottom: 4,
   },
   imageBlock: {
     gap: 8,

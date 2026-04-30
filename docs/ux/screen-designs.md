@@ -44,6 +44,7 @@
 - The detail screen should show meal details including cuisine, note, homemade/eating-out type, and homemade style.
 - Edit and delete entry points should live on the detail screen.
 - The detail edit modal should show the saved photo, allow a user-triggered right 90-degree rotation that updates the saved image file, and expose homemade style when the record is homemade.
+- When the saved record has a photo, the detail edit modal can show the same AI note-draft assist used in capture review; `メモに追加` appends the draft to the edit notes field, and the database is updated only when the user presses the modal save action.
 - The detail screen should also provide an explicit user-triggered share path for posting to X through the OS share sheet.
 
 ## Search Screen
