@@ -4,6 +4,7 @@ import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import * as MediaLibrary from 'expo-media-library';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
@@ -16,6 +17,7 @@ import type { RootTabParamList } from '../../navigation/types';
 import type { AppliedMealInputAssistMetadata } from '../../ai/mealInputAssist';
 
 export interface CaptureReviewState {
+  source: 'camera' | 'library';
   photoUri: string;
   width: number;
   height: number;
@@ -27,7 +29,7 @@ export interface CaptureReviewState {
   isHomemade: boolean;
 }
 
-export type CaptureReviewEditableField = keyof Omit<CaptureReviewState, 'photoUri' | 'width' | 'height' | 'capturedAtMs'>;
+export type CaptureReviewEditableField = keyof Omit<CaptureReviewState, 'source' | 'photoUri' | 'width' | 'height' | 'capturedAtMs'>;
 
 interface SaveCaptureOptions {
   aiMetadata?: AppliedMealInputAssistMetadata | null;
@@ -175,8 +177,9 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     navigation.navigate(ROUTE_NAMES.RECORDS);
   }, [navigation]);
 
-  const beginReview = useCallback((photo: CameraCapturedPicture) => {
+  const beginReview = useCallback((photo: Pick<CameraCapturedPicture, 'uri' | 'width' | 'height'>, source: 'camera' | 'library') => {
     setCaptureReview({
+      source,
       photoUri: photo.uri,
       width: photo.width,
       height: photo.height,
@@ -216,7 +219,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
       if (!photo) throw new Error('写真の撮影に失敗しました');
 
-      beginReview(photo);
+      beginReview(photo, 'camera');
 
     } catch {
       console.error('Photo capture failed.');
@@ -225,6 +228,30 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       setTakingPhoto(false);
     }
   }, [cameraRef, takingPhoto, beginReview, cameraPermission]);
+
+  const addPhotoFromLibrary = useCallback(async (): Promise<void> => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        exif: true,
+        quality: 1,
+      });
+
+      if (result.canceled || result.assets.length === 0) {
+        return;
+      }
+
+      const picked = result.assets[0];
+      beginReview({
+        uri: picked.uri,
+        width: picked.width ?? CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH,
+        height: picked.height ?? CAMERA_CONSTANTS.SAVED_PHOTO_MAX_HEIGHT,
+      }, 'library');
+    } catch {
+      Alert.alert('エラー', '写真の選択に失敗しました。再度お試しください。');
+    }
+  }, [beginReview]);
 
   // カメラ反転
   const flipCamera = useCallback(() => {
@@ -335,6 +362,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
     // Actions
     takePicture,
+    addPhotoFromLibrary,
     flipCamera,
     closeCamera,
     onCaptureReviewChange: updateCaptureReview,
