@@ -46,6 +46,7 @@ function createCaptureReview(overrides: Partial<CaptureReviewState> = {}): Captu
 
 function createCaptureReviewBase(): CaptureReviewState {
   return {
+    source: 'camera',
     photoUri: 'file:///tmp/meal-photo.jpg',
     width: 800,
     height: 600,

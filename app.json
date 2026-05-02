@@ -49,6 +49,13 @@
           "isAccessMediaLocationEnabled": false
         }
       ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to select a meal photo from your library.",
+          "microphonePermission": false
+        }
+      ],
       "expo-file-system",
       [
         "expo-location",

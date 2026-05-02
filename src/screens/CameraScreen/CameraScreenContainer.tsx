@@ -20,6 +20,7 @@ const CameraScreenContainer: React.FC = () => {
     facing,
     cameraRef,
     takePicture,
+    addPhotoFromLibrary,
     flipCamera,
     closeCamera,
     captureReview,
@@ -77,6 +78,7 @@ const CameraScreenContainer: React.FC = () => {
       cameraRef={cameraRef}
       captureReview={captureReview}
       onTakePicture={takePicture}
+      onAddPhotoFromLibrary={addPhotoFromLibrary}
       onFlipCamera={flipCamera}
       onClose={closeCamera}
       onRequestPermission={cameraPermissionState.requestPermissions}
