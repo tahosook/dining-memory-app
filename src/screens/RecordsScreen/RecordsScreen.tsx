@@ -164,12 +164,14 @@ function groupMealsByDate(records: Meal[]): MealGroup[] {
 export const RecordsScreen: React.FC = () => {
   const navigation = useNavigation<RecordsNavigationProp>();
   const [mealGroups, setMealGroups] = useState<MealGroup[]>([]);
+  const [flatMeals, setFlatMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadMeals = useCallback(async () => {
     try {
       const meals = await MealService.getRecentMeals(100);
+      setFlatMeals(meals);
       setMealGroups(groupMealsByDate(meals));
     } catch (error) {
       console.error('Failed to load meals:', error);
@@ -192,8 +194,13 @@ export const RecordsScreen: React.FC = () => {
   }, [loadMeals]);
 
   const handleMealPress = useCallback((meal: Meal) => {
-    navigation.navigate('MealDetail', { meal });
-  }, [navigation]);
+    const initialIndex = flatMeals.findIndex((candidate) => candidate.id === meal.id);
+    navigation.navigate('MealDetail', {
+      meal,
+      meals: flatMeals,
+      initialIndex: initialIndex >= 0 ? initialIndex : undefined,
+    });
+  }, [flatMeals, navigation]);
 
   if (loading) {
     return (

@@ -5,6 +5,8 @@ export type RecordsStackParamList = {
   RecordsList: undefined;
   MealDetail: {
     meal: Meal;
+    meals?: Meal[];
+    initialIndex?: number;
   };
 };
 

@@ -1,10 +1,11 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
   Modal,
   Platform,
   ScrollView,
+  PanResponder,
   Share,
   StyleSheet,
   Text,
@@ -68,6 +69,10 @@ function formatMealDate(mealDatetime: number): string {
   return new Date(mealDatetime).toLocaleString('ja-JP');
 }
 
+export function shouldHandleHorizontalSwipe(dx: number, dy: number): boolean {
+  return Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.detailRow}>
@@ -78,7 +83,13 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navigation }) => {
-  const [meal, setMeal] = useState<Meal>(route.params.meal);
+  const [detailMeals, setDetailMeals] = useState<Meal[]>(() => route.params.meals ?? [route.params.meal]);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const maxIndex = (route.params.meals ?? [route.params.meal]).length - 1;
+    const index = route.params.initialIndex ?? 0;
+    return Math.max(0, Math.min(index, maxIndex));
+  });
+  const meal = detailMeals[currentIndex] ?? route.params.meal;
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [editDraft, setEditDraft] = useState<MealEditDraft>(emptyEditDraft);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -87,6 +98,12 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   const [shareText, setShareText] = useState(() => buildInitialShareText(route.params.meal));
 
   const photoUri = useMemo(() => getMealDetailImageUri(meal), [meal]);
+
+  useEffect(() => {
+    if (!shareComposerVisible) {
+      setShareText(buildInitialShareText(meal));
+    }
+  }, [meal, shareComposerVisible]);
   const editCaptureReview = useMemo<CaptureReviewState | null>(() => {
     if (!editingMeal || !photoUri) {
       return null;
@@ -172,7 +189,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       });
 
       if (updatedMeal) {
-        setMeal(updatedMeal);
+        setDetailMeals(current => current.map((item, index) => (index === currentIndex ? updatedMeal : item)));
       }
 
       setEditingMeal(null);
@@ -182,7 +199,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     } finally {
       setSavingEdit(false);
     }
-  }, [editDraft, editingMeal]);
+  }, [currentIndex, editDraft, editingMeal]);
 
   const rotatePhotoClockwise = useCallback(async () => {
     if (!photoUri || rotatingPhoto) {
@@ -207,7 +224,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
       const previousPhotoUri = photoUri;
       const previousThumbnailUri = meal.photo_thumbnail_path;
-      setMeal(updatedMeal);
+      setDetailMeals(current => current.map((item, index) => (index === currentIndex ? updatedMeal : item)));
       await deleteMealPhotoFileIfSafe(previousPhotoUri, rotatedUri).catch(() => undefined);
       if (previousThumbnailUri && previousThumbnailUri !== previousPhotoUri) {
         await deleteMealPhotoFileIfSafe(previousThumbnailUri, rotatedUri).catch(() => undefined);
@@ -221,7 +238,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     } finally {
       setRotatingPhoto(false);
     }
-  }, [meal.id, meal.photo_thumbnail_path, photoUri, rotatingPhoto]);
+  }, [currentIndex, meal.id, meal.photo_thumbnail_path, photoUri, rotatingPhoto]);
 
   const confirmDelete = useCallback(() => {
     Alert.alert('削除確認', `${meal.meal_name} を削除してもよろしいですか？`, [
@@ -241,6 +258,33 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       },
     ]);
   }, [meal.id, meal.meal_name, navigation]);
+
+
+  const canSwipe = !editingMeal && !shareComposerVisible;
+
+  const handleSwipeRelease = useCallback((dx: number, dy: number) => {
+    if (!canSwipe || !shouldHandleHorizontalSwipe(dx, dy)) {
+      return;
+    }
+
+    if (dx <= -60 && currentIndex < detailMeals.length - 1) {
+      setCurrentIndex(current => current + 1);
+      return;
+    }
+
+    if (dx >= 60 && currentIndex > 0) {
+      setCurrentIndex(current => current - 1);
+    }
+  }, [canSwipe, currentIndex, detailMeals.length]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_evt, gestureState) => (
+      canSwipe && shouldHandleHorizontalSwipe(gestureState.dx, gestureState.dy)
+    ),
+    onPanResponderRelease: (_evt, gestureState) => {
+      handleSwipeRelease(gestureState.dx, gestureState.dy);
+    },
+  }), [canSwipe, handleSwipeRelease]);
 
   const submitShare = useCallback(async () => {
     try {
@@ -290,7 +334,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView testID="meal-detail-scroll" contentContainerStyle={styles.content} {...panResponder.panHandlers}>
         {photoUri ? (
           <Image
             source={{ uri: photoUri }}
@@ -308,6 +352,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         )}
 
         <View style={styles.headerCard}>
+          {detailMeals.length > 1 ? (
+            <Text style={styles.positionText}>{currentIndex + 1} / {detailMeals.length}</Text>
+          ) : null}
           <Text style={styles.mealName}>{meal.meal_name}</Text>
           <Text style={styles.mealDate}>{formatMealDate(meal.meal_datetime)}</Text>
         </View>
@@ -447,6 +494,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     gap: 6,
+  },
+  positionText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 6,
   },
   mealName: {
     fontSize: 24,
