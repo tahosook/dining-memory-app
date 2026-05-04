@@ -3,7 +3,7 @@ import { Alert, Platform, Share } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
-import { MealDetailScreen } from '../src/screens/RecordsScreen/MealDetailScreen';
+import { MealDetailScreen, shouldHandleHorizontalSwipe } from '../src/screens/RecordsScreen/MealDetailScreen';
 import type { RecordsStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
@@ -127,6 +127,76 @@ describe('MealDetailScreen', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+
+
+  test('swipe helper detects horizontal gestures only', () => {
+    expect(shouldHandleHorizontalSwipe(-80, 10)).toBe(true);
+    expect(shouldHandleHorizontalSwipe(80, 10)).toBe(true);
+    expect(shouldHandleHorizontalSwipe(40, 5)).toBe(false);
+    expect(shouldHandleHorizontalSwipe(70, 60)).toBe(false);
+  });
+
+  test('swipes between meals and stops at boundaries', () => {
+    const newerMeal = { ...baseMeal, id: 'meal-0', uuid: 'meal-0', meal_name: '最新の食事' };
+    const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
+
+    const { getByTestId, getByText } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: baseMeal,
+              meals: [newerMeal, baseMeal, olderMeal],
+              initialIndex: 1,
+            },
+          },
+        })}
+      />
+    );
+
+    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: -80, dy: 0 });
+    expect(getByText('古い食事')).toBeTruthy();
+
+    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: -80, dy: 0 });
+    expect(getByText('古い食事')).toBeTruthy();
+
+    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: 80, dy: 0 });
+    expect(getByText('焼き魚定食')).toBeTruthy();
+
+    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: 80, dy: 0 });
+    expect(getByText('最新の食事')).toBeTruthy();
+
+    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: 80, dy: 0 });
+    expect(getByText('最新の食事')).toBeTruthy();
+  });
+
+  test('does not swipe while edit modal is visible', () => {
+    const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
+
+    const { getByTestId, queryByText } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: baseMeal,
+              meals: [baseMeal, olderMeal],
+              initialIndex: 0,
+            },
+          },
+        })}
+      />
+    );
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: -80, dy: 0 });
+
+    expect(queryByText('古い食事')).toBeNull();
   });
 
   test('shows the larger detail image using photo_path first', () => {
