@@ -135,7 +135,11 @@ describe('RecordsScreen', () => {
 
     fireEvent.press(await findByTestId('meal-card-1'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', { meal });
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
+      meal,
+      meals: [meal],
+      initialIndex: 0,
+    });
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 });
