@@ -6,6 +6,7 @@ import { MealService } from '../src/database/services/MealService';
 import * as MediaLibrary from 'expo-media-library';
 import * as Location from 'expo-location';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
+import * as ImagePicker from 'expo-image-picker';
 import { persistPhotoToStablePath } from '../src/hooks/cameraCapture/photoStorage';
 
 const mockNavigate = jest.fn();
@@ -47,6 +48,9 @@ jest.mock('@bam.tech/react-native-image-resizer', () => ({
     createResizedImage: jest.fn(),
   },
 }));
+jest.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: jest.fn(),
+}), { virtual: true });
 
 describe('useCameraCapture', () => {
   const cameraPermission = {
@@ -102,6 +106,7 @@ describe('useCameraCapture', () => {
       width: 1600,
       height: 1200,
     });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true, assets: [] });
   });
 
   afterEach(() => {
@@ -242,6 +247,22 @@ describe('useCameraCapture', () => {
     );
     expect(result.current.captureReview).toBeNull();
     expect(mockNavigate).toHaveBeenCalledWith('Records');
+  });
+
+  test('opens photo picker and starts review when a photo is selected', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///tmp/library.jpg', width: 800, height: 600 }],
+    });
+
+    await act(async () => {
+      await result.current.addPhotoFromLibrary();
+    });
+
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled();
+    expect(result.current.captureReview?.photoUri).toBe('file:///tmp/library.jpg');
+    expect(result.current.captureReview?.source).toBe('library');
   });
 
   test('passes AI metadata to meal creation only when a suggestion was adopted', async () => {

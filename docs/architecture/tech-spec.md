@@ -11,7 +11,7 @@
 - TypeScript 5.9.x
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
-- Expo Camera, expo-file-system, expo-location, expo-media-library, and related native modules
+- Expo Camera, expo-image-picker, expo-file-system, expo-location, expo-media-library, and related native modules
 
 ## Architecture Principles
 - Offline-first by default.
@@ -22,6 +22,7 @@
 
 ## App Shape
 - `Camera` for capture and immediate save flow.
+- Camera は撮影に加えて写真ライブラリからの 1 枚選択も受け付けるが、review/save は同一パイプラインへ合流する。
 - `Records` for browsing and editing saved meals.
 - `Search` for text and filter-based retrieval.
 - `Stats` for analysis and future insight features.

@@ -14,7 +14,7 @@
 ## Camera Screen
 - Main area: live camera preview.
 - Top area: close and camera-flip actions.
-- Bottom area: shutter and capture guidance.
+- Bottom area: shutter, `写真から追加` の副導線, and capture guidance.
 - States to support: permission denied, taking photo, capture review, capture error, and web/mock fallback.
 - Before the first permission request, show a short explanation card and ask for permission only from an explicit CTA.
 - If permission is denied, show a recovery card with a direct path to the system settings screen.
@@ -34,6 +34,7 @@
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
 - If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
 - After a successful save, close capture review and move directly to Records instead of showing a success modal.
+- `写真から追加` は 1 枚選択のみをサポートし、選択後は撮影時と同じ capture review / save パイプラインに合流させる。
 
 ## Records Screen
 - Shows meal records grouped by date.

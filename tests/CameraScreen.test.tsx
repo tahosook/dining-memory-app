@@ -174,6 +174,7 @@ type MockPermissionState = {
 };
 
 type MockCaptureReview = {
+  source: 'camera' | 'library';
   photoUri: string;
   width: number;
   height: number;
@@ -191,6 +192,7 @@ type MockCaptureState = {
   cameraRef: typeof mockCameraRef;
   captureReview: MockCaptureReview | null;
   takePicture: jest.Mock;
+  addPhotoFromLibrary: jest.Mock;
   flipCamera: jest.Mock;
   closeCamera: jest.Mock;
   onCaptureReviewChange: jest.Mock;
@@ -239,6 +241,7 @@ function createPermissionState(overrides: Partial<MockPermissionState> = {}) {
 function createCaptureReview(overrides: Partial<MockCaptureReview> = {}): MockCaptureReview {
   return {
     photoUri: '/mock/photo.jpg',
+    source: 'camera',
     width: 800,
     height: 600,
     capturedAtMs: new Date(2026, 3, 22, 21, 35, 7).getTime(),
@@ -258,6 +261,7 @@ function createCaptureState(overrides: Partial<MockCaptureState> = {}): MockCapt
     cameraRef: mockCameraRef,
     captureReview: null,
     takePicture: jest.fn(),
+    addPhotoFromLibrary: jest.fn(),
     flipCamera: jest.fn(),
     closeCamera: jest.fn(),
     onCaptureReviewChange: jest.fn(),
@@ -372,6 +376,17 @@ describe('CameraScreen', () => {
       expect(await findByTestId('capture-button')).toBeTruthy();
       expect(await findByText('撮影範囲に料理を合わせてください')).toBeTruthy();
       expect(await findByText('ボタンをタップして撮影')).toBeTruthy();
+      expect(await findByText('写真から追加')).toBeTruthy();
+    });
+
+    test('calls library picker action when add button is pressed', async () => {
+      const addPhotoFromLibrary = jest.fn().mockResolvedValue(undefined);
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({ addPhotoFromLibrary }));
+      const { findByTestId } = render(<CameraScreen />);
+
+      fireEvent.press(await findByTestId('add-photo-from-library-button'));
+
+      expect(addPhotoFromLibrary).toHaveBeenCalledTimes(1);
     });
 
     test('handles close button press without crashing', async () => {

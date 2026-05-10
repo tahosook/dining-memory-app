@@ -16,6 +16,14 @@
 7. Save the record only after the image is persisted locally.
 8. Move directly to Records after save completes.
 
+## Alternate Flow: Add from Library
+1. Open Camera.
+2. Tap `写真から追加`.
+3. Select a single photo from the library.
+4. Enter the same capture review flow used after camera capture.
+5. Save through the same local persistence pipeline.
+6. Move directly to Records after save completes.
+
 ## Browse Flow
 1. Open Records.
 2. Browse the grouped list, which refreshes when the tab becomes active again.

@@ -53,6 +53,7 @@ type CameraLogicState = {
 
 type CameraOperations = {
   onTakePicture: () => Promise<void>;
+  onAddPhotoFromLibrary: () => Promise<void>;
   onFlipCamera: () => void;
   onClose: () => void;
   onRequestPermission: () => Promise<void>;
@@ -90,7 +91,7 @@ type CameraAiAssistOperations = {
 export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
   Pick<
     CameraOperations,
-    'onTakePicture' | 'onFlipCamera' | 'onClose' | 'onRequestPermission' | 'onOpenSettings'
+    'onTakePicture' | 'onAddPhotoFromLibrary' | 'onFlipCamera' | 'onClose' | 'onRequestPermission' | 'onOpenSettings'
   > &
   Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
   Pick<CameraReviewState, 'captureReview'> &
@@ -293,6 +294,9 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.reviewTitle}>撮影内容を確認</Text>
+          {captureReview.source === 'library' ? (
+            <Text style={styles.reviewSubtext}>選択した写真から記録を作成します</Text>
+          ) : null}
           <Image
             source={{ uri: captureReview.photoUri }}
             style={styles.reviewImage}
@@ -382,12 +386,16 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
 interface BottomControlsProps {
   takingPhoto: boolean;
   onTakePicture: () => Promise<void>;
+  onAddPhotoFromLibrary: () => Promise<void>;
 }
 
-const BottomControls: React.FC<BottomControlsProps> = ({ takingPhoto, onTakePicture }) => (
+const BottomControls: React.FC<BottomControlsProps> = ({ takingPhoto, onTakePicture, onAddPhotoFromLibrary }) => (
   <View style={[styles.bottomBar, { marginBottom: bottomBarMarginBottom }]}>
     <View style={styles.buttonGroup}>
       <CaptureButton takingPhoto={takingPhoto} onPress={onTakePicture} />
+      <TouchableOpacity style={styles.secondaryActionButton} onPress={onAddPhotoFromLibrary} testID="add-photo-from-library-button">
+        <Text style={styles.secondaryActionButtonText}>写真から追加</Text>
+      </TouchableOpacity>
       <Text style={styles.captureHint} accessibilityLabel="カメラ操作ガイド">
         ボタンをタップして撮影
       </Text>
@@ -404,6 +412,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   captureReview,
   onClose,
   onTakePicture,
+  onAddPhotoFromLibrary,
   onFlipCamera,
   onRequestPermission,
   onOpenSettings,
@@ -467,7 +476,7 @@ const CameraView: React.FC<CameraViewProps> = ({
           )}
 
           {!captureReview ? (
-            <BottomControls takingPhoto={takingPhoto} onTakePicture={onTakePicture} />
+            <BottomControls takingPhoto={takingPhoto} onTakePicture={onTakePicture} onAddPhotoFromLibrary={onAddPhotoFromLibrary} />
           ) : null}
         </View>
       </SafeAreaView>
@@ -567,6 +576,20 @@ const styles = StyleSheet.create({
   },
   buttonGroup: {
     alignItems: 'center',
+    gap: 12,
+  },
+  secondaryActionButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  secondaryActionButtonText: {
+    color: Colors.white,
+    fontSize: 14,
+    fontWeight: '600',
   },
   captureHint: {
     ...GlobalStyles.body,
@@ -596,6 +619,10 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 18,
     fontWeight: '700',
+  },
+  reviewSubtext: {
+    color: '#d7dce1',
+    fontSize: 13,
   },
   reviewImage: {
     width: '100%',

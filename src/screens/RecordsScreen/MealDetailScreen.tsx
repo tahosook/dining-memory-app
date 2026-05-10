@@ -93,6 +93,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     }
 
     return {
+      source: 'camera',
       photoUri,
       width: 0,
       height: 0,
