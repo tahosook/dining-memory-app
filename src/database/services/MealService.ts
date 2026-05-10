@@ -117,18 +117,7 @@ function resolveDefaultMealName(data: CreateMealData, rows: PersistedMealRow[]):
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const origin = { latitude: data.latitude, longitude: data.longitude };
 
-    const recentNearbyRow = rows.find((row) => {
-      if (!row.location_name
-        || typeof row.latitude !== 'number'
-        || typeof row.longitude !== 'number'
-        || row.is_deleted
-        || row.meal_datetime < oneWeekAgo
-      ) {
-        return false;
-      }
-
-      return getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) <= SAME_LOCATION_THRESHOLD_METERS;
-    });
+    const recentNearbyRow = findMostRecentNearbyRow(rows, origin, { minMealDatetime: oneWeekAgo });
 
     if (recentNearbyRow?.location_name) {
       return `${recentNearbyRow.location_name} の ${timeBasedName}`;
@@ -136,6 +125,32 @@ function resolveDefaultMealName(data: CreateMealData, rows: PersistedMealRow[]):
   }
 
   return timeBasedName;
+}
+
+function findMostRecentNearbyRow(
+  rows: PersistedMealRow[],
+  origin: { latitude: number; longitude: number },
+  options?: { minMealDatetime?: number }
+): PersistedMealRow | undefined {
+  let candidate: PersistedMealRow | undefined;
+
+  for (const row of rows) {
+    if (!row.location_name || typeof row.latitude !== 'number' || typeof row.longitude !== 'number' || row.is_deleted) {
+      continue;
+    }
+    if (typeof options?.minMealDatetime === 'number' && row.meal_datetime < options.minMealDatetime) {
+      continue;
+    }
+    if (getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) > SAME_LOCATION_THRESHOLD_METERS) {
+      continue;
+    }
+
+    if (!candidate || row.meal_datetime > candidate.meal_datetime) {
+      candidate = row;
+    }
+  }
+
+  return candidate;
 }
 
 function toRadians(value: number) {
@@ -172,16 +187,7 @@ function resolveNearbyLocationName(rows: PersistedMealRow[], data: CreateMealDat
     longitude: data.longitude,
   };
 
-  const nearbyRow = rows.find((row) => {
-    if (!row.location_name || typeof row.latitude !== 'number' || typeof row.longitude !== 'number' || row.is_deleted) {
-      return false;
-    }
-
-    return getDistanceMeters(
-      origin,
-      { latitude: row.latitude, longitude: row.longitude }
-    ) <= SAME_LOCATION_THRESHOLD_METERS;
-  });
+  const nearbyRow = findMostRecentNearbyRow(rows, origin);
 
   return nearbyRow?.location_name ?? data.location_name;
 }

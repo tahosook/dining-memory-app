@@ -252,6 +252,79 @@ describe('MealService', () => {
     expect(nearbyMeal.location_name).toBe('神田駅前');
   });
 
+  test('prefers the most recent nearby location name when multiple rows are within 100m', async () => {
+    await MealService.createMeal({
+      meal_name: '朝定食',
+      is_homemade: false,
+      photo_path: 'file:///old-nearby.jpg',
+      meal_datetime: new Date('2026-04-05T08:00:00+09:00'),
+      location_name: '古い候補',
+      latitude: 35.6812,
+      longitude: 139.7671,
+    });
+
+    await MealService.createMeal({
+      meal_name: '昼定食',
+      is_homemade: false,
+      photo_path: 'file:///new-nearby.jpg',
+      meal_datetime: new Date('2026-04-20T12:00:00+09:00'),
+      location_name: '新しい候補',
+      latitude: 35.68122,
+      longitude: 139.76712,
+    });
+
+    const meal = await MealService.createMeal({
+      meal_name: '夜定食',
+      is_homemade: false,
+      photo_path: 'file:///target-nearby.jpg',
+      meal_datetime: new Date('2026-04-21T19:00:00+09:00'),
+      latitude: 35.68121,
+      longitude: 139.76711,
+    });
+
+    expect(meal.location_name).toBe('新しい候補');
+  });
+
+  test('prefers the most recent nearby location when building default meal name', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-04-29T12:00:00+09:00'));
+
+    try {
+      await MealService.createMeal({
+        meal_name: '先週の食事',
+        is_homemade: false,
+        photo_path: 'file:///default-old.jpg',
+        meal_datetime: new Date('2026-04-22T12:00:00+09:00'),
+        location_name: '古い店名',
+        latitude: 35.7001,
+        longitude: 139.7001,
+      });
+
+      await MealService.createMeal({
+        meal_name: '昨日の食事',
+        is_homemade: false,
+        photo_path: 'file:///default-new.jpg',
+        meal_datetime: new Date('2026-04-28T12:00:00+09:00'),
+        location_name: '新しい店名',
+        latitude: 35.70012,
+        longitude: 139.70012,
+      });
+
+      const meal = await MealService.createMeal({
+        meal_name: '   ',
+        is_homemade: false,
+        photo_path: 'file:///default-target.jpg',
+        meal_datetime: new Date(2026, 3, 29, 12, 0, 0),
+        latitude: 35.70011,
+        longitude: 139.70011,
+      });
+
+      expect(meal.meal_name).toBe('新しい店名 の 昼食');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('updates meals without any semantic-search side work', async () => {
     const created = await MealService.createMeal({
       meal_name: 'カレー',
