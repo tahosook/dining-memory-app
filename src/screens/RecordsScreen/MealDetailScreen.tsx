@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
   Modal,
   Platform,
   ScrollView,
-  PanResponder,
   Share,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import type { GestureResponderEvent } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
@@ -30,6 +30,8 @@ import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLe
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils/mealPhotoRotation';
 
 type MealDetailScreenProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
+type SwipePoint = { x: number; y: number };
+type SwipeDelta = { dx: number; dy: number };
 
 const emptyEditDraft: MealEditDraft = {
   mealName: '',
@@ -73,6 +75,20 @@ export function shouldHandleHorizontalSwipe(dx: number, dy: number): boolean {
   return Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
 }
 
+function getSwipePoint(event: GestureResponderEvent): SwipePoint | null {
+  const { locationX, locationY, pageX, pageY } = event.nativeEvent;
+
+  if (typeof pageX === 'number' && typeof pageY === 'number') {
+    return { x: pageX, y: pageY };
+  }
+
+  if (typeof locationX === 'number' && typeof locationY === 'number') {
+    return { x: locationX, y: locationY };
+  }
+
+  return null;
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.detailRow}>
@@ -96,14 +112,10 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   const [rotatingPhoto, setRotatingPhoto] = useState(false);
   const [shareComposerVisible, setShareComposerVisible] = useState(false);
   const [shareText, setShareText] = useState(() => buildInitialShareText(route.params.meal));
+  const swipeStartRef = useRef<SwipePoint | null>(null);
 
   const photoUri = useMemo(() => getMealDetailImageUri(meal), [meal]);
 
-  useEffect(() => {
-    if (!shareComposerVisible) {
-      setShareText(buildInitialShareText(meal));
-    }
-  }, [meal, shareComposerVisible]);
   const editCaptureReview = useMemo<CaptureReviewState | null>(() => {
     if (!editingMeal || !photoUri) {
       return null;
@@ -263,29 +275,54 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
   const canSwipe = !editingMeal && !shareComposerVisible;
 
-  const handleSwipeRelease = useCallback((dx: number, dy: number) => {
-    if (!canSwipe || !shouldHandleHorizontalSwipe(dx, dy)) {
+  const rememberSwipeStart = useCallback((event: GestureResponderEvent) => {
+    swipeStartRef.current = getSwipePoint(event);
+  }, []);
+
+  const clearSwipeStart = useCallback(() => {
+    swipeStartRef.current = null;
+  }, []);
+
+  const getSwipeDelta = useCallback((event: GestureResponderEvent, gestureState?: SwipeDelta): SwipeDelta | null => {
+    if (gestureState) {
+      return gestureState;
+    }
+
+    const startPoint = swipeStartRef.current;
+    const endPoint = getSwipePoint(event);
+
+    if (!startPoint || !endPoint) {
+      return null;
+    }
+
+    return {
+      dx: endPoint.x - startPoint.x,
+      dy: endPoint.y - startPoint.y,
+    };
+  }, []);
+
+  const shouldSetSwipeResponder = useCallback((event: GestureResponderEvent) => {
+    const delta = getSwipeDelta(event);
+    return Boolean(delta && canSwipe && shouldHandleHorizontalSwipe(delta.dx, delta.dy));
+  }, [canSwipe, getSwipeDelta]);
+
+  const handleSwipeRelease = useCallback((event: GestureResponderEvent, gestureState?: SwipeDelta) => {
+    const delta = getSwipeDelta(event, gestureState);
+    clearSwipeStart();
+
+    if (!delta || !canSwipe || !shouldHandleHorizontalSwipe(delta.dx, delta.dy)) {
       return;
     }
 
-    if (dx <= -60 && currentIndex < detailMeals.length - 1) {
+    if (delta.dx <= -60 && currentIndex < detailMeals.length - 1) {
       setCurrentIndex(current => current + 1);
       return;
     }
 
-    if (dx >= 60 && currentIndex > 0) {
+    if (delta.dx >= 60 && currentIndex > 0) {
       setCurrentIndex(current => current - 1);
     }
-  }, [canSwipe, currentIndex, detailMeals.length]);
-
-  const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_evt, gestureState) => (
-      canSwipe && shouldHandleHorizontalSwipe(gestureState.dx, gestureState.dy)
-    ),
-    onPanResponderRelease: (_evt, gestureState) => {
-      handleSwipeRelease(gestureState.dx, gestureState.dy);
-    },
-  }), [canSwipe, handleSwipeRelease]);
+  }, [canSwipe, clearSwipeStart, currentIndex, detailMeals.length, getSwipeDelta]);
 
   const submitShare = useCallback(async () => {
     try {
@@ -335,7 +372,14 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
   return (
     <View style={styles.container}>
-      <ScrollView testID="meal-detail-scroll" contentContainerStyle={styles.content} {...panResponder.panHandlers}>
+      <ScrollView
+        testID="meal-detail-scroll"
+        contentContainerStyle={styles.content}
+        onTouchStart={rememberSwipeStart}
+        onMoveShouldSetResponder={shouldSetSwipeResponder}
+        onResponderRelease={handleSwipeRelease}
+        onResponderTerminate={clearSwipeStart}
+      >
         {photoUri ? (
           <Image
             source={{ uri: photoUri }}
