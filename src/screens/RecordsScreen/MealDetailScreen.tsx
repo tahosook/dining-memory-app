@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
   Modal,
+  PanResponder,
   Platform,
   ScrollView,
   Share,
@@ -12,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import type { GestureResponderEvent } from 'react-native';
+import type { GestureResponderEvent, PanResponderGestureState } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
@@ -30,7 +31,6 @@ import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLe
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils/mealPhotoRotation';
 
 type MealDetailScreenProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
-type SwipePoint = { x: number; y: number };
 type SwipeDelta = { dx: number; dy: number };
 
 const emptyEditDraft: MealEditDraft = {
@@ -71,22 +71,39 @@ function formatMealDate(mealDatetime: number): string {
   return new Date(mealDatetime).toLocaleString('ja-JP');
 }
 
+function createInitialDetailMeals(meal: Meal, meals?: Meal[]): Meal[] {
+  return meals?.length ? meals : [meal];
+}
+
+function clampDetailIndex(index: number, mealsLength: number): number {
+  return Math.max(0, Math.min(index, mealsLength - 1));
+}
+
 export function shouldHandleHorizontalSwipe(dx: number, dy: number): boolean {
   return Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
 }
 
-function getSwipePoint(event: GestureResponderEvent): SwipePoint | null {
-  const { locationX, locationY, pageX, pageY } = event.nativeEvent;
-
-  if (typeof pageX === 'number' && typeof pageY === 'number') {
-    return { x: pageX, y: pageY };
+function getSwipeDeltaFromEvent(event?: GestureResponderEvent): SwipeDelta | null {
+  if (!event) {
+    return null;
   }
 
-  if (typeof locationX === 'number' && typeof locationY === 'number') {
-    return { x: locationX, y: locationY };
+  const maybeEvent = event as GestureResponderEvent & {
+    dx?: unknown;
+    dy?: unknown;
+    nativeEvent?: GestureResponderEvent['nativeEvent'] & {
+      dx?: unknown;
+      dy?: unknown;
+    };
+  };
+  const dx = typeof maybeEvent.dx === 'number' ? maybeEvent.dx : maybeEvent.nativeEvent?.dx;
+  const dy = typeof maybeEvent.dy === 'number' ? maybeEvent.dy : maybeEvent.nativeEvent?.dy;
+
+  if (typeof dx !== 'number' || typeof dy !== 'number') {
+    return null;
   }
 
-  return null;
+  return { dx, dy };
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -99,20 +116,21 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navigation }) => {
-  const [detailMeals, setDetailMeals] = useState<Meal[]>(() => route.params.meals ?? [route.params.meal]);
+  const [detailMeals, setDetailMeals] = useState<Meal[]>(() =>
+    createInitialDetailMeals(route.params.meal, route.params.meals)
+  );
   const [currentIndex, setCurrentIndex] = useState(() => {
-    const maxIndex = (route.params.meals ?? [route.params.meal]).length - 1;
+    const initialMeals = createInitialDetailMeals(route.params.meal, route.params.meals);
     const index = route.params.initialIndex ?? 0;
-    return Math.max(0, Math.min(index, maxIndex));
+    return clampDetailIndex(index, initialMeals.length);
   });
-  const meal = detailMeals[currentIndex] ?? route.params.meal;
+  const meal = detailMeals[currentIndex] ?? detailMeals[0] ?? route.params.meal;
   const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
   const [editDraft, setEditDraft] = useState<MealEditDraft>(emptyEditDraft);
   const [savingEdit, setSavingEdit] = useState(false);
   const [rotatingPhoto, setRotatingPhoto] = useState(false);
   const [shareComposerVisible, setShareComposerVisible] = useState(false);
-  const [shareText, setShareText] = useState(() => buildInitialShareText(route.params.meal));
-  const swipeStartRef = useRef<SwipePoint | null>(null);
+  const [shareText, setShareText] = useState(() => buildInitialShareText(meal));
 
   const photoUri = useMemo(() => getMealDetailImageUri(meal), [meal]);
 
@@ -203,6 +221,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
       if (updatedMeal) {
         setDetailMeals(current => current.map((item, index) => (index === currentIndex ? updatedMeal : item)));
+        if (!shareComposerVisible) {
+          setShareText(buildInitialShareText(updatedMeal));
+        }
       }
 
       setEditingMeal(null);
@@ -212,7 +233,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     } finally {
       setSavingEdit(false);
     }
-  }, [currentIndex, editDraft, editingMeal]);
+  }, [currentIndex, editDraft, editingMeal, shareComposerVisible]);
 
   const rotatePhotoClockwise = useCallback(async () => {
     if (!photoUri || rotatingPhoto) {
@@ -275,54 +296,82 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
   const canSwipe = !editingMeal && !shareComposerVisible;
 
-  const rememberSwipeStart = useCallback((event: GestureResponderEvent) => {
-    swipeStartRef.current = getSwipePoint(event);
-  }, []);
+  const shouldStartSwipeResponder = useCallback((gestureState: SwipeDelta) => (
+    canSwipe && shouldHandleHorizontalSwipe(gestureState.dx, gestureState.dy)
+  ), [canSwipe]);
 
-  const clearSwipeStart = useCallback(() => {
-    swipeStartRef.current = null;
-  }, []);
+  const handleSwipeRelease = useCallback((gestureState: SwipeDelta) => {
+    if (!canSwipe || !shouldHandleHorizontalSwipe(gestureState.dx, gestureState.dy)) {
+      return;
+    }
 
-  const getSwipeDelta = useCallback((event: GestureResponderEvent, gestureState?: SwipeDelta): SwipeDelta | null => {
+    if (gestureState.dx <= -60) {
+      const nextIndex = Math.min(currentIndex + 1, detailMeals.length - 1);
+      if (nextIndex !== currentIndex) {
+        setCurrentIndex(nextIndex);
+        setShareText(buildInitialShareText(detailMeals[nextIndex]));
+      }
+      return;
+    }
+
+    if (gestureState.dx >= 60) {
+      const nextIndex = Math.max(currentIndex - 1, 0);
+      if (nextIndex !== currentIndex) {
+        setCurrentIndex(nextIndex);
+        setShareText(buildInitialShareText(detailMeals[nextIndex]));
+      }
+    }
+  }, [canSwipe, currentIndex, detailMeals]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_event, gestureState) => (
+      shouldStartSwipeResponder(gestureState)
+    ),
+    onPanResponderRelease: (_event, gestureState) => {
+      handleSwipeRelease(gestureState);
+    },
+    onPanResponderTerminationRequest: () => true,
+  }), [handleSwipeRelease, shouldStartSwipeResponder]);
+
+  const handleMoveShouldSetResponder = useCallback((
+    event?: GestureResponderEvent,
+    gestureState?: PanResponderGestureState | SwipeDelta
+  ) => {
     if (gestureState) {
-      return gestureState;
+      return shouldStartSwipeResponder(gestureState);
     }
 
-    const startPoint = swipeStartRef.current;
-    const endPoint = getSwipePoint(event);
-
-    if (!startPoint || !endPoint) {
-      return null;
+    if (!event) {
+      return true;
     }
 
-    return {
-      dx: endPoint.x - startPoint.x,
-      dy: endPoint.y - startPoint.y,
-    };
-  }, []);
+    const eventDelta = getSwipeDeltaFromEvent(event);
+    if (eventDelta) {
+      return shouldStartSwipeResponder(eventDelta);
+    }
 
-  const shouldSetSwipeResponder = useCallback((event: GestureResponderEvent) => {
-    const delta = getSwipeDelta(event);
-    return Boolean(delta && canSwipe && shouldHandleHorizontalSwipe(delta.dx, delta.dy));
-  }, [canSwipe, getSwipeDelta]);
+    return panResponder.panHandlers.onMoveShouldSetResponder?.(event) ?? false;
+  }, [panResponder.panHandlers, shouldStartSwipeResponder]);
 
-  const handleSwipeRelease = useCallback((event: GestureResponderEvent, gestureState?: SwipeDelta) => {
-    const delta = getSwipeDelta(event, gestureState);
-    clearSwipeStart();
-
-    if (!delta || !canSwipe || !shouldHandleHorizontalSwipe(delta.dx, delta.dy)) {
+  const handleResponderRelease = useCallback((
+    event: GestureResponderEvent,
+    gestureState?: PanResponderGestureState | SwipeDelta
+  ) => {
+    if (gestureState) {
+      handleSwipeRelease(gestureState);
+      panResponder.panHandlers.onResponderRelease?.(event);
       return;
     }
 
-    if (delta.dx <= -60 && currentIndex < detailMeals.length - 1) {
-      setCurrentIndex(current => current + 1);
+    const eventDelta = getSwipeDeltaFromEvent(event);
+    if (eventDelta) {
+      handleSwipeRelease(eventDelta);
+      panResponder.panHandlers.onResponderRelease?.(event);
       return;
     }
 
-    if (delta.dx >= 60 && currentIndex > 0) {
-      setCurrentIndex(current => current - 1);
-    }
-  }, [canSwipe, clearSwipeStart, currentIndex, detailMeals.length, getSwipeDelta]);
+    panResponder.panHandlers.onResponderRelease?.(event);
+  }, [handleSwipeRelease, panResponder.panHandlers]);
 
   const submitShare = useCallback(async () => {
     try {
@@ -375,10 +424,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       <ScrollView
         testID="meal-detail-scroll"
         contentContainerStyle={styles.content}
-        onTouchStart={rememberSwipeStart}
-        onMoveShouldSetResponder={shouldSetSwipeResponder}
-        onResponderRelease={handleSwipeRelease}
-        onResponderTerminate={clearSwipeStart}
+        {...panResponder.panHandlers}
+        onMoveShouldSetResponder={handleMoveShouldSetResponder}
+        onResponderRelease={handleResponderRelease}
       >
         {photoUri ? (
           <Image

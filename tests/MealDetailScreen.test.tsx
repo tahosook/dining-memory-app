@@ -31,6 +31,7 @@ jest.mock('../src/utils/mealPhotoRotation', () => ({
 }));
 
 type MealDetailProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
+type FireEventTarget = Parameters<typeof fireEvent>[0];
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -110,6 +111,14 @@ function createProps(overrides: Partial<MealDetailProps> = {}): MealDetailProps 
   };
 }
 
+function swipeDetailScroll(scroll: FireEventTarget, dx: number, dy = 0) {
+  fireEvent(scroll, 'onResponderRelease', {
+    dx,
+    dy,
+    nativeEvent: { dx, dy },
+  });
+}
+
 describe('MealDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -128,8 +137,6 @@ describe('MealDetailScreen', () => {
   afterEach(() => {
     jest.restoreAllMocks();
   });
-
-
 
   test('swipe helper detects horizontal gestures only', () => {
     expect(shouldHandleHorizontalSwipe(-80, 10)).toBe(true);
@@ -158,19 +165,19 @@ describe('MealDetailScreen', () => {
       />
     );
 
-    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: -80, dy: 0 });
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
     expect(getByText('古い食事')).toBeTruthy();
 
-    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: -80, dy: 0 });
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
     expect(getByText('古い食事')).toBeTruthy();
 
-    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: 80, dy: 0 });
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), 80);
     expect(getByText('焼き魚定食')).toBeTruthy();
 
-    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: 80, dy: 0 });
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), 80);
     expect(getByText('最新の食事')).toBeTruthy();
 
-    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: 80, dy: 0 });
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), 80);
     expect(getByText('最新の食事')).toBeTruthy();
   });
 
@@ -194,9 +201,82 @@ describe('MealDetailScreen', () => {
     );
 
     fireEvent.press(getByTestId('meal-detail-edit-button'));
-    fireEvent(getByTestId('meal-detail-scroll'), 'onResponderRelease', {}, { dx: -80, dy: 0 });
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
 
     expect(queryByText('古い食事')).toBeNull();
+  });
+
+  test('does not swipe while share composer is visible', () => {
+    const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
+
+    const { getByTestId, queryByText } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: baseMeal,
+              meals: [baseMeal, olderMeal],
+              initialIndex: 0,
+            },
+          },
+        })}
+      />
+    );
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
+
+    expect(queryByText('古い食事')).toBeNull();
+    expect(getByTestId('share-text-input').props.value).toContain('焼き魚定食');
+  });
+
+  test('opens share composer with the current meal text after swiping', () => {
+    const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
+
+    const { getByTestId } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: baseMeal,
+              meals: [baseMeal, olderMeal],
+              initialIndex: 0,
+            },
+          },
+        })}
+      />
+    );
+
+    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(getByTestId('share-text-input').props.value).toContain('古い食事');
+    expect(getByTestId('share-text-input').props.value).not.toContain('焼き魚定食');
+  });
+
+  test('falls back to the route meal when the meals param is empty', () => {
+    const { getByText, queryByText } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: baseMeal,
+              meals: [],
+              initialIndex: 5,
+            },
+          },
+        })}
+      />
+    );
+
+    expect(getByText('焼き魚定食')).toBeTruthy();
+    expect(queryByText('1 / 0')).toBeNull();
   });
 
   test('shows the larger detail image using photo_path first', () => {

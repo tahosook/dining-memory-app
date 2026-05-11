@@ -142,4 +142,53 @@ describe('RecordsScreen', () => {
     });
     expect(Alert.alert).not.toHaveBeenCalled();
   });
+
+  test('passes the flat list and tapped meal index to the detail screen', async () => {
+    const newerMeal = {
+      id: '1',
+      uuid: '1',
+      meal_name: '朝ごはん',
+      meal_datetime: new Date('2026-04-12T08:00:00+09:00').getTime(),
+      is_homemade: true,
+      photo_path: 'file:///breakfast.jpg',
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    };
+    const selectedMeal = {
+      id: '2',
+      uuid: '2',
+      meal_name: '昼ごはん',
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
+      is_homemade: false,
+      photo_path: 'file:///lunch.jpg',
+      is_deleted: false,
+      created_at: 2,
+      updated_at: 2,
+    };
+    const olderMeal = {
+      id: '3',
+      uuid: '3',
+      meal_name: '夜ごはん',
+      meal_datetime: new Date('2026-04-11T19:00:00+09:00').getTime(),
+      is_homemade: true,
+      photo_path: 'file:///dinner.jpg',
+      is_deleted: false,
+      created_at: 3,
+      updated_at: 3,
+    };
+    const meals = [newerMeal, selectedMeal, olderMeal];
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue(meals);
+
+    const { findByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(await findByTestId('meal-card-2'));
+
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
+      meal: selectedMeal,
+      meals,
+      initialIndex: 1,
+    });
+  });
 });
