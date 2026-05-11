@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   TouchableOpacity,
   Image,
   TextInput,
@@ -37,8 +36,6 @@ import type {
 } from '../../../ai/mealInputAssist';
 import TopBar from './TopBar';
 import CaptureButton from './CaptureButton';
-
-const { width: screenWidth } = Dimensions.get('window');
 
 const platformConfig =
   PLATFORM_CONFIGS[Platform.OS as keyof typeof PLATFORM_CONFIGS] || PLATFORM_CONFIGS.default;
@@ -167,15 +164,7 @@ const PermissionDeniedView: React.FC<{ onOpenSettings: () => Promise<void> }> = 
   </View>
 );
 
-const FocusArea: React.FC = () => (
-  <View style={styles.focusArea}>
-    <View style={styles.focusSquare} accessibilityLabel="撮影範囲">
-      <Text style={styles.instructionText} accessibilityLabel="撮影ガイド">
-        撮影範囲に料理を合わせてください
-      </Text>
-    </View>
-  </View>
-);
+const CameraPreviewSpacer: React.FC = () => <View style={styles.cameraPreviewSpacer} />;
 
 const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
   placeholder,
@@ -391,14 +380,11 @@ interface BottomControlsProps {
 
 const BottomControls: React.FC<BottomControlsProps> = ({ takingPhoto, onTakePicture, onAddPhotoFromLibrary }) => (
   <View style={[styles.bottomBar, { marginBottom: bottomBarMarginBottom }]}>
-    <View style={styles.buttonGroup}>
+    <View style={styles.captureActionsRow}>
       <CaptureButton takingPhoto={takingPhoto} onPress={onTakePicture} />
       <TouchableOpacity style={styles.secondaryActionButton} onPress={onAddPhotoFromLibrary} testID="add-photo-from-library-button">
         <Text style={styles.secondaryActionButtonText}>写真から追加</Text>
       </TouchableOpacity>
-      <Text style={styles.captureHint} accessibilityLabel="カメラ操作ガイド">
-        ボタンをタップして撮影
-      </Text>
     </View>
   </View>
 );
@@ -472,7 +458,7 @@ const CameraView: React.FC<CameraViewProps> = ({
               onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
             />
           ) : (
-            <FocusArea />
+            <CameraPreviewSpacer />
           )}
 
           {!captureReview ? (
@@ -545,42 +531,28 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  focusArea: {
+  cameraPreviewSpacer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  focusSquare: {
-    width: screenWidth * CAMERA_CONSTANTS.FOCUS_AREA_RATIO,
-    height:
-      (screenWidth * CAMERA_CONSTANTS.FOCUS_AREA_RATIO) / CAMERA_CONSTANTS.FOCUS_AREA_ASPECT_RATIO,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionText: {
-    ...GlobalStyles.body,
-    color: Colors.white,
-    textAlign: 'center',
-    padding: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 8,
   },
   bottomBar: {
-    paddingBottom: CAMERA_CONSTANTS.BOTTOM_BAR_PADDING,
+    width: '100%',
+    paddingBottom: 24,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  buttonGroup: {
+  captureActionsRow: {
+    width: '100%',
+    minHeight: CAMERA_CONSTANTS.CAMERA_BUTTON_SIZE,
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
   },
   secondaryActionButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    position: 'absolute',
+    right: 0,
+    top: 20,
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.35)',
@@ -588,12 +560,8 @@ const styles = StyleSheet.create({
   },
   secondaryActionButtonText: {
     color: Colors.white,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
-  },
-  captureHint: {
-    ...GlobalStyles.body,
-    color: Colors.white,
   },
   reviewContainer: {
     flex: 1,

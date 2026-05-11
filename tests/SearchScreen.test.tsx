@@ -132,18 +132,22 @@ describe('SearchScreen', () => {
   });
 
   test('opens a result in the shared detail screen', async () => {
-    const meal = createMeal();
-    (MealService.searchMeals as jest.Mock).mockResolvedValue([meal]);
+    const firstMeal = createMeal({ id: '1', meal_name: 'ラーメン' });
+    const selectedMeal = createMeal({ id: '2', meal_name: 'カレー' });
+    const results = [firstMeal, selectedMeal];
+    (MealService.searchMeals as jest.Mock).mockResolvedValue(results);
 
     const { findByTestId } = render(<SearchScreen />);
     await triggerLatestFocus();
 
-    fireEvent.press(await findByTestId('search-result-1'));
+    fireEvent.press(await findByTestId('search-result-2'));
 
     expect(mockNavigate).toHaveBeenCalledWith('Records', {
       screen: 'MealDetail',
       params: {
-        meal,
+        meal: selectedMeal,
+        meals: results,
+        initialIndex: 1,
       },
     });
   });

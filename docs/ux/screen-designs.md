@@ -14,7 +14,8 @@
 ## Camera Screen
 - Main area: live camera preview.
 - Top area: close and camera-flip actions.
-- Bottom area: shutter, `写真から追加` の副導線, and capture guidance.
+- Main preview should not show a separate framing guide overlay or capture hint copy.
+- Bottom area: centered shutter with `写真から追加` aligned at the right edge.
 - States to support: permission denied, taking photo, capture review, capture error, and web/mock fallback.
 - Before the first permission request, show a short explanation card and ask for permission only from an explicit CTA.
 - If permission is denied, show a recovery card with a direct path to the system settings screen.
@@ -56,6 +57,7 @@
 - The current optional filters are cuisine type, location, and homemade-only.
 - Search は current text/filter match だけを使い、semantic search は current scope に含めない。
 - Result cards should open the same saved-record detail screen used from Records.
+- Opening a result should keep the current search result order as the detail previous/next navigation context.
 - Use explicit loading, error, and zero-result states, and keep the previous results visible if only a refresh fails.
 
 ## Stats Screen

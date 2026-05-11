@@ -369,13 +369,13 @@ describe('CameraScreen', () => {
       (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(mockMediaLibraryPermissionsGranted);
     });
 
-    test('renders the default camera guide', async () => {
-      const { findByText, findByTestId } = render(<CameraScreen />);
+    test('renders the default camera controls without capture guide copy', async () => {
+      const { findByText, findByTestId, queryByText } = render(<CameraScreen />);
 
       expect(await findByTestId('close-button')).toBeTruthy();
       expect(await findByTestId('capture-button')).toBeTruthy();
-      expect(await findByText('撮影範囲に料理を合わせてください')).toBeTruthy();
-      expect(await findByText('ボタンをタップして撮影')).toBeTruthy();
+      expect(queryByText('撮影範囲に料理を合わせてください')).toBeNull();
+      expect(queryByText('ボタンをタップして撮影')).toBeNull();
       expect(await findByText('写真から追加')).toBeTruthy();
     });
 
@@ -707,10 +707,10 @@ describe('CameraScreen Web Mode', () => {
     consoleLogSpy.mockRestore();
   });
 
-  test('renders the camera guide in web mode without permissions', async () => {
-    const { findByText } = render(<CameraScreen />);
+  test('renders camera controls without capture guide copy in web mode', async () => {
+    const { queryByText } = render(<CameraScreen />);
 
-    expect(await findByText('撮影範囲に料理を合わせてください')).toBeTruthy();
-    expect(await findByText('ボタンをタップして撮影')).toBeTruthy();
+    expect(queryByText('撮影範囲に料理を合わせてください')).toBeNull();
+    expect(queryByText('ボタンをタップして撮影')).toBeNull();
   });
 });

@@ -92,13 +92,16 @@ export const SearchScreen: React.FC = () => {
   }, [cuisineFilter, hasLoadedOnce, homemadeOnly, locationFilter, runSearch, searchQuery]);
 
   const handleMealPress = useCallback((meal: Meal) => {
+    const initialIndex = results.findIndex((candidate) => candidate.id === meal.id);
     navigation.navigate('Records', {
       screen: 'MealDetail',
       params: {
         meal,
+        meals: results,
+        initialIndex: initialIndex >= 0 ? initialIndex : undefined,
       },
     });
-  }, [navigation]);
+  }, [navigation, results]);
 
   const showLoadingState = loading && results.length === 0;
   const showErrorState = Boolean(errorMessage) && results.length === 0;

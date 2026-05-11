@@ -1,13 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../../constants/Colors';
 import { GlobalStyles } from '../../../constants/Styles';
-import { CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 import TopBar from './TopBar';
-
-const { width: screenWidth } = Dimensions.get('window');
 
 type MockCameraViewProps = {
   takingPhoto: boolean;
@@ -25,19 +22,12 @@ const MockCameraPreview: React.FC = () => (
   </View>
 );
 
-const FocusArea: React.FC = () => (
-  <View style={styles.focusArea}>
-    <View style={styles.focusSquare}>
-      <Text style={styles.instructionText}>撮影範囲に料理を合わせてください</Text>
-    </View>
-  </View>
-);
+const CameraPreviewSpacer: React.FC = () => <View style={styles.cameraPreviewSpacer} />;
 
 const BottomControls: React.FC<{ takingPhoto: boolean; onTakePicture: () => Promise<void> }> = ({ takingPhoto, onTakePicture }) => (
   <View style={styles.bottomBar}>
-    <View style={styles.buttonGroup}>
+    <View style={styles.captureActionsRow}>
       <CaptureButton takingPhoto={takingPhoto} onPress={onTakePicture} />
-      <Text style={styles.captureHint}>ボタンをタップして撮影</Text>
     </View>
   </View>
 );
@@ -58,7 +48,7 @@ const MockCameraView: React.FC<MockCameraViewProps> = ({ takingPhoto, _facing, _
 
         <View style={styles.overlay}>
           <TopBar onClosePress={onClose} onFlipPress={onFlipCamera} />
-          <FocusArea />
+          <CameraPreviewSpacer />
           <BottomControls takingPhoto={takingPhoto} onTakePicture={onTakePicture} />
         </View>
       </SafeAreaView>
@@ -95,36 +85,20 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  focusArea: {
+  cameraPreviewSpacer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  focusSquare: {
-    width: screenWidth * CAMERA_CONSTANTS.FOCUS_AREA_RATIO,
-    height: (screenWidth * CAMERA_CONSTANTS.FOCUS_AREA_RATIO) / CAMERA_CONSTANTS.FOCUS_AREA_ASPECT_RATIO,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.8)',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionText: {
-    ...GlobalStyles.body,
-    color: Colors.white,
-    textAlign: 'center',
-    padding: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 8,
   },
   bottomBar: {
-    paddingBottom: CAMERA_CONSTANTS.BOTTOM_BAR_PADDING,
+    width: '100%',
+    paddingBottom: 24,
     paddingHorizontal: 20,
     alignItems: 'center',
   },
-  buttonGroup: {
+  captureActionsRow: {
+    width: '100%',
+    minHeight: 80,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   captureButton: {
     width: 80,
@@ -150,10 +124,6 @@ const styles = StyleSheet.create({
     ...GlobalStyles.body,
     color: Colors.black,
     fontSize: 12,
-  },
-  captureHint: {
-    ...GlobalStyles.body,
-    color: Colors.white,
   },
 });
 
