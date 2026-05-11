@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { deleteAsync } from 'expo-file-system/legacy';
+import { createMealInputAssistPolicy } from '../../ai/mealInputAssist/policy';
+import {
+  createOverrideRuntimeAvailability,
+  createUnavailableRuntimeAvailability,
+} from '../../ai/mealInputAssist/runtimeAvailability';
+import { normalizeMealInputAssistResult } from '../../ai/mealInputAssist/normalizer';
 import {
   EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS,
-  createMealInputAssistPolicy,
-  createUnavailableRuntimeAvailability,
-  createOverrideRuntimeAvailability,
-  loadMealInputAssistRuntimeAvailability,
-  normalizeMealInputAssistResult,
   type AppliedMealInputAssistMetadata,
+  type MealInputAssistAvailability,
   type MealInputAssistCuisineSuggestion,
   type MealInputAssistPolicy,
   type MealInputAssistProgress,
@@ -20,7 +22,7 @@ import {
   type MealInputAssistStatus,
   type MealInputAssistSuggestions,
   type MealInputAssistTextSuggestion,
-} from '../../ai/mealInputAssist';
+} from '../../ai/mealInputAssist/types';
 import { CAMERA_CONSTANTS } from '../../constants/CameraConstants';
 import type { CaptureReviewEditableField, CaptureReviewState } from './useCameraCapture';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
@@ -43,12 +45,22 @@ interface PreparedMealInputAssistRequest {
 
 interface MealInputAssistEnvironment {
   isAiInputAssistEnabled: boolean;
-  runtimeAvailability: MealInputAssistRuntimeAvailability;
+  runtimeAvailability: MealInputAssistRuntimeAvailability | null;
 }
 
 interface MealInputAssistEnvironmentLoaderDependencies {
   loadAiInputAssistEnabledSetting: () => Promise<boolean>;
   loadRuntimeAvailability: () => Promise<MealInputAssistRuntimeAvailability>;
+}
+
+type MealInputAssistRuntimeModule = typeof import('../../ai/mealInputAssist/runtime');
+
+async function loadDefaultMealInputAssistRuntimeAvailability() {
+  const {
+    loadMealInputAssistRuntimeAvailability,
+  } = require('../../ai/mealInputAssist/runtime') as MealInputAssistRuntimeModule;
+
+  return loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
 }
 
 function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
@@ -179,7 +191,7 @@ export function useMealInputAssist({
       resolveRuntimeAvailability ??
       (provider
         ? async () => createOverrideRuntimeAvailability(provider)
-        : () => loadMealInputAssistRuntimeAvailability('local-runtime-prototype')),
+        : loadDefaultMealInputAssistRuntimeAvailability),
     [provider, resolveRuntimeAvailability]
   );
 
@@ -250,12 +262,19 @@ export function useMealInputAssist({
       };
       environmentPromiseRef.current = (async () => {
         try {
-          const [nextAiInputAssistEnabled, nextRuntimeAvailability] = await Promise.all([
-            loadAiInputAssistEnabledSetting(),
-            loadRuntimeAvailability(),
-          ]);
+          const nextAiInputAssistEnabled = await loadAiInputAssistEnabledSetting();
 
           setIsAiInputAssistEnabled(nextAiInputAssistEnabled);
+
+          if (!nextAiInputAssistEnabled) {
+            setRuntimeAvailability(null);
+            return {
+              isAiInputAssistEnabled: nextAiInputAssistEnabled,
+              runtimeAvailability: null,
+            };
+          }
+
+          const nextRuntimeAvailability = await loadRuntimeAvailability();
           setRuntimeAvailability(nextRuntimeAvailability);
 
           return {
@@ -291,6 +310,13 @@ export function useMealInputAssist({
         loadAiInputAssistEnabledSetting &&
         environmentLoaderDependenciesRef.current.loadRuntimeAvailability ===
           loadRuntimeAvailability);
+    if (isAiInputAssistEnabled === false && hasMatchingEnvironmentDependencies) {
+      return {
+        isAiInputAssistEnabled,
+        runtimeAvailability: null,
+      };
+    }
+
     const hasCurrentEnvironment =
       isAiInputAssistEnabled !== null &&
       runtimeAvailability !== null &&
@@ -317,8 +343,38 @@ export function useMealInputAssist({
       return;
     }
 
-    loadEnvironment().catch(() => undefined);
-  }, [captureReview, loadEnvironment, policy, provider]);
+    if (provider || policy || loadAiInputAssistEnabled || resolveRuntimeAvailability) {
+      loadEnvironment().catch(() => undefined);
+      return;
+    }
+
+    let cancelled = false;
+
+    loadAiInputAssistEnabledSetting()
+      .then((nextAiInputAssistEnabled) => {
+        if (!cancelled) {
+          setIsAiInputAssistEnabled(nextAiInputAssistEnabled);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load AI input assist setting:', error);
+        if (!cancelled) {
+          setIsAiInputAssistEnabled(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    captureReview,
+    loadAiInputAssistEnabled,
+    loadAiInputAssistEnabledSetting,
+    loadEnvironment,
+    policy,
+    provider,
+    resolveRuntimeAvailability,
+  ]);
 
   const cleanupPreparedPhoto = useCallback(
     async (preparedPhotoUri: string, originalPhotoUri: string) => {
@@ -370,20 +426,45 @@ export function useMealInputAssist({
     [captureReview]
   );
 
-  const effectivePolicy = useMemo(
-    () =>
-      policy ??
-      createMealInputAssistPolicy({
-        isEnabled: isAiInputAssistEnabled,
-        runtimeAvailability,
-      }),
-    [isAiInputAssistEnabled, policy, runtimeAvailability]
-  );
+  const availability = useMemo<MealInputAssistAvailability>(() => {
+    if (!request) {
+      return { kind: 'enabled' };
+    }
 
-  const availability = useMemo(
-    () => (request ? effectivePolicy(request) : { kind: 'enabled' as const }),
-    [effectivePolicy, request]
-  );
+    if (policy) {
+      return policy(request);
+    }
+
+    if (!request.photoUri.trim()) {
+      return {
+        kind: 'disabled',
+        reason: '写真を確認できないため、AI候補を提案できません。',
+      };
+    }
+
+    if (isAiInputAssistEnabled === null) {
+      return {
+        kind: 'disabled',
+        reason: 'AI入力補助の準備を確認中です。',
+      };
+    }
+
+    if (!isAiInputAssistEnabled) {
+      return {
+        kind: 'disabled',
+        reason: '設定画面でAI入力補助をオンにすると利用できます。',
+      };
+    }
+
+    if (runtimeAvailability === null) {
+      return { kind: 'enabled' };
+    }
+
+    return createMealInputAssistPolicy({
+      isEnabled: isAiInputAssistEnabled,
+      runtimeAvailability,
+    })(request);
+  }, [isAiInputAssistEnabled, policy, request, runtimeAvailability]);
 
   const effectiveStatus: MealInputAssistStatus = !captureReview
     ? 'idle'
@@ -427,7 +508,7 @@ export function useMealInputAssist({
     }
 
     const activeProvider =
-      environment.runtimeAvailability.kind === 'ready'
+      environment.runtimeAvailability?.kind === 'ready'
         ? environment.runtimeAvailability.provider
         : null;
     if (!activeProvider) {
@@ -521,7 +602,7 @@ export function useMealInputAssist({
 
     try {
       const environment = await loadEnvironment();
-      if (!environment.isAiInputAssistEnabled || environment.runtimeAvailability.kind !== 'ready') {
+      if (!environment.isAiInputAssistEnabled || environment.runtimeAvailability?.kind !== 'ready') {
         setPrewarmStatus('idle');
         return;
       }

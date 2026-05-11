@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 import { PermissionResponse, useCameraPermissions } from 'expo-camera';
-import * as MediaLibrary from 'expo-media-library';
 import { openAppSettings as openSystemSettings } from '../../utils/openAppSettings';
 
 export type CameraPermissionUiState = 'checking' | 'needs_request' | 'denied' | 'granted';
@@ -19,14 +18,6 @@ export type CameraPermissionState = {
  */
 export const useCameraPermission = (): CameraPermissionState => {
   const [permission, requestPermission] = useCameraPermissions();
-
-  const requestMediaLibraryPermission = useCallback(async (): Promise<void> => {
-    try {
-      await MediaLibrary.getPermissionsAsync();
-    } catch {
-      console.warn('Media library permission check failed.');
-    }
-  }, []);
 
   const handlePermissionError = useCallback((error: unknown): void => {
     console.error('Permission request failed.');
@@ -47,15 +38,11 @@ export const useCameraPermission = (): CameraPermissionState => {
     }
 
     try {
-      const permissionResult = await requestPermission();
-
-      if (permissionResult.granted) {
-        await requestMediaLibraryPermission();
-      }
+      await requestPermission();
     } catch (error) {
       handlePermissionError(error);
     }
-  }, [handlePermissionError, permission, requestMediaLibraryPermission, requestPermission]);
+  }, [handlePermissionError, permission, requestPermission]);
 
   const openAppSettings = useCallback(async (): Promise<void> => {
     await openSystemSettings({

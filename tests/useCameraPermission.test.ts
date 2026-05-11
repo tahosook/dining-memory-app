@@ -61,7 +61,7 @@ describe('useCameraPermission', () => {
     expect(requestPermission).not.toHaveBeenCalled();
   });
 
-  test('requests permission only when requestPermissions is called', async () => {
+  test('requests camera permission only when requestPermissions is called', async () => {
     const requestPermission = jest.fn().mockResolvedValue(grantedPermission);
     (useCameraPermissions as jest.Mock).mockReturnValue([undeterminedPermission, requestPermission]);
     (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
@@ -73,7 +73,7 @@ describe('useCameraPermission', () => {
     });
 
     expect(requestPermission).toHaveBeenCalledTimes(1);
-    expect(MediaLibrary.getPermissionsAsync).toHaveBeenCalledTimes(1);
+    expect(MediaLibrary.getPermissionsAsync).not.toHaveBeenCalled();
   });
 
   test('returns denied uiState when permission is denied', () => {

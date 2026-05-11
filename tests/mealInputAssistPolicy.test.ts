@@ -31,6 +31,18 @@ describe('createMealInputAssistPolicy', () => {
     });
   });
 
+  test('returns the settings-off reason before checking runtime readiness', () => {
+    const policy = createMealInputAssistPolicy({
+      isEnabled: false,
+      runtimeAvailability: null,
+    });
+
+    expect(policy(request)).toEqual({
+      kind: 'disabled',
+      reason: '設定画面でAI入力補助をオンにすると利用できます。',
+    });
+  });
+
   test('returns disabled when runtime is unavailable', () => {
     const policy = createMealInputAssistPolicy({
       isEnabled: true,

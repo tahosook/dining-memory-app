@@ -253,16 +253,63 @@ describe('useCameraCapture', () => {
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'file:///tmp/library.jpg', width: 800, height: 600 }],
+      assets: [{
+        uri: 'file:///tmp/library.jpg',
+        width: 800,
+        height: 600,
+        exif: { GPSLatitude: 35.6895 },
+        base64: 'sensitive-base64',
+      }],
     });
 
     await act(async () => {
       await result.current.addPhotoFromLibrary();
     });
 
-    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalled();
-    expect(result.current.captureReview?.photoUri).toBe('file:///tmp/library.jpg');
-    expect(result.current.captureReview?.source).toBe('library');
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: false,
+      exif: false,
+      quality: 1,
+    });
+    expect(result.current.captureReview).toEqual(expect.objectContaining({
+      source: 'library',
+      photoUri: 'file:///tmp/library.jpg',
+      width: 800,
+      height: 600,
+    }));
+    expect(result.current.captureReview).not.toHaveProperty('exif');
+    expect(result.current.captureReview).not.toHaveProperty('base64');
+  });
+
+  test('keeps review state empty when the photo picker is cancelled', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: true,
+      assets: [],
+    });
+
+    await act(async () => {
+      await result.current.addPhotoFromLibrary();
+    });
+
+    expect(result.current.captureReview).toBeNull();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  test('keeps review state empty and shows an alert when the photo picker fails', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockRejectedValue(new Error('picker failed'));
+
+    await act(async () => {
+      await result.current.addPhotoFromLibrary();
+    });
+
+    expect(result.current.captureReview).toBeNull();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'エラー',
+      '写真の選択に失敗しました。再度お試しください。'
+    );
   });
 
   test('passes AI metadata to meal creation only when a suggestion was adopted', async () => {

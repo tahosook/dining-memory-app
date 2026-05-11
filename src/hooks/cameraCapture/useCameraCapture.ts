@@ -4,7 +4,6 @@ import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import * as MediaLibrary from 'expo-media-library';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { CameraView, CameraCapturedPicture, PermissionResponse } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { CAMERA_CONSTANTS, ROUTE_NAMES } from '../../constants/CameraConstants';
@@ -14,7 +13,7 @@ import type { CuisineTypeOption } from '../../constants/MealOptions';
 import { persistPhotoToStablePath, type PersistPhotoOptions } from './photoStorage';
 import { openAppSettings } from '../../utils/openAppSettings';
 import type { RootTabParamList } from '../../navigation/types';
-import type { AppliedMealInputAssistMetadata } from '../../ai/mealInputAssist';
+import type { AppliedMealInputAssistMetadata } from '../../ai/mealInputAssist/types';
 
 export interface CaptureReviewState {
   source: 'camera' | 'library';
@@ -35,7 +34,13 @@ interface SaveCaptureOptions {
   aiMetadata?: AppliedMealInputAssistMetadata | null;
 }
 
+type ExpoImagePickerModule = typeof import('expo-image-picker');
+
 const PHOTO_PERMISSION_SCOPE: MediaLibrary.GranularPermission[] = ['photo'];
+
+function loadImagePicker(): ExpoImagePickerModule {
+  return require('expo-image-picker') as ExpoImagePickerModule;
+}
 
 /**
  * カメラキャプチャ機能のHook
@@ -231,10 +236,11 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
   const addPhotoFromLibrary = useCallback(async (): Promise<void> => {
     try {
+      const ImagePicker = loadImagePicker();
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
-        exif: true,
+        exif: false,
         quality: 1,
       });
 

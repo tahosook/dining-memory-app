@@ -17,7 +17,7 @@ export function createMealInputAssistPolicy({
       };
     }
 
-    if (isEnabled === null || runtimeAvailability === null) {
+    if (isEnabled === null) {
       return {
         kind: 'disabled',
         reason: 'AI入力補助の準備を確認中です。',
@@ -28,6 +28,13 @@ export function createMealInputAssistPolicy({
       return {
         kind: 'disabled',
         reason: '設定画面でAI入力補助をオンにすると利用できます。',
+      };
+    }
+
+    if (runtimeAvailability === null) {
+      return {
+        kind: 'disabled',
+        reason: 'AI入力補助の準備を確認中です。',
       };
     }
 

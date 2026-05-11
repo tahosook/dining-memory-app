@@ -291,7 +291,7 @@ describe('useMealInputAssist', () => {
       }),
     };
     const loadAiInputAssistEnabled = async () => false;
-    const resolveRuntimeAvailability = async () => createReadyRuntimeAvailability(provider);
+    const resolveRuntimeAvailability = jest.fn(async () => createReadyRuntimeAvailability(provider));
     const { result } = renderHook(() =>
       useMealInputAssist({
         captureReview: createCaptureReview(),
@@ -315,6 +315,7 @@ describe('useMealInputAssist', () => {
     });
 
     expect(provider.suggest).not.toHaveBeenCalled();
+    expect(resolveRuntimeAvailability).not.toHaveBeenCalled();
   });
 
   test('returns disabled when runtime availability reports unsupported', async () => {
