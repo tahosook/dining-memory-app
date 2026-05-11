@@ -43,7 +43,7 @@
 - Tapping a record card should move directly to a dedicated detail screen instead of opening an alert.
 - The detail screen should show a visibly larger photo than the list card, preferring `photo_path` over `photo_thumbnail_path`.
 - The detail screen should show meal details including cuisine, note, homemade/eating-out type, and homemade style.
-- The detail screen should support horizontal swipes through the Records list order: left for the next older record and right for the previous newer record, with no action at the list ends.
+- The detail screen should provide compact previous/next record buttons near the photo for moving through Records list order, with no action at the list ends.
 - Edit and delete entry points should live on the detail screen.
 - The detail edit modal should show the saved photo, allow a user-triggered right 90-degree rotation that updates the saved image file, and expose homemade style when the record is homemade.
 - When the saved record has a photo, the detail edit modal can show the same AI note-draft assist used in capture review; `メモに追加` appends the draft to the edit notes field, and the database is updated only when the user presses the modal save action.

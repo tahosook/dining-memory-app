@@ -3,7 +3,11 @@ import { Alert, Platform, Share } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
-import { MealDetailScreen, shouldHandleHorizontalSwipe } from '../src/screens/RecordsScreen/MealDetailScreen';
+import {
+  canNavigateMealDetail,
+  getAdjacentMealIndex,
+  MealDetailScreen,
+} from '../src/screens/RecordsScreen/MealDetailScreen';
 import type { RecordsStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
@@ -31,7 +35,6 @@ jest.mock('../src/utils/mealPhotoRotation', () => ({
 }));
 
 type MealDetailProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
-type FireEventTarget = Parameters<typeof fireEvent>[0];
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -111,14 +114,6 @@ function createProps(overrides: Partial<MealDetailProps> = {}): MealDetailProps 
   };
 }
 
-function swipeDetailScroll(scroll: FireEventTarget, dx: number, dy = 0) {
-  fireEvent(scroll, 'onResponderRelease', {
-    dx,
-    dy,
-    nativeEvent: { dx, dy },
-  });
-}
-
 describe('MealDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -138,18 +133,24 @@ describe('MealDetailScreen', () => {
     jest.restoreAllMocks();
   });
 
-  test('swipe helper detects horizontal gestures only', () => {
-    expect(shouldHandleHorizontalSwipe(-80, 10)).toBe(true);
-    expect(shouldHandleHorizontalSwipe(80, 10)).toBe(true);
-    expect(shouldHandleHorizontalSwipe(40, 5)).toBe(false);
-    expect(shouldHandleHorizontalSwipe(70, 60)).toBe(false);
+  test('adjacent meal helper calculates indexes and boundaries', () => {
+    expect(getAdjacentMealIndex(1, 3, 'next')).toBe(2);
+    expect(getAdjacentMealIndex(2, 3, 'next')).toBe(2);
+    expect(getAdjacentMealIndex(1, 3, 'previous')).toBe(0);
+    expect(getAdjacentMealIndex(0, 3, 'previous')).toBe(0);
   });
 
-  test('swipes between meals and stops at boundaries', () => {
+  test('detail navigation is disabled while edit or share modal is visible', () => {
+    expect(canNavigateMealDetail(false, false)).toBe(true);
+    expect(canNavigateMealDetail(true, false)).toBe(false);
+    expect(canNavigateMealDetail(false, true)).toBe(false);
+  });
+
+  test('visible photo navigation buttons move between meals and stop at boundaries', () => {
     const newerMeal = { ...baseMeal, id: 'meal-0', uuid: 'meal-0', meal_name: '最新の食事' };
     const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
 
-    const { getByTestId, getByText } = render(
+    const { getByTestId, getByText, queryByTestId } = render(
       <MealDetailScreen
         {...createProps({
           route: {
@@ -165,23 +166,29 @@ describe('MealDetailScreen', () => {
       />
     );
 
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
+    expect(queryByTestId('meal-detail-photo-left-edge')).toBeNull();
+    expect(queryByTestId('meal-detail-photo-right-edge')).toBeNull();
+    expect(queryByTestId('meal-detail-photo-edge-feedback')).toBeNull();
+    expect(getByText('前の記録')).toBeTruthy();
+    expect(getByText('次の記録')).toBeTruthy();
+
+    fireEvent.press(getByTestId('meal-detail-photo-nav-next'));
     expect(getByText('古い食事')).toBeTruthy();
 
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
+    fireEvent.press(getByTestId('meal-detail-photo-nav-next'));
     expect(getByText('古い食事')).toBeTruthy();
 
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), 80);
+    fireEvent.press(getByTestId('meal-detail-photo-nav-previous'));
     expect(getByText('焼き魚定食')).toBeTruthy();
 
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), 80);
+    fireEvent.press(getByTestId('meal-detail-photo-nav-previous'));
     expect(getByText('最新の食事')).toBeTruthy();
 
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), 80);
+    fireEvent.press(getByTestId('meal-detail-photo-nav-previous'));
     expect(getByText('最新の食事')).toBeTruthy();
   });
 
-  test('does not swipe while edit modal is visible', () => {
+  test('detail navigation buttons do not navigate while edit modal is visible', () => {
     const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
 
     const { getByTestId, queryByText } = render(
@@ -201,12 +208,12 @@ describe('MealDetailScreen', () => {
     );
 
     fireEvent.press(getByTestId('meal-detail-edit-button'));
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
+    fireEvent.press(getByTestId('meal-detail-photo-nav-next'));
 
     expect(queryByText('古い食事')).toBeNull();
   });
 
-  test('does not swipe while share composer is visible', () => {
+  test('detail navigation buttons do not navigate while share composer is visible', () => {
     const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
 
     const { getByTestId, queryByText } = render(
@@ -226,36 +233,9 @@ describe('MealDetailScreen', () => {
     );
 
     fireEvent.press(getByTestId('meal-detail-share-button'));
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
+    fireEvent.press(getByTestId('meal-detail-photo-nav-next'));
 
     expect(queryByText('古い食事')).toBeNull();
-    expect(getByTestId('share-text-input').props.value).toContain('焼き魚定食');
-  });
-
-  test('opens share composer with the current meal text after swiping', () => {
-    const olderMeal = { ...baseMeal, id: 'meal-2', uuid: 'meal-2', meal_name: '古い食事' };
-
-    const { getByTestId } = render(
-      <MealDetailScreen
-        {...createProps({
-          route: {
-            key: 'MealDetail-test',
-            name: 'MealDetail',
-            params: {
-              meal: baseMeal,
-              meals: [baseMeal, olderMeal],
-              initialIndex: 0,
-            },
-          },
-        })}
-      />
-    );
-
-    swipeDetailScroll(getByTestId('meal-detail-scroll'), -80);
-    fireEvent.press(getByTestId('meal-detail-share-button'));
-
-    expect(getByTestId('share-text-input').props.value).toContain('古い食事');
-    expect(getByTestId('share-text-input').props.value).not.toContain('焼き魚定食');
   });
 
   test('falls back to the route meal when the meals param is empty', () => {

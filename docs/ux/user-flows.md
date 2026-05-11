@@ -29,7 +29,7 @@
 2. Browse the grouped list, which refreshes when the tab becomes active again.
 3. Open a record card.
 4. Review the larger photo and saved details on the dedicated detail screen.
-5. Swipe left or right on the detail screen to move to the adjacent older or newer record from the Records list order; swiping at either end does nothing.
+5. Use the compact previous/next buttons below the detail photo to move to the adjacent newer or older record from the Records list order; tapping at either end does nothing.
 6. Edit or delete the record, optionally use AI note-draft assist inside the edit modal when a saved photo exists, or open the explicit X share path.
 
 ## Search Flow

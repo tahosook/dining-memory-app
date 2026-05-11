@@ -3,7 +3,6 @@ import {
   Alert,
   Image,
   Modal,
-  PanResponder,
   Platform,
   ScrollView,
   Share,
@@ -13,7 +12,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import type { GestureResponderEvent, PanResponderGestureState } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
@@ -31,7 +29,7 @@ import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLe
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils/mealPhotoRotation';
 
 type MealDetailScreenProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
-type SwipeDelta = { dx: number; dy: number };
+export type DetailNavigationDirection = 'previous' | 'next';
 
 const emptyEditDraft: MealEditDraft = {
   mealName: '',
@@ -79,31 +77,27 @@ function clampDetailIndex(index: number, mealsLength: number): number {
   return Math.max(0, Math.min(index, mealsLength - 1));
 }
 
-export function shouldHandleHorizontalSwipe(dx: number, dy: number): boolean {
-  return Math.abs(dx) >= 60 && Math.abs(dx) > Math.abs(dy) * 1.5;
+export function getAdjacentMealIndex(
+  currentIndex: number,
+  mealsLength: number,
+  direction: DetailNavigationDirection
+): number {
+  if (mealsLength <= 0) {
+    return currentIndex;
+  }
+
+  if (direction === 'next') {
+    return Math.min(currentIndex + 1, mealsLength - 1);
+  }
+
+  return Math.max(currentIndex - 1, 0);
 }
 
-function getSwipeDeltaFromEvent(event?: GestureResponderEvent): SwipeDelta | null {
-  if (!event) {
-    return null;
-  }
-
-  const maybeEvent = event as GestureResponderEvent & {
-    dx?: unknown;
-    dy?: unknown;
-    nativeEvent?: GestureResponderEvent['nativeEvent'] & {
-      dx?: unknown;
-      dy?: unknown;
-    };
-  };
-  const dx = typeof maybeEvent.dx === 'number' ? maybeEvent.dx : maybeEvent.nativeEvent?.dx;
-  const dy = typeof maybeEvent.dy === 'number' ? maybeEvent.dy : maybeEvent.nativeEvent?.dy;
-
-  if (typeof dx !== 'number' || typeof dy !== 'number') {
-    return null;
-  }
-
-  return { dx, dy };
+export function canNavigateMealDetail(
+  editingVisible: boolean,
+  shareComposerVisible: boolean
+): boolean {
+  return !editingVisible && !shareComposerVisible;
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -293,85 +287,26 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     ]);
   }, [meal.id, meal.meal_name, navigation]);
 
+  const canNavigateDetail = canNavigateMealDetail(Boolean(editingMeal), shareComposerVisible);
+  const isAtFirstMeal = currentIndex === 0;
+  const isAtLastMeal = currentIndex >= detailMeals.length - 1;
 
-  const canSwipe = !editingMeal && !shareComposerVisible;
-
-  const shouldStartSwipeResponder = useCallback((gestureState: SwipeDelta) => (
-    canSwipe && shouldHandleHorizontalSwipe(gestureState.dx, gestureState.dy)
-  ), [canSwipe]);
-
-  const handleSwipeRelease = useCallback((gestureState: SwipeDelta) => {
-    if (!canSwipe || !shouldHandleHorizontalSwipe(gestureState.dx, gestureState.dy)) {
+  const navigateToAdjacentMeal = useCallback((direction: DetailNavigationDirection) => {
+    if (!canNavigateDetail) {
       return;
     }
 
-    if (gestureState.dx <= -60) {
-      const nextIndex = Math.min(currentIndex + 1, detailMeals.length - 1);
-      if (nextIndex !== currentIndex) {
-        setCurrentIndex(nextIndex);
-        setShareText(buildInitialShareText(detailMeals[nextIndex]));
-      }
-      return;
+    const nextIndex = getAdjacentMealIndex(
+      currentIndex,
+      detailMeals.length,
+      direction
+    );
+
+    if (nextIndex !== currentIndex) {
+      setCurrentIndex(nextIndex);
+      setShareText(buildInitialShareText(detailMeals[nextIndex]));
     }
-
-    if (gestureState.dx >= 60) {
-      const nextIndex = Math.max(currentIndex - 1, 0);
-      if (nextIndex !== currentIndex) {
-        setCurrentIndex(nextIndex);
-        setShareText(buildInitialShareText(detailMeals[nextIndex]));
-      }
-    }
-  }, [canSwipe, currentIndex, detailMeals]);
-
-  const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_event, gestureState) => (
-      shouldStartSwipeResponder(gestureState)
-    ),
-    onPanResponderRelease: (_event, gestureState) => {
-      handleSwipeRelease(gestureState);
-    },
-    onPanResponderTerminationRequest: () => true,
-  }), [handleSwipeRelease, shouldStartSwipeResponder]);
-
-  const handleMoveShouldSetResponder = useCallback((
-    event?: GestureResponderEvent,
-    gestureState?: PanResponderGestureState | SwipeDelta
-  ) => {
-    if (gestureState) {
-      return shouldStartSwipeResponder(gestureState);
-    }
-
-    if (!event) {
-      return true;
-    }
-
-    const eventDelta = getSwipeDeltaFromEvent(event);
-    if (eventDelta) {
-      return shouldStartSwipeResponder(eventDelta);
-    }
-
-    return panResponder.panHandlers.onMoveShouldSetResponder?.(event) ?? false;
-  }, [panResponder.panHandlers, shouldStartSwipeResponder]);
-
-  const handleResponderRelease = useCallback((
-    event: GestureResponderEvent,
-    gestureState?: PanResponderGestureState | SwipeDelta
-  ) => {
-    if (gestureState) {
-      handleSwipeRelease(gestureState);
-      panResponder.panHandlers.onResponderRelease?.(event);
-      return;
-    }
-
-    const eventDelta = getSwipeDeltaFromEvent(event);
-    if (eventDelta) {
-      handleSwipeRelease(eventDelta);
-      panResponder.panHandlers.onResponderRelease?.(event);
-      return;
-    }
-
-    panResponder.panHandlers.onResponderRelease?.(event);
-  }, [handleSwipeRelease, panResponder.panHandlers]);
+  }, [canNavigateDetail, currentIndex, detailMeals]);
 
   const submitShare = useCallback(async () => {
     try {
@@ -420,29 +355,61 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   }, [meal.meal_name, photoUri, shareText]);
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      testID="meal-detail-container"
+    >
       <ScrollView
         testID="meal-detail-scroll"
         contentContainerStyle={styles.content}
-        {...panResponder.panHandlers}
-        onMoveShouldSetResponder={handleMoveShouldSetResponder}
-        onResponderRelease={handleResponderRelease}
       >
-        {photoUri ? (
-          <Image
-            source={{ uri: photoUri }}
-            style={styles.heroImage}
-            resizeMode="cover"
-            testID="meal-detail-image"
-          />
-        ) : (
-          <View
-            style={[styles.heroImage, styles.noImageHero]}
-            testID="meal-detail-image-placeholder"
-          >
-            <Text style={styles.noImageText}>写真はありません</Text>
+        <View style={styles.heroImageFrame}>
+          {photoUri ? (
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.heroImage}
+              resizeMode="cover"
+              testID="meal-detail-image"
+            />
+          ) : (
+            <View
+              style={[styles.heroImage, styles.noImageHero]}
+              testID="meal-detail-image-placeholder"
+            >
+              <Text style={styles.noImageText}>写真はありません</Text>
+            </View>
+          )}
+        </View>
+        {detailMeals.length > 1 ? (
+          <View style={styles.photoNavRow}>
+            <TouchableOpacity
+              accessibilityLabel="前の食事記録へ"
+              accessibilityState={{ disabled: !canNavigateDetail || isAtFirstMeal }}
+              disabled={!canNavigateDetail || isAtFirstMeal}
+              onPress={() => navigateToAdjacentMeal('previous')}
+              style={[
+                styles.photoNavButton,
+                !canNavigateDetail || isAtFirstMeal ? styles.photoNavButtonDisabled : null,
+              ]}
+              testID="meal-detail-photo-nav-previous"
+            >
+              <Text style={styles.photoNavButtonText}>前の記録</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityLabel="次の食事記録へ"
+              accessibilityState={{ disabled: !canNavigateDetail || isAtLastMeal }}
+              disabled={!canNavigateDetail || isAtLastMeal}
+              onPress={() => navigateToAdjacentMeal('next')}
+              style={[
+                styles.photoNavButton,
+                !canNavigateDetail || isAtLastMeal ? styles.photoNavButtonDisabled : null,
+              ]}
+              testID="meal-detail-photo-nav-next"
+            >
+              <Text style={styles.photoNavButtonText}>次の記録</Text>
+            </TouchableOpacity>
           </View>
-        )}
+        ) : null}
 
         <View style={styles.headerCard}>
           {detailMeals.length > 1 ? (
@@ -568,11 +535,40 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
-  heroImage: {
+  heroImageFrame: {
+    position: 'relative',
     width: '100%',
     height: 320,
     borderRadius: 16,
+    overflow: 'hidden',
     backgroundColor: '#e9ecef',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e9ecef',
+  },
+  photoNavRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoNavButton: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: '#d9d9d9',
+  },
+  photoNavButtonDisabled: {
+    opacity: 0.45,
+  },
+  photoNavButtonText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '700',
   },
   noImageHero: {
     alignItems: 'center',
