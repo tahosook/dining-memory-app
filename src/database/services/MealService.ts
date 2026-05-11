@@ -1,6 +1,22 @@
 import { getDatabase, getInMemoryMeals, initializeDatabase, isUsingNativeDatabase, mapRowToMeal, setInMemoryMeals, type PersistedMealRow } from './localDatabase';
 import type { CookingLevel, Meal } from '../../types/MealTypes';
-import { inferCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
+import {
+  resolveDefaultMealName,
+  resolveNearbyLocationName,
+} from '../../domain/meals/defaults';
+import {
+  applyNonTextFilters,
+  matchesTextFilter,
+  sortByRecency,
+  type SearchFilters,
+} from '../../domain/meals/search';
+import {
+  buildStatisticsSummary,
+  filterRowsForStatistics,
+  type StatisticsOptions,
+  type StatisticsSummary,
+} from '../../domain/meals/statistics';
+import { normalizeMealRow } from '../../domain/meals/mealRow';
 
 export interface CreateMealData {
   meal_name: string;
@@ -21,187 +37,20 @@ export interface CreateMealData {
   tags?: string;
 }
 
-export interface SearchFilters {
-  dateFrom?: Date;
-  dateTo?: Date;
-  cuisine_type?: string;
-  is_homemade?: boolean;
-  cooking_level?: CookingLevel | string;
-  location_name?: string;
-  text?: string;
-}
-
-export interface StatisticsSummary {
-  totalMeals: number;
-  homemadeMeals: number;
-  takeoutMeals: number;
-  favoriteCuisine?: string;
-  favoriteLocation?: string;
-  topCuisines?: Array<{ label: string; count: number }>;
-  topLocations?: Array<{ label: string; count: number }>;
-}
-
-export interface StatisticsOptions {
-  dateFrom?: Date;
-  dateTo?: Date;
-}
+export type { SearchFilters } from '../../domain/meals/search';
+export type { StatisticsOptions, StatisticsSummary } from '../../domain/meals/statistics';
 
 type MealUpdateData = Partial<CreateMealData>;
-const SAME_LOCATION_THRESHOLD_METERS = 100;
 
 function createId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
 function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): PersistedMealRow {
-  const now = Date.now();
-  const searchText = data.search_text ?? generateSearchText(data);
-
-  return {
-    id: existing?.id ?? createId(),
-    uuid: existing?.uuid ?? createId(),
-    meal_name: data.meal_name,
-    meal_type: data.meal_type ?? null,
-    cuisine_type: data.cuisine_type ?? null,
-    ai_confidence: data.ai_confidence ?? null,
-    ai_source: data.ai_source ?? null,
-    notes: data.notes ?? null,
-    cooking_level: resolveCookingLevelForSave(data) ?? null,
-    is_homemade: data.is_homemade ? 1 : 0,
-    photo_path: data.photo_path,
-    photo_thumbnail_path: data.photo_thumbnail_path ?? null,
-    location_name: data.location_name ?? null,
-    latitude: data.latitude ?? null,
-    longitude: data.longitude ?? null,
-    meal_datetime: data.meal_datetime.getTime(),
-    search_text: searchText,
-    tags: data.tags ?? null,
-    is_deleted: existing?.is_deleted ?? 0,
-    created_at: existing?.created_at ?? now,
-    updated_at: now,
-  };
-}
-
-function generateSearchText(data: Partial<CreateMealData>): string {
-  return [data.meal_name, data.cuisine_type, data.location_name, data.notes, data.tags]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-}
-
-function getMealNameByTime(date: Date): string {
-  const hour = date.getHours();
-
-  if (hour >= 5 && hour < 10) {
-    return '朝食';
-  } else if (hour >= 10 && hour < 14) {
-    return '昼食';
-  } else if (hour >= 14 && hour < 18) {
-    return '午後の軽食';
-  } else if (hour >= 18 && hour < 22) {
-    return '夕食';
-  } else {
-    return '深夜の食事';
-  }
-}
-
-function resolveDefaultMealName(data: CreateMealData, rows: PersistedMealRow[]): string {
-  if (data.meal_name.trim()) {
-    return data.meal_name.trim();
-  }
-
-  const timeBasedName = getMealNameByTime(data.meal_datetime);
-
-  // 過去一週間以内、同じ場所のレコードを探す
-  if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const origin = { latitude: data.latitude, longitude: data.longitude };
-
-    const recentNearbyRow = findMostRecentNearbyRow(rows, origin, { minMealDatetime: oneWeekAgo });
-
-    if (recentNearbyRow?.location_name) {
-      return `${recentNearbyRow.location_name} の ${timeBasedName}`;
-    }
-  }
-
-  return timeBasedName;
-}
-
-function findMostRecentNearbyRow(
-  rows: PersistedMealRow[],
-  origin: { latitude: number; longitude: number },
-  options?: { minMealDatetime?: number }
-): PersistedMealRow | undefined {
-  let candidate: PersistedMealRow | undefined;
-
-  for (const row of rows) {
-    if (!row.location_name || typeof row.latitude !== 'number' || typeof row.longitude !== 'number' || row.is_deleted) {
-      continue;
-    }
-    if (typeof options?.minMealDatetime === 'number' && row.meal_datetime < options.minMealDatetime) {
-      continue;
-    }
-    if (getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) > SAME_LOCATION_THRESHOLD_METERS) {
-      continue;
-    }
-
-    if (!candidate || row.meal_datetime > candidate.meal_datetime) {
-      candidate = row;
-    }
-  }
-
-  return candidate;
-}
-
-function toRadians(value: number) {
-  return (value * Math.PI) / 180;
-}
-
-function getDistanceMeters(
-  first: { latitude: number; longitude: number },
-  second: { latitude: number; longitude: number }
-) {
-  const earthRadiusMeters = 6371000;
-  const latitudeDelta = toRadians(second.latitude - first.latitude);
-  const longitudeDelta = toRadians(second.longitude - first.longitude);
-  const startLatitude = toRadians(first.latitude);
-  const endLatitude = toRadians(second.latitude);
-  const haversine =
-    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2)
-    + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) * Math.sin(longitudeDelta / 2);
-
-  return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
-}
-
-function resolveNearbyLocationName(rows: PersistedMealRow[], data: CreateMealData) {
-  if (
-    data.location_name?.trim()
-    || typeof data.latitude !== 'number'
-    || typeof data.longitude !== 'number'
-  ) {
-    return data.location_name;
-  }
-
-  const origin = {
-    latitude: data.latitude,
-    longitude: data.longitude,
-  };
-
-  const nearbyRow = findMostRecentNearbyRow(rows, origin);
-
-  return nearbyRow?.location_name ?? data.location_name;
-}
-
-function resolveCookingLevelForSave(data: Pick<CreateMealData, 'cooking_level' | 'is_homemade' | 'meal_name' | 'cuisine_type' | 'notes'>): CookingLevel | undefined {
-  if (!data.is_homemade) {
-    return undefined;
-  }
-
-  return normalizeCookingLevel(data.cooking_level) ?? inferCookingLevel({
-    mealName: data.meal_name,
-    cuisineType: data.cuisine_type,
-    notes: data.notes,
-    isHomemade: data.is_homemade,
+  return normalizeMealRow(data, {
+    existing,
+    nowMs: Date.now(),
+    createId,
   });
 }
 
@@ -272,52 +121,6 @@ async function upsertRow(row: PersistedMealRow) {
     row.created_at,
     row.updated_at
   );
-}
-
-function applyNonTextFilters(rows: PersistedMealRow[], filters: SearchFilters): PersistedMealRow[] {
-  return rows.filter((row) => {
-    if (row.is_deleted) {
-      return false;
-    }
-
-    if (filters.dateFrom && row.meal_datetime < filters.dateFrom.getTime()) {
-      return false;
-    }
-
-    if (filters.dateTo && row.meal_datetime > filters.dateTo.getTime()) {
-      return false;
-    }
-
-    if (filters.cuisine_type && row.cuisine_type !== filters.cuisine_type) {
-      return false;
-    }
-
-    if (typeof filters.is_homemade === 'boolean' && Boolean(row.is_homemade) !== filters.is_homemade) {
-      return false;
-    }
-
-    if (filters.cooking_level) {
-      const filterCookingLevel = normalizeCookingLevel(filters.cooking_level);
-      if (!filterCookingLevel || normalizeCookingLevel(row.cooking_level) !== filterCookingLevel) {
-        return false;
-      }
-    }
-
-    if (filters.location_name && !(row.location_name ?? '').toLowerCase().includes(filters.location_name.toLowerCase())) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
-function matchesTextFilter(row: PersistedMealRow, text: string) {
-  const haystack = `${row.meal_name} ${row.location_name ?? ''} ${row.notes ?? ''} ${row.search_text ?? ''}`.toLowerCase();
-  return haystack.includes(text.toLowerCase());
-}
-
-function sortByRecency(left: PersistedMealRow, right: PersistedMealRow) {
-  return right.meal_datetime - left.meal_datetime;
 }
 
 export class MealService {
@@ -410,33 +213,8 @@ export class MealService {
   }
 
   static async getStatistics(options: StatisticsOptions = {}): Promise<StatisticsSummary> {
-    const rows = (await getAllRows()).filter((row) => {
-      if (row.is_deleted) {
-        return false;
-      }
-      if (options.dateFrom && row.meal_datetime < options.dateFrom.getTime()) {
-        return false;
-      }
-      if (options.dateTo && row.meal_datetime > options.dateTo.getTime()) {
-        return false;
-      }
-
-      return true;
-    });
-    const homemadeMeals = rows.filter((row) => Boolean(row.is_homemade)).length;
-    const takeoutMeals = rows.length - homemadeMeals;
-    const topCuisines = topCounts(rows.map((row) => row.cuisine_type));
-    const topLocations = topCounts(rows.map((row) => row.location_name));
-
-    return {
-      totalMeals: rows.length,
-      homemadeMeals,
-      takeoutMeals,
-      favoriteCuisine: topCuisines[0]?.label,
-      favoriteLocation: topLocations[0]?.label,
-      topCuisines,
-      topLocations,
-    };
+    const rows = filterRowsForStatistics(await getAllRows(), options);
+    return buildStatisticsSummary(rows);
   }
 
   static async clearAllMeals(): Promise<void> {
@@ -454,20 +232,4 @@ export class MealService {
 
     await db.runAsync('DELETE FROM meals');
   }
-}
-
-function topCounts(values: Array<string | null | undefined>, limit = 3): Array<{ label: string; count: number }> {
-  const counts = new Map<string, number>();
-  values.forEach((value) => {
-    const label = value?.trim();
-    if (!label) {
-      return;
-    }
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  });
-
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'))
-    .slice(0, limit)
-    .map(([label, count]) => ({ label, count }));
 }

@@ -142,13 +142,10 @@ describe('SearchScreen', () => {
 
     fireEvent.press(await findByTestId('search-result-2'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('Records', {
-      screen: 'MealDetail',
-      params: {
-        meal: selectedMeal,
-        meals: results,
-        initialIndex: 1,
-      },
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
+      meal: selectedMeal,
+      meals: results,
+      initialIndex: 1,
     });
   });
 

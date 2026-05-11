@@ -1,19 +1,25 @@
-import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { Meal } from '../types/MealTypes';
+
+export type MealDetailRouteParams = {
+  meal: Meal;
+  meals?: Meal[];
+  initialIndex?: number;
+};
 
 export type RecordsStackParamList = {
   RecordsList: undefined;
-  MealDetail: {
-    meal: Meal;
-    meals?: Meal[];
-    initialIndex?: number;
-  };
+  MealDetail: MealDetailRouteParams;
 };
 
 export type RootTabParamList = {
   Camera: undefined;
-  Records: NavigatorScreenParams<RecordsStackParamList> | undefined;
+  Records: undefined;
   Search: undefined;
   Stats: undefined;
   Settings: undefined;
+};
+
+export type RootStackParamList = {
+  MainTabs: undefined;
+  MealDetail: MealDetailRouteParams;
 };

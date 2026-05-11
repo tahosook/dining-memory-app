@@ -31,7 +31,7 @@
 
 ### Architecture / Runtime
 - Read first: [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
-- Common source: `src/ai/`, `src/hooks/`, `src/database/services/`, `src/navigation/`
+- Common source: `src/ai/`, `src/hooks/`, `src/domain/`, `src/media/`, `src/database/services/`, `src/navigation/`
 - Also read: [docs/domain/database-design.md](../domain/database-design.md) when storage or schema changes
 
 ### UI / Screen Improvements
@@ -41,17 +41,17 @@
 
 ### Camera / Save / EXIF / GPS / File Paths
 - Read first: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
-- Common source: `src/hooks/cameraCapture/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`, `src/database/services/MealService.ts`
+- Common source: `src/hooks/cameraCapture/`, `src/media/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`, `src/database/services/MealService.ts`
 - Common tests: `tests/useCameraCapture.test.ts`, `tests/photoStorage.test.ts`, `tests/photoExif.test.ts`, `tests/mealPhotoRotation.test.ts`
 
 ### Records / Search / X Share
 - Read first: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md)
-- Common source: `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`, `src/database/services/MealService.ts`
+- Common source: `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`, `src/database/services/MealService.ts`, `src/domain/meals/`
 - Common tests: `tests/RecordsScreen.test.tsx`, `tests/MealDetailScreen.test.tsx`, `tests/SearchScreen.test.tsx`, `tests/MealService.test.ts`
 
 ### Stats
 - Read first: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md)
-- Common source: `src/screens/StatsScreen/StatsScreen.tsx`, `src/database/services/MealService.ts`
+- Common source: `src/screens/StatsScreen/StatsScreen.tsx`, `src/database/services/MealService.ts`, `src/domain/meals/statistics.ts`
 - Common tests: `tests/StatsSettingsScreens.test.tsx`, `tests/MealService.test.ts`
 
 ### AI Input Assist
@@ -95,10 +95,10 @@
 When source changes, check the smallest matching canonical docs before finishing.
 
 - `src/ai/mealInputAssist/`, `src/ai/runtime/`, `src/screens/SettingsScreen/`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/product/progress.md](../product/progress.md), relevant `docs/notes/ai-input-*`
-- `src/hooks/cameraCapture/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
-- `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/product/progress.md](../product/progress.md)
+- `src/hooks/cameraCapture/`, `src/media/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
+- `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/product/progress.md](../product/progress.md)
 - `src/screens/StatsScreen/`, stats aggregation in `src/database/services/MealService.ts`: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/domain/database-design.md](../domain/database-design.md)
-- `src/database/services/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
+- `src/database/services/`, `src/domain/meals/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
 - `scripts/*food-labels.py`, `scripts/mediapipe_*`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md)
 - `app.json`, `eas.json`, `.github/workflows/ci.yml`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/codex-workflow.md](codex-workflow.md)
 

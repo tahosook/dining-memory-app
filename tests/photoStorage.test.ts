@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { copyAsync, getInfoAsync } from 'expo-file-system/legacy';
-import { writePhotoExifToJpeg } from '../src/hooks/cameraCapture/photoExif';
-import { ANDROID_PHOTO_ALBUM_NAME, persistPhotoToStablePath } from '../src/hooks/cameraCapture/photoStorage';
+import { writePhotoExifToJpeg } from '../src/media/photoExif';
+import { ANDROID_PHOTO_ALBUM_NAME, persistPhotoToStablePath } from '../src/media/photoStorage';
 
 jest.mock('expo-media-library', () => ({
   createAssetAsync: jest.fn(),
@@ -10,8 +10,8 @@ jest.mock('expo-media-library', () => ({
   createAlbumAsync: jest.fn(),
 }));
 
-jest.mock('../src/hooks/cameraCapture/photoExif', () => {
-  const actual = jest.requireActual('../src/hooks/cameraCapture/photoExif');
+jest.mock('../src/media/photoExif', () => {
+  const actual = jest.requireActual('../src/media/photoExif');
 
   return {
     ...actual,

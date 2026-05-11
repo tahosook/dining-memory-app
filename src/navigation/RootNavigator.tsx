@@ -11,11 +11,11 @@ import { MealDetailScreen } from '../screens/RecordsScreen/MealDetailScreen';
 import { SearchScreen } from '../screens/SearchScreen/SearchScreen';
 import StatsScreen from '../screens/StatsScreen/StatsScreen';
 import SettingsScreen from '../screens/SettingsScreen/SettingsScreen';
-import type { RootTabParamList, RecordsStackParamList } from './types';
+import type { RootStackParamList, RootTabParamList } from './types';
 
 // Tab navigator
 const Tab = createBottomTabNavigator<RootTabParamList>();
-const RecordsStack = createNativeStackNavigator<RecordsStackParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 // Colors for 40+ male target user - clean, high contrast
 const COLORS = {
@@ -45,64 +45,64 @@ function renderTabIcon(routeName: string, focused: boolean) {
   return <Ionicons name={iconName} size={24} color={focused ? COLORS.activeTint : COLORS.inactiveTint} />;
 }
 
-function RecordsNavigator() {
+function MainTabs() {
   return (
-    <RecordsStack.Navigator>
-      <RecordsStack.Screen
-        name="RecordsList"
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        tabBarIcon: ({ focused }) => renderTabIcon(route.name, focused),
+        tabBarActiveTintColor: COLORS.activeTint,
+        tabBarInactiveTintColor: COLORS.inactiveTint,
+        tabBarStyle: {
+          backgroundColor: COLORS.tabBar,
+          height: 70,
+        },
+        headerShown: route.name !== 'Camera' && route.name !== 'Records',
+      })}
+    >
+      <Tab.Screen
+        name="Camera"
+        component={CameraScreen}
+        options={{ title: '撮影' }}
+      />
+      <Tab.Screen
+        name="Records"
         component={RecordsScreen}
-        options={{ headerShown: false }}
+        options={{ title: '記録' }}
       />
-      <RecordsStack.Screen
-        name="MealDetail"
-        component={MealDetailScreen}
-        options={{ title: '記録詳細' }}
+      <Tab.Screen
+        name="Search"
+        component={SearchScreen}
+        options={{ title: '検索' }}
       />
-    </RecordsStack.Navigator>
+      <Tab.Screen
+        name="Stats"
+        component={StatsScreen}
+        options={{ title: '統計' }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: '設定' }}
+      />
+    </Tab.Navigator>
   );
 }
 
 export default function RootNavigator() {
   return (
     <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused }) => renderTabIcon(route.name, focused),
-          tabBarActiveTintColor: COLORS.activeTint,
-          tabBarInactiveTintColor: COLORS.inactiveTint,
-          tabBarStyle: {
-            backgroundColor: COLORS.tabBar,
-            height: 70,
-          },
-          headerShown: route.name !== 'Camera' && route.name !== 'Records',
-        })}
-      >
-        <Tab.Screen
-          name="Camera"
-          component={CameraScreen}
-          options={{ title: '撮影' }}
+      <RootStack.Navigator>
+        <RootStack.Screen
+          name="MainTabs"
+          component={MainTabs}
+          options={{ headerShown: false }}
         />
-        <Tab.Screen
-          name="Records"
-          component={RecordsNavigator}
-          options={{ title: '記録' }}
+        <RootStack.Screen
+          name="MealDetail"
+          component={MealDetailScreen}
+          options={{ title: '記録詳細' }}
         />
-        <Tab.Screen
-          name="Search"
-          component={SearchScreen}
-          options={{ title: '検索' }}
-        />
-        <Tab.Screen
-          name="Stats"
-          component={StatsScreen}
-          options={{ title: '統計' }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: '設定' }}
-        />
-      </Tab.Navigator>
+      </RootStack.Navigator>
     </NavigationContainer>
   );
 }

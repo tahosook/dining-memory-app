@@ -21,12 +21,12 @@
 - 導入後の確認方法: `git status --short` で実値の `.env` が不用意に差分化しないこと、README の env 例が実装名と一致することを確認します。
 
 ### capture 系ログから機微な photo URI を外す
-- status: open
-- 問題点: camera capture 周辺で `photo.uri` や保存処理の詳細を `console.log` 出力しています。
-- リスク: 端末内パスや撮影データの扱いがログに残り、デバッグ共有や CI 出力で不要な露出が起きます。
-- 推奨修正: 本番相当コードでは photo URI や不要な成功ログを削減し、失敗時も最小限の文脈だけを残します。
+- status: done
+- 解消済みの問題: camera capture 周辺で `photo.uri` や保存処理の詳細を `console.log` 出力していた状態を解消しました。
+- 現状: capture / save / AI assist の production-like logs は、photo URI、location coordinates、raw AI output を直接出力しない最小限の失敗文脈に留めています。
+- 維持方針: 失敗時も photo path、location、notes、raw provider response をログに追加しない方針を維持します。
 - 関連ファイル: [src/hooks/cameraCapture/useCameraCapture.ts](../../src/hooks/cameraCapture/useCameraCapture.ts), [src/hooks/cameraCapture/useCameraPermission.ts](../../src/hooks/cameraCapture/useCameraPermission.ts)
-- 導入後の確認方法: `rg -n "console\\.(log|warn|error)" src/hooks/cameraCapture` で photo URI を含むログが残っていないことを確認します。
+- 導入後の確認方法: `rg -n "console\\.(log|warn|error|info).*?(photoUri|photo\\.uri|location|raw AI|raw output)|(?:photoUri|photo\\.uri|location|raw AI|raw output).*?console\\.(log|warn|error|info)" src` で直接ログが残っていないことを確認します。
 
 ### CI とローカル gate の常設運用を定着させる
 - status: done
@@ -39,12 +39,12 @@
 
 ## Medium
 ### Search 詳細表示のタブ切り替えを減らす
-- status: open
-- 問題点: Search から詳細を開くと、現状は Records 側の shared detail を再利用するためタブが切り替わります。
-- リスク: 詳細内容は揃っていても、検索文脈にそのまま戻りたいときの体験がやや分かりづらくなります。
-- 推奨修正: 将来的に detail route を root stack に上げるか、Search タブ内でも同じ detail を使えるようにして文脈移動を減らします。
+- status: done
+- 解消済みの問題: Search から詳細を開くと Records 側の shared detail を経由してタブが切り替わる違和感がありました。
+- 現状: `MealDetail` は root stack route になり、Search から直接開いて戻ると検索文脈に戻れる構造です。
+- 維持方針: Records / Search は同じ detail 画面を使いながら、それぞれの一覧順を previous/next context として渡します。
 - 関連ファイル: [src/navigation/RootNavigator.tsx](../../src/navigation/RootNavigator.tsx), [src/screens/RecordsScreen/MealDetailScreen.tsx](../../src/screens/RecordsScreen/MealDetailScreen.tsx), [src/screens/SearchScreen/SearchScreen.tsx](../../src/screens/SearchScreen/SearchScreen.tsx)
-- 導入後の確認方法: Search から詳細を開いたあと、戻る操作と現在タブの変化が意図通りかを実機で確認します。
+- 導入後の確認方法: `npm test -- tests/RecordsScreen.test.tsx tests/SearchScreen.test.tsx tests/MealDetailScreen.test.tsx --runInBand` と実機で戻る操作を確認します。
 
 ### image resizer 依存の継続監視
 - status: open

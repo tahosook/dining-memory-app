@@ -55,6 +55,7 @@
 - [Codex Context Map](./engineering/codex-context-map.md): task-specific reading map for reducing unnecessary context use.
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Codex Workflow](./engineering/codex-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
+- [Refactoring Plan](./engineering/refactoring-plan.md): phased refactoring inventory, target files, risks, and verification log.
 - [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
 - [MediaPipe Labeling Workflow](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の自動化方針、guardrail、停止条件.
 - [Immediate Improvements](./engineering/immediate-improvements.md): 今すぐ入れるべき具体的な改善案と優先度.

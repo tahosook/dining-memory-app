@@ -8,7 +8,7 @@ import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
 import { MealService } from '../../database/services/MealService';
 import type { Meal } from '../../types/MealTypes';
-import type { RootTabParamList } from '../../navigation/types';
+import type { RootStackParamList } from '../../navigation/types';
 import { getMealListImageUri } from '../../utils/mealImage';
 
 type SearchFilterState = {
@@ -19,7 +19,7 @@ type SearchFilterState = {
 };
 
 export const SearchScreen: React.FC = () => {
-  const navigation = useNavigation<NavigationProp<RootTabParamList>>();
+  const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { width: windowWidth } = useWindowDimensions();
   const [searchQuery, setSearchQuery] = useState('');
   const [cuisineFilter, setCuisineFilter] = useState('');
@@ -93,13 +93,10 @@ export const SearchScreen: React.FC = () => {
 
   const handleMealPress = useCallback((meal: Meal) => {
     const initialIndex = results.findIndex((candidate) => candidate.id === meal.id);
-    navigation.navigate('Records', {
-      screen: 'MealDetail',
-      params: {
-        meal,
-        meals: results,
-        initialIndex: initialIndex >= 0 ? initialIndex : undefined,
-      },
+    navigation.navigate('MealDetail', {
+      meal,
+      meals: results,
+      initialIndex: initialIndex >= 0 ? initialIndex : undefined,
     });
   }, [navigation, results]);
 

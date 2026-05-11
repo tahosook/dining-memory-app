@@ -8,6 +8,7 @@
 
 ## Navigation Shell
 - Bottom tabs: Camera, Records, Search, Stats, Settings.
+- The shared saved-record detail screen lives on the root stack above the tabs.
 - Camera is the primary entry point.
 - Other screens should stay lightweight and support the main capture-and-review loop.
 
@@ -56,7 +57,7 @@
 - Results should browse like a photo-first three-column grid, using thumbnails before full photo paths.
 - The current optional filters are cuisine type, location, and homemade-only.
 - Search は current text/filter match だけを使い、semantic search は current scope に含めない。
-- Result cards should open the same saved-record detail screen used from Records.
+- Result cards should open the same root-level saved-record detail screen used from Records without switching to the Records tab first.
 - Opening a result should keep the current search result order as the detail previous/next navigation context.
 - Use explicit loading, error, and zero-result states, and keep the previous results visible if only a refresh fails.
 

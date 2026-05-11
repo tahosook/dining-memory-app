@@ -1,6 +1,6 @@
 import { EncodingType, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
 import piexif from 'piexifjs';
-import { writePhotoExifToJpeg } from '../src/hooks/cameraCapture/photoExif';
+import { writePhotoExifToJpeg } from '../src/media/photoExif';
 
 jest.mock('expo-file-system/legacy', () => ({
   EncodingType: {

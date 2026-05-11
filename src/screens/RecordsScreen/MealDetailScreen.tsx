@@ -23,12 +23,12 @@ import type {
   CaptureReviewEditableField,
   CaptureReviewState,
 } from '../../hooks/cameraCapture/useCameraCapture';
-import type { RecordsStackParamList } from '../../navigation/types';
+import type { RootStackParamList } from '../../navigation/types';
 import { getMealDetailImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils/mealPhotoRotation';
 
-type MealDetailScreenProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
+type MealDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'MealDetail'>;
 export type DetailNavigationDirection = 'previous' | 'next';
 
 const emptyEditDraft: MealEditDraft = {

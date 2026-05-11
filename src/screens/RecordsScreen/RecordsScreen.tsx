@@ -10,12 +10,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { NavigationProp } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MealService } from '../../database/services/MealService';
 import type { Meal } from '../../types/MealTypes';
-import type { RecordsStackParamList } from '../../navigation/types';
+import type { RootStackParamList } from '../../navigation/types';
 import { getMealListImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 
@@ -25,7 +25,7 @@ interface MealGroup {
   meals: Meal[];
 }
 
-type RecordsNavigationProp = NativeStackNavigationProp<RecordsStackParamList, 'RecordsList'>;
+type RecordsNavigationProp = NavigationProp<RootStackParamList>;
 
 type MealItemProps = {
   item: Meal;

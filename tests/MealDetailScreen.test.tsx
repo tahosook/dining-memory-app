@@ -8,7 +8,7 @@ import {
   getAdjacentMealIndex,
   MealDetailScreen,
 } from '../src/screens/RecordsScreen/MealDetailScreen';
-import type { RecordsStackParamList } from '../src/navigation/types';
+import type { RootStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
 import { rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
@@ -34,7 +34,7 @@ jest.mock('../src/utils/mealPhotoRotation', () => ({
   rotateMealPhotoClockwise: jest.fn(),
 }));
 
-type MealDetailProps = NativeStackScreenProps<RecordsStackParamList, 'MealDetail'>;
+type MealDetailProps = NativeStackScreenProps<RootStackParamList, 'MealDetail'>;
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

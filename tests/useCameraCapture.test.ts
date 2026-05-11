@@ -7,7 +7,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Location from 'expo-location';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import * as ImagePicker from 'expo-image-picker';
-import { persistPhotoToStablePath } from '../src/hooks/cameraCapture/photoStorage';
+import { persistPhotoToStablePath } from '../src/media/photoStorage';
 
 const mockNavigate = jest.fn();
 
@@ -38,7 +38,7 @@ jest.mock('expo-location', () => ({
   },
 }));
 
-jest.mock('../src/hooks/cameraCapture/photoStorage', () => ({
+jest.mock('../src/media/photoStorage', () => ({
   persistPhotoToStablePath: jest.fn(),
 }));
 

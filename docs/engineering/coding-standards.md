@@ -17,7 +17,9 @@
 - `src/screens/` for screen-level UI and screen composition.
 - `src/components/` for reusable presentational components.
 - `src/hooks/` for stateful or reusable application logic.
+- `src/domain/` for pure domain logic shared by services and screens.
 - `src/database/` for schema, models, and database services.
+- `src/media/` for photo file, EXIF, and media persistence boundaries.
 - `src/navigation/` for route and tab definitions.
 - `src/constants/` for shared constants.
 - `src/types/` for app-wide TypeScript types.

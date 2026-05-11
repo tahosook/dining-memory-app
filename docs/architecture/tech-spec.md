@@ -18,6 +18,8 @@
 - Keep capture, storage, search, and presentation separated.
 - Prefer local processing and local persistence for user data.
 - Preserve clear boundaries between UI, hooks, navigation, and database services.
+- Keep pure meal-domain logic in small helpers separate from DB access.
+- Keep photo file persistence and EXIF handling behind the media boundary.
 - Keep AI runtime capability checks explicit so unavailable local runtimes stay visible instead of being hidden behind silent fallbacks.
 
 ## App Shape
@@ -27,6 +29,7 @@
 - `Search` for text and filter-based retrieval.
 - `Stats` for analysis and future insight features.
 - `Settings` for data, privacy, and app controls.
+- `MealDetail` is a root stack route above the tab shell so Records and Search can open the same detail screen without changing tabs unnecessarily.
 
 ## Runtime Assumptions
 - Local development uses Node.js 25.9.x as the recommended runtime; CI currently runs Node.js 25.9.0.
@@ -34,6 +37,7 @@
 - App data lives primarily on the device.
 - Captured photos should be resized before save.
 - Final saved JPEG should keep available source EXIF when possible and add save-time EXIF updates such as capture timestamp and app `Software`, using a shared JS-only EXIF writer after the app-local copy is finalized.
+- Photo file naming, stable app-local copy creation, save-time EXIF updates, Android album registration, and temp-file cleanup are owned by `src/media/` helpers and called from capture/detail workflows.
 - On Android, captured photos should keep an app-local stable file for in-app display and also be added to a dedicated `Pictures / Dining Memory` album so future backup targeting stays possible without mixing unrelated media.
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
@@ -41,6 +45,7 @@
 - `src/ai/runtime/` は meal input assist 向けの最小 runtime status helper を持ち、feature 固有ロジックは `src/ai/mealInputAssist/` 配下に残す。
 - ready な runtime と unavailable / noop helper は明確に分け、production path の default fallback に noop provider を使わない。
 - Search は current text/filter path だけを使い、semantic search は current scope に含めない。
+- MealService keeps the public create/search/update/delete/statistics API, while pure default-name, nearby-location, search-filter, recency-sort, row-normalization, and statistics helpers live under `src/domain/meals/`.
 - meal input assist は `llama.rn` の multimodal path を使い、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
 - MediaPipe custom food classifier 向けの static-image groundwork は `src/ai/mealInputAssist/` 配下の separate path として追加してよく、current active runtime selection や Settings の readiness source of truth を直ちに置き換えない。
 - MediaPipe static-image path は Android native bridge で real inference まで持ってよいが、current default runtime は引き続き `llama.rn` path とし、hidden separate path として扱う。

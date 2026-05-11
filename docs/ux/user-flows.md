@@ -36,8 +36,8 @@
 1. Open Search.
 2. Enter text or select filters.
 3. Review the result list, which reruns with the current query when the tab regains focus and keeps text/filter search as the fallback baseline.
-4. Open a result card to move to the shared saved-record detail screen.
-5. Use previous/next in the detail screen to move through the current search result order, edit or delete the record there, or refine the search and try again.
+4. Open a result card to move to the shared root-level saved-record detail screen without switching away from Search first.
+5. Use previous/next in the detail screen to move through the current search result order, edit or delete the record there, then go back to the Search context or refine the search and try again.
 
 ## Stats Flow
 1. Open Stats.

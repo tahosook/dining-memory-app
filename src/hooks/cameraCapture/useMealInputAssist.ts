@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ImageResizer from '@bam.tech/react-native-image-resizer';
-import { deleteAsync } from 'expo-file-system/legacy';
 import { createMealInputAssistPolicy } from '../../ai/mealInputAssist/policy';
 import {
   createOverrideRuntimeAvailability,
-  createUnavailableRuntimeAvailability,
 } from '../../ai/mealInputAssist/runtimeAvailability';
 import { normalizeMealInputAssistResult } from '../../ai/mealInputAssist/normalizer';
+import { mergeAppliedMetadata } from '../../ai/mealInputAssist/appliedMetadata';
+import {
+  createMealInputAssistEnvironmentLoadFailure,
+  loadDefaultMealInputAssistRuntimeAvailability,
+  loadMealInputAssistEnvironment,
+  type MealInputAssistEnvironment,
+  type MealInputAssistEnvironmentLoaderDependencies,
+} from '../../ai/mealInputAssist/environment';
+import { toProgressSnapshot } from '../../ai/mealInputAssist/progress';
+import { prepareMealInputAssistRequest } from '../../ai/mealInputAssist/preparedPhoto';
+import { buildMealInputAssistRequest } from '../../ai/mealInputAssist/request';
+import {
+  countNormalizedSuggestions,
+  countProviderResultCandidates,
+  hasAnyMealInputAssistSuggestions,
+} from '../../ai/mealInputAssist/suggestionDiagnostics';
 import {
   EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS,
   type AppliedMealInputAssistMetadata,
@@ -17,13 +30,11 @@ import {
   type MealInputAssistPrewarmStatus,
   type MealInputAssistProgressUpdate,
   type MealInputAssistProvider,
-  type MealInputAssistProviderResult,
   type MealInputAssistRuntimeAvailability,
   type MealInputAssistStatus,
   type MealInputAssistSuggestions,
   type MealInputAssistTextSuggestion,
 } from '../../ai/mealInputAssist/types';
-import { CAMERA_CONSTANTS } from '../../constants/CameraConstants';
 import type { CaptureReviewEditableField, CaptureReviewState } from './useCameraCapture';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
 
@@ -36,109 +47,6 @@ interface UseMealInputAssistParams {
   policy?: MealInputAssistPolicy;
   loadAiInputAssistEnabled?: () => Promise<boolean>;
   resolveRuntimeAvailability?: () => Promise<MealInputAssistRuntimeAvailability>;
-}
-
-interface PreparedMealInputAssistRequest {
-  request: ReturnType<typeof buildMealInputAssistRequest>;
-  cleanup: () => Promise<void>;
-}
-
-interface MealInputAssistEnvironment {
-  isAiInputAssistEnabled: boolean;
-  runtimeAvailability: MealInputAssistRuntimeAvailability | null;
-}
-
-interface MealInputAssistEnvironmentLoaderDependencies {
-  loadAiInputAssistEnabledSetting: () => Promise<boolean>;
-  loadRuntimeAvailability: () => Promise<MealInputAssistRuntimeAvailability>;
-}
-
-type MealInputAssistRuntimeModule = typeof import('../../ai/mealInputAssist/runtime');
-
-async function loadDefaultMealInputAssistRuntimeAvailability() {
-  const {
-    loadMealInputAssistRuntimeAvailability,
-  } = require('../../ai/mealInputAssist/runtime') as MealInputAssistRuntimeModule;
-
-  return loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
-}
-
-function buildMealInputAssistRequest(captureReview: CaptureReviewState) {
-  return {
-    photoUri: captureReview.photoUri,
-    mealName: captureReview.mealName,
-    cuisineType: captureReview.cuisineType,
-    notes: captureReview.notes,
-    locationName: captureReview.locationName,
-    isHomemade: captureReview.isHomemade,
-  };
-}
-
-function hasAnyMealInputAssistSuggestions(suggestions: MealInputAssistSuggestions) {
-  return (
-    Boolean(suggestions.noteDraft) ||
-    suggestions.mealNames.length > 0 ||
-    suggestions.cuisineTypes.length > 0
-  );
-}
-
-function countProviderResultCandidates(result: MealInputAssistProviderResult) {
-  return {
-    noteDraft: result.noteDraft ? 1 : 0,
-    mealNames: result.mealNames?.length ?? 0,
-    cuisineTypes: result.cuisineTypes?.length ?? 0,
-  };
-}
-
-function countNormalizedSuggestions(suggestions: MealInputAssistSuggestions) {
-  return {
-    noteDraft: suggestions.noteDraft ? 1 : 0,
-    mealNames: suggestions.mealNames.length,
-    cuisineTypes: suggestions.cuisineTypes.length,
-  };
-}
-
-function mergeAppliedMetadata(
-  current: AppliedMealInputAssistMetadata | null,
-  field: AppliedMealInputAssistMetadata['appliedFields'][number],
-  source: string,
-  confidence?: number
-): AppliedMealInputAssistMetadata {
-  const appliedFields = current?.appliedFields.includes(field)
-    ? current.appliedFields
-    : [...(current?.appliedFields ?? []), field];
-
-  const nextConfidence =
-    typeof confidence === 'number'
-      ? typeof current?.aiConfidence === 'number'
-        ? Math.max(current.aiConfidence, confidence)
-        : confidence
-      : current?.aiConfidence;
-
-  return {
-    aiSource: source,
-    aiConfidence: nextConfidence,
-    appliedFields,
-  };
-}
-
-function toProgressSnapshot(
-  update: MealInputAssistProgressUpdate,
-  startedAt: number,
-  updatedAt: number
-): MealInputAssistProgress {
-  const now = Date.now();
-  const elapsedMs = Math.max(now - startedAt, 0);
-  const estimatedRemainingMs =
-    update.estimatedRemainingMs === null
-      ? null
-      : Math.max(update.estimatedRemainingMs - (now - updatedAt), 0);
-
-  return {
-    ...update,
-    elapsedMs,
-    estimatedRemainingMs,
-  };
 }
 
 export function useMealInputAssist({
@@ -262,40 +170,24 @@ export function useMealInputAssist({
       };
       environmentPromiseRef.current = (async () => {
         try {
-          const nextAiInputAssistEnabled = await loadAiInputAssistEnabledSetting();
+          const environment = await loadMealInputAssistEnvironment({
+            loadAiInputAssistEnabledSetting,
+            loadRuntimeAvailability,
+          });
 
-          setIsAiInputAssistEnabled(nextAiInputAssistEnabled);
+          setIsAiInputAssistEnabled(environment.isAiInputAssistEnabled);
+          setRuntimeAvailability(environment.runtimeAvailability);
 
-          if (!nextAiInputAssistEnabled) {
-            setRuntimeAvailability(null);
-            return {
-              isAiInputAssistEnabled: nextAiInputAssistEnabled,
-              runtimeAvailability: null,
-            };
-          }
-
-          const nextRuntimeAvailability = await loadRuntimeAvailability();
-          setRuntimeAvailability(nextRuntimeAvailability);
-
-          return {
-            isAiInputAssistEnabled: nextAiInputAssistEnabled,
-            runtimeAvailability: nextRuntimeAvailability,
-          };
+          return environment;
         } catch (error) {
           console.error('Failed to load AI input assist environment:', error);
 
-          const fallbackRuntimeAvailability = createUnavailableRuntimeAvailability(
-            'runtime_unavailable',
-            'この build には端末内 AI runtime がまだ組み込まれていません。'
-          );
+          const fallbackEnvironment = createMealInputAssistEnvironmentLoadFailure();
 
-          setIsAiInputAssistEnabled(false);
-          setRuntimeAvailability(fallbackRuntimeAvailability);
+          setIsAiInputAssistEnabled(fallbackEnvironment.isAiInputAssistEnabled);
+          setRuntimeAvailability(fallbackEnvironment.runtimeAvailability);
 
-          return {
-            isAiInputAssistEnabled: false,
-            runtimeAvailability: fallbackRuntimeAvailability,
-          };
+          return fallbackEnvironment;
         }
       })();
     }
@@ -376,51 +268,6 @@ export function useMealInputAssist({
     resolveRuntimeAvailability,
   ]);
 
-  const cleanupPreparedPhoto = useCallback(
-    async (preparedPhotoUri: string, originalPhotoUri: string) => {
-      if (preparedPhotoUri === originalPhotoUri) {
-        return;
-      }
-
-      try {
-        await deleteAsync(preparedPhotoUri, { idempotent: true });
-      } catch (error) {
-        console.warn('Failed to clean up AI analysis photo:', error);
-      }
-    },
-    []
-  );
-
-  const prepareRequestForSuggestion = useCallback(
-    async (
-      currentRequest: ReturnType<typeof buildMealInputAssistRequest>
-    ): Promise<PreparedMealInputAssistRequest> => {
-      const resizedPhoto = await ImageResizer.createResizedImage(
-        currentRequest.photoUri,
-        CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_WIDTH,
-        CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_MAX_HEIGHT,
-        'JPEG',
-        CAMERA_CONSTANTS.AI_INPUT_ASSIST_PHOTO_QUALITY_PERCENT,
-        0,
-        undefined,
-        true,
-        {
-          mode: 'contain',
-          onlyScaleDown: true,
-        }
-      );
-
-      return {
-        request: {
-          ...currentRequest,
-          photoUri: resizedPhoto.uri,
-        },
-        cleanup: async () => cleanupPreparedPhoto(resizedPhoto.uri, currentRequest.photoUri),
-      };
-    },
-    [cleanupPreparedPhoto]
-  );
-
   const request = useMemo(
     () => (captureReview ? buildMealInputAssistRequest(captureReview) : null),
     [captureReview]
@@ -472,10 +319,7 @@ export function useMealInputAssist({
       ? 'disabled'
       : status;
 
-  const hasAnySuggestions =
-    suggestions.mealNames.length > 0 ||
-    Boolean(suggestions.noteDraft) ||
-    suggestions.cuisineTypes.length > 0;
+  const hasAnySuggestions = hasAnyMealInputAssistSuggestions(suggestions);
 
   const requestSuggestions = useCallback(async () => {
     if (!request || isRunningRef.current) {
@@ -533,7 +377,7 @@ export function useMealInputAssist({
     let cleanupPreparedRequest = async () => {};
 
     try {
-      const preparedRequest = await prepareRequestForSuggestion(request);
+      const preparedRequest = await prepareMealInputAssistRequest(request);
       cleanupPreparedRequest = preparedRequest.cleanup;
 
       setProgressState({
@@ -590,7 +434,7 @@ export function useMealInputAssist({
     } finally {
       await cleanupPreparedRequest();
     }
-  }, [getRequestEnvironment, policy, prepareRequestForSuggestion, request, setProgressState]);
+  }, [getRequestEnvironment, policy, request, setProgressState]);
 
   const prewarm = useCallback(async () => {
     if (isRunningRef.current || isPrewarmingRef.current) {
