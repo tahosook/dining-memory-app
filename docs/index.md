@@ -26,6 +26,7 @@
 - [docs/domain/database-design.md](./domain/database-design.md): current storage rules
 - [docs/engineering/coding-standards.md](./engineering/coding-standards.md): coding rules
 - [docs/engineering/codex-workflow.md](./engineering/codex-workflow.md): verification and workflow
+- [docs/engineering/github-security-settings.md](./engineering/github-security-settings.md): GitHub security / quality settings and manual setup checklist
 - [docs/engineering/food-labeling-guidelines.md](./engineering/food-labeling-guidelines.md): 食事画像ラベリング用スクリプトの責務、優先度、打ち止めライン
 - [docs/engineering/mediapipe-labeling-workflow.md](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の目的、guardrail、停止条件
 
@@ -55,6 +56,7 @@
 - [Codex Context Map](./engineering/codex-context-map.md): task-specific reading map for reducing unnecessary context use.
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Codex Workflow](./engineering/codex-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
+- [GitHub Security Settings](./engineering/github-security-settings.md): CodeQL, Dependabot, Secret scanning, branch protection, and Actions permission setup.
 - [Refactoring Plan](./engineering/refactoring-plan.md): phased refactoring inventory, target files, risks, and verification log.
 - [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
 - [MediaPipe Labeling Workflow](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の自動化方針、guardrail、停止条件.

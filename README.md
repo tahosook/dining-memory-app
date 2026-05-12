@@ -24,6 +24,7 @@
 - [DB設計](docs/domain/database-design.md): current schema and storage rules
 - [実装規約](docs/engineering/coding-standards.md): coding rules
 - [Codex 作業ルール](docs/engineering/codex-workflow.md): review and verification workflow
+- [GitHub セキュリティ設定](docs/engineering/github-security-settings.md): CodeQL、Dependabot、Secret scanning、branch protection、Actions permissions の運用手順
 - [リファクタリング計画](docs/engineering/refactoring-plan.md): phased refactoring inventory and verification log
 - [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けた script 修整の判断ルール
 - [MediaPipe ラベル改善ワークフロー](docs/engineering/mediapipe-labeling-workflow.md): 自動改善 loop の目的、guardrail、停止条件

@@ -82,7 +82,8 @@
 
 ### Tests / CI / Quality
 - Read first: [docs/engineering/codex-workflow.md](codex-workflow.md), [docs/engineering/coding-standards.md](coding-standards.md)
-- Common files: `package.json`, `jest.config.js`, `jest.setup.js`, `eslint.config.js`, `.github/workflows/ci.yml`, `tests/`, `scripts/tests/`
+- GitHub security settings: [docs/engineering/github-security-settings.md](github-security-settings.md)
+- Common files: `package.json`, `jest.config.js`, `jest.setup.js`, `eslint.config.js`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `tests/`, `scripts/tests/`
 - Use the narrowest useful check first, then broader gates for meaningful code changes.
 
 ### Docs-only Changes
