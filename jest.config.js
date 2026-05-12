@@ -11,9 +11,7 @@ module.exports = {
     '!src/**/*.d.ts'
   ],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
-    '^expo-modules-core$': '<rootDir>/node_modules/expo/node_modules/expo-modules-core',
-    '^expo-modules-core/(.*)$': '<rootDir>/node_modules/expo/node_modules/expo-modules-core/$1'
+    '^@/(.*)$': '<rootDir>/src/$1'
   },
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native|@expo-modules-core|@expo-modules-core/.*|@expo-modules-core/shared|@expo-modules-core/shared/.*|expo-modules-core/.*/.*|@expo/vector-icons|@expo/vector-icons/.*|expo/.*/.*|expo-file-system/.*))'
