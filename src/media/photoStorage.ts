@@ -61,6 +61,8 @@ export async function persistPhotoToStablePath(
   }
 
   if (Platform.OS === 'android') {
+    let savedToMediaLibrary = false;
+
     try {
       const album = await MediaLibrary.getAlbumAsync(ANDROID_PHOTO_ALBUM_NAME);
 
@@ -69,13 +71,14 @@ export async function persistPhotoToStablePath(
       } else {
         await MediaLibrary.createAlbumAsync(ANDROID_PHOTO_ALBUM_NAME, undefined, undefined, destination);
       }
+      savedToMediaLibrary = true;
     } catch (albumError: unknown) {
       console.warn('Android album save failed, but local photo copy is preserved:', albumError);
     }
 
     return {
       stablePhotoUri: destination,
-      savedToMediaLibrary: true,
+      savedToMediaLibrary,
     };
   }
 

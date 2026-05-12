@@ -188,6 +188,7 @@ type MockCaptureReview = {
 
 type MockCaptureState = {
   takingPhoto: boolean;
+  savingCapture: boolean;
   facing: 'front' | 'back';
   cameraRef: typeof mockCameraRef;
   captureReview: MockCaptureReview | null;
@@ -257,6 +258,7 @@ function createCaptureReview(overrides: Partial<MockCaptureReview> = {}): MockCa
 function createCaptureState(overrides: Partial<MockCaptureState> = {}): MockCaptureState {
   return {
     takingPhoto: false,
+    savingCapture: false,
     facing: 'back',
     cameraRef: mockCameraRef,
     captureReview: null,
@@ -573,6 +575,20 @@ describe('CameraScreen', () => {
 
       expect(await findByText('候補を取得できませんでした。もう一度お試しください。')).toBeTruthy();
       expect(await findByTestId('save-meal-button')).toBeTruthy();
+    });
+
+    test('disables the save button while capture review is saving', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview(),
+        savingCapture: true,
+      }));
+
+      const { findByTestId, findByText } = render(<CameraScreen />);
+      const saveButton = await findByTestId('save-meal-button');
+
+      expect(await findByText('保存中...')).toBeTruthy();
+      expect(saveButton.props.disabled).toBe(true);
+      expect(saveButton.props.accessibilityState).toEqual({ disabled: true });
     });
 
     test('shows AI analysis progress and ETA while running', async () => {

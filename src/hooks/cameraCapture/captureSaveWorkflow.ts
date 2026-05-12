@@ -9,6 +9,7 @@ import type { LocationSnapshot } from './locationSnapshot';
 interface PersistedCapturePhoto {
   stablePhotoUri: string;
   savedToMediaLibrary: boolean;
+  resizedPhotoUri?: string;
 }
 
 interface SaveCaptureWorkflowParams {
@@ -26,7 +27,13 @@ interface SaveCaptureWorkflowParams {
 }
 
 export type SaveCaptureWorkflowResult =
-  | { kind: 'saved' }
+  | {
+    kind: 'saved';
+    resizedPhotoUri: string | null;
+    stablePhotoUri: string;
+    savedToMediaLibrary: boolean;
+    mealId: string;
+  }
   | { kind: 'skipped'; reason: 'photo_permission_denied' };
 
 export async function saveCaptureReviewWorkflow({
@@ -52,15 +59,20 @@ export async function saveCaptureReviewWorkflow({
 
     const locationSnapshot = await getLocationSnapshot();
     const persistedPhoto = isWebWithoutPermissions
-      ? { stablePhotoUri: captureReview.photoUri, savedToMediaLibrary: false }
+      ? {
+        stablePhotoUri: captureReview.photoUri,
+        resizedPhotoUri: null,
+        savedToMediaLibrary: false,
+      }
       : await persistPhotoLocally(captureReview.photoUri, {
         capturedAt: new Date(captureReview.capturedAtMs),
         location: locationSnapshot,
         softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
       });
     stablePhotoUri = persistedPhoto.stablePhotoUri;
+    let savedToMediaLibrary = persistedPhoto.savedToMediaLibrary;
 
-    await MealService.createMeal({
+    const meal = await MealService.createMeal({
       meal_name: captureReview.mealName.trim(),
       cuisine_type: captureReview.cuisineType || undefined,
       ai_confidence: aiMetadata?.aiConfidence,
@@ -76,6 +88,7 @@ export async function saveCaptureReviewWorkflow({
 
     if (!isWebWithoutPermissions && !persistedPhoto.savedToMediaLibrary) {
       const saveSuccess = await savePhotoToMediaLibrary(stablePhotoUri);
+      savedToMediaLibrary = saveSuccess;
       if (!saveSuccess) {
         console.warn('Media library save skipped, but local record is preserved.');
       }
@@ -85,7 +98,13 @@ export async function saveCaptureReviewWorkflow({
       await cleanupTempFile(captureReview.photoUri);
     }
 
-    return { kind: 'saved' };
+    return {
+      kind: 'saved',
+      resizedPhotoUri: persistedPhoto.resizedPhotoUri ?? null,
+      stablePhotoUri,
+      savedToMediaLibrary,
+      mealId: meal.id,
+    };
   } catch (error) {
     if (stablePhotoUri && stablePhotoUri !== captureReview.photoUri) {
       await cleanupTempFile(stablePhotoUri);

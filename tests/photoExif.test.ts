@@ -99,7 +99,7 @@ describe('photoExif', () => {
     expect(piexif.remove).toHaveBeenCalledWith('data:image/jpeg;base64,ORIGINAL_BASE64');
     expect(piexif.dump).toHaveBeenCalledWith({
       '0th': {
-        274: 6,
+        274: 1,
         305: 'Dining Memory',
         315: 'Original Artist',
       },
@@ -174,6 +174,7 @@ describe('photoExif', () => {
 
     expect(piexif.dump).toHaveBeenCalledWith({
       '0th': {
+        274: 1,
         305: 'Dining Memory',
       },
       Exif: {

@@ -64,6 +64,7 @@ type CameraPermissionState = {
 
 type CameraReviewState = {
   captureReview: CaptureReviewState | null;
+  savingCapture: boolean;
 };
 
 type CameraReviewOperations = {
@@ -91,7 +92,7 @@ export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 
     'onTakePicture' | 'onAddPhotoFromLibrary' | 'onFlipCamera' | 'onClose' | 'onRequestPermission' | 'onOpenSettings'
   > &
   Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
-  Pick<CameraReviewState, 'captureReview'> &
+  Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
   Pick<
     CameraReviewOperations,
     'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'
@@ -202,6 +203,7 @@ const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
 
 interface CaptureReviewProps {
   captureReview: CaptureReviewState;
+  savingCapture: boolean;
   onChange: (field: CaptureReviewEditableField, value: string | boolean) => void;
   onCancel: () => void;
   onSave: () => Promise<void>;
@@ -216,6 +218,7 @@ interface CaptureReviewProps {
 
 const CaptureReview: React.FC<CaptureReviewProps> = ({
   captureReview,
+  savingCapture,
   onChange,
   onCancel,
   onSave,
@@ -360,11 +363,17 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             <Text style={styles.reviewCancelText}>キャンセル</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.reviewButton, styles.reviewSaveButton]}
+            style={[
+              styles.reviewButton,
+              styles.reviewSaveButton,
+              savingCapture && styles.reviewSaveButtonDisabled,
+            ]}
             onPress={onSave}
+            disabled={savingCapture}
             testID="save-meal-button"
+            accessibilityState={{ disabled: savingCapture }}
           >
-            <Text style={styles.reviewSaveText}>保存</Text>
+            <Text style={styles.reviewSaveText}>{savingCapture ? '保存中...' : '保存'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -391,6 +400,7 @@ const BottomControls: React.FC<BottomControlsProps> = ({ takingPhoto, onTakePict
 
 const CameraView: React.FC<CameraViewProps> = ({
   takingPhoto,
+  savingCapture,
   facing,
   cameraPermission,
   permissionUiState,
@@ -446,6 +456,7 @@ const CameraView: React.FC<CameraViewProps> = ({
           {captureReview ? (
             <CaptureReview
               captureReview={captureReview}
+              savingCapture={savingCapture}
               onChange={onCaptureReviewChange}
               onCancel={onCaptureReviewCancel}
               onSave={onCaptureReviewSave}
@@ -652,6 +663,9 @@ const styles = StyleSheet.create({
   },
   reviewSaveButton: {
     backgroundColor: Colors.primary,
+  },
+  reviewSaveButtonDisabled: {
+    opacity: 0.55,
   },
   reviewCancelText: {
     color: Colors.black,

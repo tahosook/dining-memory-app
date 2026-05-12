@@ -31,6 +31,10 @@ interface SaveCaptureOptions {
   aiMetadata?: AppliedMealInputAssistMetadata | null;
 }
 
+function shouldLogCaptureDiagnostics() {
+  return process.env.NODE_ENV === 'development';
+}
+
 /**
  * カメラキャプチャ機能のHook
  * Application層のビジネスロジックをカプセル化
@@ -38,7 +42,12 @@ interface SaveCaptureOptions {
 export const useCameraCapture = (cameraPermission: PermissionResponse | null) => {
   const navigation = useNavigation<NavigationProp<RootTabParamList>>();
   const cameraRef = useRef<CameraView>(null);
+  const takingPhotoRef = useRef(false);
+  const savingCaptureRef = useRef(false);
+  const captureAttemptIdRef = useRef(0);
+  const saveAttemptIdRef = useRef(0);
   const [takingPhoto, setTakingPhoto] = useState(false);
+  const [savingCapture, setSavingCapture] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [captureReview, setCaptureReview] = useState<CaptureReviewState | null>(null);
 
@@ -92,21 +101,38 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     // webモードで権限がない場合はカメラrefチェックをスキップ
     const isWebWithoutPermissions = isWebWithoutCameraPermission(cameraPermission);
 
-    if (!isWebWithoutPermissions && (!cameraRef.current || takingPhoto)) return;
-    if (isWebWithoutPermissions && takingPhoto) return;
+    if (takingPhotoRef.current) return;
+    if (!isWebWithoutPermissions && !cameraRef.current) return;
+
+    takingPhotoRef.current = true;
+    const captureAttemptId = captureAttemptIdRef.current + 1;
+    captureAttemptIdRef.current = captureAttemptId;
 
     try {
       setTakingPhoto(true);
+      if (shouldLogCaptureDiagnostics()) {
+        console.info('Camera capture attempt started.', { captureAttemptId });
+      }
       const photo = await takePhotoForReview(cameraRef, cameraPermission);
+      if (shouldLogCaptureDiagnostics()) {
+        console.info('Camera capture attempt completed.', {
+          captureAttemptId,
+          photoUri: photo.uri,
+        });
+      }
       beginReview(photo, 'camera');
 
     } catch {
+      if (shouldLogCaptureDiagnostics()) {
+        console.info('Camera capture attempt failed.', { captureAttemptId });
+      }
       console.error('Photo capture failed.');
       Alert.alert('エラー', '写真の撮影に失敗しました。再度お試しください。');
     } finally {
+      takingPhotoRef.current = false;
       setTakingPhoto(false);
     }
-  }, [cameraRef, takingPhoto, beginReview, cameraPermission]);
+  }, [beginReview, cameraPermission]);
 
   const addPhotoFromLibrary = useCallback(async (): Promise<void> => {
     try {
@@ -151,13 +177,25 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   }, []);
 
   const saveCapture = useCallback(async (options?: SaveCaptureOptions) => {
-    if (!captureReview) {
+    const review = captureReview;
+    if (!review || savingCaptureRef.current) {
       return;
     }
 
+    savingCaptureRef.current = true;
+    const saveAttemptId = saveAttemptIdRef.current + 1;
+    saveAttemptIdRef.current = saveAttemptId;
+
     try {
+      setSavingCapture(true);
+      if (shouldLogCaptureDiagnostics()) {
+        console.info('Capture review save attempt started.', {
+          saveAttemptId,
+          sourcePhotoUri: review.photoUri,
+        });
+      }
       const result = await saveCaptureReviewWorkflow({
-        captureReview,
+        captureReview: review,
         cameraPermission,
         aiMetadata: options?.aiMetadata,
         ensurePhotoSavePermission,
@@ -168,14 +206,40 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       });
 
       if (result.kind === 'skipped') {
+        if (shouldLogCaptureDiagnostics()) {
+          console.info('Capture review save attempt skipped.', {
+            saveAttemptId,
+            sourcePhotoUri: review.photoUri,
+            reason: result.reason,
+          });
+        }
         return;
       }
 
+      if (shouldLogCaptureDiagnostics()) {
+        console.info('Capture review save attempt completed.', {
+          saveAttemptId,
+          sourcePhotoUri: review.photoUri,
+          resizedPhotoUri: result.resizedPhotoUri,
+          stablePhotoUri: result.stablePhotoUri,
+          savedToMediaLibrary: result.savedToMediaLibrary,
+          mealId: result.mealId,
+        });
+      }
       setCaptureReview(null);
       navigateToRecords();
     } catch {
+      if (shouldLogCaptureDiagnostics()) {
+        console.info('Capture review save attempt failed.', {
+          saveAttemptId,
+          sourcePhotoUri: review.photoUri,
+        });
+      }
       console.error('Meal save failed.');
       Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
+    } finally {
+      savingCaptureRef.current = false;
+      setSavingCapture(false);
     }
   }, [
     cameraPermission,
@@ -187,6 +251,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   return {
     // State
     takingPhoto: isTakingPhoto,
+    savingCapture,
     facing,
     cameraRef,
     captureReview,

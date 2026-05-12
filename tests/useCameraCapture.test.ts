@@ -52,6 +52,17 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }), { virtual: true });
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
+}
+
 describe('useCameraCapture', () => {
   const cameraPermission = {
     granted: true,
@@ -145,6 +156,38 @@ describe('useCameraCapture', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Records');
   });
 
+  test('ignores overlapping takePicture calls before React state updates', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    const photoCapture = createDeferred<{ uri: string; width: number; height: number }>();
+    const takePictureAsync = jest.fn().mockReturnValue(photoCapture.promise);
+
+    result.current.cameraRef.current = {
+      takePictureAsync,
+    } as never;
+
+    let firstCapture!: Promise<void>;
+    let secondCapture!: Promise<void>;
+    act(() => {
+      firstCapture = result.current.takePicture();
+      secondCapture = result.current.takePicture();
+    });
+
+    expect(takePictureAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      photoCapture.resolve({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      });
+      await Promise.all([firstCapture, secondCapture]);
+    });
+
+    expect(result.current.captureReview).toEqual(expect.objectContaining({
+      photoUri: 'file:///tmp/photo.jpg',
+    }));
+  });
+
   test('does not create a meal when local persistence fails', async () => {
     (persistPhotoToStablePath as jest.Mock).mockRejectedValue(new Error('copy failed'));
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
@@ -170,7 +213,54 @@ describe('useCameraCapture', () => {
     });
 
     expect(MealService.createMeal).not.toHaveBeenCalled();
+    expect(result.current.captureReview?.mealName).toBe('親子丼');
+    expect(result.current.savingCapture).toBe(false);
     expect(Alert.alert).toHaveBeenCalledWith('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
+  });
+
+  test('ignores overlapping save calls for the same capture review', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    const localPersistence = createDeferred<{
+      stablePhotoUri: string;
+      savedToMediaLibrary: boolean;
+    }>();
+    (persistPhotoToStablePath as jest.Mock).mockReturnValue(localPersistence.promise);
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    let firstSave!: Promise<void>;
+    let secondSave!: Promise<void>;
+    act(() => {
+      firstSave = result.current.onCaptureReviewSave();
+      secondSave = result.current.onCaptureReviewSave();
+    });
+
+    await waitFor(() => {
+      expect(persistPhotoToStablePath).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      localPersistence.resolve({
+        stablePhotoUri: 'file:///mock-documents/meal-123.jpg',
+        savedToMediaLibrary: false,
+      });
+      await Promise.all([firstSave, secondSave]);
+    });
+
+    expect(persistPhotoToStablePath).toHaveBeenCalledTimes(1);
+    expect(MealService.createMeal).toHaveBeenCalledTimes(1);
+    expect(MediaLibrary.createAssetAsync).toHaveBeenCalledTimes(1);
+    expect(result.current.captureReview).toBeNull();
   });
 
   test('creates a meal and navigates to records only after local persistence succeeds', async () => {

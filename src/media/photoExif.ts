@@ -119,6 +119,7 @@ function readExifDataFromJpeg(jpegDataUrl: string) {
 function buildPhotoExifData(existingExifData: ExifData, context: PhotoExifContext) {
   const exifData = ensureExifData(existingExifData);
 
+  exifData['0th'][piexif.ImageIFD.Orientation] = 1;
   exifData['0th'][piexif.ImageIFD.Software] = context.softwareName;
   exifData.Exif[piexif.ExifIFD.DateTimeOriginal] = formatExifLocalDateTime(context.capturedAt);
   exifData.Exif[piexif.ExifIFD.DateTimeDigitized] = formatExifLocalDateTime(context.capturedAt);

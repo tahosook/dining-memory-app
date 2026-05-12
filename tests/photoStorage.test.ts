@@ -57,6 +57,7 @@ describe('photoStorage', () => {
       }
     );
     expect(MediaLibrary.getAlbumAsync).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
+    expect(MediaLibrary.createAssetAsync).toHaveBeenCalledTimes(1);
     expect(MediaLibrary.createAssetAsync).toHaveBeenCalledWith(
       'file:///mock-documents/meal-20260422213507.jpg',
       { id: 'album-1' },
@@ -82,6 +83,7 @@ describe('photoStorage', () => {
       undefined,
       'file:///mock-documents/meal-20260422213507.jpg'
     );
+    expect(MediaLibrary.createAlbumAsync).toHaveBeenCalledTimes(1);
     expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507.jpg');
     expect(result.savedToMediaLibrary).toBe(true);
   });
@@ -97,7 +99,7 @@ describe('photoStorage', () => {
     });
 
     expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507.jpg');
-    expect(result.savedToMediaLibrary).toBe(true);
+    expect(result.savedToMediaLibrary).toBe(false);
     expect(consoleWarnSpy).toHaveBeenCalledWith(
       'Android album save failed, but local photo copy is preserved:',
       expect.any(Error)

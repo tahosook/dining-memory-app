@@ -6,10 +6,14 @@ import {
 } from '../../media/photoStorage';
 import { cleanupTempFile } from '../../media/tempFiles';
 
+type PersistedCapturePhotoWithResizeInfo = Awaited<ReturnType<typeof persistPhotoToStablePath>> & {
+  resizedPhotoUri: string;
+};
+
 export async function persistCapturePhotoLocally(
   photoUri: string,
   options: PersistPhotoOptions
-) {
+): Promise<PersistedCapturePhotoWithResizeInfo> {
   const resizedPhoto = await ImageResizer.createResizedImage(
     photoUri,
     CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH,
@@ -26,7 +30,11 @@ export async function persistCapturePhotoLocally(
   );
 
   try {
-    return await persistPhotoToStablePath(resizedPhoto.uri, options);
+    const persistedPhoto = await persistPhotoToStablePath(resizedPhoto.uri, options);
+    return {
+      ...persistedPhoto,
+      resizedPhotoUri: resizedPhoto.uri,
+    };
   } finally {
     if (resizedPhoto.uri !== photoUri) {
       await cleanupTempFile(resizedPhoto.uri);
