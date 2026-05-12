@@ -67,7 +67,7 @@
     "react-native-web": "^0.21.2",
     "react-test-renderer": "19.2.0",
     "semver": "^7.7.4",
-    "typescript": "~5.9.3"
+    "typescript": "~6.0.3"
   },
   "expo": {
     "doctor": {
