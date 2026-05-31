@@ -44,6 +44,7 @@
 - If a thumbnail is missing, fall back to the saved photo path instead of showing an empty placeholder.
 - Tapping a record card should move directly to a dedicated detail screen instead of opening an alert.
 - The detail screen should show a visibly larger photo than the list card, preferring `photo_path` over `photo_thumbnail_path`.
+- Tapping the detail photo should open a black full-screen viewer with contain sizing, safe-area controls, close button, swipe-down close, pinch zoom, and photo-context swiping when the current Records/Search context includes multiple photographed records.
 - The detail screen should show meal details including cuisine, note, homemade/eating-out type, and homemade style.
 - The detail screen should provide compact previous/next record buttons near the photo for moving through Records list order, with no action at the list ends.
 - Edit and delete entry points should live on the detail screen.

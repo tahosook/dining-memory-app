@@ -5,7 +5,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
 import {
   canNavigateMealDetail,
+  createMealDetailViewerPhotos,
   getAdjacentMealIndex,
+  getMealDetailViewerPhotoIndex,
   MealDetailScreen,
 } from '../src/screens/RecordsScreen/MealDetailScreen';
 import type { RootStackParamList } from '../src/navigation/types';
@@ -28,6 +30,54 @@ jest.mock('expo-sharing', () => ({
   isAvailableAsync: jest.fn(),
   shareAsync: jest.fn(),
 }));
+
+jest.mock('expo-status-bar', () => ({
+  StatusBar: () => null,
+}));
+
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: 'Ionicons',
+}));
+
+jest.mock('react-native-reanimated', () => {
+  const ReactNative = jest.requireActual('react-native');
+
+  return {
+    __esModule: true,
+    default: {
+      View: ReactNative.View,
+    },
+    runOnJS: (callback: () => void) => callback,
+    useAnimatedStyle: (callback: () => Record<string, unknown>) => callback(),
+    useSharedValue: (value: unknown) => ({ value }),
+    withSpring: (value: unknown) => value,
+  };
+});
+
+jest.mock('react-native-gesture-handler', () => {
+  const ReactNative = jest.requireActual('react-native');
+  const createGesture = () => ({
+    onBegin() {
+      return this;
+    },
+    onEnd() {
+      return this;
+    },
+    onUpdate() {
+      return this;
+    },
+  });
+
+  return {
+    Gesture: {
+      Pan: createGesture,
+      Pinch: createGesture,
+      Simultaneous: (...gestures: unknown[]) => ({ gestures }),
+    },
+    GestureDetector: ({ children }: { children: React.ReactNode }) => children,
+    GestureHandlerRootView: ReactNative.View,
+  };
+});
 
 jest.mock('../src/utils/mealPhotoRotation', () => ({
   deleteMealPhotoFileIfSafe: jest.fn(() => Promise.resolve()),
@@ -265,6 +315,83 @@ describe('MealDetailScreen', () => {
     expect(getByTestId('meal-detail-image').props.source).toEqual({
       uri: 'file:///full-photo.jpg',
     });
+  });
+
+  test('opens and closes the fullscreen photo viewer from the detail image', () => {
+    const { getByTestId, queryByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    expect(queryByTestId('meal-photo-viewer-container')).toBeNull();
+
+    fireEvent.press(getByTestId('meal-detail-image-button'));
+
+    expect(getByTestId('meal-photo-viewer-container')).toBeTruthy();
+    expect(getByTestId('meal-photo-viewer-image').props.source).toEqual({
+      uri: 'file:///full-photo.jpg',
+    });
+
+    fireEvent.press(getByTestId('meal-photo-viewer-close-button'));
+
+    expect(queryByTestId('meal-photo-viewer-container')).toBeNull();
+  });
+
+  test('closes the fullscreen photo viewer through the modal request close handler', () => {
+    const { getByTestId, queryByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-image-button'));
+    fireEvent(getByTestId('meal-photo-viewer-modal'), 'requestClose');
+
+    expect(queryByTestId('meal-photo-viewer-container')).toBeNull();
+  });
+
+  test('does not expose a fullscreen photo action when the meal has no photo', () => {
+    const props = createProps({
+      route: {
+        key: 'MealDetail-test',
+        name: 'MealDetail',
+        params: {
+          meal: {
+            ...baseMeal,
+            photo_path: '',
+            photo_thumbnail_path: undefined,
+          },
+        },
+      },
+    });
+
+    const { queryByTestId } = render(<MealDetailScreen {...props} />);
+
+    expect(queryByTestId('meal-detail-image-button')).toBeNull();
+    expect(queryByTestId('meal-photo-viewer-container')).toBeNull();
+  });
+
+  test('viewer photo helpers preserve the mapping back to detail meal indexes', () => {
+    const noPhotoMeal = {
+      ...baseMeal,
+      id: 'meal-no-photo',
+      uuid: 'meal-no-photo',
+      meal_name: '写真なし',
+      photo_path: '',
+      photo_thumbnail_path: undefined,
+    };
+    const olderMeal = {
+      ...baseMeal,
+      id: 'meal-2',
+      uuid: 'meal-2',
+      meal_name: '古い食事',
+      photo_path: 'file:///older-full-photo.jpg',
+      photo_thumbnail_path: 'file:///older-thumb-photo.jpg',
+    };
+
+    const viewerPhotos = createMealDetailViewerPhotos([noPhotoMeal, baseMeal, olderMeal]);
+
+    expect(viewerPhotos.map(photo => photo.mealIndex)).toEqual([1, 2]);
+    expect(viewerPhotos.map(photo => photo.uri)).toEqual([
+      'file:///full-photo.jpg',
+      'file:///older-full-photo.jpg',
+    ]);
+    expect(getMealDetailViewerPhotoIndex(viewerPhotos, 1)).toBe(0);
+    expect(getMealDetailViewerPhotoIndex(viewerPhotos, 2)).toBe(1);
+    expect(getMealDetailViewerPhotoIndex(viewerPhotos, 0)).toBe(0);
   });
 
   test('shows homemade style labels and legacy values safely', () => {

@@ -15,6 +15,10 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
+import {
+  MealPhotoViewer,
+  type MealPhotoViewerPhoto,
+} from '../../components/common/MealPhotoViewer';
 import { Colors } from '../../constants/Colors';
 import { MealService } from '../../database/services/MealService';
 import { useMealInputAssist } from '../../hooks/cameraCapture/useMealInputAssist';
@@ -30,6 +34,10 @@ import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils
 
 type MealDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'MealDetail'>;
 export type DetailNavigationDirection = 'previous' | 'next';
+
+type MealDetailViewerPhoto = MealPhotoViewerPhoto & {
+  mealIndex: number;
+};
 
 const emptyEditDraft: MealEditDraft = {
   mealName: '',
@@ -100,6 +108,33 @@ export function canNavigateMealDetail(
   return !editingVisible && !shareComposerVisible;
 }
 
+export function createMealDetailViewerPhotos(meals: Meal[]): MealDetailViewerPhoto[] {
+  return meals.reduce<MealDetailViewerPhoto[]>((photos, item, index) => {
+    const uri = getMealDetailImageUri(item);
+
+    if (!uri) {
+      return photos;
+    }
+
+    photos.push({
+      id: item.id,
+      uri,
+      title: item.meal_name,
+      mealIndex: index,
+    });
+
+    return photos;
+  }, []);
+}
+
+export function getMealDetailViewerPhotoIndex(
+  photos: readonly Pick<MealDetailViewerPhoto, 'mealIndex'>[],
+  currentIndex: number
+): number {
+  const viewerIndex = photos.findIndex(photo => photo.mealIndex === currentIndex);
+  return viewerIndex >= 0 ? viewerIndex : 0;
+}
+
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.detailRow}>
@@ -124,9 +159,15 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   const [savingEdit, setSavingEdit] = useState(false);
   const [rotatingPhoto, setRotatingPhoto] = useState(false);
   const [shareComposerVisible, setShareComposerVisible] = useState(false);
+  const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
   const [shareText, setShareText] = useState(() => buildInitialShareText(meal));
 
   const photoUri = useMemo(() => getMealDetailImageUri(meal), [meal]);
+  const viewerPhotos = useMemo(() => createMealDetailViewerPhotos(detailMeals), [detailMeals]);
+  const viewerPhotoIndex = useMemo(
+    () => getMealDetailViewerPhotoIndex(viewerPhotos, currentIndex),
+    [currentIndex, viewerPhotos]
+  );
 
   const editCaptureReview = useMemo<CaptureReviewState | null>(() => {
     if (!editingMeal || !photoUri) {
@@ -195,6 +236,38 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     setShareText(buildInitialShareText(meal));
     setShareComposerVisible(true);
   }, [meal]);
+
+  const openPhotoViewer = useCallback(() => {
+    if (!photoUri) {
+      return;
+    }
+
+    setPhotoViewerVisible(true);
+  }, [photoUri]);
+
+  const closePhotoViewer = useCallback(() => {
+    setPhotoViewerVisible(false);
+  }, []);
+
+  const handlePhotoViewerIndexChange = useCallback(
+    (viewerIndex: number) => {
+      const nextMealIndex = viewerPhotos[viewerIndex]?.mealIndex;
+
+      if (typeof nextMealIndex !== 'number' || nextMealIndex === currentIndex) {
+        return;
+      }
+
+      const nextMeal = detailMeals[nextMealIndex];
+
+      if (!nextMeal) {
+        return;
+      }
+
+      setCurrentIndex(nextMealIndex);
+      setShareText(buildInitialShareText(nextMeal));
+    },
+    [currentIndex, detailMeals, viewerPhotos]
+  );
 
   const saveEdit = useCallback(async () => {
     if (!editingMeal) {
@@ -287,7 +360,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     ]);
   }, [meal.id, meal.meal_name, navigation]);
 
-  const canNavigateDetail = canNavigateMealDetail(Boolean(editingMeal), shareComposerVisible);
+  const canNavigateDetail = canNavigateMealDetail(Boolean(editingMeal), shareComposerVisible || photoViewerVisible);
   const isAtFirstMeal = currentIndex === 0;
   const isAtLastMeal = currentIndex >= detailMeals.length - 1;
 
@@ -365,12 +438,22 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       >
         <View style={styles.heroImageFrame}>
           {photoUri ? (
-            <Image
-              source={{ uri: photoUri }}
-              style={styles.heroImage}
-              resizeMode="cover"
-              testID="meal-detail-image"
-            />
+            <TouchableOpacity
+              accessibilityHint="写真全体を黒背景の画面で表示します"
+              accessibilityLabel={`${meal.meal_name}の写真を全画面表示`}
+              accessibilityRole="imagebutton"
+              activeOpacity={0.88}
+              onPress={openPhotoViewer}
+              style={styles.heroImageButton}
+              testID="meal-detail-image-button"
+            >
+              <Image
+                source={{ uri: photoUri }}
+                style={styles.heroImage}
+                resizeMode="cover"
+                testID="meal-detail-image"
+              />
+            </TouchableOpacity>
           ) : (
             <View
               style={[styles.heroImage, styles.noImageHero]}
@@ -476,6 +559,16 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         onApplyNoteDraftSuggestion={editMealInputAssist.applyNoteDraftSuggestion}
       />
 
+      {photoViewerVisible ? (
+        <MealPhotoViewer
+          visible={photoViewerVisible}
+          photos={viewerPhotos}
+          initialIndex={viewerPhotoIndex}
+          onClose={closePhotoViewer}
+          onIndexChange={handlePhotoViewerIndexChange}
+        />
+      ) : null}
+
       <Modal
         animationType="slide"
         transparent
@@ -547,6 +640,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     backgroundColor: '#e9ecef',
+  },
+  heroImageButton: {
+    width: '100%',
+    height: '100%',
   },
   photoNavRow: {
     flexDirection: 'row',

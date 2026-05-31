@@ -29,15 +29,16 @@
 2. Browse the grouped list, which refreshes when the tab becomes active again.
 3. Open a record card.
 4. Review the larger photo and saved details on the dedicated detail screen.
-5. Use the compact previous/next buttons below the detail photo to move to the adjacent newer or older record from the Records list order; tapping at either end does nothing.
-6. Edit or delete the record, optionally use AI note-draft assist inside the edit modal when a saved photo exists, or open the explicit X share path.
+5. Tap the detail photo when needed to inspect it in the full-screen viewer; close it with swipe down, the close button, or platform back.
+6. Use the compact previous/next buttons below the detail photo to move to the adjacent newer or older record from the Records list order; tapping at either end does nothing.
+7. Edit or delete the record, optionally use AI note-draft assist inside the edit modal when a saved photo exists, or open the explicit X share path.
 
 ## Search Flow
 1. Open Search.
 2. Enter text or select filters.
 3. Review the result list, which reruns with the current query when the tab regains focus and keeps text/filter search as the fallback baseline.
 4. Open a result card to move to the shared root-level saved-record detail screen without switching away from Search first.
-5. Use previous/next in the detail screen to move through the current search result order, edit or delete the record there, then go back to the Search context or refine the search and try again.
+5. Use the full-screen photo viewer or previous/next in the detail screen to move through the current search result order, edit or delete the record there, then go back to the Search context or refine the search and try again.
 
 ## Stats Flow
 1. Open Stats.
