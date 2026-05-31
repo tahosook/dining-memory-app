@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
-import { Alert } from 'react-native';
-import { useNavigation, type NavigationProp } from '@react-navigation/native';
+import { Alert, BackHandler } from 'react-native';
+import { useFocusEffect, useNavigation, type NavigationProp } from '@react-navigation/native';
 import { CameraView, PermissionResponse } from 'expo-camera';
 import { ROUTE_NAMES } from '../../constants/CameraConstants';
 import { openAppSettings } from '../../utils/openAppSettings';
@@ -43,10 +43,12 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   const navigation = useNavigation<NavigationProp<RootTabParamList>>();
   const cameraRef = useRef<CameraView>(null);
   const takingPhotoRef = useRef(false);
+  const pickingPhotoFromLibraryRef = useRef(false);
   const savingCaptureRef = useRef(false);
   const captureAttemptIdRef = useRef(0);
   const saveAttemptIdRef = useRef(0);
   const [takingPhoto, setTakingPhoto] = useState(false);
+  const [pickingPhotoFromLibrary, setPickingPhotoFromLibrary] = useState(false);
   const [savingCapture, setSavingCapture] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [captureReview, setCaptureReview] = useState<CaptureReviewState | null>(null);
@@ -135,7 +137,14 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   }, [beginReview, cameraPermission]);
 
   const addPhotoFromLibrary = useCallback(async (): Promise<void> => {
+    if (pickingPhotoFromLibraryRef.current) {
+      return;
+    }
+
+    pickingPhotoFromLibraryRef.current = true;
+
     try {
+      setPickingPhotoFromLibrary(true);
       const picked = await pickPhotoFromLibraryForReview();
       if (!picked) {
         return;
@@ -144,6 +153,9 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       beginReview(picked, 'library');
     } catch {
       Alert.alert('エラー', '写真の選択に失敗しました。再度お試しください。');
+    } finally {
+      pickingPhotoFromLibraryRef.current = false;
+      setPickingPhotoFromLibrary(false);
     }
   }, [beginReview]);
 
@@ -153,6 +165,10 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   }, []);
 
   const closeCamera = useCallback(() => {
+    if (savingCaptureRef.current) {
+      return;
+    }
+
     navigateToRecords();
   }, [navigateToRecords]);
 
@@ -173,8 +189,33 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   );
 
   const cancelReview = useCallback(() => {
+    if (savingCaptureRef.current) {
+      return;
+    }
+
     setCaptureReview(null);
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (!captureReview) {
+          return false;
+        }
+
+        if (savingCaptureRef.current) {
+          return true;
+        }
+
+        setCaptureReview(null);
+        return true;
+      });
+
+      return () => {
+        subscription.remove();
+      };
+    }, [captureReview])
+  );
 
   const saveCapture = useCallback(async (options?: SaveCaptureOptions) => {
     const review = captureReview;
@@ -251,6 +292,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   return {
     // State
     takingPhoto: isTakingPhoto,
+    pickingPhotoFromLibrary,
     savingCapture,
     facing,
     cameraRef,

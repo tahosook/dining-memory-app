@@ -13,12 +13,12 @@
 4. Review the captured image and enter meal details. review 中は live camera preview を止める。
 5. Optionally request AI suggestions, then watch the current stage, progress estimate, and remaining-time estimate while the local runtime works.
 6. Add location or note only when needed by tapping each compact row once.
-7. Save the record only after the image is persisted locally.
+7. Save the record only after the image is persisted locally; while saving, the review stays visible and save/cancel/close/back actions stay locked.
 8. Move directly to Records after save completes.
 
 ## Alternate Flow: Add from Library
 1. Open Camera.
-2. Tap `写真から追加`.
+2. Tap `写真から追加`; while the picker is opening, repeated taps do not start another picker.
 3. Select a single photo from the library.
 4. Enter the same capture review flow used after camera capture.
 5. Save through the same local persistence pipeline.

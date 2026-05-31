@@ -188,6 +188,7 @@ type MockCaptureReview = {
 
 type MockCaptureState = {
   takingPhoto: boolean;
+  pickingPhotoFromLibrary: boolean;
   savingCapture: boolean;
   facing: 'front' | 'back';
   cameraRef: typeof mockCameraRef;
@@ -258,6 +259,7 @@ function createCaptureReview(overrides: Partial<MockCaptureReview> = {}): MockCa
 function createCaptureState(overrides: Partial<MockCaptureState> = {}): MockCaptureState {
   return {
     takingPhoto: false,
+    pickingPhotoFromLibrary: false,
     savingCapture: false,
     facing: 'back',
     cameraRef: mockCameraRef,
@@ -389,6 +391,19 @@ describe('CameraScreen', () => {
       fireEvent.press(await findByTestId('add-photo-from-library-button'));
 
       expect(addPhotoFromLibrary).toHaveBeenCalledTimes(1);
+    });
+
+    test('disables the library picker action while a photo is being selected', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        pickingPhotoFromLibrary: true,
+      }));
+      const { findByTestId, findByText } = render(<CameraScreen />);
+
+      const addButton = await findByTestId('add-photo-from-library-button');
+
+      expect(await findByText('選択中...')).toBeTruthy();
+      expect(addButton.props.disabled).toBe(true);
+      expect(addButton.props.accessibilityState).toEqual({ disabled: true });
     });
 
     test('handles close button press without crashing', async () => {
@@ -585,10 +600,16 @@ describe('CameraScreen', () => {
 
       const { findByTestId, findByText } = render(<CameraScreen />);
       const saveButton = await findByTestId('save-meal-button');
+      const cancelButton = await findByTestId('cancel-capture-review-button');
+      const closeButton = await findByTestId('close-button');
 
       expect(await findByText('保存中...')).toBeTruthy();
       expect(saveButton.props.disabled).toBe(true);
       expect(saveButton.props.accessibilityState).toEqual({ disabled: true });
+      expect(cancelButton.props.disabled).toBe(true);
+      expect(cancelButton.props.accessibilityState).toEqual({ disabled: true });
+      expect(closeButton.props.disabled).toBe(true);
+      expect(closeButton.props.accessibilityState).toEqual({ disabled: true });
     });
 
     test('shows AI analysis progress and ETA while running', async () => {

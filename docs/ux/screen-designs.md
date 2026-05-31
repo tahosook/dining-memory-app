@@ -34,9 +34,10 @@
 - capture review を開いたら live camera preview は止め、review 中の端末負荷を抑える。
 - AI 入力補助は captured original をそのまま解析せず、端末内で一時的に downsized image を作ってから推論し、終わったら一時 file を片付ける。
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
+- Capture review save should lock immediately after the save action starts, show `保存中...`, and disable save, cancel, close, and Android back until the save settles.
 - If Android photo-save permission is missing at save time, keep the review visible and offer an alert-based recovery path to the system settings screen instead of collapsing into a generic save failure.
 - After a successful save, close capture review and move directly to Records instead of showing a success modal.
-- `写真から追加` は 1 枚選択のみをサポートし、選択後は撮影時と同じ capture review / save パイプラインに合流させる。
+- `写真から追加` は 1 枚選択のみをサポートし、picker 起動中は再タップできない状態にして、選択後は撮影時と同じ capture review / save パイプラインに合流させる。
 
 ## Records Screen
 - Shows meal records grouped by date.

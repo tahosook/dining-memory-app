@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { Alert, Linking, Platform } from 'react-native';
+import { Alert, BackHandler, Linking, Platform } from 'react-native';
 import type { PermissionResponse } from 'expo-camera';
 import { useCameraCapture } from '../src/hooks/cameraCapture/useCameraCapture';
 import { MealService } from '../src/database/services/MealService';
@@ -11,11 +11,18 @@ import { persistPhotoToStablePath } from '../src/media/photoStorage';
 
 const mockNavigate = jest.fn();
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({
-    navigate: mockNavigate,
-  }),
-}));
+jest.mock('@react-navigation/native', () => {
+  const ReactModule = require('react');
+
+  return {
+    useFocusEffect: (callback: () => void | (() => void)) => {
+      ReactModule.useEffect(callback, [callback]);
+    },
+    useNavigation: () => ({
+      navigate: mockNavigate,
+    }),
+  };
+});
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
@@ -248,6 +255,7 @@ describe('useCameraCapture', () => {
     await waitFor(() => {
       expect(persistPhotoToStablePath).toHaveBeenCalledTimes(1);
     });
+    expect(result.current.savingCapture).toBe(true);
 
     await act(async () => {
       localPersistence.resolve({
@@ -261,6 +269,7 @@ describe('useCameraCapture', () => {
     expect(MealService.createMeal).toHaveBeenCalledTimes(1);
     expect(MediaLibrary.createAssetAsync).toHaveBeenCalledTimes(1);
     expect(result.current.captureReview).toBeNull();
+    expect(result.current.savingCapture).toBe(false);
   });
 
   test('creates a meal and navigates to records only after local persistence succeeds', async () => {
@@ -370,6 +379,44 @@ describe('useCameraCapture', () => {
     }));
     expect(result.current.captureReview).not.toHaveProperty('exif');
     expect(result.current.captureReview).not.toHaveProperty('base64');
+    expect(result.current.pickingPhotoFromLibrary).toBe(false);
+  });
+
+  test('ignores overlapping photo picker calls before React state updates', async () => {
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+    const photoPicker = createDeferred<{
+      canceled: false;
+      assets: Array<{ uri: string; width: number; height: number }>;
+    }>();
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockReturnValue(photoPicker.promise);
+
+    let firstPick!: Promise<void>;
+    let secondPick!: Promise<void>;
+    act(() => {
+      firstPick = result.current.addPhotoFromLibrary();
+      secondPick = result.current.addPhotoFromLibrary();
+    });
+
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      photoPicker.resolve({
+        canceled: false,
+        assets: [{
+          uri: 'file:///tmp/library.jpg',
+          width: 800,
+          height: 600,
+        }],
+      });
+      await Promise.all([firstPick, secondPick]);
+    });
+
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledTimes(1);
+    expect(result.current.captureReview).toEqual(expect.objectContaining({
+      source: 'library',
+      photoUri: 'file:///tmp/library.jpg',
+    }));
+    expect(result.current.pickingPhotoFromLibrary).toBe(false);
   });
 
   test('keeps review state empty when the photo picker is cancelled', async () => {
@@ -606,6 +653,7 @@ describe('useCameraCapture', () => {
       'Dining Memory アルバムへ写真を保存するには、アプリ設定で写真の保存権限を許可してください。',
       expect.any(Array)
     );
+    expect(result.current.savingCapture).toBe(false);
 
     const alertButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
     const settingsButton = alertButtons.find((button) => button.text === '設定を開く');
@@ -614,5 +662,100 @@ describe('useCameraCapture', () => {
     });
 
     expect(Linking.openSettings).toHaveBeenCalled();
+  });
+
+  test('keeps the review locked when cancel, close, or Android back happen during save', async () => {
+    const backHandlerRef: { current: (() => boolean | null | undefined) | null } = {
+      current: null,
+    };
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_eventName, handler) => {
+      backHandlerRef.current = handler;
+      return {
+        remove: jest.fn(),
+      } as ReturnType<typeof BackHandler.addEventListener>;
+    });
+    const localPersistence = createDeferred<{
+      stablePhotoUri: string;
+      savedToMediaLibrary: boolean;
+    }>();
+    (persistPhotoToStablePath as jest.Mock).mockReturnValue(localPersistence.promise);
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    let pendingSave!: Promise<void>;
+    act(() => {
+      pendingSave = result.current.onCaptureReviewSave();
+    });
+
+    await waitFor(() => {
+      expect(result.current.savingCapture).toBe(true);
+    });
+
+    act(() => {
+      result.current.onCaptureReviewCancel();
+      result.current.closeCamera();
+    });
+    const handledBack = backHandlerRef.current?.();
+
+    expect(handledBack).toBe(true);
+    expect(result.current.captureReview).toEqual(expect.objectContaining({
+      photoUri: 'file:///tmp/photo.jpg',
+    }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      localPersistence.resolve({
+        stablePhotoUri: 'file:///mock-documents/meal-123.jpg',
+        savedToMediaLibrary: false,
+      });
+      await pendingSave;
+    });
+
+    expect(result.current.captureReview).toBeNull();
+    expect(mockNavigate).toHaveBeenCalledWith('Records');
+  });
+
+  test('Android back cancels an idle capture review', async () => {
+    const backHandlerRef: { current: (() => boolean | null | undefined) | null } = {
+      current: null,
+    };
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_eventName, handler) => {
+      backHandlerRef.current = handler;
+      return {
+        remove: jest.fn(),
+      } as ReturnType<typeof BackHandler.addEventListener>;
+    });
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    let handledBack: boolean | null | undefined;
+    act(() => {
+      handledBack = backHandlerRef.current?.();
+    });
+
+    expect(handledBack).toBe(true);
+    expect(result.current.captureReview).toBeNull();
   });
 });

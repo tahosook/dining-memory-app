@@ -34,7 +34,13 @@ export type SaveCaptureWorkflowResult =
     savedToMediaLibrary: boolean;
     mealId: string;
   }
-  | { kind: 'skipped'; reason: 'photo_permission_denied' };
+  | { kind: 'skipped'; reason: 'photo_permission_denied' | 'duplicate_in_flight' };
+
+const inFlightCaptureReviewSaves = new Set<string>();
+
+function createCaptureReviewSaveKey(captureReview: CaptureReviewState) {
+  return `${captureReview.photoUri}::${captureReview.capturedAtMs}`;
+}
 
 export async function saveCaptureReviewWorkflow({
   captureReview,
@@ -48,6 +54,13 @@ export async function saveCaptureReviewWorkflow({
 }: SaveCaptureWorkflowParams): Promise<SaveCaptureWorkflowResult> {
   let stablePhotoUri: string | null = null;
   const isWebWithoutPermissions = isWebWithoutCameraPermission(cameraPermission);
+  const saveKey = createCaptureReviewSaveKey(captureReview);
+
+  if (inFlightCaptureReviewSaves.has(saveKey)) {
+    return { kind: 'skipped', reason: 'duplicate_in_flight' };
+  }
+
+  inFlightCaptureReviewSaves.add(saveKey);
 
   try {
     if (!isWebWithoutPermissions) {
@@ -110,5 +123,7 @@ export async function saveCaptureReviewWorkflow({
       await cleanupTempFile(stablePhotoUri);
     }
     throw error;
+  } finally {
+    inFlightCaptureReviewSaves.delete(saveKey);
   }
 }

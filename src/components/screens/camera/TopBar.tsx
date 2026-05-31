@@ -12,20 +12,23 @@ import { Colors } from '../../../constants/Colors';
 interface TopBarProps {
   onClosePress: () => void;
   onFlipPress: () => void;
+  closeDisabled?: boolean;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onClosePress, onFlipPress }) => {
+const TopBar: React.FC<TopBarProps> = ({ onClosePress, onFlipPress, closeDisabled = false }) => {
   const insets = useSafeAreaInsets();
 
   return (
     <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
       <TouchableOpacity
-        style={styles.closeButton}
+        style={[styles.closeButton, closeDisabled && styles.disabledButton]}
         onPress={onClosePress}
+        disabled={closeDisabled}
         testID="close-button"
         accessibilityLabel="撮影画面を閉じる"
         accessibilityHint="このボタンをタップすると撮影を終了します"
         accessibilityRole="button"
+        accessibilityState={{ disabled: closeDisabled }}
       >
         <Text style={styles.closeButtonText}>✕</Text>
       </TouchableOpacity>
@@ -73,6 +76,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  disabledButton: {
+    opacity: 0.5,
   },
 });
 

@@ -17,6 +17,7 @@ const CameraScreenContainer: React.FC = () => {
   const cameraPermissionState = useCameraPermission();
   const {
     takingPhoto,
+    pickingPhotoFromLibrary,
     savingCapture,
     facing,
     cameraRef,
@@ -73,6 +74,7 @@ const CameraScreenContainer: React.FC = () => {
   return (
     <CameraView
       takingPhoto={takingPhoto}
+      pickingPhotoFromLibrary={pickingPhotoFromLibrary}
       savingCapture={savingCapture}
       facing={facing}
       cameraPermission={cameraPermissionState.permission}

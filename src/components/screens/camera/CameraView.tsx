@@ -44,6 +44,7 @@ const bottomBarMarginBottom = platformConfig.bottomBarMarginBottom;
 
 type CameraLogicState = {
   takingPhoto: boolean;
+  pickingPhotoFromLibrary: boolean;
   facing: 'front' | 'back';
   cameraRef: React.RefObject<CameraViewType | null>;
 };
@@ -86,7 +87,10 @@ type CameraAiAssistOperations = {
   onApplyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
 };
 
-export type CameraViewProps = Pick<CameraLogicState, 'takingPhoto' | 'facing' | 'cameraRef'> &
+export type CameraViewProps = Pick<
+  CameraLogicState,
+  'takingPhoto' | 'pickingPhotoFromLibrary' | 'facing' | 'cameraRef'
+> &
   Pick<
     CameraOperations,
     'onTakePicture' | 'onAddPhotoFromLibrary' | 'onFlipCamera' | 'onClose' | 'onRequestPermission' | 'onOpenSettings'
@@ -357,8 +361,15 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
 
         <View style={styles.reviewButtonRow}>
           <TouchableOpacity
-            style={[styles.reviewButton, styles.reviewCancelButton]}
+            style={[
+              styles.reviewButton,
+              styles.reviewCancelButton,
+              savingCapture && styles.reviewButtonDisabled,
+            ]}
             onPress={onCancel}
+            disabled={savingCapture}
+            testID="cancel-capture-review-button"
+            accessibilityState={{ disabled: savingCapture }}
           >
             <Text style={styles.reviewCancelText}>キャンセル</Text>
           </TouchableOpacity>
@@ -383,16 +394,33 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
 
 interface BottomControlsProps {
   takingPhoto: boolean;
+  pickingPhotoFromLibrary: boolean;
   onTakePicture: () => Promise<void>;
   onAddPhotoFromLibrary: () => Promise<void>;
 }
 
-const BottomControls: React.FC<BottomControlsProps> = ({ takingPhoto, onTakePicture, onAddPhotoFromLibrary }) => (
+const BottomControls: React.FC<BottomControlsProps> = ({
+  takingPhoto,
+  pickingPhotoFromLibrary,
+  onTakePicture,
+  onAddPhotoFromLibrary,
+}) => (
   <View style={[styles.bottomBar, { marginBottom: bottomBarMarginBottom }]}>
     <View style={styles.captureActionsRow}>
       <CaptureButton takingPhoto={takingPhoto} onPress={onTakePicture} />
-      <TouchableOpacity style={styles.secondaryActionButton} onPress={onAddPhotoFromLibrary} testID="add-photo-from-library-button">
-        <Text style={styles.secondaryActionButtonText}>写真から追加</Text>
+      <TouchableOpacity
+        style={[
+          styles.secondaryActionButton,
+          pickingPhotoFromLibrary && styles.secondaryActionButtonDisabled,
+        ]}
+        onPress={onAddPhotoFromLibrary}
+        disabled={pickingPhotoFromLibrary}
+        testID="add-photo-from-library-button"
+        accessibilityState={{ disabled: pickingPhotoFromLibrary }}
+      >
+        <Text style={styles.secondaryActionButtonText}>
+          {pickingPhotoFromLibrary ? '選択中...' : '写真から追加'}
+        </Text>
       </TouchableOpacity>
     </View>
   </View>
@@ -400,6 +428,7 @@ const BottomControls: React.FC<BottomControlsProps> = ({ takingPhoto, onTakePict
 
 const CameraView: React.FC<CameraViewProps> = ({
   takingPhoto,
+  pickingPhotoFromLibrary,
   savingCapture,
   facing,
   cameraPermission,
@@ -451,7 +480,11 @@ const CameraView: React.FC<CameraViewProps> = ({
         {captureReview ? <View style={styles.cameraReviewBackdrop} pointerEvents="none" /> : null}
 
         <View style={styles.overlay}>
-          <TopBar onClosePress={onClose} onFlipPress={onFlipCamera} />
+          <TopBar
+            onClosePress={onClose}
+            onFlipPress={onFlipCamera}
+            closeDisabled={savingCapture}
+          />
 
           {captureReview ? (
             <CaptureReview
@@ -473,7 +506,12 @@ const CameraView: React.FC<CameraViewProps> = ({
           )}
 
           {!captureReview ? (
-            <BottomControls takingPhoto={takingPhoto} onTakePicture={onTakePicture} onAddPhotoFromLibrary={onAddPhotoFromLibrary} />
+            <BottomControls
+              takingPhoto={takingPhoto}
+              pickingPhotoFromLibrary={pickingPhotoFromLibrary}
+              onTakePicture={onTakePicture}
+              onAddPhotoFromLibrary={onAddPhotoFromLibrary}
+            />
           ) : null}
         </View>
       </SafeAreaView>
@@ -569,6 +607,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.35)',
     backgroundColor: 'rgba(0,0,0,0.25)',
   },
+  secondaryActionButtonDisabled: {
+    opacity: 0.55,
+  },
   secondaryActionButtonText: {
     color: Colors.white,
     fontSize: 13,
@@ -660,6 +701,9 @@ const styles = StyleSheet.create({
   },
   reviewCancelButton: {
     backgroundColor: Colors.white,
+  },
+  reviewButtonDisabled: {
+    opacity: 0.55,
   },
   reviewSaveButton: {
     backgroundColor: Colors.primary,
