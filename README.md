@@ -61,7 +61,7 @@ dining-memory-app/
 
 ### システム要件
 - Node.js 25.9.x 推奨
-- Expo SDK 55.x
+- Expo SDK 56.x
 - Expo CLI 55.x 以上（`npx expo` 推奨）
 - iOS 開発: Xcode
 - Android 開発: Android Studio（任意）
@@ -77,8 +77,8 @@ npx expo start --dev-client
 ```
 
 ### 実行時前提
-- React Native 0.83 系 / React 19.2 系を前提としています
-- Expo SDK 55 以降のため New Architecture は常時有効です
+- React Native 0.85 系 / React 19.2 系を前提としています
+- Expo SDK 56 以降のため New Architecture は常時有効です
 - Android の写真保存権限は `expo-media-library` プラグインで管理します
 - `llama.rn` を使う local AI runtime は Expo Go ではなく dev build / native build 前提です
 

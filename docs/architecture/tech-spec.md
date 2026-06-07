@@ -7,8 +7,8 @@
 - Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/domain/database-design.md](../domain/database-design.md)
 
 ## Current Stack
-- Expo SDK 55 on React Native 0.83 / React 19.2
-- TypeScript 5.9.x
+- Expo SDK 56 on React Native 0.85 / React 19.2
+- TypeScript 6.0.x
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
 - Expo Camera, expo-image-picker, expo-file-system, expo-location, expo-media-library, and related native modules
@@ -33,7 +33,8 @@
 
 ## Runtime Assumptions
 - Local development uses Node.js 25.9.x as the recommended runtime; CI currently runs Node.js 25.9.0.
-- Expo SDK 55 keeps the New Architecture enabled at all times.
+- Expo SDK 56 keeps the New Architecture enabled at all times.
+- iOS native builds target iOS 16.4 or newer.
 - App data lives primarily on the device.
 - Captured photos should be resized before save.
 - Final saved JPEG should keep available source EXIF when possible and add save-time EXIF updates such as capture timestamp and app `Software`, using a shared JS-only EXIF writer after the app-local copy is finalized.
