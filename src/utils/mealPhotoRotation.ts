@@ -3,6 +3,7 @@ import {
   copyAsync,
   deleteAsync,
   documentDirectory,
+  getInfoAsync,
 } from 'expo-file-system/legacy';
 import { CAMERA_CONSTANTS } from '../constants/CameraConstants';
 
@@ -42,10 +43,21 @@ export async function rotateMealPhotoClockwise(sourceUri: string): Promise<strin
   const destinationUri = createRotatedMealPhotoDestinationUri();
 
   try {
-    await copyAsync({
-      from: resizedPhoto.uri,
-      to: destinationUri,
-    });
+    try {
+      await copyAsync({
+        from: resizedPhoto.uri,
+        to: destinationUri,
+      });
+    } catch (copyError: unknown) {
+      const errorMessage = copyError instanceof Error ? copyError.message : String(copyError);
+      throw new Error(`Failed to copy rotated photo: ${errorMessage}`);
+    }
+
+    // Verify the file was actually copied
+    const destinationInfo = await getInfoAsync(destinationUri);
+    if (!destinationInfo.exists) {
+      throw new Error(`Photo rotation copy completed but file not found at ${destinationUri}`);
+    }
 
     return destinationUri;
   } finally {

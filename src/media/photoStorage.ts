@@ -45,10 +45,22 @@ export async function persistPhotoToStablePath(
   }
 
   const destination = await resolveDestinationUri(options.capturedAt);
-  await copyAsync({
-    from: photoUri,
-    to: destination,
-  });
+  
+  try {
+    await copyAsync({
+      from: photoUri,
+      to: destination,
+    });
+  } catch (copyError: unknown) {
+    const errorMessage = copyError instanceof Error ? copyError.message : String(copyError);
+    throw new Error(`Failed to copy photo to stable path: ${errorMessage}`);
+  }
+
+  // Verify the file was actually copied
+  const destinationInfo = await getInfoAsync(destination);
+  if (!destinationInfo.exists) {
+    throw new Error(`Photo copy completed but file not found at ${destination}`);
+  }
 
   try {
     await writePhotoExifToJpeg(destination, {
@@ -64,13 +76,12 @@ export async function persistPhotoToStablePath(
     let savedToMediaLibrary = false;
 
     try {
-      const album = await MediaLibrary.getAlbumAsync(ANDROID_PHOTO_ALBUM_NAME);
-
-      if (album) {
-        await MediaLibrary.createAssetAsync(destination, album);
-      } else {
-        await MediaLibrary.createAlbumAsync(ANDROID_PHOTO_ALBUM_NAME, undefined, undefined, destination);
-      }
+      await MediaLibrary.createAssetAsync(destination, {
+        mediaType: 'photo',
+        mediaSubTypes: [],
+      }).then((asset) => {
+        return MediaLibrary.createAlbumAsync(ANDROID_PHOTO_ALBUM_NAME, asset);
+      });
       savedToMediaLibrary = true;
     } catch (albumError: unknown) {
       console.warn('Android album save failed, but local photo copy is preserved:', albumError);
