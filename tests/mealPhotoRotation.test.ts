@@ -1,5 +1,5 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer';
-import { copyAsync, deleteAsync } from 'expo-file-system/legacy';
+import { copyAsync, deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
 import { CAMERA_CONSTANTS } from '../src/constants/CameraConstants';
 
@@ -13,6 +13,7 @@ jest.mock('@bam.tech/react-native-image-resizer', () => ({
 jest.mock('expo-file-system/legacy', () => ({
   copyAsync: jest.fn(),
   deleteAsync: jest.fn(),
+  getInfoAsync: jest.fn(),
   documentDirectory: 'file:///documents/',
 }));
 
@@ -27,6 +28,7 @@ describe('mealPhotoRotation', () => {
     });
     (copyAsync as jest.Mock).mockResolvedValue(undefined);
     (deleteAsync as jest.Mock).mockResolvedValue(undefined);
+    (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
   });
 
   afterEach(() => {

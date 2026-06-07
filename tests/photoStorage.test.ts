@@ -30,12 +30,17 @@ describe('photoStorage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+    (copyAsync as jest.Mock).mockResolvedValue(undefined);
+    // Default: all files exist after copy (for file verification check)
+    (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
     (writePhotoExifToJpeg as jest.Mock).mockResolvedValue(undefined);
   });
 
   test('stores Android photos in the dedicated Dining Memory album', async () => {
     Platform.OS = 'android';
+    (getInfoAsync as jest.Mock)
+      .mockResolvedValueOnce({ exists: false }) // collision check
+      .mockResolvedValueOnce({ exists: true }); // file verification
     (MediaLibrary.createAssetAsync as jest.Mock).mockResolvedValue({ id: 'asset-1', uri: 'file:///asset.jpg' });
     (MediaLibrary.getAlbumAsync as jest.Mock).mockResolvedValue({ id: 'album-1' });
 
@@ -71,6 +76,9 @@ describe('photoStorage', () => {
 
   test('creates the dedicated album directly from the local file when it does not exist on Android', async () => {
     Platform.OS = 'android';
+    (getInfoAsync as jest.Mock)
+      .mockResolvedValueOnce({ exists: false }) // collision check
+      .mockResolvedValueOnce({ exists: true }); // file verification
     (MediaLibrary.getAlbumAsync as jest.Mock).mockResolvedValue(null);
 
     const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg', {
@@ -90,6 +98,9 @@ describe('photoStorage', () => {
 
   test('keeps the local stable copy even if album registration fails on Android', async () => {
     Platform.OS = 'android';
+    (getInfoAsync as jest.Mock)
+      .mockResolvedValueOnce({ exists: false }) // collision check
+      .mockResolvedValueOnce({ exists: true }); // file verification
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
     (MediaLibrary.getAlbumAsync as jest.Mock).mockResolvedValue({ id: 'album-1' });
     (MediaLibrary.createAssetAsync as jest.Mock).mockRejectedValue(new Error('album failed'));
@@ -109,6 +120,9 @@ describe('photoStorage', () => {
 
   test('stores iOS photos in the document directory', async () => {
     Platform.OS = 'ios';
+    (getInfoAsync as jest.Mock)
+      .mockResolvedValueOnce({ exists: false }) // collision check
+      .mockResolvedValueOnce({ exists: true }); // file verification
 
     const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg', {
       capturedAt,
@@ -124,8 +138,9 @@ describe('photoStorage', () => {
   test('adds a numeric suffix when the timestamp-based name already exists', async () => {
     Platform.OS = 'ios';
     (getInfoAsync as jest.Mock)
-      .mockResolvedValueOnce({ exists: true })
-      .mockResolvedValueOnce({ exists: false });
+      .mockResolvedValueOnce({ exists: true })  // collision check for meal-20260422213507.jpg
+      .mockResolvedValueOnce({ exists: false }) // collision check for meal-20260422213507-1.jpg
+      .mockResolvedValueOnce({ exists: true }); // verify file exists after copy
 
     const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg', {
       capturedAt,
@@ -140,6 +155,9 @@ describe('photoStorage', () => {
 
   test('continues saving when EXIF writing fails', async () => {
     Platform.OS = 'ios';
+    (getInfoAsync as jest.Mock)
+      .mockResolvedValueOnce({ exists: false }) // collision check
+      .mockResolvedValueOnce({ exists: true }); // file verification
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
     (writePhotoExifToJpeg as jest.Mock).mockRejectedValue(new Error('exif failed'));
 

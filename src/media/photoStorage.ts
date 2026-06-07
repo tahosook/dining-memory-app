@@ -45,10 +45,22 @@ export async function persistPhotoToStablePath(
   }
 
   const destination = await resolveDestinationUri(options.capturedAt);
-  await copyAsync({
-    from: photoUri,
-    to: destination,
-  });
+  
+  try {
+    await copyAsync({
+      from: photoUri,
+      to: destination,
+    });
+  } catch (copyError: unknown) {
+    const errorMessage = copyError instanceof Error ? copyError.message : String(copyError);
+    throw new Error(`Failed to copy photo to stable path: ${errorMessage}`);
+  }
+
+  // Verify the file was actually copied
+  const destinationInfo = await getInfoAsync(destination);
+  if (!destinationInfo.exists) {
+    throw new Error(`Photo copy completed but file not found at ${destination}`);
+  }
 
   try {
     await writePhotoExifToJpeg(destination, {
