@@ -69,7 +69,7 @@ describe('photoStorage', () => {
     );
     expect(MediaLibrary.Asset.create).toHaveBeenCalledWith('file:///mock-documents/meal-20260422213507.jpg');
     expect(MediaLibrary.Album.get).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
-    expect(mockAlbum.add).toHaveBeenCalledWith(mockAsset);
+    expect(mockAlbum.add).toHaveBeenCalledWith([mockAsset]);
     expect((writePhotoExifToJpeg as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
       (MediaLibrary.Asset.create as jest.Mock).mock.invocationCallOrder[0]
     );
@@ -94,7 +94,7 @@ describe('photoStorage', () => {
 
     expect(MediaLibrary.Asset.create).toHaveBeenCalledWith('file:///mock-documents/meal-20260422213507.jpg');
     expect(MediaLibrary.Album.get).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
-    expect(MediaLibrary.Album.create).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME, mockAsset);
+    expect(MediaLibrary.Album.create).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME, [mockAsset]);
     expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507.jpg');
     expect(result.savedToMediaLibrary).toBe(true);
   });

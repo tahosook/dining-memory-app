@@ -80,9 +80,9 @@ export async function persistPhotoToStablePath(
       const existingAlbum = await MediaLibrary.Album.get(ANDROID_PHOTO_ALBUM_NAME);
       
       if (existingAlbum) {
-        await existingAlbum.add(asset);
+        await existingAlbum.add([asset]);
       } else {
-        await MediaLibrary.Album.create(ANDROID_PHOTO_ALBUM_NAME, asset);
+        await MediaLibrary.Album.create(ANDROID_PHOTO_ALBUM_NAME, [asset]);
       }
       savedToMediaLibrary = true;
     } catch (albumError: unknown) {
