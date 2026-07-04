@@ -45,6 +45,7 @@ yarn-error.*
 # ビルド成果物（APK）を無視
 build*.apk
 *.apk
+artifacts/android-release/
 
 # Android ビルドディレクトリ
 android/app/build/

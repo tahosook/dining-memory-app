@@ -160,6 +160,19 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 - 詳細な検証ルールは [docs/engineering/codex-workflow.md](docs/engineering/codex-workflow.md) を参照
 
 ## APK ビルド
+### 日常運用のリリースAPK
+```bash
+npm run build:android:release
+```
+
+このコマンドは `android/` に移動せずに実行でき、次をまとめて残します。
+- `artifacts/android-release/<timestamp>/app-release.apk`
+- `artifacts/android-release/<timestamp>/gradle-build.log`
+- `artifacts/android-release/<timestamp>/build-info.txt`
+- `artifacts/android-release/<timestamp>/output-metadata.json` があればコピー
+
+ビルド失敗時も `gradle-build.log` と `build-info.txt` は残るので、あとから原因を追いやすくなります。
+
 ### 🔹 開発用デバッグAPK
 ```bash
 cd android
@@ -167,7 +180,7 @@ cd android
 ```
 出力先: `./android/app/build/outputs/apk/debug/app-debug.apk`
 
-### 🔹 本番用リリースAPK（推奨）
+### 🔹 本番用リリースAPK（直接実行）
 ```bash
 cd android
 ./gradlew assembleRelease
@@ -176,4 +189,4 @@ cd android
 
 ✅ どちらも一度端末にインストールすればUSBケーブル不要で単体で動作します。開発サーバーなしでも全機能が利用可能です。
 
-💡 リリース版は最適化が有効で起動が速く、ファイルサイズも小さくなります。実際に使う場合はこちらを推奨します。
+💡 日常運用では上の `npm run build:android:release` を使うと、APK に加えてログとメタデータも残せます。直接実行は切り分け用の低レベル手順です。
