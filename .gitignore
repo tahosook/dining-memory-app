@@ -45,16 +45,18 @@ yarn-error.*
 # ビルド成果物（APK）を無視
 build*.apk
 *.apk
-artifacts/android-release/
+artifacts/
 
 # Android ビルドディレクトリ
 android/app/build/
 android/build/
+ios/build/
 
 # 署名鍵や gradle 一時ファイル
 *.keystore
 *.jks
 .gradle/
+.gradle-home/
 android/.gradle/
 
 # Expo / Metro / node

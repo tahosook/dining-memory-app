@@ -165,28 +165,33 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 npm run build:android:release
 ```
 
-このコマンドは `android/` に移動せずに実行でき、次をまとめて残します。
-- `artifacts/android-release/<timestamp>/app-release.apk`
-- `artifacts/android-release/<timestamp>/gradle-build.log`
-- `artifacts/android-release/<timestamp>/build-info.txt`
-- `artifacts/android-release/<timestamp>/output-metadata.json` があればコピー
+このコマンドは `arm64-v8a` のみで作るので、私用端末に入れる日常運用に向いています。
+出力には APK、`gradle-build.log`、`build-info.txt`、`output-metadata.json`、`sha256` が含まれます。
 
-ビルド失敗時も `gradle-build.log` と `build-info.txt` は残るので、あとから原因を追いやすくなります。
-
-### 🔹 開発用デバッグAPK
+### 全 ABI のリリースAPK
 ```bash
-cd android
-./gradlew assembleDebug
+npm run build:android:release:full
 ```
-出力先: `./android/app/build/outputs/apk/debug/app-debug.apk`
 
-### 🔹 本番用リリースAPK（直接実行）
+こちらは `armeabi-v7a` も含むフルビルドです。端末幅広めの確認や、配布前の最終確認に使います。
+
+### 開発用デバッグAPK
 ```bash
-cd android
-./gradlew assembleRelease
+npm run build:android:debug
 ```
-出力先: `./android/app/build/outputs/apk/release/app-release.apk`
 
-✅ どちらも一度端末にインストールすればUSBケーブル不要で単体で動作します。開発サーバーなしでも全機能が利用可能です。
+debug は ABI 制限をかけず、エミュレータや別端末での確認にも回しやすいようにしています。
 
-💡 日常運用では上の `npm run build:android:release` を使うと、APK に加えてログとメタデータも残せます。直接実行は切り分け用の低レベル手順です。
+### 直接 Gradle を触る切り分け
+```bash
+npm run android:gradle -- assembleRelease --stacktrace
+```
+
+`android/` に入って低レベルに確認したい時だけ使う手順です。`build:android:*` はこの切り分けより上の、日常運用向けの入口として扱います。
+
+### 端末へのインストール
+```bash
+npm run install:android:release
+```
+
+✅ どちらも一度端末にインストールすれば USB ケーブル不要で単体で動作します。開発サーバーなしでも全機能が利用可能です。
