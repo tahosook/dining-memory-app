@@ -10,6 +10,12 @@ interface MealLocationInput {
   meal_datetime: Date;
 }
 
+interface NearbyRowOptions {
+  minMealDatetime?: number;
+  maxDistanceMeters?: number;
+  requireLocationName?: boolean;
+}
+
 function toRadians(value: number) {
   return (value * Math.PI) / 180;
 }
@@ -51,18 +57,23 @@ export function getMealNameByTime(date: Date): string {
 export function findMostRecentNearbyRow(
   rows: PersistedMealRow[],
   origin: { latitude: number; longitude: number },
-  options?: { minMealDatetime?: number }
+  options: NearbyRowOptions = {}
 ): PersistedMealRow | undefined {
   let candidate: PersistedMealRow | undefined;
+  const maxDistanceMeters = options.maxDistanceMeters ?? SAME_LOCATION_THRESHOLD_METERS;
+  const requireLocationName = options.requireLocationName ?? true;
 
   for (const row of rows) {
-    if (!row.location_name || typeof row.latitude !== 'number' || typeof row.longitude !== 'number' || row.is_deleted) {
+    if (requireLocationName && !row.location_name) {
+      continue;
+    }
+    if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number' || row.is_deleted) {
       continue;
     }
     if (typeof options?.minMealDatetime === 'number' && row.meal_datetime < options.minMealDatetime) {
       continue;
     }
-    if (getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) > SAME_LOCATION_THRESHOLD_METERS) {
+    if (getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) > maxDistanceMeters) {
       continue;
     }
 
@@ -109,4 +120,18 @@ export function resolveNearbyLocationName(rows: PersistedMealRow[], data: MealLo
   });
 
   return nearbyRow?.location_name ?? data.location_name;
+}
+
+export function resolveNearbyHomemadeDefault(
+  rows: PersistedMealRow[],
+  origin: { latitude: number; longitude: number },
+  options: { minMealDatetime?: number; maxDistanceMeters?: number } = {}
+): boolean | null {
+  const nearbyRow = findMostRecentNearbyRow(rows, origin, {
+    minMealDatetime: options.minMealDatetime,
+    maxDistanceMeters: options.maxDistanceMeters,
+    requireLocationName: false,
+  });
+
+  return nearbyRow ? Boolean(nearbyRow.is_homemade) : null;
 }

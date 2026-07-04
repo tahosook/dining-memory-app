@@ -28,6 +28,7 @@
 - AI 入力補助は、新規保存時にユーザーがメモ下書きや provider suggestion を採用したときだけ `meals.ai_source` と `meals.ai_confidence` を保存し、生レスポンスや候補一覧は保存しない。detail edit modal の AI 補助は notes 追記だけを行い、新しい AI metadata は保存しない。
 - `app_settings` は user-controlled feature flags や meal input assist model の導入状態を保存し、実際の ready 判定は app-local fixed path の file existence を優先する。
 - Preserve latitude and longitude when available, and allow service-layer logic to reuse an existing place name when a new record is captured within roughly 100 meters of a known location.
+- The same location history can also be used to initialize `is_homemade` from a recent nearby meal record, but this remains a service-layer decision rather than schema state.
 - Photo persistence and EXIF writes are handled in `src/media/`; the database stores displayable file paths and does not store image blobs.
 
 ## Search and Analytics Intent

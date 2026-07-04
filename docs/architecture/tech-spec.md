@@ -68,7 +68,8 @@
 - Prefer local storage and local processing unless a feature clearly needs external transfer.
 - Allow external handoff only from an explicit user action, such as opening the OS share sheet from a saved record detail.
 - Request only the minimum camera, photo, and location access needed for the active feature.
-- Request foreground location only at save time, and keep meal saving available even if location permission is denied.
+- Request foreground location when resolving capture-review defaults or at save time, and keep meal saving available even if location permission is denied.
+- Capture-review location lookup is best effort and may reuse the most recent nearby meal to initialize homemade state, but it must never block manual edits or saving.
 - Write GPS EXIF only when save-time location permission is granted and coordinates are actually available; otherwise save the JPEG without GPS metadata.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
 - Do not assume external AI, backup, or export is allowed by default; require explicit user intent.

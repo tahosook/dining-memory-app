@@ -2,6 +2,7 @@ import { getDatabase, getInMemoryMeals, initializeDatabase, isUsingNativeDatabas
 import type { CookingLevel, Meal } from '../../types/MealTypes';
 import {
   resolveDefaultMealName,
+  resolveNearbyHomemadeDefault,
   resolveNearbyLocationName,
 } from '../../domain/meals/defaults';
 import {
@@ -133,6 +134,15 @@ export class MealService {
     });
     await upsertRow(row);
     return mapRowToMeal(row);
+  }
+
+  static async getRecentNearbyHomemadeDefault(origin: { latitude: number; longitude: number }): Promise<boolean | null> {
+    const rows = await getAllRows();
+    const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return resolveNearbyHomemadeDefault(rows, origin, {
+      minMealDatetime: oneWeekAgo,
+      maxDistanceMeters: 80,
+    });
   }
 
   static async searchMeals(filters: SearchFilters = {}): Promise<Meal[]> {

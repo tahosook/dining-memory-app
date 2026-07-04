@@ -27,6 +27,7 @@ jest.mock('@react-navigation/native', () => {
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     createMeal: jest.fn(),
+    getRecentNearbyHomemadeDefault: jest.fn(),
   },
 }));
 
@@ -105,6 +106,7 @@ describe('useCameraCapture', () => {
       accessPrivileges: 'all',
     });
     (MealService.createMeal as jest.Mock).mockResolvedValue({ id: 'meal-1' });
+    (MealService.getRecentNearbyHomemadeDefault as jest.Mock).mockResolvedValue(null);
     (persistPhotoToStablePath as jest.Mock).mockResolvedValue({
       stablePhotoUri: 'file:///mock-documents/meal-123.jpg',
       savedToMediaLibrary: false,
@@ -346,6 +348,114 @@ describe('useCameraCapture', () => {
     );
     expect(result.current.captureReview).toBeNull();
     expect(mockNavigate).toHaveBeenCalledWith('Records');
+  });
+
+  test('applies a nearby homemade default when a recent nearby meal exists', async () => {
+    (MealService.getRecentNearbyHomemadeDefault as jest.Mock).mockResolvedValueOnce(true);
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    await waitFor(() => {
+      expect(MealService.getRecentNearbyHomemadeDefault).toHaveBeenCalledWith({
+        latitude: 35.6895,
+        longitude: 139.6917,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.captureReview?.isHomemade).toBe(true);
+    });
+  });
+
+  test('keeps the manual homemade choice when the async default arrives later', async () => {
+    const nearbyDefault = createDeferred<boolean | null>();
+    (MealService.getRecentNearbyHomemadeDefault as jest.Mock).mockReturnValueOnce(nearbyDefault.promise);
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    act(() => {
+      result.current.onCaptureReviewChange('isHomemade', true);
+    });
+
+    await act(async () => {
+      nearbyDefault.resolve(false);
+      await Promise.resolve();
+    });
+
+    expect(result.current.captureReview?.isHomemade).toBe(true);
+  });
+
+  test('ignores a stale nearby homemade lookup after a new review starts', async () => {
+    const firstLookup = createDeferred<boolean | null>();
+    (MealService.getRecentNearbyHomemadeDefault as jest.Mock)
+      .mockReturnValueOnce(firstLookup.promise)
+      .mockResolvedValueOnce(null);
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    await act(async () => {
+      firstLookup.resolve(true);
+      await Promise.resolve();
+    });
+
+    expect(result.current.captureReview?.isHomemade).toBe(false);
+  });
+
+  test('keeps the homemade default off when location lookup is denied', async () => {
+    (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ granted: false });
+    const { result } = renderHook(() => useCameraCapture(cameraPermission));
+
+    result.current.cameraRef.current = {
+      takePictureAsync: jest.fn().mockResolvedValue({
+        uri: 'file:///tmp/photo.jpg',
+        width: 100,
+        height: 100,
+      }),
+    } as never;
+
+    await act(async () => {
+      await result.current.takePicture();
+    });
+
+    expect(MealService.getRecentNearbyHomemadeDefault).not.toHaveBeenCalled();
+    expect(result.current.captureReview?.isHomemade).toBe(false);
   });
 
   test('opens photo picker and starts review when a photo is selected', async () => {

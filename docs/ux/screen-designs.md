@@ -24,7 +24,7 @@
 - Capture review should show the photo first, then an optional AI suggestion section, then the fields in this order: meal name, cuisine type, homemade flag, location, note.
 - Meal name should use a placeholder-only text input labeled `料理名` instead of a separate section label or helper copy.
 - Cuisine type should stay visible, but the selector should hide its label inside capture review.
-- Homemade should remain visible as a short inline toggle row.
+- Homemade should remain visible as a short inline toggle row, and its initial value may be inherited from the most recent nearby meal recorded within 80m and the last week. Manual changes should win over the auto default.
 - Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
 - AI suggestion section should show `未実行 / 解析中 / 成功 / 失敗 / 無効` and keep the save and cancel actions available in every state.
 - AI suggestion section の `解析中` では、少なくとも current stage、進捗の目安、経過時間、残り時間の目安を表示する。

@@ -12,9 +12,10 @@
 3. Capture a photo.
 4. Review the captured image and enter meal details. review 中は live camera preview を止める。
 5. Optionally request AI suggestions, then watch the current stage, progress estimate, and remaining-time estimate while the local runtime works.
-6. Add location or note only when needed by tapping each compact row once.
-7. Save the record only after the image is persisted locally; while saving, the review stays visible and save/cancel/close/back actions stay locked.
-8. Move directly to Records after save completes.
+6. If the current location is within 80m of a meal recorded in the last week, inherit that meal's `自炊` value as the initial toggle state. If no nearby record is found or location lookup fails, the initial state stays `off` and the user can change it manually.
+7. Add location or note only when needed by tapping each compact row once.
+8. Save the record only after the image is persisted locally; while saving, the review stays visible and save/cancel/close/back actions stay locked.
+9. Move directly to Records after save completes.
 
 ## Alternate Flow: Add from Library
 1. Open Camera.

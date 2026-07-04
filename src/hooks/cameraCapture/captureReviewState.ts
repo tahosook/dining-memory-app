@@ -38,6 +38,6 @@ export function createCaptureReviewState(
     cuisineType: '',
     notes: '',
     locationName: '',
-    isHomemade: true,
+    isHomemade: false,
   };
 }

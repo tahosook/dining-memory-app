@@ -285,6 +285,121 @@ describe('MealService', () => {
     expect(meal.location_name).toBe('新しい候補');
   });
 
+  test('returns the most recent nearby homemade default within 80m and one week', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-04-30T12:00:00+09:00'));
+
+    try {
+      await MealService.createMeal({
+        meal_name: '古い自炊',
+        is_homemade: true,
+        photo_path: 'file:///old-home.jpg',
+        meal_datetime: new Date('2026-04-24T12:00:00+09:00'),
+        latitude: 35.681236,
+        longitude: 139.767125,
+      });
+      await MealService.createMeal({
+        meal_name: '遠い外食',
+        is_homemade: false,
+        photo_path: 'file:///far-takeout.jpg',
+        meal_datetime: new Date('2026-04-29T12:00:00+09:00'),
+        latitude: 35.7001,
+        longitude: 139.8001,
+      });
+      await MealService.createMeal({
+        meal_name: '新しい自炊',
+        is_homemade: true,
+        photo_path: 'file:///new-home.jpg',
+        meal_datetime: new Date('2026-04-29T13:00:00+09:00'),
+        latitude: 35.68124,
+        longitude: 139.76713,
+      });
+
+      await expect(
+        MealService.getRecentNearbyHomemadeDefault({
+          latitude: 35.681236,
+          longitude: 139.767125,
+        })
+      ).resolves.toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('returns the most recent nearby homemade default even when a farther row is newer', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-04-30T12:00:00+09:00'));
+
+    try {
+      await MealService.createMeal({
+        meal_name: '近い自炊',
+        is_homemade: true,
+        photo_path: 'file:///near-home.jpg',
+        meal_datetime: new Date('2026-04-28T12:00:00+09:00'),
+        latitude: 35.681236,
+        longitude: 139.767125,
+      });
+      await MealService.createMeal({
+        meal_name: '近い外食',
+        is_homemade: false,
+        photo_path: 'file:///near-takeout.jpg',
+        meal_datetime: new Date('2026-04-29T12:00:00+09:00'),
+        latitude: 35.68124,
+        longitude: 139.76713,
+      });
+      await MealService.createMeal({
+        meal_name: '遠い自炊',
+        is_homemade: true,
+        photo_path: 'file:///far-home.jpg',
+        meal_datetime: new Date('2026-04-29T13:00:00+09:00'),
+        latitude: 35.7001,
+        longitude: 139.8001,
+      });
+
+      await expect(
+        MealService.getRecentNearbyHomemadeDefault({
+          latitude: 35.681236,
+          longitude: 139.767125,
+        })
+      ).resolves.toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('returns null when only stale or distant meals exist', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-04-30T12:00:00+09:00'));
+
+    try {
+      await MealService.createMeal({
+        meal_name: '古い自炊',
+        is_homemade: true,
+        photo_path: 'file:///stale-home.jpg',
+        meal_datetime: new Date('2026-04-20T12:00:00+09:00'),
+        latitude: 35.681236,
+        longitude: 139.767125,
+      });
+      await MealService.createMeal({
+        meal_name: '遠い外食',
+        is_homemade: false,
+        photo_path: 'file:///distant-takeout.jpg',
+        meal_datetime: new Date('2026-04-29T12:00:00+09:00'),
+        latitude: 35.7001,
+        longitude: 139.8001,
+      });
+
+      await expect(
+        MealService.getRecentNearbyHomemadeDefault({
+          latitude: 35.681236,
+          longitude: 139.767125,
+        })
+      ).resolves.toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   test('prefers the most recent nearby location when building default meal name', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-04-29T12:00:00+09:00'));
