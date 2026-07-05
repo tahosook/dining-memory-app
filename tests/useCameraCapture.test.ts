@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { Alert, BackHandler, Linking, Platform } from 'react-native';
+import { Alert, BackHandler, Linking, Platform, type HardwareBackPressEvent } from 'react-native';
 import type { PermissionResponse } from 'expo-camera';
 import { useCameraCapture } from '../src/hooks/cameraCapture/useCameraCapture';
 import { MealService } from '../src/database/services/MealService';
@@ -775,7 +775,7 @@ describe('useCameraCapture', () => {
   });
 
   test('keeps the review locked when cancel, close, or Android back happen during save', async () => {
-    const backHandlerRef: { current: (() => boolean | null | undefined) | null } = {
+    const backHandlerRef: { current: Parameters<typeof BackHandler.addEventListener>[1] | null } = {
       current: null,
     };
     jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_eventName, handler) => {
@@ -816,7 +816,7 @@ describe('useCameraCapture', () => {
       result.current.onCaptureReviewCancel();
       result.current.closeCamera();
     });
-    const handledBack = backHandlerRef.current?.();
+    const handledBack = backHandlerRef.current?.({} as HardwareBackPressEvent);
 
     expect(handledBack).toBe(true);
     expect(result.current.captureReview).toEqual(expect.objectContaining({
@@ -837,7 +837,7 @@ describe('useCameraCapture', () => {
   });
 
   test('Android back cancels an idle capture review', async () => {
-    const backHandlerRef: { current: (() => boolean | null | undefined) | null } = {
+    const backHandlerRef: { current: Parameters<typeof BackHandler.addEventListener>[1] | null } = {
       current: null,
     };
     jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_eventName, handler) => {
@@ -862,7 +862,7 @@ describe('useCameraCapture', () => {
 
     let handledBack: boolean | null | undefined;
     act(() => {
-      handledBack = backHandlerRef.current?.();
+      handledBack = backHandlerRef.current?.({} as HardwareBackPressEvent);
     });
 
     expect(handledBack).toBe(true);
