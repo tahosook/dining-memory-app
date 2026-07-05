@@ -92,10 +92,13 @@ android {
         applicationId 'com.tahosook.diningmemory'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
+        // versionCode is read from expo config (app.json) via Expo CLI
+        versionCode findProperty('androidVersionCode') ? findProperty('androidVersionCode') as Integer : 1
         versionName "1.0.0"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
+        buildConfigField "String", "COMMIT_HASH", "\"${project.hasProperty('COMMIT_HASH') ? COMMIT_HASH : ''}\""
+        buildConfigField "String", "BUILD_DATE", "\"${project.hasProperty('BUILD_DATE') ? BUILD_DATE : ''}\""
     }
     signingConfigs {
         debug {

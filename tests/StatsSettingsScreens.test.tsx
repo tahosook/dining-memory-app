@@ -51,6 +51,16 @@ jest.mock('../src/ai/mealInputAssist/modelInstaller', () => ({
   deleteMealInputAssistModel: jest.fn(),
 }));
 
+jest.mock('../src/utils/buildInfo', () => ({
+  getAppVersion: jest.fn(() => '1.0.0'),
+  getAndroidVersionCode: jest.fn(() => 1),
+  getBuildDate: jest.fn(() => '2026-07-05 14:32'),
+  getBuildEnvironment: jest.fn(() => 'preview'),
+  getExpoSdkVersion: jest.fn(() => '56.0.0'),
+  getGitCommitHash: jest.fn(() => 'a1b2c3d'),
+  getIosBuildNumber: jest.fn(() => null),
+}));
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;

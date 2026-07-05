@@ -11,7 +11,8 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.tahosook.diningmemory"
+      "bundleIdentifier": "com.tahosook.diningmemory",
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +25,8 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.tahosook.diningmemory"
+      "package": "com.tahosook.diningmemory",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"

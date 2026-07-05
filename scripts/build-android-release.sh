@@ -36,6 +36,14 @@ if [[ -n "$BUILD_ARCHITECTURES" ]]; then
   GRADLE_ARGS+=("-PreactNativeArchitectures=$BUILD_ARCHITECTURES")
 fi
 
+# Inject commit hash and build date for build info
+if [[ -z "${COMMIT_HASH:-}" ]]; then
+  export COMMIT_HASH="$(git -C "$ROOT_DIR" rev-parse --short=7 HEAD 2>/dev/null || echo '')"
+fi
+if [[ -z "${BUILD_DATE:-}" ]]; then
+  export BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+fi
+
 if [[ -z "${NODE_ENV:-}" ]]; then
   if [[ "$BUILD_OUTPUT_TYPE" == "debug" ]]; then
     export NODE_ENV=development

@@ -2,6 +2,15 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
+  getAndroidVersionCode,
+  getAppVersion,
+  getBuildDate,
+  getBuildEnvironment,
+  getExpoSdkVersion,
+  getGitCommitHash,
+  getIosBuildNumber,
+} from '../../utils/buildInfo';
+import {
   getMealInputAssistManagedFiles,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
   type MealInputAssistModelDownloadProgress,
@@ -345,7 +354,12 @@ export default function SettingsScreen() {
 
       <Section title="アプリ情報">
         <Text style={styles.bodyText}>Dining Memory</Text>
-        <Text style={styles.metaText}>Version 1.0.0</Text>
+        <BuildInfoRow label="Version" value={getAppVersion()} />
+        <BuildInfoRow label="Build" value={getAndroidVersionCode() ?? getIosBuildNumber()} />
+        <BuildInfoRow label="Environment" value={getBuildEnvironment()} />
+        <BuildInfoRow label="Commit" value={getGitCommitHash()} />
+        <BuildInfoRow label="Built" value={getBuildDate()} />
+        <BuildInfoRow label="Expo SDK" value={getExpoSdkVersion()} />
         <Text style={styles.metaText}>端末内保存を基本にした食事記録アプリ</Text>
       </Section>
     </ScrollView>
@@ -357,6 +371,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
       <View style={styles.card}>{children}</View>
+    </View>
+  );
+}
+
+function BuildInfoRow({ label, value }: { label: string; value: string | number | null }) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return (
+    <View style={styles.buildInfoRow}>
+      <Text style={styles.buildInfoLabel}>{label}</Text>
+      <Text style={styles.buildInfoValue}>{String(value)}</Text>
     </View>
   );
 }
@@ -840,5 +866,19 @@ const styles = StyleSheet.create({
     color: Colors.error,
     fontWeight: '700',
     fontSize: 15,
+  },
+  buildInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  buildInfoLabel: {
+    fontSize: 14,
+    color: Colors.gray,
+  },
+  buildInfoValue: {
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '500',
   },
 });
