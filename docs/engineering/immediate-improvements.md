@@ -63,10 +63,18 @@
 - 導入後の確認方法: 実機で「撮影 -> 保存 -> Records 詳細 -> X共有 -> ホーム画面アイコン確認」を 1 回通して結果を記録します。
 
 ## Low
+### expo-file-system マルチパートアップロードの CRLF インジェクション留意
+- status: tracked
+- 問題点: `expo-file-system` の `FileSystemUploadTask.swift` と `NetworkingHelpers.swift` において、`fieldName`、`filename`、`parameters` の値が CRLF 文字 (`\r`, `\n`) のエスケープなしでマルチパートボディに直接挿入されています。これは HTTP ヘッダーインジェクションにつながる CRLF インジェクションの可能性があります。
+- 現状: 本アプリは `expo-file-system` を使用しているが、現在のコードベースではアップロード機能を使用していません。
+- リスク: 将来アップロード機能を追加する際、ユーザー入力をそのままフィールド名やファイル名に使用すると脆弱性が露出する可能性があります。
+- 推奨修正: アップロード機能を追加する場合は、フィールド名・パラメータ・ファイル名に対して CRLF 文字のエスケープを行うか、信頼できる固定値のみを使用する。`expo-file-system` のアップデートで修正版がリリースされるまで、ユーザー入力を直接使用しない方針を維持します。
+- 関連ファイル: [package.json](../../package.json), [node_modules/expo-file-system/ios/FileSystemUploadTask.swift](../../node_modules/expo-file-system/ios/FileSystemUploadTask.swift)
+- 導入後の確認方法: `grep -r "uploadTask\|UploadTask\|upload" src/` でアップロードコードが追加されていないことを確認します。
+
 ### アイコン assets の生成手順を repo 内に残す
 - status: open
 - 問題点: PNG assets だけがあると、後で色味や構図を微調整したいときに再現性が落ちます。
 - リスク: asset 差し替えが属人的になり、adaptive icon と通常 icon の整合が崩れやすくなります。
 - 推奨修正: stdlib-only script で icon を再生成できる状態を維持し、必要なら簡単な使用手順も README に追記します。
 - 関連ファイル: `scripts/generate-icons.py`, [assets/icon.png](../../assets/icon.png), [assets/adaptive-foreground.png](../../assets/adaptive-foreground.png), [assets/adaptive-monochrome.png](../../assets/adaptive-monochrome.png)
-- 導入後の確認方法: script を再実行して同じ asset 群が生成でき、`app.json` の参照先と一致することを確認します。
