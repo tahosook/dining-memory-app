@@ -78,7 +78,7 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#F28A57"
         }
       ],
       "expo-sharing"
