@@ -76,13 +76,21 @@ export async function persistPhotoToStablePath(
     let savedToMediaLibrary = false;
 
     try {
-      const asset = await MediaLibrary.Asset.create(destination);
       const existingAlbum = await MediaLibrary.Album.get(ANDROID_PHOTO_ALBUM_NAME);
       
       if (existingAlbum) {
-        await existingAlbum.add([asset]);
+        const asset = await MediaLibrary.Asset.create(destination, existingAlbum);
+        console.info('Android photo saved directly to existing Dining Memory album:', {
+          destination,
+          albumId: existingAlbum.id,
+          assetId: asset.id,
+        });
       } else {
-        await MediaLibrary.Album.create(ANDROID_PHOTO_ALBUM_NAME, [asset]);
+        const newAlbum = await MediaLibrary.Album.create(ANDROID_PHOTO_ALBUM_NAME, [destination]);
+        console.info('Android Dining Memory album created with photo:', {
+          destination,
+          albumId: newAlbum.id,
+        });
       }
       savedToMediaLibrary = true;
     } catch (albumError: unknown) {

@@ -46,7 +46,7 @@ describe('photoStorage', () => {
       .mockResolvedValueOnce({ exists: false }) // collision check
       .mockResolvedValueOnce({ exists: true }); // file verification
     const mockAsset = { id: 'asset-1', uri: 'file:///asset.jpg' };
-    const mockAlbum = { id: 'album-1', add: jest.fn().mockResolvedValue(undefined) };
+    const mockAlbum = { id: 'album-1' };
     (MediaLibrary.Asset.create as jest.Mock).mockResolvedValue(mockAsset);
     (MediaLibrary.Album.get as jest.Mock).mockResolvedValue(mockAlbum);
 
@@ -67,9 +67,11 @@ describe('photoStorage', () => {
         softwareName: 'Dining Memory',
       }
     );
-    expect(MediaLibrary.Asset.create).toHaveBeenCalledWith('file:///mock-documents/meal-20260422213507.jpg');
     expect(MediaLibrary.Album.get).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
-    expect(mockAlbum.add).toHaveBeenCalledWith([mockAsset]);
+    expect(MediaLibrary.Asset.create).toHaveBeenCalledWith(
+      'file:///mock-documents/meal-20260422213507.jpg',
+      mockAlbum
+    );
     expect((writePhotoExifToJpeg as jest.Mock).mock.invocationCallOrder[0]).toBeLessThan(
       (MediaLibrary.Asset.create as jest.Mock).mock.invocationCallOrder[0]
     );
@@ -82,9 +84,7 @@ describe('photoStorage', () => {
     (getInfoAsync as jest.Mock)
       .mockResolvedValueOnce({ exists: false }) // collision check
       .mockResolvedValueOnce({ exists: true }); // file verification
-    const mockAsset = { id: 'asset-1', uri: 'file:///asset.jpg' };
     const mockNewAlbum = { id: 'album-1' };
-    (MediaLibrary.Asset.create as jest.Mock).mockResolvedValue(mockAsset);
     (MediaLibrary.Album.get as jest.Mock).mockResolvedValue(null); // Album doesn't exist
     (MediaLibrary.Album.create as jest.Mock).mockResolvedValue(mockNewAlbum);
 
@@ -92,9 +92,11 @@ describe('photoStorage', () => {
       capturedAt,
     });
 
-    expect(MediaLibrary.Asset.create).toHaveBeenCalledWith('file:///mock-documents/meal-20260422213507.jpg');
     expect(MediaLibrary.Album.get).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
-    expect(MediaLibrary.Album.create).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME, [mockAsset]);
+    expect(MediaLibrary.Album.create).toHaveBeenCalledWith(
+      ANDROID_PHOTO_ALBUM_NAME,
+      ['file:///mock-documents/meal-20260422213507.jpg']
+    );
     expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507.jpg');
     expect(result.savedToMediaLibrary).toBe(true);
   });
@@ -105,7 +107,7 @@ describe('photoStorage', () => {
       .mockResolvedValueOnce({ exists: false }) // collision check
       .mockResolvedValueOnce({ exists: true }); // file verification
     const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
-    (MediaLibrary.Asset.create as jest.Mock).mockRejectedValue(new Error('album failed'));
+    (MediaLibrary.Album.get as jest.Mock).mockRejectedValue(new Error('album failed'));
 
     const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg', {
       capturedAt,
