@@ -18,6 +18,7 @@ import {
   type StatisticsSummary,
 } from '../../domain/meals/statistics';
 import { normalizeMealRow } from '../../domain/meals/mealRow';
+import { normalizeCookingLevel } from '../../utils/cookingLevel';
 
 export interface CreateMealData {
   meal_name: string;
@@ -55,6 +56,16 @@ function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): Persis
   });
 }
 
+function escapeSqliteLike(value: string): string {
+  return value.replace(/([%_\\])/g, '\\$1');
+}
+
+const COOKING_LEVEL_VARIANTS: Record<CookingLevel, string[]> = {
+  quick: ['quick', 'easy'],
+  daily: ['daily', 'medium'],
+  gourmet: ['gourmet', 'hard'],
+};
+
 async function getAllRows(): Promise<PersistedMealRow[]> {
   await initializeDatabase();
 
@@ -68,6 +79,24 @@ async function getAllRows(): Promise<PersistedMealRow[]> {
   }
 
   return db.getAllAsync<PersistedMealRow>('SELECT * FROM meals');
+}
+
+async function getRowById(id: string): Promise<PersistedMealRow | null> {
+  await initializeDatabase();
+
+  if (isUsingNativeDatabase()) {
+    const db = getDatabase();
+    if (db) {
+      const row = await db.getFirstAsync<PersistedMealRow>(
+        'SELECT * FROM meals WHERE id = ? LIMIT 1',
+        id
+      );
+      return row ?? null;
+    }
+  }
+
+  const rows = getInMemoryMeals();
+  return rows.find((item) => item.id === id) ?? null;
 }
 
 async function saveRows(rows: PersistedMealRow[]) {
@@ -146,6 +175,80 @@ export class MealService {
   }
 
   static async searchMeals(filters: SearchFilters = {}): Promise<Meal[]> {
+    await initializeDatabase();
+
+    if (isUsingNativeDatabase()) {
+      const db = getDatabase();
+      if (db) {
+        const conditions: string[] = ['is_deleted = 0'];
+        const params: (string | number)[] = [];
+
+        if (filters.dateFrom) {
+          conditions.push('meal_datetime >= ?');
+          params.push(filters.dateFrom.getTime());
+        }
+        if (filters.dateTo) {
+          conditions.push('meal_datetime <= ?');
+          params.push(filters.dateTo.getTime());
+        }
+        if (filters.cuisine_type) {
+          conditions.push('cuisine_type = ?');
+          params.push(filters.cuisine_type);
+        }
+        if (typeof filters.is_homemade === 'boolean') {
+          conditions.push('is_homemade = ?');
+          params.push(filters.is_homemade ? 1 : 0);
+        }
+
+        let targetCookingLevel: CookingLevel | undefined;
+        if (filters.cooking_level) {
+          targetCookingLevel = normalizeCookingLevel(filters.cooking_level);
+          if (targetCookingLevel) {
+            const variants = COOKING_LEVEL_VARIANTS[targetCookingLevel];
+            conditions.push(`cooking_level IN (${variants.map(() => '?').join(', ')})`);
+            params.push(...variants);
+          } else {
+            conditions.push('1 = 0');
+          }
+        }
+
+        const locationQuery = filters.location_name?.trim();
+        if (locationQuery) {
+          conditions.push("location_name LIKE ? ESCAPE '\\'");
+          params.push(`%${escapeSqliteLike(locationQuery)}%`);
+        }
+
+        const textQuery = filters.text?.trim();
+        if (textQuery) {
+          const escapedTextPattern = `%${escapeSqliteLike(textQuery)}%`;
+          conditions.push(
+            "(search_text LIKE ? ESCAPE '\\' OR meal_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\')"
+          );
+          params.push(escapedTextPattern, escapedTextPattern, escapedTextPattern, escapedTextPattern);
+        }
+
+        const whereClause = conditions.join(' AND ');
+        const rows = await db.getAllAsync<PersistedMealRow>(
+          `SELECT * FROM meals WHERE ${whereClause} ORDER BY meal_datetime DESC`,
+          ...params
+        );
+
+        let resultRows = rows;
+        if (targetCookingLevel) {
+          resultRows = resultRows.filter((r) => normalizeCookingLevel(r.cooking_level) === targetCookingLevel);
+        }
+        if (locationQuery) {
+          const locLower = locationQuery.toLowerCase();
+          resultRows = resultRows.filter((r) => (r.location_name ?? '').toLowerCase().includes(locLower));
+        }
+        if (textQuery) {
+          resultRows = resultRows.filter((r) => matchesTextFilter(r, textQuery));
+        }
+
+        return resultRows.map(mapRowToMeal);
+      }
+    }
+
     const rows = await getAllRows();
     const filteredRows = applyNonTextFilters(rows, filters);
     const textQuery = filters.text?.trim();
@@ -171,6 +274,19 @@ export class MealService {
   }
 
   static async getRecentMeals(limit = 20): Promise<Meal[]> {
+    await initializeDatabase();
+
+    if (isUsingNativeDatabase()) {
+      const db = getDatabase();
+      if (db) {
+        const rows = await db.getAllAsync<PersistedMealRow>(
+          'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?',
+          limit
+        );
+        return rows.map(mapRowToMeal);
+      }
+    }
+
     const rows = await getAllRows();
     return rows
       .filter((row) => !row.is_deleted)
@@ -180,6 +296,20 @@ export class MealService {
   }
 
   static async softDeleteMeal(mealId: string): Promise<void> {
+    await initializeDatabase();
+
+    if (isUsingNativeDatabase()) {
+      const db = getDatabase();
+      if (db) {
+        await db.runAsync(
+          'UPDATE meals SET is_deleted = 1, updated_at = ? WHERE id = ?',
+          Date.now(),
+          mealId
+        );
+        return;
+      }
+    }
+
     const rows = await getAllRows();
     const row = rows.find((item) => item.id === mealId);
     if (!row) {
@@ -192,8 +322,7 @@ export class MealService {
   }
 
   static async updateMeal(mealId: string, updates: MealUpdateData): Promise<Meal | null> {
-    const rows = await getAllRows();
-    const row = rows.find((item) => item.id === mealId);
+    const row = await getRowById(mealId);
     if (!row) {
       return null;
     }

@@ -241,4 +241,57 @@ describe('SearchScreen', () => {
     expect(queryByText('ラーメン')).toBeNull();
     expect(queryByText('神田')).toBeNull();
   });
+
+  test('does not trigger redundant debounced search on initial focus', async () => {
+    jest.useFakeTimers();
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
+
+    render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    expect(MealService.searchMeals).toHaveBeenCalledTimes(1);
+
+    // 300ms 経過してもフィルター未変更のため2回目の検索は走らない
+    await act(async () => {
+      jest.advanceTimersByTime(500);
+      await Promise.resolve();
+    });
+
+    expect(MealService.searchMeals).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  test('ignores stale search results when newer search completes earlier', async () => {
+    const firstDeferred = createDeferred<unknown[]>();
+    const secondDeferred = createDeferred<unknown[]>();
+
+    (MealService.searchMeals as jest.Mock)
+      .mockReturnValueOnce(firstDeferred.promise)
+      .mockReturnValueOnce(secondDeferred.promise);
+
+    const { findByTestId, queryByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus(); // searchId = 1
+
+    // 2回目の検索（searchId = 2）
+    await triggerLatestFocus();
+
+    // 2回目（最新）が先に解決
+    await act(async () => {
+      secondDeferred.resolve([createMeal({ id: '2', meal_name: '最新の食事' })]);
+      await Promise.resolve();
+    });
+
+    expect(await findByTestId('search-result-2')).toBeTruthy();
+
+    // 1回目（遅延した古い結果）が後から解決
+    await act(async () => {
+      firstDeferred.resolve([createMeal({ id: '1', meal_name: '古い食事' })]);
+      await Promise.resolve();
+    });
+
+    // 最新の '2' のみが残っており、'1' で上書きされていないことを検証
+    expect(await findByTestId('search-result-2')).toBeTruthy();
+    expect(queryByTestId('search-result-1')).toBeNull();
+  });
 });
+

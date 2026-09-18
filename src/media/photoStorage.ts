@@ -1,10 +1,16 @@
 import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { copyAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
-import { buildMealPhotoFileName, type PhotoLocationSnapshot, writePhotoExifToJpeg } from './photoExif';
+import {
+  buildMealPhotoFileName,
+  formatPhotoTimestampForFilename,
+  type PhotoLocationSnapshot,
+  writePhotoExifToJpeg,
+} from './photoExif';
 
 export const ANDROID_PHOTO_ALBUM_NAME = 'Dining Memory';
 export const DEFAULT_PHOTO_SOFTWARE_NAME = process.env.EXPO_PUBLIC_APP_NAME ?? ANDROID_PHOTO_ALBUM_NAME;
+export const MAX_PHOTO_COLLISION_ATTEMPTS = 100;
 
 export type PersistPhotoResult = {
   stablePhotoUri: string;
@@ -24,7 +30,7 @@ async function resolveDestinationUri(capturedAt: Date) {
 
   let collisionIndex = 0;
 
-  while (true) {
+  while (collisionIndex < MAX_PHOTO_COLLISION_ATTEMPTS) {
     const candidate = `${documentDirectory}${buildMealPhotoFileName(capturedAt, collisionIndex)}`;
     const fileInfo = await getInfoAsync(candidate);
 
@@ -34,6 +40,10 @@ async function resolveDestinationUri(capturedAt: Date) {
 
     collisionIndex += 1;
   }
+
+  const timestamp = formatPhotoTimestampForFilename(capturedAt);
+  const fallbackSuffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  return `${documentDirectory}meal-${timestamp}-fallback-${fallbackSuffix}.jpg`;
 }
 
 export async function persistPhotoToStablePath(
