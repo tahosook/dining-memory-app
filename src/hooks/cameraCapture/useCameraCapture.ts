@@ -55,6 +55,8 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   const [savingCapture, setSavingCapture] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [captureReview, setCaptureReview] = useState<CaptureReviewState | null>(null);
+  const captureReviewRef = useRef<CaptureReviewState | null>(null);
+  captureReviewRef.current = captureReview;
 
   // 撮影中の状態管理
   const isTakingPhoto = takingPhoto;
@@ -250,7 +252,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (!captureReview) {
+        if (!captureReviewRef.current) {
           return false;
         }
 
@@ -265,7 +267,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       return () => {
         subscription.remove();
       };
-    }, [captureReview])
+    }, [])
   );
 
   const saveCapture = useCallback(async (options?: SaveCaptureOptions) => {

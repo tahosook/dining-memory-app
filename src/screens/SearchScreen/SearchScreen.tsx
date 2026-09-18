@@ -30,7 +30,14 @@ export const SearchScreen: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const activeSearchIdRef = useRef(0);
   const filtersRef = useRef<SearchFilterState>({
+    searchQuery: '',
+    cuisineFilter: '',
+    locationFilter: '',
+    homemadeOnly: false,
+  });
+  const previousFiltersRef = useRef<SearchFilterState>({
     searchQuery: '',
     cuisineFilter: '',
     locationFilter: '',
@@ -47,6 +54,7 @@ export const SearchScreen: React.FC = () => {
   }, [cuisineFilter, homemadeOnly, locationFilter, searchQuery]);
 
   const runSearch = useCallback(async (filters: SearchFilterState = filtersRef.current) => {
+    const searchId = ++activeSearchIdRef.current;
     setLoading(true);
     setErrorMessage(null);
 
@@ -57,13 +65,21 @@ export const SearchScreen: React.FC = () => {
         location_name: filters.locationFilter.trim() || undefined,
         is_homemade: filters.homemadeOnly || undefined,
       });
+      if (searchId !== activeSearchIdRef.current) {
+        return;
+      }
       setResults(meals);
     } catch (error) {
+      if (searchId !== activeSearchIdRef.current) {
+        return;
+      }
       console.error('Failed to search meals:', error);
       setErrorMessage('検索結果の更新に失敗しました。');
     } finally {
-      setHasLoadedOnce(true);
-      setLoading(false);
+      if (searchId === activeSearchIdRef.current) {
+        setHasLoadedOnce(true);
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -74,7 +90,21 @@ export const SearchScreen: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!hasLoadedOnce) {
+    const prev = previousFiltersRef.current;
+    const hasFiltersChanged =
+      prev.searchQuery !== searchQuery ||
+      prev.cuisineFilter !== cuisineFilter ||
+      prev.locationFilter !== locationFilter ||
+      prev.homemadeOnly !== homemadeOnly;
+
+    previousFiltersRef.current = {
+      searchQuery,
+      cuisineFilter,
+      locationFilter,
+      homemadeOnly,
+    };
+
+    if (!hasFiltersChanged || !hasLoadedOnce) {
       return undefined;
     }
 
