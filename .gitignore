@@ -65,10 +65,9 @@ android/app/src/main/assets/ggml-hexagon/
 # iOS ビルドディレクトリ
 ios/build/
 
-# 署名鍵や gradle 一時ファイル（開発用 debug.keystore のみ追跡許可）
+# 署名鍵や gradle 一時ファイル
 *.keystore
 *.jks
-!android/app/debug.keystore
 .gradle/
 .gradle-home/
 
