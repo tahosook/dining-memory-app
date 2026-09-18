@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Platform, Share } from 'react-native';
+import { Alert, NativeModules, Platform, Share } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
@@ -176,6 +176,7 @@ describe('MealDetailScreen', () => {
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
     (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-photo.jpg');
     (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState());
+    NativeModules.MealShare = undefined;
     Platform.OS = 'ios';
   });
 
@@ -688,7 +689,31 @@ describe('MealDetailScreen', () => {
     });
   });
 
-  test('uses expo-sharing to attach the photo on Android', async () => {
+  test('uses MealShare native module on Android when available', async () => {
+    Platform.OS = 'android';
+    const mockShareMeal = jest.fn().mockResolvedValue({ success: true });
+    NativeModules.MealShare = { shareMeal: mockShareMeal };
+
+    const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(getByText('共有する前に確認')).toBeTruthy();
+    fireEvent.press(getByTestId('share-submit-button'));
+
+    await waitFor(() => {
+      expect(mockShareMeal).toHaveBeenCalledWith({
+        title: '共有',
+        text: '食事記録: 焼き魚定食\n料理ジャンル: 和食\n場所: 自宅',
+        photoUri: 'file:///full-photo.jpg',
+        mimeType: 'image/jpeg',
+      });
+    });
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+    expect(Share.share).not.toHaveBeenCalled();
+  });
+
+  test('uses expo-sharing to attach the photo on Android when native module is unavailable', async () => {
     Platform.OS = 'android';
 
     const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
