@@ -5,7 +5,6 @@ import {
   Modal,
   Platform,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -13,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import * as Sharing from 'expo-sharing';
+import { shareMealContent } from '../../media/mealShare';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
 import {
   MealPhotoViewer,
@@ -383,42 +382,12 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
   const submitShare = useCallback(async () => {
     try {
-      if (Platform.OS === 'ios' && photoUri) {
-        await Share.share({
-          title: meal.meal_name,
-          message: shareText,
-          url: photoUri,
-        });
-      } else if (Platform.OS === 'android' && photoUri) {
-        const sharingAvailable = await Sharing.isAvailableAsync();
-
-        if (sharingAvailable) {
-          await Sharing.shareAsync(photoUri, {
-            dialogTitle: '共有',
-            mimeType: 'image/jpeg',
-          });
-        } else {
-          await Share.share(
-            {
-              title: meal.meal_name,
-              message: shareText,
-            },
-            {
-              dialogTitle: '共有',
-            }
-          );
-        }
-      } else {
-        await Share.share(
-          {
-            title: meal.meal_name,
-            message: shareText,
-          },
-          {
-            dialogTitle: '共有',
-          }
-        );
-      }
+      await shareMealContent({
+        title: meal.meal_name,
+        text: shareText,
+        photoUri,
+        mimeType: 'image/jpeg',
+      });
 
       setShareComposerVisible(false);
     } catch (error) {
