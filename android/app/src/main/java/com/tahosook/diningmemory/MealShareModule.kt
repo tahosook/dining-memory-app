@@ -16,7 +16,6 @@ import java.io.File
 
 private const val MODULE_NAME = "MealShare"
 private const val TAG = "MealShareModule"
-private const val TWITTER_PACKAGE_NAME = "com.twitter.android"
 
 class MealShareModule(
   private val reactContext: ReactApplicationContext,
@@ -37,8 +36,14 @@ class MealShareModule(
       var contentUri: Uri? = null
 
       if (!photoUriString.isNullOrBlank()) {
-        contentUri = resolveContentUri(photoUriString)
+        try {
+          contentUri = resolveContentUri(photoUriString)
+        } catch (e: Exception) {
+          Log.w(TAG, "Failed to resolve content URI for photoUri, sharing as text only", e)
+        }
+      }
 
+      if (contentUri != null) {
         shareIntent.type = mimeType ?: "image/jpeg"
         shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri)
         shareIntent.clipData = ClipData.newRawUri(null, contentUri)
@@ -48,7 +53,7 @@ class MealShareModule(
           shareIntent.putExtra(Intent.EXTRA_TEXT, text)
         }
 
-        // Grant explicit read URI permissions to all matching activities (including X/Twitter)
+        // Grant explicit read URI permissions to target packages (including X/Twitter)
         grantPermissionsToMatchingPackages(shareIntent, contentUri)
       } else {
         shareIntent.type = "text/plain"
@@ -79,23 +84,19 @@ class MealShareModule(
   }
 
   private fun resolveContentUri(uriString: String): Uri {
-    val uri = Uri.parse(uriString)
-
-    // If already a content URI (e.g. MediaStore or other ContentProvider), use it directly
-    if ("content".equals(uri.scheme, ignoreCase = true)) {
-      return uri
+    if (MealShareSupport.isContentUri(uriString)) {
+      return Uri.parse(uriString)
     }
 
-    // If a file URI or file path, convert via FileProvider
-    val filePath = if ("file".equals(uri.scheme, ignoreCase = true)) {
-      uri.path ?: uriString.removePrefix("file://")
-    } else {
-      uriString
-    }
+    val filePath = MealShareSupport.resolveLocalFilePath(uriString)
+      ?: throw IllegalArgumentException("Unsupported photo URI scheme: $uriString")
 
     val file = File(filePath)
-    val authority = "${reactContext.packageName}.SharingFileProvider"
+    if (!file.exists()) {
+      Log.w(TAG, "Local photo file does not exist at path: $filePath")
+    }
 
+    val authority = "${reactContext.packageName}.SharingFileProvider"
     return FileProvider.getUriForFile(reactContext, authority, file)
   }
 
@@ -103,24 +104,19 @@ class MealShareModule(
     try {
       val pm = reactContext.packageManager
       val resolveInfoList = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+      val matchingPackages = resolveInfoList.mapNotNull { it.activityInfo?.packageName }
 
-      for (resolveInfo in resolveInfoList) {
-        val packageName = resolveInfo.activityInfo.packageName
+      val targetPackages = MealShareSupport.collectTargetPackages(matchingPackages)
+
+      for (packageName in targetPackages) {
         try {
           reactContext.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
         } catch (e: Exception) {
           Log.w(TAG, "Failed to grant URI permission to package: $packageName", e)
         }
       }
-
-      // Explicitly grant to Twitter/X if installed, to ensure background workers retain access
-      try {
-        reactContext.grantUriPermission(TWITTER_PACKAGE_NAME, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-      } catch (e: Exception) {
-        Log.d(TAG, "Twitter package not installed or permission grant skipped: ${e.message}")
-      }
     } catch (e: Exception) {
-      Log.w(TAG, "Error while granting URI permissions", e)
+      Log.w(TAG, "Error while querying or granting URI permissions", e)
     }
   }
 }

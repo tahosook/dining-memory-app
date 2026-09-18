@@ -29,24 +29,47 @@ export interface MealShareResult {
   details?: unknown;
 }
 
+export function sanitizeUriForLog(uri?: string): string | undefined {
+  if (!uri || uri.trim() === '') {
+    return undefined;
+  }
+
+  const trimmed = uri.trim();
+  if (trimmed.startsWith('content://')) {
+    // Content URIs like content://media/external/images/media/1234 don't contain personal paths
+    return trimmed;
+  }
+
+  // For file:// or absolute paths, mask the user/app container structure and keep only filename
+  const slashIndex = trimmed.lastIndexOf('/');
+  if (slashIndex >= 0 && slashIndex < trimmed.length - 1) {
+    const filename = trimmed.slice(slashIndex + 1);
+    return `file://.../${filename}`;
+  }
+
+  return 'file://...';
+}
+
 export function detectStorageLocation(uri?: string): StorageLocationType {
-  if (!uri) {
+  if (!uri || uri.trim() === '') {
     return 'none';
   }
 
-  if (uri.startsWith('content://media/')) {
+  const normalized = uri.trim().toLowerCase();
+
+  if (normalized.startsWith('content://media/')) {
     return 'mediaStore';
   }
 
-  if (uri.includes('/cache/') || uri.includes('cacheDir')) {
+  if (normalized.includes('/cache/') || normalized.includes('cached_') || normalized.includes('cache')) {
     return 'cache';
   }
 
-  if (uri.includes('/files/') || uri.includes('documentDir')) {
+  if (normalized.includes('/files/') || normalized.includes('document') || normalized.includes('expo_files')) {
     return 'document';
   }
 
-  if (uri.startsWith('file://') || uri.startsWith('/')) {
+  if (normalized.startsWith('file://') || normalized.startsWith('/')) {
     return 'external';
   }
 
@@ -56,13 +79,13 @@ export function detectStorageLocation(uri?: string): StorageLocationType {
 export async function inspectSharePhoto(photoUri?: string, mimeType = 'image/jpeg'): Promise<MealShareDebugInfo> {
   const debugInfo: MealShareDebugInfo = {
     platform: Platform.OS,
-    photoUri,
+    photoUri: sanitizeUriForLog(photoUri),
     mimeType,
     storageLocation: detectStorageLocation(photoUri),
     shareTextLength: 0,
   };
 
-  if (!photoUri) {
+  if (!photoUri || photoUri.trim() === '') {
     return debugInfo;
   }
 
@@ -116,38 +139,46 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
       const mealShareModule = NativeModules.MealShare;
 
       if (mealShareModule?.shareMeal) {
-        const result = await mealShareModule.shareMeal({
-          title: dialogTitle,
-          text: options.text,
-          photoUri: options.photoUri,
-          mimeType,
-        });
-
-        console.info('[MealShare] Android native share completed:', result);
-        return {
-          completed: true,
-          platform: 'android',
-          method: 'mealShareNative',
-          details: result,
-        };
-      }
-
-      // Fallback if native module is not linked (e.g. in certain dev/test environments)
-      if (options.photoUri) {
-        const sharingAvailable = await Sharing.isAvailableAsync();
-
-        if (sharingAvailable) {
-          await Sharing.shareAsync(options.photoUri, {
-            dialogTitle,
+        try {
+          const result = await mealShareModule.shareMeal({
+            title: dialogTitle,
+            text: options.text,
+            photoUri: options.photoUri,
             mimeType,
           });
 
-          console.info('[MealShare] Fallback Android expo-sharing completed');
+          console.info('[MealShare] Android native share completed:', result);
           return {
             completed: true,
             platform: 'android',
-            method: 'expoSharing',
+            method: 'mealShareNative',
+            details: result,
           };
+        } catch (nativeError) {
+          console.warn('[MealShare] Android native share threw, falling back to next available method:', nativeError);
+        }
+      }
+
+      // Fallback if native module is not linked or failed
+      if (options.photoUri && options.photoUri.trim() !== '') {
+        try {
+          const sharingAvailable = await Sharing.isAvailableAsync();
+
+          if (sharingAvailable) {
+            await Sharing.shareAsync(options.photoUri, {
+              dialogTitle,
+              mimeType,
+            });
+
+            console.info('[MealShare] Fallback Android expo-sharing completed');
+            return {
+              completed: true,
+              platform: 'android',
+              method: 'expoSharing',
+            };
+          }
+        } catch (expoSharingError) {
+          console.warn('[MealShare] Fallback expo-sharing failed, attempting standard Share:', expoSharingError);
         }
       }
 
