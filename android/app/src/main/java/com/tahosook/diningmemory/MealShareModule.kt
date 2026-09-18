@@ -13,6 +13,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableMap
 import java.io.File
+import java.io.FileNotFoundException
 
 private const val MODULE_NAME = "MealShare"
 private const val TAG = "MealShareModule"
@@ -36,11 +37,7 @@ class MealShareModule(
       var contentUri: Uri? = null
 
       if (!photoUriString.isNullOrBlank()) {
-        try {
-          contentUri = resolveContentUri(photoUriString)
-        } catch (e: Exception) {
-          Log.w(TAG, "Failed to resolve content URI for photoUri, sharing as text only", e)
-        }
+        contentUri = resolveContentUri(photoUriString)
       }
 
       if (contentUri != null) {
@@ -93,7 +90,7 @@ class MealShareModule(
 
     val file = File(filePath)
     if (!file.exists()) {
-      Log.w(TAG, "Local photo file does not exist at path: $filePath")
+      throw FileNotFoundException("Local photo file does not exist at path: $filePath")
     }
 
     val authority = "${reactContext.packageName}.SharingFileProvider"
