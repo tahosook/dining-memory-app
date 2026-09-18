@@ -43,6 +43,7 @@ dining-memory-app/
 ├── AGENTS.md
 ├── TASKS.md
 ├── PLANS.md
+├── android/
 ├── docs/
 │   ├── index.md
 │   ├── product/
@@ -61,8 +62,8 @@ dining-memory-app/
 
 ### システム要件
 - Node.js 25.9.x 推奨
-- Expo SDK 56.x
-- Expo CLI 55.x 以上（`npx expo` 推奨）
+- Expo SDK 57.x
+- Expo CLI（`npx expo` 推奨）
 - iOS 開発: Xcode
 - Android 開発: Android Studio（任意）
 
