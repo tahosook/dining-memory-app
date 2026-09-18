@@ -36,26 +36,18 @@ object MealShareSupport {
     }
   }
 
-  fun collectTargetPackages(
-    matchingPackages: Collection<String>?,
-    fallbackPackages: Collection<String> = listOf(TWITTER_PACKAGE_NAME),
-  ): Set<String> {
+  fun collectTargetPackages(matchingPackages: Collection<String>?): Set<String> {
+    if (matchingPackages == null) {
+      return emptySet()
+    }
+
     val result = mutableSetOf<String>()
-
-    matchingPackages?.forEach { pkg ->
+    matchingPackages.forEach { pkg ->
       val trimmed = pkg.trim()
       if (trimmed.isNotEmpty()) {
         result.add(trimmed)
       }
     }
-
-    fallbackPackages.forEach { pkg ->
-      val trimmed = pkg.trim()
-      if (trimmed.isNotEmpty()) {
-        result.add(trimmed)
-      }
-    }
-
     return result
   }
 }

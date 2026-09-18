@@ -15,6 +15,7 @@ class MealShareSupportTest {
     assertFalse(MealShareSupport.isContentUri("file:///data/user/0/app/file.jpg"))
     assertFalse(MealShareSupport.isContentUri("/data/user/0/app/file.jpg"))
     assertFalse(MealShareSupport.isContentUri(""))
+    assertFalse(MealShareSupport.isContentUri("   "))
     assertFalse(MealShareSupport.isContentUri(null))
   }
 
@@ -31,14 +32,21 @@ class MealShareSupportTest {
     assertNull(MealShareSupport.resolveLocalFilePath("content://media/external/images/123"))
     assertNull(MealShareSupport.resolveLocalFilePath("https://example.com/image.jpg"))
     assertNull(MealShareSupport.resolveLocalFilePath(""))
+    assertNull(MealShareSupport.resolveLocalFilePath("   "))
     assertNull(MealShareSupport.resolveLocalFilePath(null))
   }
 
   @Test
-  fun `collects and deduplicates target packages with fallback`() {
+  fun `collects and deduplicates target packages strictly from matching packages`() {
     val collected = MealShareSupport.collectTargetPackages(
-      listOf("com.google.android.apps.photos", "com.twitter.android", "com.example.other"),
-      listOf("com.twitter.android"),
+      listOf(
+        "com.google.android.apps.photos",
+        "com.twitter.android",
+        "com.twitter.android",
+        "  com.example.other  ",
+        "",
+        "   ",
+      ),
     )
 
     assertEquals(
@@ -48,15 +56,9 @@ class MealShareSupportTest {
   }
 
   @Test
-  fun `includes fallback package when matching packages do not contain it`() {
-    val collected = MealShareSupport.collectTargetPackages(
-      listOf("com.google.android.apps.photos"),
-      listOf(MealShareSupport.TWITTER_PACKAGE_NAME),
-    )
-
-    assertEquals(
-      setOf("com.google.android.apps.photos", "com.twitter.android"),
-      collected,
-    )
+  fun `returns empty set when matching packages is empty or null`() {
+    assertTrue(MealShareSupport.collectTargetPackages(null).isEmpty())
+    assertTrue(MealShareSupport.collectTargetPackages(emptyList()).isEmpty())
+    assertTrue(MealShareSupport.collectTargetPackages(listOf("  ", "")).isEmpty())
   }
 }
