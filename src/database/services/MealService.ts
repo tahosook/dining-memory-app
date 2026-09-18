@@ -56,6 +56,16 @@ function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): Persis
   });
 }
 
+function escapeSqliteLike(value: string): string {
+  return value.replace(/([%_\\])/g, '\\$1');
+}
+
+const COOKING_LEVEL_VARIANTS: Record<CookingLevel, string[]> = {
+  quick: ['quick', 'easy'],
+  daily: ['daily', 'medium'],
+  gourmet: ['gourmet', 'hard'],
+};
+
 async function getAllRows(): Promise<PersistedMealRow[]> {
   await initializeDatabase();
 
@@ -190,6 +200,33 @@ export class MealService {
           params.push(filters.is_homemade ? 1 : 0);
         }
 
+        let targetCookingLevel: CookingLevel | undefined;
+        if (filters.cooking_level) {
+          targetCookingLevel = normalizeCookingLevel(filters.cooking_level);
+          if (targetCookingLevel) {
+            const variants = COOKING_LEVEL_VARIANTS[targetCookingLevel];
+            conditions.push(`cooking_level IN (${variants.map(() => '?').join(', ')})`);
+            params.push(...variants);
+          } else {
+            conditions.push('1 = 0');
+          }
+        }
+
+        const locationQuery = filters.location_name?.trim();
+        if (locationQuery) {
+          conditions.push("location_name LIKE ? ESCAPE '\\'");
+          params.push(`%${escapeSqliteLike(locationQuery)}%`);
+        }
+
+        const textQuery = filters.text?.trim();
+        if (textQuery) {
+          const escapedTextPattern = `%${escapeSqliteLike(textQuery)}%`;
+          conditions.push(
+            "(search_text LIKE ? ESCAPE '\\' OR meal_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\')"
+          );
+          params.push(escapedTextPattern, escapedTextPattern, escapedTextPattern, escapedTextPattern);
+        }
+
         const whereClause = conditions.join(' AND ');
         const rows = await db.getAllAsync<PersistedMealRow>(
           `SELECT * FROM meals WHERE ${whereClause} ORDER BY meal_datetime DESC`,
@@ -197,15 +234,13 @@ export class MealService {
         );
 
         let resultRows = rows;
-        if (filters.cooking_level) {
-          const targetLevel = normalizeCookingLevel(filters.cooking_level);
-          resultRows = resultRows.filter((r) => normalizeCookingLevel(r.cooking_level) === targetLevel);
+        if (targetCookingLevel) {
+          resultRows = resultRows.filter((r) => normalizeCookingLevel(r.cooking_level) === targetCookingLevel);
         }
-        if (filters.location_name) {
-          const loc = filters.location_name.toLowerCase();
-          resultRows = resultRows.filter((r) => (r.location_name ?? '').toLowerCase().includes(loc));
+        if (locationQuery) {
+          const locLower = locationQuery.toLowerCase();
+          resultRows = resultRows.filter((r) => (r.location_name ?? '').toLowerCase().includes(locLower));
         }
-        const textQuery = filters.text?.trim();
         if (textQuery) {
           resultRows = resultRows.filter((r) => matchesTextFilter(r, textQuery));
         }

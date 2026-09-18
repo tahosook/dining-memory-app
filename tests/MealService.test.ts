@@ -599,6 +599,10 @@ describe('MealService', () => {
           uuid: 's-1',
           meal_name: '味噌ラーメン',
           cuisine_type: '和食',
+          location_name: '神田店',
+          notes: '濃厚',
+          search_text: '味噌ラーメン 和食 神田店 濃厚',
+          cooking_level: null,
           meal_datetime: 3000,
           is_homemade: 0,
           photo_path: 'file:///miso.jpg',
@@ -611,16 +615,71 @@ describe('MealService', () => {
       const meals = await MealService.searchMeals({
         cuisine_type: '和食',
         is_homemade: false,
+        location_name: '神田',
         text: '味噌',
       });
 
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-        'SELECT * FROM meals WHERE is_deleted = 0 AND cuisine_type = ? AND is_homemade = ? ORDER BY meal_datetime DESC',
+        "SELECT * FROM meals WHERE is_deleted = 0 AND cuisine_type = ? AND is_homemade = ? AND location_name LIKE ? ESCAPE '\\' AND (search_text LIKE ? ESCAPE '\\' OR meal_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\') ORDER BY meal_datetime DESC",
         '和食',
-        0
+        0,
+        '%神田%',
+        '%味噌%',
+        '%味噌%',
+        '%味噌%',
+        '%味噌%'
       );
       expect(meals).toHaveLength(1);
       expect(meals[0].meal_name).toBe('味噌ラーメン');
+    });
+
+    test('supports legacy cooking_level aliases in SQL query', async () => {
+      mockDb.getAllAsync.mockResolvedValue([
+        {
+          id: 'c-1',
+          uuid: 'c-1',
+          meal_name: '卵かけご飯',
+          cooking_level: 'easy', // legacy value
+          meal_datetime: 4000,
+          is_homemade: 1,
+          photo_path: 'file:///tkg.jpg',
+          is_deleted: 0,
+          created_at: 4000,
+          updated_at: 4000,
+        },
+      ]);
+
+      // 'quick' で検索しても SQL 側で 'quick' と 'easy' の両方を検索
+      const meals = await MealService.searchMeals({
+        cooking_level: 'quick',
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 AND cooking_level IN (?, ?) ORDER BY meal_datetime DESC',
+        'quick',
+        'easy'
+      );
+      expect(meals).toHaveLength(1);
+      expect(meals[0].meal_name).toBe('卵かけご飯');
+      expect(meals[0].cooking_level).toBe('easy'); // raw mock row value preserved
+    });
+
+    test('escapes special LIKE characters in text and location queries', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.searchMeals({
+        location_name: '100%_store',
+        text: '50%_discount',
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        "SELECT * FROM meals WHERE is_deleted = 0 AND location_name LIKE ? ESCAPE '\\' AND (search_text LIKE ? ESCAPE '\\' OR meal_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\') ORDER BY meal_datetime DESC",
+        '%100\\%\\_store%',
+        '%50\\%\\_discount%',
+        '%50\\%\\_discount%',
+        '%50\\%\\_discount%',
+        '%50\\%\\_discount%'
+      );
     });
   });
 });
