@@ -3,8 +3,6 @@ package com.tahosook.diningmemory
 import android.net.Uri
 
 object MealShareSupport {
-  const val TWITTER_PACKAGE_NAME = "com.twitter.android"
-
   fun isContentUri(uriString: String?): Boolean {
     if (uriString.isNullOrBlank()) {
       return false
