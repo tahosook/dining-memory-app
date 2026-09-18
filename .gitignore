@@ -25,6 +25,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+coverage/
 
 # macOS
 .DS_Store
@@ -40,24 +41,36 @@ yarn-error.*
 
 # generated native folders
 /ios
-/android
 
 # ビルド成果物（APK）を無視
 build*.apk
 *.apk
 artifacts/
 
-# Android ビルドディレクトリ
-android/app/build/
+# Android ビルド・生成ディレクトリ・ローカル設定
+android/.gradle/
+android/.kotlin/
 android/build/
+android/app/build/
+android/app/.cxx/
+android/local.properties
+android/*.iml
+android/app/*.iml
+android/*.hprof
+android/app/*.hprof
+
+# llama.rn runtime generated assets (synced from node_modules during Gradle build)
+android/app/src/main/assets/ggml-hexagon/
+
+# iOS ビルドディレクトリ
 ios/build/
 
-# 署名鍵や gradle 一時ファイル
+# 署名鍵や gradle 一時ファイル（開発用 debug.keystore のみ追跡許可）
 *.keystore
 *.jks
+!android/app/debug.keystore
 .gradle/
 .gradle-home/
-android/.gradle/
 
 # Expo / Metro / node
 .expo/

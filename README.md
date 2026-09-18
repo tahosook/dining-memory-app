@@ -77,8 +77,11 @@ npx expo start --dev-client
 ```
 
 ### 実行時前提
-- React Native 0.85 系 / React 19.2 系を前提としています
-- Expo SDK 56 以降のため New Architecture は常時有効です
+- React Native 0.86 系 / React 19.2 系を前提としています
+- Expo SDK 57 の New Architecture は常時有効です
+- Android Native プロジェクトは **Bare Workflow** として `android/` を Git 管理しています
+  - `llama.rn`、MediaPipe Tasks Vision、カスタム Kotlin Native Module（`MealShareModule` 等）を直接保持しています
+  - `npx expo prebuild --clean` は `MainApplication.kt` や `build.gradle` などのカスタム Native 実装を上書き・破壊するため、通常運用では実行しないでください（Expo SDK 更新時などは差分マージで追従します）
 - Android の写真保存権限は `expo-media-library` プラグインで管理します
 - `llama.rn` を使う local AI runtime は Expo Go ではなく dev build / native build 前提です
 
