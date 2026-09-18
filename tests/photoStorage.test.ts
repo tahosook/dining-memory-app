@@ -176,4 +176,20 @@ describe('photoStorage', () => {
     );
     consoleWarnSpy.mockRestore();
   });
+
+  test('falls back safely with unique suffix when collision limit is reached', async () => {
+    Platform.OS = 'ios';
+    // getInfoAsync always returns exists: true (simulating persistent collisions)
+    (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+
+    const result = await persistPhotoToStablePath('file:///tmp/resized-photo.jpg', {
+      capturedAt,
+    });
+
+    expect(result.stablePhotoUri).toMatch(
+      /^file:\/\/\/mock-documents\/meal-20260422213507-fallback-[0-9a-f-]+\.jpg$/
+    );
+    // 100 collision checks + 1 file verification check = 101 calls
+    expect(getInfoAsync).toHaveBeenCalledTimes(101);
+  });
 });

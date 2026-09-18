@@ -187,7 +187,41 @@ MediaPipe static-image classifier の `.task` model を Android build で利用�
 ### Notes
 - `android/app/src/main/assets/mediapipe/meal-input-assist.task` は期待 path だが、actual model は現在 repo に含めない。
 - label set は JS normalizer と一致する必要がある。
-- 同梱可否は要確認。
+
+## ランタイム動作安定化と過剰ループ・全件走査の解消
+
+### Goal
+画面フォーカス時やユーザー入力時の二重フェッチ・過剰な再レンダリングループを解消し、データ件数増加時でも快適に動作するよう DB アクセスとリスト描画を最適化する。
+
+### Constraints
+- Local-first 原則および SQLite / InMemory 双方の互換性を維持する。
+- 既存のテストスイートをすべてグリーンで維持する。
+- UI/UX の振る舞い（デザイン・アニメーション・タップ可能領域）を変更せず、内部の実行効率のみを改善する。
+- 外部送信や不要なデータ永続化は追加しない。
+
+### Suggested Steps
+- Phase 1: SearchScreen の二重検索抑止と最新 ID ガード、StatsScreen の期間変更時二重フェッチ抑止、photoStorage の上限安全ガードを実装。
+- Phase 2: MealService の `getRecentMeals` / `updateMeal` / `softDeleteMeal` を直接 SQL 化し、RecordsScreen を SectionList に統合。
+- Phase 3: useCameraCapture の BackHandler リスナー再登録をフォーカス時のみに局所化。
+- focused tests を追加し、多重実行防止とフォールバック動作を検証する。
+
+### Read First
+- [docs/architecture/tech-spec.md](docs/architecture/tech-spec.md)
+- [docs/domain/database-design.md](docs/domain/database-design.md)
+- `src/screens/SearchScreen/SearchScreen.tsx`
+- `src/screens/StatsScreen/StatsScreen.tsx`
+- `src/database/services/MealService.ts`
+- `src/screens/RecordsScreen/RecordsScreen.tsx`
+- `src/hooks/cameraCapture/useCameraCapture.ts`
+- `src/media/photoStorage.ts`
+
+### Notes
+- SearchScreen は初回 focus 時とユーザー入力時でデバウンス検索の発火を分離し、activeSearchIdRef で古いレスポンスの上書きを抑止。
+- StatsScreen は selectedPeriodRef により期間切り替え時の多重フェッチを抑止。
+- photoStorage はファイル名衝突探索を上限 100 回とし、超過時は一意なタイムスタンプ＋乱数サフィックスへフォールバック。
+- MealService は native DB モード時に `WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?` 等の直接 SQL を発行。
+- RecordsScreen は nested FlatList を SectionList に置き換えてリスト仮想化を回復。
+- useCameraCapture は captureReviewRef で BackHandler の再登録を入力中から分離。
 
 ## Historical Notes
 - 以前の MVP completion plan は current plan ではない。

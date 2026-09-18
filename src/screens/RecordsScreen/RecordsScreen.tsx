@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   Alert,
   Image,
@@ -19,10 +19,10 @@ import type { RootStackParamList } from '../../navigation/types';
 import { getMealListImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 
-interface MealGroup {
+interface MealSection {
   date: string;
   dateLabel: string;
-  meals: Meal[];
+  data: Meal[];
 }
 
 type RecordsNavigationProp = NavigationProp<RootStackParamList>;
@@ -32,22 +32,17 @@ type MealItemProps = {
   onPress: (meal: Meal) => void;
 };
 
-type MealGroupSectionProps = {
-  item: MealGroup;
-  onMealPress: (meal: Meal) => void;
-};
-
 const Separator = () => <View style={styles.separator} />;
 
 const GroupSeparator = () => <View style={styles.groupSeparator} />;
 
-const MealGroupHeader: React.FC<{ item: MealGroup }> = ({ item }) => (
+const MealGroupHeader: React.FC<{ section: MealSection }> = ({ section }) => (
   <View style={styles.dateHeader}>
-    <Text style={styles.dateHeaderText}>{item.dateLabel}</Text>
+    <Text style={styles.dateHeaderText}>{section.dateLabel}</Text>
   </View>
 );
 
-const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
+const MealListItem = React.memo<MealItemProps>(({ item, onPress }) => {
   const imageUri = getMealListImageUri(item);
   const cookingLevel = item.is_homemade ? normalizeCookingLevel(item.cooking_level) : undefined;
 
@@ -110,20 +105,7 @@ const MealListItem: React.FC<MealItemProps> = ({ item, onPress }) => {
       </View>
     </TouchableOpacity>
   );
-};
-
-const MealGroupSection: React.FC<MealGroupSectionProps> = ({ item, onMealPress }) => (
-  <View>
-    <MealGroupHeader item={item} />
-    <FlatList
-      data={item.meals}
-      keyExtractor={(meal) => meal.id}
-      renderItem={({ item: meal }) => <MealListItem item={meal} onPress={onMealPress} />}
-      scrollEnabled={false}
-      ItemSeparatorComponent={Separator}
-    />
-  </View>
-);
+});
 
 function formatDateLabel(date: Date): string {
   const today = new Date();
@@ -141,7 +123,7 @@ function formatDateLabel(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-function groupMealsByDate(records: Meal[]): MealGroup[] {
+function groupMealsByDate(records: Meal[]): MealSection[] {
   const groups: Record<string, Meal[]> = {};
 
   records.forEach((meal) => {
@@ -156,14 +138,14 @@ function groupMealsByDate(records: Meal[]): MealGroup[] {
     .map(([dateKey, groupMeals]) => ({
       date: dateKey,
       dateLabel: formatDateLabel(new Date(dateKey)),
-      meals: groupMeals.sort((a, b) => b.meal_datetime - a.meal_datetime),
+      data: groupMeals.sort((a, b) => b.meal_datetime - a.meal_datetime),
     }))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 export const RecordsScreen: React.FC = () => {
   const navigation = useNavigation<RecordsNavigationProp>();
-  const [mealGroups, setMealGroups] = useState<MealGroup[]>([]);
+  const [mealSections, setMealSections] = useState<MealSection[]>([]);
   const [flatMeals, setFlatMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -172,7 +154,7 @@ export const RecordsScreen: React.FC = () => {
     try {
       const meals = await MealService.getRecentMeals(100);
       setFlatMeals(meals);
-      setMealGroups(groupMealsByDate(meals));
+      setMealSections(groupMealsByDate(meals));
     } catch (error) {
       console.error('Failed to load meals:', error);
       Alert.alert('エラー', '食事記録の読み込みに失敗しました。');
@@ -223,7 +205,7 @@ export const RecordsScreen: React.FC = () => {
       </View>
 
       <View style={styles.content}>
-        {mealGroups.length === 0 ? (
+        {mealSections.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyIcon}>🍽️</Text>
             <Text style={styles.emptyTitle}>まだ食事記録がありません</Text>
@@ -232,14 +214,16 @@ export const RecordsScreen: React.FC = () => {
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={mealGroups}
-            keyExtractor={(group) => group.date}
-            renderItem={({ item }) => <MealGroupSection item={item} onMealPress={handleMealPress} />}
+          <SectionList
+            sections={mealSections}
+            keyExtractor={(meal) => meal.id}
+            renderItem={({ item }) => <MealListItem item={item} onPress={handleMealPress} />}
+            renderSectionHeader={({ section }) => <MealGroupHeader section={section} />}
+            renderSectionFooter={() => <GroupSeparator />}
+            ItemSeparatorComponent={Separator}
             refreshing={refreshing}
             onRefresh={handleRefresh}
             showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={GroupSeparator}
           />
         )}
       </View>

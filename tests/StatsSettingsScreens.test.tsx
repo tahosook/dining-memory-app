@@ -293,6 +293,29 @@ describe('StatsScreen', () => {
     expect(await findByText('まだ集計できるジャンルがありません')).toBeTruthy();
     expect(await findByText('まだ集計できる場所がありません')).toBeTruthy();
   });
+
+  test('fetches statistics exactly once when changing periods', async () => {
+    (MealService.getStatistics as jest.Mock).mockResolvedValue({
+      totalMeals: 0,
+      homemadeMeals: 0,
+      takeoutMeals: 0,
+      topCuisines: [],
+      topLocations: [],
+    });
+
+    const { getByTestId } = render(<StatsScreen />);
+    await triggerLatestFocus();
+
+    expect(MealService.getStatistics).toHaveBeenCalledTimes(1);
+
+    (MealService.getStatistics as jest.Mock).mockClear();
+
+    fireEvent.press(getByTestId('stats-period-last7days'));
+
+    await waitFor(() => {
+      expect(MealService.getStatistics).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('SettingsScreen', () => {

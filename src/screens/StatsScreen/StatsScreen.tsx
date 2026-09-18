@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { ScreenStateCard } from '../../components/common/ScreenStateCard';
@@ -27,21 +27,32 @@ export default function StatsScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState<StatsPeriodKey>('thisMonth');
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const selectedPeriodRef = useRef<StatsPeriodKey>(selectedPeriod);
+  const activeStatsRequestIdRef = useRef(0);
 
-  const loadStats = useCallback(async (period: StatsPeriodKey = selectedPeriod) => {
+  const loadStats = useCallback(async (period: StatsPeriodKey = selectedPeriodRef.current) => {
+    const requestId = ++activeStatsRequestIdRef.current;
     setLoading(true);
     setErrorMessage(null);
 
     try {
       const nextStats = await MealService.getStatistics(getStatsPeriodRange(period));
+      if (requestId !== activeStatsRequestIdRef.current) {
+        return;
+      }
       setStats(nextStats);
     } catch (error) {
+      if (requestId !== activeStatsRequestIdRef.current) {
+        return;
+      }
       console.error('Failed to load stats:', error);
       setErrorMessage('統計情報の更新に失敗しました。');
     } finally {
-      setLoading(false);
+      if (requestId === activeStatsRequestIdRef.current) {
+        setLoading(false);
+      }
     }
-  }, [selectedPeriod]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -50,6 +61,7 @@ export default function StatsScreen() {
   );
 
   const handlePeriodChange = useCallback((period: StatsPeriodKey) => {
+    selectedPeriodRef.current = period;
     setSelectedPeriod(period);
     loadStats(period).catch(() => undefined);
   }, [loadStats]);
