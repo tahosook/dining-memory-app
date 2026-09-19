@@ -173,8 +173,10 @@ npm run build:android:release
 出力には APK、`gradle-build.log`、`build-info.txt`、`output-metadata.json`、`sha256` が含まれます。
 
 > **Note**: リリース APK の署名設定
-> 環境変数 `RELEASE_STORE_FILE`（およびパスワード等）が設定されている場合は本番 keystore で署名されます。
-> 未指定の場合は、私用端末への adb install やローカル検証がスムーズに行えるよう、自動的に debug 署名にフォールバックします。keystore や秘密鍵は Git に含めません。
+> - **keystore 未指定時**: 個人利用・ローカル検証用途として、自動的に debug 署名が使用されます。
+> - **keystore 指定時**: `RELEASE_STORE_FILE`（および `RELEASE_STORE_PASSWORD`、`RELEASE_KEY_ALIAS`、`RELEASE_KEY_PASSWORD`）が設定されている場合は release 署名が適用されます。
+> - **設定不備時**: keystore ファイルが存在しない場合や認証情報が不足している場合は、意図しない debug 署名への silent fallback を防ぐため**必ず build failure**となります。
+> - keystore や秘密鍵は Git に含めません。
 
 ### 全 ABI のリリースAPK
 ```bash

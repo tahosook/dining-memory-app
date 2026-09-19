@@ -107,10 +107,28 @@ android {
         release {
             def storeFilePath = findProperty('RELEASE_STORE_FILE') ?: System.getenv('RELEASE_STORE_FILE')
             if (storeFilePath) {
-                storeFile file(storeFilePath)
-                storePassword findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('RELEASE_STORE_PASSWORD') ?: ""
-                keyAlias findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS') ?: ""
-                keyPassword findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD') ?: ""
+                def store = file(storeFilePath)
+                def storePass = findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('RELEASE_STORE_PASSWORD')
+                def alias = findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS')
+                def keyPass = findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD')
+
+                if (!store.exists()) {
+                    throw new GradleException("Release signing error: keystore file not found at '${storeFilePath}'. To use debug signing for local personal testing, leave RELEASE_STORE_FILE unset.")
+                }
+                if (!storePass) {
+                    throw new GradleException("Release signing error: RELEASE_STORE_PASSWORD is required when RELEASE_STORE_FILE is set.")
+                }
+                if (!alias) {
+                    throw new GradleException("Release signing error: RELEASE_KEY_ALIAS is required when RELEASE_STORE_FILE is set.")
+                }
+                if (!keyPass) {
+                    throw new GradleException("Release signing error: RELEASE_KEY_PASSWORD is required when RELEASE_STORE_FILE is set.")
+                }
+
+                storeFile store
+                storePassword storePass
+                keyAlias alias
+                keyPassword keyPass
             }
         }
     }
@@ -119,10 +137,10 @@ android {
             signingConfig = signingConfigs.debug
         }
         release {
-            // For production builds, configure RELEASE_STORE_FILE via environment or gradle.properties.
-            // For local personal testing, fallback to debug signing if no release keystore is provided.
-            def hasReleaseKeystore = signingConfigs.release.storeFile?.exists()
-            signingConfig = hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
+            // If RELEASE_STORE_FILE is explicitly set, release signing must be used (errors thrown above if misconfigured).
+            // If RELEASE_STORE_FILE is unset, fallback to debug signing for local personal testing and CI testing.
+            def storeFilePath = findProperty('RELEASE_STORE_FILE') ?: System.getenv('RELEASE_STORE_FILE')
+            signingConfig = storeFilePath ? signingConfigs.release : signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources = enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
