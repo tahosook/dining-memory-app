@@ -7,7 +7,7 @@ import * as MediaLibrary from 'expo-media-library';
 import * as Location from 'expo-location';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import * as ImagePicker from 'expo-image-picker';
-import { persistPhotoToStablePath } from '../src/media/photoStorage';
+import { persistPhotoToStablePath, persistThumbnailToStablePath } from '../src/media/photoStorage';
 
 const mockNavigate = jest.fn();
 
@@ -48,6 +48,7 @@ jest.mock('expo-location', () => ({
 
 jest.mock('../src/media/photoStorage', () => ({
   persistPhotoToStablePath: jest.fn(),
+  persistThumbnailToStablePath: jest.fn(),
 }));
 
 jest.mock('@bam.tech/react-native-image-resizer', () => ({
@@ -111,6 +112,9 @@ describe('useCameraCapture', () => {
       stablePhotoUri: 'file:///mock-documents/meal-123.jpg',
       savedToMediaLibrary: false,
     });
+    (persistThumbnailToStablePath as jest.Mock).mockResolvedValue(
+      'file:///mock-documents/meal-123-thumb.jpg'
+    );
     (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
     (Location.getLastKnownPositionAsync as jest.Mock).mockResolvedValue({
       coords: { latitude: 35.6895, longitude: 139.6917 },

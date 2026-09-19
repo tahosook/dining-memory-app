@@ -29,7 +29,7 @@
 - `app_settings` は user-controlled feature flags や meal input assist model の導入状態を保存し、実際の ready 判定は app-local fixed path の file existence を優先する。
 - Preserve latitude and longitude when available, and allow service-layer logic to reuse an existing place name when a new record is captured within roughly 100 meters of a known location.
 - The same location history can also be used to initialize `is_homemade` from a recent nearby meal record, but this remains a service-layer decision rather than schema state.
-- Photo persistence and EXIF writes are handled in `src/media/`; the database stores displayable file paths and does not store image blobs.
+- Photo persistence and EXIF writes are handled in `src/media/`; the database stores displayable file paths and does not store image blobs. `meals.photo_path` は高解像度の original 画像パスを保持し、`meals.photo_thumbnail_path` は一覧表示用サムネイル（長辺320px）の永続パスを保持する。thumbnail 生成失敗や既存レコードでの NULL は許容され、一覧表示時は `photo_thumbnail_path ?? photo_path` でフォールバックする。
 
 ## Search and Analytics Intent
 - The schema currently supports text search and filter search.

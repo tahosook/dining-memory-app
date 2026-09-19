@@ -316,6 +316,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
           sourcePhotoUri: review.photoUri,
           resizedPhotoUri: result.resizedPhotoUri,
           stablePhotoUri: result.stablePhotoUri,
+          stableThumbnailUri: result.stableThumbnailUri,
           savedToMediaLibrary: result.savedToMediaLibrary,
           mealId: result.mealId,
         });

@@ -85,6 +85,7 @@ describe('saveCaptureReviewWorkflow', () => {
       kind: 'saved',
       resizedPhotoUri: null,
       stablePhotoUri: 'file:///tmp/photo.jpg',
+      stableThumbnailUri: null,
       savedToMediaLibrary: true,
       mealId: 'meal-1',
     });
@@ -98,5 +99,102 @@ describe('saveCaptureReviewWorkflow', () => {
       expect.objectContaining({ kind: 'saved' })
     );
     expect(persistPhotoLocally).toHaveBeenCalledTimes(2);
+  });
+
+  test('passes photo_path and photo_thumbnail_path to MealService.createMeal', async () => {
+    const captureReview = createCaptureReview();
+    const cleanupTempFile = jest.fn().mockResolvedValue(undefined);
+    const persistPhotoLocally = jest.fn().mockResolvedValue({
+      stablePhotoUri: 'file:///docs/meal-1.jpg',
+      stableThumbnailUri: 'file:///docs/meal-1-thumb.jpg',
+      resizedPhotoUri: 'file:///tmp/resized-1.jpg',
+      savedToMediaLibrary: true,
+    });
+
+    const result = await saveCaptureReviewWorkflow({
+      captureReview,
+      cameraPermission,
+      ensurePhotoSavePermission: jest.fn().mockResolvedValue(true),
+      getLocationSnapshot: jest.fn().mockResolvedValue({ latitude: 35.0, longitude: 139.0 }),
+      persistPhotoLocally,
+      savePhotoToMediaLibrary: jest.fn().mockResolvedValue(true),
+      cleanupTempFile,
+    });
+
+    expect(MealService.createMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        photo_path: 'file:///docs/meal-1.jpg',
+        photo_thumbnail_path: 'file:///docs/meal-1-thumb.jpg',
+      })
+    );
+    expect(result).toEqual({
+      kind: 'saved',
+      resizedPhotoUri: 'file:///tmp/resized-1.jpg',
+      stablePhotoUri: 'file:///docs/meal-1.jpg',
+      stableThumbnailUri: 'file:///docs/meal-1-thumb.jpg',
+      savedToMediaLibrary: true,
+      mealId: 'meal-1',
+    });
+    expect(cleanupTempFile).toHaveBeenCalledWith('file:///tmp/photo.jpg');
+  });
+
+  test('proceeds with photo_thumbnail_path undefined when thumbnail was not generated', async () => {
+    const captureReview = createCaptureReview();
+    const persistPhotoLocally = jest.fn().mockResolvedValue({
+      stablePhotoUri: 'file:///docs/meal-1.jpg',
+      stableThumbnailUri: undefined,
+      savedToMediaLibrary: true,
+    });
+
+    const result = await saveCaptureReviewWorkflow({
+      captureReview,
+      cameraPermission,
+      ensurePhotoSavePermission: jest.fn().mockResolvedValue(true),
+      getLocationSnapshot: jest.fn().mockResolvedValue({}),
+      persistPhotoLocally,
+      savePhotoToMediaLibrary: jest.fn().mockResolvedValue(true),
+      cleanupTempFile: jest.fn().mockResolvedValue(undefined),
+    });
+
+    expect(MealService.createMeal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        photo_path: 'file:///docs/meal-1.jpg',
+        photo_thumbnail_path: undefined,
+      })
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        kind: 'saved',
+        stablePhotoUri: 'file:///docs/meal-1.jpg',
+        stableThumbnailUri: null,
+      })
+    );
+  });
+
+  test('cleans up both stablePhotoUri and stableThumbnailUri when createMeal fails', async () => {
+    const captureReview = createCaptureReview();
+    const cleanupTempFile = jest.fn().mockResolvedValue(undefined);
+    (MealService.createMeal as jest.Mock).mockRejectedValueOnce(new Error('Database write error'));
+
+    const persistPhotoLocally = jest.fn().mockResolvedValue({
+      stablePhotoUri: 'file:///docs/meal-1.jpg',
+      stableThumbnailUri: 'file:///docs/meal-1-thumb.jpg',
+      savedToMediaLibrary: true,
+    });
+
+    await expect(
+      saveCaptureReviewWorkflow({
+        captureReview,
+        cameraPermission,
+        ensurePhotoSavePermission: jest.fn().mockResolvedValue(true),
+        getLocationSnapshot: jest.fn().mockResolvedValue({}),
+        persistPhotoLocally,
+        savePhotoToMediaLibrary: jest.fn().mockResolvedValue(true),
+        cleanupTempFile,
+      })
+    ).rejects.toThrow('Database write error');
+
+    expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/meal-1.jpg');
+    expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/meal-1-thumb.jpg');
   });
 });
