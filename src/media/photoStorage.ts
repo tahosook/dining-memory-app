@@ -118,3 +118,39 @@ export async function persistPhotoToStablePath(
     savedToMediaLibrary: false,
   };
 }
+
+export function resolveThumbnailDestinationUri(stablePhotoUri: string): string {
+  const match = stablePhotoUri.match(/^(.*)\.(jpe?g)$/i);
+  if (match) {
+    return `${match[1]}-thumb.jpg`;
+  }
+  return `${stablePhotoUri}-thumb.jpg`;
+}
+
+export async function persistThumbnailToStablePath(
+  tempThumbnailUri: string,
+  stablePhotoUri: string
+): Promise<string> {
+  if (!documentDirectory) {
+    throw new Error('Document directory is not available');
+  }
+
+  const destination = resolveThumbnailDestinationUri(stablePhotoUri);
+
+  try {
+    await copyAsync({
+      from: tempThumbnailUri,
+      to: destination,
+    });
+  } catch (copyError: unknown) {
+    const errorMessage = copyError instanceof Error ? copyError.message : String(copyError);
+    throw new Error(`Failed to copy thumbnail to stable path: ${errorMessage}`);
+  }
+
+  const destinationInfo = await getInfoAsync(destination);
+  if (!destinationInfo.exists) {
+    throw new Error(`Thumbnail copy completed but file not found at ${destination}`);
+  }
+
+  return destination;
+}

@@ -2,7 +2,12 @@ import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { copyAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { writePhotoExifToJpeg } from '../src/media/photoExif';
-import { ANDROID_PHOTO_ALBUM_NAME, persistPhotoToStablePath } from '../src/media/photoStorage';
+import {
+  ANDROID_PHOTO_ALBUM_NAME,
+  persistPhotoToStablePath,
+  persistThumbnailToStablePath,
+  resolveThumbnailDestinationUri,
+} from '../src/media/photoStorage';
 
 jest.mock('expo-media-library', () => ({
   Asset: {
@@ -191,5 +196,80 @@ describe('photoStorage', () => {
     );
     // 100 collision checks + 1 file verification check = 101 calls
     expect(getInfoAsync).toHaveBeenCalledTimes(101);
+  });
+
+  describe('resolveThumbnailDestinationUri', () => {
+    test('appends -thumb before .jpg extension', () => {
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-20260422213507.jpg')).toBe(
+        'file:///docs/meal-20260422213507-thumb.jpg'
+      );
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-20260422213507-1.jpg')).toBe(
+        'file:///docs/meal-20260422213507-1-thumb.jpg'
+      );
+    });
+
+    test('handles uppercase or missing extension gracefully', () => {
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-20260422213507.JPG')).toBe(
+        'file:///docs/meal-20260422213507-thumb.jpg'
+      );
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-photo')).toBe(
+        'file:///docs/meal-photo-thumb.jpg'
+      );
+    });
+
+    test('handles .jpeg and .JPEG extensions case-insensitively', () => {
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-20260422213507.jpeg')).toBe(
+        'file:///docs/meal-20260422213507-thumb.jpg'
+      );
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-20260422213507.JPEG')).toBe(
+        'file:///docs/meal-20260422213507-thumb.jpg'
+      );
+      expect(resolveThumbnailDestinationUri('file:///docs/meal.photo.with.dots.jpg')).toBe(
+        'file:///docs/meal.photo.with.dots-thumb.jpg'
+      );
+    });
+  });
+
+  describe('persistThumbnailToStablePath', () => {
+    test('copies thumbnail to stable document path without EXIF or album save', async () => {
+      Platform.OS = 'android';
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+
+      const stableThumbnail = await persistThumbnailToStablePath(
+        'file:///tmp/resized-thumb.jpg',
+        'file:///mock-documents/meal-20260422213507.jpg'
+      );
+
+      expect(copyAsync).toHaveBeenCalledWith({
+        from: 'file:///tmp/resized-thumb.jpg',
+        to: 'file:///mock-documents/meal-20260422213507-thumb.jpg',
+      });
+      expect(writePhotoExifToJpeg).not.toHaveBeenCalled();
+      expect(MediaLibrary.Album.get).not.toHaveBeenCalled();
+      expect(MediaLibrary.Asset.create).not.toHaveBeenCalled();
+      expect(stableThumbnail).toBe('file:///mock-documents/meal-20260422213507-thumb.jpg');
+    });
+
+    test('throws error if copyAsync fails', async () => {
+      (copyAsync as jest.Mock).mockRejectedValue(new Error('disk full'));
+
+      await expect(
+        persistThumbnailToStablePath(
+          'file:///tmp/resized-thumb.jpg',
+          'file:///mock-documents/meal-20260422213507.jpg'
+        )
+      ).rejects.toThrow('Failed to copy thumbnail to stable path: disk full');
+    });
+
+    test('throws error if destination file does not exist after copy', async () => {
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+
+      await expect(
+        persistThumbnailToStablePath(
+          'file:///tmp/resized-thumb.jpg',
+          'file:///mock-documents/meal-20260422213507.jpg'
+        )
+      ).rejects.toThrow('Thumbnail copy completed but file not found');
+    });
   });
 });

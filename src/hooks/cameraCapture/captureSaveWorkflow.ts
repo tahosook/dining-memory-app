@@ -8,6 +8,7 @@ import type { LocationSnapshot } from './locationSnapshot';
 
 interface PersistedCapturePhoto {
   stablePhotoUri: string;
+  stableThumbnailUri?: string;
   savedToMediaLibrary: boolean;
   resizedPhotoUri?: string;
 }
@@ -31,6 +32,7 @@ export type SaveCaptureWorkflowResult =
     kind: 'saved';
     resizedPhotoUri: string | null;
     stablePhotoUri: string;
+    stableThumbnailUri?: string;
     savedToMediaLibrary: boolean;
     mealId: string;
   }
@@ -53,6 +55,7 @@ export async function saveCaptureReviewWorkflow({
   cleanupTempFile,
 }: SaveCaptureWorkflowParams): Promise<SaveCaptureWorkflowResult> {
   let stablePhotoUri: string | null = null;
+  let stableThumbnailUri: string | undefined;
   const isWebWithoutPermissions = isWebWithoutCameraPermission(cameraPermission);
   const saveKey = createCaptureReviewSaveKey(captureReview);
 
@@ -74,6 +77,7 @@ export async function saveCaptureReviewWorkflow({
     const persistedPhoto = isWebWithoutPermissions
       ? {
         stablePhotoUri: captureReview.photoUri,
+        stableThumbnailUri: undefined,
         resizedPhotoUri: null,
         savedToMediaLibrary: false,
       }
@@ -83,6 +87,7 @@ export async function saveCaptureReviewWorkflow({
         softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
       });
     stablePhotoUri = persistedPhoto.stablePhotoUri;
+    stableThumbnailUri = persistedPhoto.stableThumbnailUri;
     let savedToMediaLibrary = persistedPhoto.savedToMediaLibrary;
 
     const meal = await MealService.createMeal({
@@ -96,6 +101,7 @@ export async function saveCaptureReviewWorkflow({
       longitude: locationSnapshot.longitude,
       is_homemade: captureReview.isHomemade,
       photo_path: stablePhotoUri,
+      photo_thumbnail_path: stableThumbnailUri,
       meal_datetime: new Date(),
     });
 
@@ -115,12 +121,16 @@ export async function saveCaptureReviewWorkflow({
       kind: 'saved',
       resizedPhotoUri: persistedPhoto.resizedPhotoUri ?? null,
       stablePhotoUri,
+      stableThumbnailUri,
       savedToMediaLibrary,
       mealId: meal.id,
     };
   } catch (error) {
     if (stablePhotoUri && stablePhotoUri !== captureReview.photoUri) {
       await cleanupTempFile(stablePhotoUri);
+    }
+    if (stableThumbnailUri && stableThumbnailUri !== captureReview.photoUri) {
+      await cleanupTempFile(stableThumbnailUri);
     }
     throw error;
   } finally {

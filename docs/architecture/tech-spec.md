@@ -44,6 +44,7 @@
 - On Android, captured photos should keep an app-local stable file for in-app display and also be added to a dedicated `Pictures / Dining Memory` album so future backup targeting stays possible without mixing unrelated media.
 - On Android, capture review save should verify photo-library permission immediately before persistence and route denied states to system settings guidance.
 - On iOS and web, saved photos can continue using app-local stable paths.
+- For list display performance, an in-app display thumbnail (max 320x320, JPEG 70%) is generated after original photo persistence and saved to an app-local stable path (`${photo_path}-thumb.jpg`), referenced via `photo_thumbnail_path`. Thumbnails do not require EXIF or MediaLibrary registration, and thumbnail failures preserve the original photo and meal creation without blocking save.
 - AI 入力補助は capture review または saved record の detail edit modal 上の明示的なユーザー操作でのみ実行し、current default は `llama.rn` local-runtime prototype の `noteDraft` path とする。mock / override provider は tests や injection 用に留める。
 - `src/ai/runtime/` は meal input assist 向けの最小 runtime status helper を持ち、feature 固有ロジックは `src/ai/mealInputAssist/` 配下に残す。
 - ready な runtime と unavailable / noop helper は明確に分け、production path の default fallback に noop provider を使わない。
