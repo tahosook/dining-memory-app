@@ -7,8 +7,9 @@
 - Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/domain/database-design.md](../domain/database-design.md)
 
 ## Current Stack
-- Expo SDK 56 on React Native 0.85 / React 19.2
+- Expo SDK 57 on React Native 0.86 / React 19.2
 - TypeScript 6.0.x
+- Android Bare Workflow (`android/` is tracked in Git with custom Kotlin modules, MediaPipe, llama.rn)
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
 - Expo Camera, expo-image-picker, expo-file-system, expo-location, expo-media-library, and related native modules
@@ -33,7 +34,8 @@
 
 ## Runtime Assumptions
 - Local development uses Node.js 25.9.x as the recommended runtime; CI currently runs Node.js 25.9.0.
-- Expo SDK 56 keeps the New Architecture enabled at all times.
+- Expo SDK 57 keeps the New Architecture enabled at all times.
+- Android uses Bare Workflow where `android/` is git-tracked. `npx expo prebuild --clean` is prohibited in normal operation to preserve custom native modules (`MealShare*`, `MediaPipe*`) and build configurations. When updating Expo SDK or native dependencies, generate prebuild outputs into a separate workspace and manually merge necessary diffs into `android/`.
 - iOS native builds target iOS 16.4 or newer.
 - App data lives primarily on the device.
 - Captured photos should be resized before save.
@@ -82,7 +84,7 @@
 ## Quality and Delivery Defaults
 - Keep the core capture, save, search, and export paths covered through a mix of unit, integration, and device-level verification.
 - Treat type checking, linting, and automated tests as the normal gate for meaningful app changes.
-- Keep build and release assumptions aligned with the current Expo and EAS workflow rather than maintaining parallel delivery paths.
+- Keep build and release assumptions aligned with the Bare Workflow (git-tracked `android/`) and standard Expo CLI / EAS tooling rather than maintaining diverging delivery paths. Android unit tests (`cd android && ./gradlew :app:testDebugUnitTest`) can be executed locally and have room to be added to CI pipelines alongside JS/TS checks.
 - For local Android installs, prefer the fast `arm64-v8a` release wrapper as the day-to-day path and keep the full ABI build for broader compatibility checks.
 - Prefer privacy-preserving crash and usage diagnostics; do not introduce telemetry that weakens the app's local-first posture by default.
 

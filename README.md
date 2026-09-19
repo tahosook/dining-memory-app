@@ -43,6 +43,7 @@ dining-memory-app/
 ├── AGENTS.md
 ├── TASKS.md
 ├── PLANS.md
+├── android/
 ├── docs/
 │   ├── index.md
 │   ├── product/
@@ -61,8 +62,8 @@ dining-memory-app/
 
 ### システム要件
 - Node.js 25.9.x 推奨
-- Expo SDK 56.x
-- Expo CLI 55.x 以上（`npx expo` 推奨）
+- Expo SDK 57.x
+- Expo CLI（`npx expo` 推奨）
 - iOS 開発: Xcode
 - Android 開発: Android Studio（任意）
 
@@ -77,8 +78,11 @@ npx expo start --dev-client
 ```
 
 ### 実行時前提
-- React Native 0.85 系 / React 19.2 系を前提としています
-- Expo SDK 56 以降のため New Architecture は常時有効です
+- React Native 0.86 系 / React 19.2 系を前提としています
+- Expo SDK 57 の New Architecture は常時有効です
+- Android Native プロジェクトは **Bare Workflow** として `android/` を Git 管理しています
+  - `llama.rn`、MediaPipe Tasks Vision、カスタム Kotlin Native Module（`MealShareModule` 等）を直接保持しています
+  - `npx expo prebuild --clean` は `MainApplication.kt` や `build.gradle` などのカスタム Native 実装を上書き・破壊するため、通常運用では実行しないでください（Expo SDK 更新時などは差分マージで追従します）
 - Android の写真保存権限は `expo-media-library` プラグインで管理します
 - `llama.rn` を使う local AI runtime は Expo Go ではなく dev build / native build 前提です
 
@@ -167,6 +171,12 @@ npm run build:android:release
 
 このコマンドは `arm64-v8a` のみで作るので、私用端末に入れる日常運用に向いています。
 出力には APK、`gradle-build.log`、`build-info.txt`、`output-metadata.json`、`sha256` が含まれます。
+
+> **Note**: リリース APK の署名設定
+> - **keystore 未指定時**: 個人利用・ローカル検証用途として、自動的に debug 署名が使用されます。
+> - **keystore 指定時**: `RELEASE_STORE_FILE`（および `RELEASE_STORE_PASSWORD`、`RELEASE_KEY_ALIAS`、`RELEASE_KEY_PASSWORD`）が設定されている場合は release 署名が適用されます。
+> - **設定不備時**: keystore ファイルが存在しない場合や認証情報が不足している場合は、意図しない debug 署名への silent fallback を防ぐため**必ず build failure**となります。
+> - keystore や秘密鍵は Git に含めません。
 
 ### 全 ABI のリリースAPK
 ```bash
