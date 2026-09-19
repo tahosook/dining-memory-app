@@ -38,6 +38,15 @@
 - Export and backup formats should stay versioned and preserve the relationships needed to rebuild meals, ingredients, images, settings, and generated insights.
 - `search_vectors` は legacy schema として残すが、current feature path では source of truth にしない。
 
+## Backup and Export Specification (Issue #63)
+- バックアップアーカイブは単一 ZIP 形式（`dining-memory-backup-YYYYMMDD-HHMMSS.zip`）でエクスポートする。
+  - `manifest.json`: `formatVersion`（現在 1）、`appId`、`appVersion`、`schemaVersion`（現在 2）、`exportedAt`（ISO8601）、`mealCount`、`photoCount` を保持。
+  - `database/meals.json`: `PersistedMealRow` をポータブル化した JSON 配列。端末依存の絶対パス `photo_path` は `photo_file_name`（ファイル名のみ）に正規化。`photo_thumbnail_path` は除外する。
+  - `database/app_settings.json`: `app_settings` のポータブル JSON 配列。
+  - `photos/<filename>.jpg`: 参照されているオリジナル写真ファイルのみを格納。サムネイル（`-thumb.jpg`）は同梱しない。
+- 復元（インポート）時は、一時展開ディレクトリでのマニフェスト・データ構造・写真整合性検証およびユーザー確認を経て、写真を `documentDirectory` へ配置し、SQLite トランザクション内で既存データを一括置換する。
+- 復元後の `meals.photo_path` は新環境の `${documentDirectory}${photo_file_name}` に書き換えられ、`photo_thumbnail_path` は NULL に設定される（一覧表示は既存の `photo_thumbnail_path ?? photo_path` フォールバックで即時表示される）。
+
 ## Current Implementation Notes
 - The active schema is intentionally small while capture, save, search, and settings behavior stabilizes.
 - `search_text` は current text and filter search path を支える field として扱う。

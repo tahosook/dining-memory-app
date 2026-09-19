@@ -66,16 +66,17 @@
 - Database schema versioning should stay explicit and small.
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
 - Search, records, and stats should refresh when a tab regains focus so the capture flow never leaves stale data on screen.
+- 内部バックアップ・復元（Issue #63）は、大容量写真によるメモリ圧迫を避けるためネイティブストリーミング ZIP 圧縮・解凍（`react-native-zip-archive`）を採用し、OS 共有シート（`expo-sharing`）およびファイル選択（`expo-document-picker`）を介して端末ローカルで完結する。復元時は一時ディレクトリでのマニフェスト・データ・写真ファイルの完全検証を行い、ユーザー確認後にのみ SQLite トランザクションで既存データを置換する。
 
 ## Security and Privacy Defaults
 - Prefer local storage and local processing unless a feature clearly needs external transfer.
-- Allow external handoff only from an explicit user action, such as opening the OS share sheet from a saved record detail.
+- Allow external handoff only from an explicit user action, such as opening the OS share sheet from a saved record detail or initiating a local backup export.
 - Request only the minimum camera, photo, and location access needed for the active feature.
 - Request foreground location when resolving capture-review defaults or at save time, and keep meal saving available even if location permission is denied.
 - Capture-review location lookup is best effort and may reuse the most recent nearby meal to initialize homemade state, but it must never block manual edits or saving.
 - Write GPS EXIF only when save-time location permission is granted and coordinates are actually available; otherwise save the JPEG without GPS metadata.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
-- Do not assume external AI, backup, or export is allowed by default; require explicit user intent.
+- Do not assume external AI, cloud backup, or sync is allowed by default; require explicit user intent. Local ZIP backup export and restore require explicit user trigger and use sandboxed staging with strict path sanitization (Zip Slip prevention).
 - AI 入力補助では写真やメモを外部送信せず、新規保存時のメモ下書き採用では最小限の AI metadata だけを meal record に残す。detail edit modal では v1 として notes の追記だけを行い、新しい AI metadata は保存しない。
 - local AI spike でも写真やメモの外部送信は行わず、Settings の user opt-in がない限り AI 入力補助を無効にする。
 - Settings の runtime status も外部照会を行わず、端末内で native module / supported ABI / app-local model path の存在だけを確認する。
@@ -99,6 +100,6 @@
 - Camera is the main entry point for the app.
 - Search and stats exist as first-class tabs rather than hidden tools.
 - The project keeps a strong privacy and local-storage bias.
-- The current MVP does not ship cloud backup, export, or external AI transfer behavior.
+- The current app supports local ZIP backup export and restore, while cloud backup, external export, and remote AI sync remain out of scope.
 - AI 入力補助は save / update flow の外側に置き、失敗時でも手入力保存を妨げない。
 - local AI runtime が未組み込みの build では、review に disabled reason を出し、mock 候補で自動的に置き換えない。
