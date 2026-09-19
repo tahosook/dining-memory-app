@@ -18,8 +18,13 @@ export function validateSafeFileName(fileName: string): boolean {
     return false;
   }
 
-  // Disallow path traversal, directory separators, or non-matching extensions
-  if (fileName.includes('/') || fileName.includes('\\') || fileName.includes('..')) {
+  // Disallow path traversal, directory separators, null bytes, or non-matching extensions
+  if (
+    fileName.includes('/') ||
+    fileName.includes('\\') ||
+    fileName.includes('..') ||
+    fileName.includes('\0')
+  ) {
     return false;
   }
 

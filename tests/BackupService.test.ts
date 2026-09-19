@@ -5,6 +5,7 @@ import {
   getInfoAsync,
   makeDirectoryAsync,
   readAsStringAsync,
+  readDirectoryAsync,
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -40,6 +41,7 @@ jest.mock('expo-file-system/legacy', () => ({
   copyAsync: jest.fn(),
   getInfoAsync: jest.fn(),
   readAsStringAsync: jest.fn(),
+  readDirectoryAsync: jest.fn(),
   writeAsStringAsync: jest.fn(),
 }));
 
@@ -96,6 +98,7 @@ describe('BackupService', () => {
     (getAllAppSettingsRows as jest.Mock).mockResolvedValue(mockAppSettings);
     (zip as jest.Mock).mockResolvedValue('file:///mock-cache/backup.zip');
     (unzip as jest.Mock).mockResolvedValue('file:///mock-cache/staging/');
+    (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-20260422-01.jpg']);
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
     (replaceDatabaseWithBackup as jest.Mock).mockResolvedValue(undefined);
@@ -231,16 +234,222 @@ describe('BackupService', () => {
       });
 
       (readAsStringAsync as jest.Mock).mockResolvedValue(
-        JSON.stringify({ formatVersion: 99, schemaVersion: 2, exportedAt: '2026-09-19T00:00:00.000Z', mealCount: 1, photoCount: 1 })
+        JSON.stringify({
+          formatVersion: 99,
+          appId: 'com.tahosook.diningmemory',
+          schemaVersion: 2,
+          exportedAt: '2026-09-19T00:00:00.000Z',
+          mealCount: 1,
+          photoCount: 1,
+        })
       );
 
       const result = await BackupService.pickAndValidateBackup();
       expect(result.valid).toBe(false);
       expect(result.error).toContain('新しいバージョンのアプリ');
     });
+
+    // Test C: appId mismatch test
+    test('rejects backup with mismatched or invalid appId', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) {
+          return Promise.resolve(
+            JSON.stringify({
+              formatVersion: 1,
+              appId: 'com.other.maliciousapp',
+              appVersion: '1.0.0',
+              schemaVersion: 2,
+              exportedAt: '2026-09-19T10:00:00.000Z',
+              mealCount: 0,
+              photoCount: 0,
+            })
+          );
+        }
+        return Promise.resolve('{}');
+      });
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('別のアプリ');
+    });
+
+    // Test D: schemaVersion mismatch test
+    test('rejects backup with schemaVersion mismatch', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) {
+          return Promise.resolve(
+            JSON.stringify({
+              formatVersion: 1,
+              appId: 'com.tahosook.diningmemory',
+              appVersion: '1.0.0',
+              schemaVersion: 1, // Current DB schema is 2
+              exportedAt: '2026-09-19T10:00:00.000Z',
+              mealCount: 0,
+              photoCount: 0,
+            })
+          );
+        }
+        return Promise.resolve('{}');
+      });
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('データベーススキーマバージョン');
+      expect(result.error).toContain('互換性がありません');
+    });
+
+    // Test A: Missing photo in archive test
+    test('rejects backup when meals reference photos missing from photos directory', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 2,
+        photoCount: 2,
+      });
+
+      const mealsContent = JSON.stringify([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: 'うどん',
+          photo_file_name: 'meal-udon.jpg',
+          is_homemade: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+        {
+          id: 'meal-2',
+          uuid: 'uuid-2',
+          meal_name: 'そば',
+          photo_file_name: 'meal-soba.jpg',
+          is_homemade: 0,
+          meal_datetime: 1713900000000,
+          created_at: 1713900000000,
+          updated_at: 1713900000000,
+        },
+      ]);
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        return Promise.resolve('{}');
+      });
+
+      // photos/ contains 2 files, but meal-soba.jpg is missing (replaced by another file)
+      (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-udon.jpg', 'other-photo.jpg']);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('バックアップ内の写真が不足しています');
+      expect(result.error).toContain('必要: 2枚, 検出: 1枚（不足: 1枚）');
+    });
+
+    // Test B: photoCount mismatch test
+    test('rejects backup when actual photos count does not match manifest.photoCount', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 1,
+        photoCount: 5, // Manifest says 5
+      });
+
+      const mealsContent = JSON.stringify([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: 'うどん',
+          photo_file_name: 'meal-udon.jpg',
+          is_homemade: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+      ]);
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        return Promise.resolve('{}');
+      });
+
+      // Actual photos count is only 1
+      (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-udon.jpg']);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('写真ファイル数（1枚）がマニフェスト（5枚）と一致しません');
+    });
+
+    // Test G: Zip Slip / malicious paths test
+    test('rejects backup containing malicious path traversal in photos directory or meals', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 1,
+        photoCount: 1,
+      });
+
+      const mealsContent = JSON.stringify([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: '不正',
+          photo_file_name: '../../evil.jpg',
+          is_homemade: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+      ]);
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        return Promise.resolve('{}');
+      });
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+    });
   });
 
   describe('restoreVerifiedBackup', () => {
+    // Test H: Full valid backup restored completely
     test('copies photos to documentDirectory and replaces database records atomically', async () => {
       const validationResult = {
         valid: true,
@@ -287,6 +496,152 @@ describe('BackupService', () => {
       );
 
       // Staging directory cleaned up
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
+    });
+
+    // Test E: Photo copy failure rollback
+    test('rolls back photo changes when copying a photo fails midway, without modifying DB', async () => {
+      const validationResult = {
+        valid: true,
+        stagingDirectory: 'file:///mock-cache/dm-import-123/',
+        meals: [
+          {
+            id: 'meal-1',
+            uuid: 'uuid-1',
+            meal_name: '既存上書き写真の食事',
+            photo_file_name: 'existing-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713800000000,
+            created_at: 1713800000000,
+            updated_at: 1713800000000,
+          },
+          {
+            id: 'meal-2',
+            uuid: 'uuid-2',
+            meal_name: '新規写真の食事',
+            photo_file_name: 'new-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713900000000,
+            created_at: 1713900000000,
+            updated_at: 1713900000000,
+          },
+        ],
+      };
+
+      // Mock getInfoAsync:
+      // - existing-photo.jpg exists in documentDirectory
+      // - new-photo.jpg does NOT exist in documentDirectory initially
+      // - staging photos exist
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path === 'file:///mock-documents/existing-photo.jpg') {
+          return Promise.resolve({ exists: true });
+        }
+        if (path === 'file:///mock-documents/new-photo.jpg') {
+          return Promise.resolve({ exists: false });
+        }
+        return Promise.resolve({ exists: true });
+      });
+
+      // Fail when copying new-photo.jpg
+      (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
+        if (options.to === 'file:///mock-documents/new-photo.jpg') {
+          return Promise.reject(new Error('ストレージ容量不足（Disk full）'));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow('Disk full');
+
+      // Database replace was NEVER called
+      expect(replaceDatabaseWithBackup).not.toHaveBeenCalled();
+
+      // Overwritten existing photo was restored from rollback directory
+      expect(copyAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\/existing-photo\.jpg/),
+          to: 'file:///mock-documents/existing-photo.jpg',
+        })
+      );
+
+      // Rollback directory and staging directory were deleted
+      expect(deleteAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\//),
+        { idempotent: true }
+      );
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
+    });
+
+    // Test F: DB transaction failure rollback
+    test('rolls back photos when replaceDatabaseWithBackup throws error', async () => {
+      const validationResult = {
+        valid: true,
+        stagingDirectory: 'file:///mock-cache/dm-import-123/',
+        meals: [
+          {
+            id: 'meal-1',
+            uuid: 'uuid-1',
+            meal_name: '既存上書き写真の食事',
+            photo_file_name: 'existing-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713800000000,
+            created_at: 1713800000000,
+            updated_at: 1713800000000,
+          },
+          {
+            id: 'meal-2',
+            uuid: 'uuid-2',
+            meal_name: '新規写真の食事',
+            photo_file_name: 'new-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713900000000,
+            created_at: 1713900000000,
+            updated_at: 1713900000000,
+          },
+        ],
+      };
+
+      let newPhotoCopied = false;
+      (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
+        if (options.to === 'file:///mock-documents/new-photo.jpg') {
+          newPhotoCopied = true;
+        }
+        return Promise.resolve(undefined);
+      });
+
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path === 'file:///mock-documents/existing-photo.jpg') {
+          return Promise.resolve({ exists: true });
+        }
+        if (path === 'file:///mock-documents/new-photo.jpg') {
+          return Promise.resolve({ exists: newPhotoCopied });
+        }
+        return Promise.resolve({ exists: true });
+      });
+
+      (replaceDatabaseWithBackup as jest.Mock).mockRejectedValue(new Error('SQLite transaction failed'));
+
+      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow('SQLite transaction failed');
+
+      // 1. Existing photo is restored from rollback dir
+      expect(copyAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\/existing-photo\.jpg/),
+          to: 'file:///mock-documents/existing-photo.jpg',
+        })
+      );
+
+      // 2. Newly created photo is deleted from documentDirectory
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/new-photo.jpg', { idempotent: true });
+
+      // 3. Rollback directory and staging directory are cleaned up
+      expect(deleteAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\//),
+        { idempotent: true }
+      );
       expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
     });
   });

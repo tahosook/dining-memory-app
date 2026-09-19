@@ -52,14 +52,21 @@ export function validateBackupManifest(raw: unknown, currentSchemaVersion: numbe
     return { valid: false, error: '不正なバックアップ形式バージョンです。' };
   }
 
+  if (!manifest.appId || typeof manifest.appId !== 'string' || manifest.appId !== BACKUP_APP_ID) {
+    return {
+      valid: false,
+      error: 'このバックアップは別のアプリから作成されたか、アプリケーション識別子（appId）が不正です。',
+    };
+  }
+
   if (typeof manifest.schemaVersion !== 'number' || manifest.schemaVersion <= 0) {
     return { valid: false, error: 'データベーススキーマバージョン（schemaVersion）が不正です。' };
   }
 
-  if (manifest.schemaVersion > currentSchemaVersion) {
+  if (manifest.schemaVersion !== currentSchemaVersion) {
     return {
       valid: false,
-      error: `このバックアップのデータベーススキーマバージョン（${manifest.schemaVersion}）は、現在のアプリ（${currentSchemaVersion}）より新しいため復元できません。`,
+      error: `このバックアップのデータベーススキーマバージョン（${manifest.schemaVersion}）は、現在のアプリ（${currentSchemaVersion}）と互換性がありません。`,
     };
   }
 

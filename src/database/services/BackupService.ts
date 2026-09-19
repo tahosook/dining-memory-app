@@ -7,6 +7,7 @@ import {
   getInfoAsync,
   makeDirectoryAsync,
   readAsStringAsync,
+  readDirectoryAsync,
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -23,6 +24,7 @@ import {
   validateBackupManifest,
   validatePortableAppSettings,
   validatePortableMeals,
+  validateSafeFileName,
   type BackupManifest,
   type BackupValidationResult,
   type PortableAppSettingRecord,
@@ -226,15 +228,72 @@ export class BackupService {
         }
       }
 
-      // 4. Verify photo files exist
-      const photoFileNames: string[] = [];
+      // Check meals count matches manifest
+      if (mealsValidation.meals.length !== manifestValidation.manifest.mealCount) {
+        await this.cleanupStaging(stagingDir);
+        return {
+          valid: false,
+          error: `バックアップ内の食事記録件数（${mealsValidation.meals.length}件）がマニフェスト（${manifestValidation.manifest.mealCount}件）と一致しません。`,
+        };
+      }
+
+      // 4. Verify photo files exist and match manifest
+      const photosDir = `${stagingDir}photos`;
+      const photosDirInfo = await getInfoAsync(photosDir);
+      const actualPhotoFiles = photosDirInfo.exists
+        ? await readDirectoryAsync(photosDir).catch(() => [])
+        : [];
+
+      // Ensure all filenames in photos/ are safe
+      for (const entry of actualPhotoFiles) {
+        if (!validateSafeFileName(entry)) {
+          await this.cleanupStaging(stagingDir);
+          return {
+            valid: false,
+            error: 'バックアップの写真ディレクトリに不正なファイル名が含まれています。',
+          };
+        }
+      }
+
+      // Verify photo count matches manifest
+      if (actualPhotoFiles.length !== manifestValidation.manifest.photoCount) {
+        await this.cleanupStaging(stagingDir);
+        return {
+          valid: false,
+          error: `バックアップ内の写真ファイル数（${actualPhotoFiles.length}枚）がマニフェスト（${manifestValidation.manifest.photoCount}枚）と一致しません。`,
+        };
+      }
+
+      // Collect all required unique photo files from meals
+      const requiredPhotos = new Set<string>();
       for (const meal of mealsValidation.meals) {
         if (meal.photo_file_name) {
-          const photoInfo = await getInfoAsync(`${stagingDir}photos/${meal.photo_file_name}`);
-          if (photoInfo.exists && !photoFileNames.includes(meal.photo_file_name)) {
-            photoFileNames.push(meal.photo_file_name);
+          if (!validateSafeFileName(meal.photo_file_name)) {
+            await this.cleanupStaging(stagingDir);
+            return {
+              valid: false,
+              error: '食事データに不正な写真ファイル名が含まれています。',
+            };
           }
+          requiredPhotos.add(meal.photo_file_name);
         }
+      }
+
+      // Ensure every single referenced photo exists in actualPhotoFiles
+      const missingPhotos: string[] = [];
+      for (const photoName of requiredPhotos) {
+        if (!actualPhotoFiles.includes(photoName)) {
+          missingPhotos.push(photoName);
+        }
+      }
+
+      if (missingPhotos.length > 0) {
+        await this.cleanupStaging(stagingDir);
+        const foundCount = requiredPhotos.size - missingPhotos.length;
+        return {
+          valid: false,
+          error: `バックアップ内の写真が不足しています。必要: ${requiredPhotos.size}枚, 検出: ${foundCount}枚（不足: ${missingPhotos.length}枚）。`,
+        };
       }
 
       return {
@@ -242,7 +301,7 @@ export class BackupService {
         manifest: manifestValidation.manifest,
         meals: mealsValidation.meals,
         appSettings,
-        photoFileNames,
+        photoFileNames: Array.from(requiredPhotos),
         stagingDirectory: stagingDir,
       };
     } catch {
@@ -257,6 +316,7 @@ export class BackupService {
   /**
    * Restores data from a previously validated staging directory.
    * Copies photos to documentDirectory and replaces database records in a transaction.
+   * On failure, restores backed-up overwritten photos and removes newly created ones.
    */
   static async restoreVerifiedBackup(
     validationResult: BackupValidationResult
@@ -269,54 +329,99 @@ export class BackupService {
       throw new Error('復元に必要な検証データが不足しています。');
     }
 
-    if (!documentDirectory) {
-      throw new Error('ドキュメント保存ディレクトリを利用できません。');
+    if (!documentDirectory || !cacheDirectory) {
+      throw new Error('必要なストレージディレクトリを利用できません。');
     }
 
     const stagingDir = validationResult.stagingDirectory;
     const targetDocDir = ensureTrailingSlash(documentDirectory);
+    const rollbackDir = `${ensureTrailingSlash(cacheDirectory)}dm-restore-rollback-${Date.now()}/`;
+
+    const backedUpFiles: string[] = [];
+    const newlyCreatedFiles: string[] = [];
+    const copiedFiles = new Set<string>();
 
     try {
-      // 1. Copy photos to documentDirectory
-      let restoredPhotoCount = 0;
-      const copiedSet = new Set<string>();
+      await makeDirectoryAsync(rollbackDir, { intermediates: true });
 
+      // Identify unique photo files to restore
+      const uniquePhotosToRestore = new Set<string>();
       for (const meal of validationResult.meals) {
-        const fileName = meal.photo_file_name;
-        if (!fileName || copiedSet.has(fileName)) {
-          continue;
-        }
-
-        const sourcePath = `${stagingDir}photos/${fileName}`;
-        const destPath = `${targetDocDir}${fileName}`;
-
-        try {
-          const sourceInfo = await getInfoAsync(sourcePath);
-          if (sourceInfo.exists) {
-            await copyAsync({
-              from: sourcePath,
-              to: destPath,
-            });
-            copiedSet.add(fileName);
-            restoredPhotoCount++;
+        if (meal.photo_file_name) {
+          if (!validateSafeFileName(meal.photo_file_name)) {
+            throw new Error('不正な写真ファイル名が含まれています。');
           }
-        } catch {
-          // Best effort for individual photo copy without leaking paths
+          uniquePhotosToRestore.add(meal.photo_file_name);
         }
       }
 
-      // 2. Deserialize portable meals with rewritten photo_path and null thumbnail_path
+      // 1. Prepare rollback state: backup existing files that would be overwritten
+      for (const fileName of uniquePhotosToRestore) {
+        const destPath = `${targetDocDir}${fileName}`;
+        const destInfo = await getInfoAsync(destPath);
+        if (destInfo.exists) {
+          await copyAsync({
+            from: destPath,
+            to: `${rollbackDir}${fileName}`,
+          });
+          backedUpFiles.push(fileName);
+        } else {
+          newlyCreatedFiles.push(fileName);
+        }
+      }
+
+      // 2. Copy all verified photos to documentDirectory (Fail-fast: no best-effort)
+      for (const fileName of uniquePhotosToRestore) {
+        const sourcePath = `${stagingDir}photos/${fileName}`;
+        const destPath = `${targetDocDir}${fileName}`;
+
+        const sourceInfo = await getInfoAsync(sourcePath);
+        if (!sourceInfo.exists) {
+          throw new Error('写真ファイルが見つかりません。');
+        }
+
+        await copyAsync({
+          from: sourcePath,
+          to: destPath,
+        });
+
+        const destInfo = await getInfoAsync(destPath);
+        if (!destInfo.exists) {
+          throw new Error('写真ファイルのコピーに失敗しました。');
+        }
+
+        copiedFiles.add(fileName);
+      }
+
+      // 3. Deserialize portable meals with rewritten photo_path and null thumbnail_path
       const restoredMeals = deserializeMeals(validationResult.meals, targetDocDir);
       const restoredSettings = deserializeAppSettings(validationResult.appSettings ?? []);
 
-      // 3. Atomically replace database records
+      // 4. Atomically replace database records inside SQLite transaction
       await replaceDatabaseWithBackup(restoredMeals, restoredSettings);
 
       return {
         restoredMealCount: restoredMeals.length,
-        restoredPhotoCount,
+        restoredPhotoCount: copiedFiles.size,
       };
+    } catch (restoreError) {
+      // Rollback photo modifications if anything failed
+      for (const fileName of newlyCreatedFiles) {
+        if (copiedFiles.has(fileName)) {
+          await deleteAsync(`${targetDocDir}${fileName}`, { idempotent: true }).catch(() => undefined);
+        }
+      }
+      for (const fileName of backedUpFiles) {
+        if (copiedFiles.has(fileName)) {
+          await copyAsync({
+            from: `${rollbackDir}${fileName}`,
+            to: `${targetDocDir}${fileName}`,
+          }).catch(() => undefined);
+        }
+      }
+      throw restoreError;
     } finally {
+      await deleteAsync(rollbackDir, { idempotent: true }).catch(() => undefined);
       await this.cleanupStaging(stagingDir);
     }
   }

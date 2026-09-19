@@ -41,9 +41,12 @@ describe('backup pathNormalizer', () => {
 
     // Rejections (Zip Slip / Traversal / Suspicious extensions)
     expect(validateSafeFileName('../evil.jpg')).toBe(false);
+    expect(validateSafeFileName('..\\evil.jpg')).toBe(false);
     expect(validateSafeFileName('../../etc/passwd')).toBe(false);
     expect(validateSafeFileName('/absolute/path.jpg')).toBe(false);
     expect(validateSafeFileName('subdir/file.jpg')).toBe(false);
+    expect(validateSafeFileName('subdir\\file.jpg')).toBe(false);
+    expect(validateSafeFileName('meal\0.jpg')).toBe(false);
     expect(validateSafeFileName('meal.exe')).toBe(false);
     expect(validateSafeFileName('meal.json')).toBe(false);
     expect(validateSafeFileName('')).toBe(false);
@@ -118,6 +121,7 @@ describe('backup manifest', () => {
   test('validateBackupManifest rejects future formatVersion', () => {
     const raw = {
       formatVersion: 99,
+      appId: 'com.tahosook.diningmemory',
       schemaVersion: 2,
       exportedAt: '2026-09-19T10:00:00.000Z',
       mealCount: 1,
@@ -129,27 +133,80 @@ describe('backup manifest', () => {
     expect(result.error).toContain('新しいバージョンのアプリ');
   });
 
-  test('validateBackupManifest rejects newer schemaVersion than app supports', () => {
-    const raw = {
-      formatVersion: 1,
-      schemaVersion: 999,
-      exportedAt: '2026-09-19T10:00:00.000Z',
-      mealCount: 1,
-      photoCount: 1,
-    };
+  test('validateBackupManifest rejects mismatched or missing appId', () => {
+    expect(
+      validateBackupManifest(
+        {
+          formatVersion: 1,
+          appId: 'com.other.app',
+          schemaVersion: 2,
+          exportedAt: '2026-09-19T10:00:00.000Z',
+          mealCount: 1,
+          photoCount: 1,
+        },
+        2
+      ).valid
+    ).toBe(false);
 
-    const result = validateBackupManifest(raw, 2);
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('スキーマバージョン');
+    expect(
+      validateBackupManifest(
+        {
+          formatVersion: 1,
+          schemaVersion: 2,
+          exportedAt: '2026-09-19T10:00:00.000Z',
+          mealCount: 1,
+          photoCount: 1,
+        },
+        2
+      ).valid
+    ).toBe(false);
+  });
+
+  test('validateBackupManifest rejects mismatched schemaVersion', () => {
+    // Newer schemaVersion
+    expect(
+      validateBackupManifest(
+        {
+          formatVersion: 1,
+          appId: 'com.tahosook.diningmemory',
+          schemaVersion: 999,
+          exportedAt: '2026-09-19T10:00:00.000Z',
+          mealCount: 1,
+          photoCount: 1,
+        },
+        2
+      ).valid
+    ).toBe(false);
+
+    // Older schemaVersion
+    expect(
+      validateBackupManifest(
+        {
+          formatVersion: 1,
+          appId: 'com.tahosook.diningmemory',
+          schemaVersion: 1,
+          exportedAt: '2026-09-19T10:00:00.000Z',
+          mealCount: 1,
+          photoCount: 1,
+        },
+        2
+      ).valid
+    ).toBe(false);
   });
 
   test('validateBackupManifest rejects invalid counts or malformed date', () => {
     expect(
-      validateBackupManifest({ formatVersion: 1, schemaVersion: 2, exportedAt: 'invalid-date', mealCount: 0, photoCount: 0 }, 2).valid
+      validateBackupManifest(
+        { formatVersion: 1, appId: 'com.tahosook.diningmemory', schemaVersion: 2, exportedAt: 'invalid-date', mealCount: 0, photoCount: 0 },
+        2
+      ).valid
     ).toBe(false);
 
     expect(
-      validateBackupManifest({ formatVersion: 1, schemaVersion: 2, exportedAt: '2026-09-19T10:00:00.000Z', mealCount: -1, photoCount: 0 }, 2).valid
+      validateBackupManifest(
+        { formatVersion: 1, appId: 'com.tahosook.diningmemory', schemaVersion: 2, exportedAt: '2026-09-19T10:00:00.000Z', mealCount: -1, photoCount: 0 },
+        2
+      ).valid
     ).toBe(false);
   });
 });
