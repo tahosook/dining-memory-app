@@ -172,6 +172,10 @@ npm run build:android:release
 このコマンドは `arm64-v8a` のみで作るので、私用端末に入れる日常運用に向いています。
 出力には APK、`gradle-build.log`、`build-info.txt`、`output-metadata.json`、`sha256` が含まれます。
 
+> **Note**: リリース APK の署名設定
+> 環境変数 `RELEASE_STORE_FILE`（およびパスワード等）が設定されている場合は本番 keystore で署名されます。
+> 未指定の場合は、私用端末への adb install やローカル検証がスムーズに行えるよう、自動的に debug 署名にフォールバックします。keystore や秘密鍵は Git に含めません。
+
 ### 全 ABI のリリースAPK
 ```bash
 npm run build:android:release:full

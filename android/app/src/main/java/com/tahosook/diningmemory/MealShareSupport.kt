@@ -1,6 +1,6 @@
 package com.tahosook.diningmemory
 
-import android.net.Uri
+import java.net.URLDecoder
 
 object MealShareSupport {
   fun isContentUri(uriString: String?): Boolean {
@@ -20,17 +20,17 @@ object MealShareSupport {
       return null
     }
 
-    return try {
-      val uri = Uri.parse(trimmed)
-      if ("file".equals(uri.scheme, ignoreCase = true)) {
-        uri.path ?: trimmed.removePrefix("file://")
-      } else if (uri.scheme == null || uri.scheme.isNullOrEmpty()) {
-        trimmed
-      } else {
-        null
+    return if (trimmed.startsWith("file://", ignoreCase = true)) {
+      val rawPath = trimmed.substring(7).let { if (it.startsWith("/")) it else "/$it" }
+      try {
+        URLDecoder.decode(rawPath, "UTF-8")
+      } catch (_: Exception) {
+        rawPath
       }
-    } catch (_: Exception) {
-      trimmed.removePrefix("file://")
+    } else if (trimmed.startsWith("/")) {
+      trimmed
+    } else {
+      null
     }
   }
 

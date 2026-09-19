@@ -100,14 +100,29 @@ android {
         buildConfigField "String", "COMMIT_HASH", "\"${project.hasProperty('COMMIT_HASH') ? COMMIT_HASH : ''}\""
         buildConfigField "String", "BUILD_DATE", "\"${project.hasProperty('BUILD_DATE') ? BUILD_DATE : ''}\""
     }
+    signingConfigs {
+        debug {
+            // AGP manages default debug signing (~/.android/debug.keystore)
+        }
+        release {
+            def storeFilePath = findProperty('RELEASE_STORE_FILE') ?: System.getenv('RELEASE_STORE_FILE')
+            if (storeFilePath) {
+                storeFile file(storeFilePath)
+                storePassword findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('RELEASE_STORE_PASSWORD') ?: ""
+                keyAlias findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS') ?: ""
+                keyPassword findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD') ?: ""
+            }
+        }
+    }
     buildTypes {
         debug {
             signingConfig = signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig = signingConfigs.debug
+            // For production builds, configure RELEASE_STORE_FILE via environment or gradle.properties.
+            // For local personal testing, fallback to debug signing if no release keystore is provided.
+            def hasReleaseKeystore = signingConfigs.release.storeFile?.exists()
+            signingConfig = hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources = enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
