@@ -101,12 +101,14 @@ class MealShareSupportTest {
   }
 
   @Test
-  fun `rejects non-file URIs and empty or blank inputs`() {
+  fun `rejects non-file URIs, relative paths, and empty or blank inputs`() {
     assertNull(MealShareSupport.resolveLocalFilePath("content://media/external/images/123"))
     assertNull(MealShareSupport.resolveLocalFilePath("CONTENT://custom.provider/file"))
     assertNull(MealShareSupport.resolveLocalFilePath("https://example.com/image.jpg"))
     assertNull(MealShareSupport.resolveLocalFilePath("http://example.com/photo.png"))
     assertNull(MealShareSupport.resolveLocalFilePath("unknown://some/path"))
+    assertNull(MealShareSupport.resolveLocalFilePath("relative/path/to/meal.jpg"))
+    assertNull(MealShareSupport.resolveLocalFilePath("photo.jpg"))
     assertNull(MealShareSupport.resolveLocalFilePath(null))
     assertNull(MealShareSupport.resolveLocalFilePath(""))
     assertNull(MealShareSupport.resolveLocalFilePath("   "))

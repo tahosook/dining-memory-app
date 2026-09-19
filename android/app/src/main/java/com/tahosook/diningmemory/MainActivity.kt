@@ -1,5 +1,4 @@
 package com.tahosook.diningmemory
-import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
 import android.os.Bundle
@@ -10,6 +9,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 import expo.modules.ReactActivityDelegateWrapper
+import expo.modules.splashscreen.SplashScreenManager
 
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,6 +20,7 @@ class MainActivity : ReactActivity() {
     // @generated begin expo-splashscreen - expo prebuild (DO NOT MODIFY) sync-f3ff59a738c56c9a6119210cb55f0b613eb8b6af
     SplashScreenManager.registerOnActivity(this)
     // @generated end expo-splashscreen
+    // Expo template intentionally discards savedInstanceState to prevent React Navigation / screens state restore crashes
     super.onCreate(null)
   }
 

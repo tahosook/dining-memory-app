@@ -1,16 +1,18 @@
-# OSX
-#
+# macOS
 .DS_Store
 
-# Android/IntelliJ
-#
+# Android / Gradle / IntelliJ
 build/
-.idea
-.gradle
+.gradle/
+.kotlin/
 local.properties
 *.iml
 *.hprof
 .cxx/
+.idea/
+
+# llama.rn runtime generated assets (synced from node_modules during Gradle build)
+app/src/main/assets/ggml-hexagon/
 
 # generated inline modules
 app/src/main/java/inline/

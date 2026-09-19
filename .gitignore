@@ -1,86 +1,59 @@
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-# dependencies
+# Dependencies
 node_modules/
 
 # Expo
 .expo/
+.expo-shared/
 dist/
 web-build/
 expo-env.d.ts
 
-# Native
-.kotlin/
-*.orig.*
+# Native & Signing (keystores and private certificates are strictly excluded)
+*.keystore
 *.jks
 *.p8
 *.p12
 *.key
+*.pem
 *.mobileprovision
+*.orig.*
 
-# Metro
+# Generated native folders (iOS remains managed by Expo; Android is Bare Workflow)
+/ios
+ios/build/
+
+# Android native project artifacts & local configs (managed in android/.gitignore)
+# See android/.gitignore for android/build, .gradle, local.properties, ggml-hexagon, etc.
+
+# Build artifacts (APKs and outputs)
+build*.apk
+*.apk
+artifacts/
+
+# Metro / Debug / Coverage
 .metro-health-check*
-
-# debug
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 coverage/
 
-# macOS
-.DS_Store
-*.pem
-
-# local env files
+# Local env files
 .env
 .env.local
 .env*.local
 
-# typescript
+# TypeScript
 *.tsbuildinfo
-
-# generated native folders
-/ios
-
-# ビルド成果物（APK）を無視
-build*.apk
-*.apk
-artifacts/
-
-# Android ビルド・生成ディレクトリ・ローカル設定
-android/.gradle/
-android/.kotlin/
-android/build/
-android/app/build/
-android/app/.cxx/
-android/local.properties
-android/*.iml
-android/app/*.iml
-android/*.hprof
-android/app/*.hprof
-
-# llama.rn runtime generated assets (synced from node_modules during Gradle build)
-android/app/src/main/assets/ggml-hexagon/
-
-# iOS ビルドディレクトリ
-ios/build/
-
-# 署名鍵や gradle 一時ファイル
-*.keystore
-*.jks
-.gradle/
-.gradle-home/
-
-# Expo / Metro / node
-.expo/
-.expo-shared/
-node_modules/
 
 # OS / IDE
 .DS_Store
 .vscode/
 .idea/
 .eslintcache
+.gradle/
+.gradle-home/
 
 # MediaPipe labeling loop runtime artifacts
 state/labeling/

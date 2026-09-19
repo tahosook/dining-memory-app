@@ -38,6 +38,9 @@ object MealShareSupport {
       return trimmed
     }
 
+    // Relative paths (schemeless and not starting with '/') cannot be safely resolved to a concrete
+    // local file without a base directory, so they are intentionally rejected (returns null).
+
     // Try standard Java URI parsing first (works identically across JVM Unit Tests and Android runtime)
     try {
       val uri = URI(trimmed)
