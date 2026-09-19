@@ -76,3 +76,21 @@ jest.mock('lodash', () => ({
   debounce: jest.fn(fn => fn),
   throttle: jest.fn(fn => fn),
 }));
+
+// Document Picker mock
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn(),
+}));
+
+// Expo Sharing mock
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(),
+  shareAsync: jest.fn(),
+}));
+
+// Zip Archive mock
+jest.mock('react-native-zip-archive', () => ({
+  zip: jest.fn(),
+  unzip: jest.fn(),
+}));
+

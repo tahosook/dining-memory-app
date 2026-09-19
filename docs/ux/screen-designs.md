@@ -72,11 +72,12 @@
 - Later candidates include a record calendar, day/time trends, photo highlights, and recently increasing genres; they are not part of the current MVP.
 
 ## Settings Screen
-- Prioritize privacy, current scope, local data deletion, and app information.
+- Prioritize privacy, current scope, data management (backup export / restore, local data deletion), and app information.
 - AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。
 - meal input assist model の status を `未導入 / ダウンロード中 / 利用可能 / エラー` で表示し、`ダウンロード / 再ダウンロード / 削除` を提供する。
 - `Local AI Runtime Status` では AI 入力補助だけを表示し、ready / unavailable、reason、expected path を確認できる。
-- Keep destructive actions visually separated.
+- 「データ管理」セクションに「バックアップをエクスポート」と「バックアップから復元」ボタンを提供し、食事記録とオリジナル写真の単一 ZIP 書き出しおよび復元を行う。復元時は検証成功後に日時・件数・置換警告を含む確認ダイアログを表示する。
+- Keep destructive actions visually separated and require explicit confirmation dialogs.
 
 ## Shared States
 - Empty state: each major screen should explain what is missing and give the next useful action.

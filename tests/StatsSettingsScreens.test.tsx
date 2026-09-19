@@ -14,6 +14,7 @@ import StatsScreen from '../src/screens/StatsScreen/StatsScreen';
 import SettingsScreen from '../src/screens/SettingsScreen/SettingsScreen';
 import { MealService } from '../src/database/services/MealService';
 import { AppSettingsService } from '../src/database/services/AppSettingsService';
+import { BackupService } from '../src/database/services/BackupService';
 import { getLocalAiRuntimeStatusSnapshot } from '../src/ai/runtime';
 import {
   deleteAllDownloadedLocalAiModels,
@@ -36,6 +37,15 @@ jest.mock('../src/database/services/AppSettingsService', () => ({
   AppSettingsService: {
     getAiInputAssistEnabled: jest.fn(),
     setAiInputAssistEnabled: jest.fn(),
+  },
+}));
+
+jest.mock('../src/database/services/BackupService', () => ({
+  BackupService: {
+    exportBackup: jest.fn(),
+    pickAndValidateBackup: jest.fn(),
+    restoreVerifiedBackup: jest.fn(),
+    cleanupStaging: jest.fn(),
   },
 }));
 
@@ -332,6 +342,20 @@ describe('SettingsScreen', () => {
     (redownloadMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (deleteMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (deleteAllDownloadedLocalAiModels as jest.Mock).mockResolvedValue(undefined);
+    (BackupService.exportBackup as jest.Mock).mockResolvedValue({
+      zipFileName: 'backup.zip',
+      mealCount: 5,
+      photoCount: 4,
+    });
+    (BackupService.pickAndValidateBackup as jest.Mock).mockResolvedValue({
+      valid: false,
+      canceled: true,
+    });
+    (BackupService.restoreVerifiedBackup as jest.Mock).mockResolvedValue({
+      restoredMealCount: 5,
+      restoredPhotoCount: 4,
+    });
+    (BackupService.cleanupStaging as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -483,6 +507,119 @@ describe('SettingsScreen', () => {
       expect(deleteAllDownloadedLocalAiModels).toHaveBeenCalledTimes(1);
     });
     expect(await findByText('状態: 未準備')).toBeTruthy();
+
+    alertSpy.mockRestore();
+  });
+
+  test('renders backup export and import buttons in data management section', async () => {
+    const { getByTestId, getByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(getByTestId('settings-export-backup-button')).toBeTruthy();
+    expect(getByTestId('settings-import-backup-button')).toBeTruthy();
+    expect(getByText('バックアップをエクスポート')).toBeTruthy();
+    expect(getByText('バックアップから復元')).toBeTruthy();
+  });
+
+  test('calls BackupService.exportBackup and shows completion alert', async () => {
+    const { getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(getByTestId('settings-export-backup-button'));
+
+    await waitFor(() => {
+      expect(BackupService.exportBackup).toHaveBeenCalledTimes(1);
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'エクスポート完了',
+      expect.stringContaining('5件')
+    );
+  });
+
+  test('shows confirmation dialog on valid import and restores when user confirms', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
+      if (title === 'バックアップから復元') {
+        const confirmButton = buttons?.find((b) => b.text === '復元する');
+        confirmButton?.onPress?.();
+      }
+    });
+
+    (BackupService.pickAndValidateBackup as jest.Mock).mockResolvedValue({
+      valid: true,
+      manifest: {
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 5,
+        photoCount: 4,
+      },
+      meals: [],
+      appSettings: [],
+      stagingDirectory: 'file:///mock-cache/dm-import-123/',
+    });
+
+    const { getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(getByTestId('settings-import-backup-button'));
+
+    await waitFor(() => {
+      expect(BackupService.pickAndValidateBackup).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(BackupService.restoreVerifiedBackup).toHaveBeenCalledTimes(1);
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      '復元完了',
+      expect.stringContaining('5件')
+    );
+
+    alertSpy.mockRestore();
+  });
+
+  test('cleans up staging when user cancels import confirmation alert', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
+      if (title === 'バックアップから復元') {
+        const cancelButton = buttons?.find((b) => b.text === 'キャンセル');
+        cancelButton?.onPress?.();
+      }
+    });
+
+    (BackupService.pickAndValidateBackup as jest.Mock).mockResolvedValue({
+      valid: true,
+      manifest: {
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 5,
+        photoCount: 4,
+      },
+      meals: [],
+      appSettings: [],
+      stagingDirectory: 'file:///mock-cache/dm-import-123/',
+    });
+
+    const { getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(getByTestId('settings-import-backup-button'));
+
+    await waitFor(() => {
+      expect(BackupService.pickAndValidateBackup).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(BackupService.cleanupStaging).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/');
+    });
+
+    expect(BackupService.restoreVerifiedBackup).not.toHaveBeenCalled();
 
     alertSpy.mockRestore();
   });

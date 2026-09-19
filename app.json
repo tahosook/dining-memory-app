@@ -81,7 +81,9 @@
           "backgroundColor": "#F28A57"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-document-picker",
+      "react-native-zip-archive"
     ],
     "extra": {
       "eas": {

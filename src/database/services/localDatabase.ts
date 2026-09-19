@@ -251,3 +251,109 @@ export function mapRowToMeal(row: PersistedMealRow): Meal {
     updated_at: row.updated_at,
   };
 }
+
+export async function getAllPersistedMealRows(): Promise<PersistedMealRow[]> {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    return getInMemoryMeals();
+  }
+
+  const db = getDatabase();
+  if (!db) {
+    return [];
+  }
+
+  return db.getAllAsync<PersistedMealRow>('SELECT * FROM meals');
+}
+
+export async function getAllAppSettingsRows(): Promise<PersistedAppSettingRow[]> {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    const memorySettings = getInMemoryAppSettings();
+    const now = Date.now();
+    return Object.entries(memorySettings).map(([key, value]) => ({
+      key,
+      value,
+      updated_at: now,
+    }));
+  }
+
+  const db = getDatabase();
+  if (!db) {
+    return [];
+  }
+
+  return db.getAllAsync<PersistedAppSettingRow>('SELECT key, value, updated_at FROM app_settings');
+}
+
+export async function replaceDatabaseWithBackup(
+  meals: PersistedMealRow[],
+  appSettings: PersistedAppSettingRow[]
+): Promise<void> {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    setInMemoryMeals(meals);
+    const settingsMap: Record<string, string> = {};
+    for (const setting of appSettings) {
+      if (setting.value !== null && setting.value !== undefined) {
+        settingsMap[setting.key] = setting.value;
+      }
+    }
+    setInMemoryAppSettings(settingsMap);
+    return;
+  }
+
+  const db = getDatabase();
+  if (!db) {
+    throw new Error('Database is not available');
+  }
+
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM meals');
+    for (const meal of meals) {
+      await db.runAsync(
+        `INSERT INTO meals (
+          id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source,
+          notes, cooking_level, is_homemade, photo_path, photo_thumbnail_path,
+          location_name, latitude, longitude, meal_datetime, search_text,
+          tags, is_deleted, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        meal.id,
+        meal.uuid,
+        meal.meal_name,
+        meal.meal_type ?? null,
+        meal.cuisine_type ?? null,
+        meal.ai_confidence ?? null,
+        meal.ai_source ?? null,
+        meal.notes ?? null,
+        meal.cooking_level ?? null,
+        meal.is_homemade,
+        meal.photo_path,
+        meal.photo_thumbnail_path ?? null,
+        meal.location_name ?? null,
+        meal.latitude ?? null,
+        meal.longitude ?? null,
+        meal.meal_datetime,
+        meal.search_text ?? null,
+        meal.tags ?? null,
+        meal.is_deleted,
+        meal.created_at,
+        meal.updated_at
+      );
+    }
+
+    await db.runAsync('DELETE FROM app_settings');
+    for (const setting of appSettings) {
+      await db.runAsync(
+        'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
+        setting.key,
+        setting.value ?? null,
+        setting.updated_at
+      );
+    }
+  });
+}
+

@@ -13,7 +13,7 @@ Dining Memory は、撮影して保存し、一覧・検索・期間別の統計
 review 画面と詳細編集モーダルには、メモ下書きを明示タップで notes に追加する AI 入力補助が入り、real local runtime path も app-local model / projector がある build で使える状態になりました。
 AI 実行中は current stage、進捗の目安、残り時間の目安を AI UI 上に表示し、capture review 中は live camera preview を止めて端末負荷を抑えます。
 Settings には local AI の事前許可、meal input assist model のダウンロード管理、local AI runtime status が入り、条件を満たさない build では引き続き disabled reason を返します。
-本格的な AI 解析、クラウドバックアップ、データエクスポートはまだ実装していません。
+本格的な AI 解析、クラウド自動バックアップはまだ実装していません。ローカル ZIP バックアップのエクスポートと復元は実装済みです。
 一覧の詳細画面から、明示的な操作で X 共有に進む最小導線を持っています。
 
 ## 現在使える機能
@@ -26,7 +26,7 @@ Settings には local AI の事前許可、meal input assist model のダウン�
 - 記録詳細から、共有シート経由で気に入った写真だけ X 投稿に進む
 - テキスト検索、料理ジャンル、場所フィルター、自炊フィルターで探し、結果からそのまま編集・削除する
 - 期間別の総記録数、自炊比率、よく記録する料理ジャンル・場所、短いふりかえり文を確認し、更新失敗時は再試行する
-- 設定画面でプライバシー方針、meal input assist model の導入状態、local AI runtime status、ローカルデータ削除を確認する
+- 設定画面でプライバシー方針、meal input assist model の導入状態、local AI runtime status、内部データのバックアップ（エクスポート／復元）、ローカルデータ削除を操作する
 
 ## 機能ごとの進捗
 ### 完了
@@ -36,6 +36,7 @@ Settings には local AI の事前許可、meal input assist model のダウン�
 - 簡易統計
 - 設定画面の最小構成
 - ローカル保存を前提にしたデータアクセス層
+- 内部データのエクスポート・インポート（バックアップ／復元）基盤（Issue #63）
 
 ### 一部実装
 - AI 入力補助
@@ -58,8 +59,7 @@ Settings には local AI の事前許可、meal input assist model のダウン�
 
 ### 未実装
 - 自動的な AI 解析
-- クラウドバックアップ
-- データエクスポート / 復元
+- クラウド自動同期・クラウドバックアップ
 - 高度な行動パターン分析
 - 栄養情報推定
 - レシピ提案
