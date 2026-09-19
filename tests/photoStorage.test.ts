@@ -216,6 +216,18 @@ describe('photoStorage', () => {
         'file:///docs/meal-photo-thumb.jpg'
       );
     });
+
+    test('handles .jpeg and .JPEG extensions case-insensitively', () => {
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-20260422213507.jpeg')).toBe(
+        'file:///docs/meal-20260422213507-thumb.jpg'
+      );
+      expect(resolveThumbnailDestinationUri('file:///docs/meal-20260422213507.JPEG')).toBe(
+        'file:///docs/meal-20260422213507-thumb.jpg'
+      );
+      expect(resolveThumbnailDestinationUri('file:///docs/meal.photo.with.dots.jpg')).toBe(
+        'file:///docs/meal.photo.with.dots-thumb.jpg'
+      );
+    });
   });
 
   describe('persistThumbnailToStablePath', () => {

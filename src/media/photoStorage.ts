@@ -120,8 +120,9 @@ export async function persistPhotoToStablePath(
 }
 
 export function resolveThumbnailDestinationUri(stablePhotoUri: string): string {
-  if (stablePhotoUri.toLowerCase().endsWith('.jpg')) {
-    return `${stablePhotoUri.slice(0, -4)}-thumb.jpg`;
+  const match = stablePhotoUri.match(/^(.*)\.(jpe?g)$/i);
+  if (match) {
+    return `${match[1]}-thumb.jpg`;
   }
   return `${stablePhotoUri}-thumb.jpg`;
 }

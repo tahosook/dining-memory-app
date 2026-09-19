@@ -85,7 +85,7 @@ describe('saveCaptureReviewWorkflow', () => {
       kind: 'saved',
       resizedPhotoUri: null,
       stablePhotoUri: 'file:///tmp/photo.jpg',
-      stableThumbnailUri: null,
+      stableThumbnailUri: undefined,
       savedToMediaLibrary: true,
       mealId: 'meal-1',
     });
@@ -166,7 +166,7 @@ describe('saveCaptureReviewWorkflow', () => {
       expect.objectContaining({
         kind: 'saved',
         stablePhotoUri: 'file:///docs/meal-1.jpg',
-        stableThumbnailUri: null,
+        stableThumbnailUri: undefined,
       })
     );
   });

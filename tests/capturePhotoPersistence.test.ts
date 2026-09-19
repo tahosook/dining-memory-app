@@ -91,13 +91,10 @@ describe('capturePhotoPersistence', () => {
       options
     );
 
-    // 3. Original temp cleanup
-    expect(cleanupTempFile).toHaveBeenCalledWith('file:///tmp/resized-original.jpg');
-
-    // 4. Thumbnail resize
+    // 3. Thumbnail resize (from resizedPhoto.uri, not raw photoUri)
     expect(ImageResizer.createResizedImage).toHaveBeenNthCalledWith(
       2,
-      'file:///tmp/captured-raw.jpg',
+      'file:///tmp/resized-original.jpg',
       CAMERA_CONSTANTS.THUMBNAIL_PHOTO_MAX_WIDTH,
       CAMERA_CONSTANTS.THUMBNAIL_PHOTO_MAX_HEIGHT,
       'JPEG',
@@ -111,16 +108,23 @@ describe('capturePhotoPersistence', () => {
       }
     );
 
-    // 5. Thumbnail persist to stable path
+    // 4. Thumbnail persist to stable path
     expect(persistThumbnailToStablePath).toHaveBeenCalledWith(
       'file:///tmp/resized-thumbnail.jpg',
       'file:///documents/meal-20260422213507.jpg'
     );
 
-    // 6. Thumbnail temp cleanup
-    expect(cleanupTempFile).toHaveBeenCalledWith('file:///tmp/resized-thumbnail.jpg');
+    // 5. Cleanup order verification: thumbnail temp is cleaned up first, then original temp
+    expect((cleanupTempFile as jest.Mock).mock.calls).toEqual([
+      ['file:///tmp/resized-thumbnail.jpg'],
+      ['file:///tmp/resized-original.jpg'],
+    ]);
 
-    // 7. Result verification
+    const thumbResizeOrder = (ImageResizer.createResizedImage as jest.Mock).mock.invocationCallOrder[1];
+    const originalCleanupOrder = (cleanupTempFile as jest.Mock).mock.invocationCallOrder[1];
+    expect(thumbResizeOrder).toBeLessThan(originalCleanupOrder);
+
+    // 6. Result verification
     expect(result).toEqual({
       stablePhotoUri: 'file:///documents/meal-20260422213507.jpg',
       stableThumbnailUri: 'file:///documents/meal-20260422213507-thumb.jpg',

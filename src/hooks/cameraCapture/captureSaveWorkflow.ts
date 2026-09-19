@@ -32,7 +32,7 @@ export type SaveCaptureWorkflowResult =
     kind: 'saved';
     resizedPhotoUri: string | null;
     stablePhotoUri: string;
-    stableThumbnailUri?: string | null;
+    stableThumbnailUri?: string;
     savedToMediaLibrary: boolean;
     mealId: string;
   }
@@ -55,7 +55,7 @@ export async function saveCaptureReviewWorkflow({
   cleanupTempFile,
 }: SaveCaptureWorkflowParams): Promise<SaveCaptureWorkflowResult> {
   let stablePhotoUri: string | null = null;
-  let stableThumbnailUri: string | null = null;
+  let stableThumbnailUri: string | undefined;
   const isWebWithoutPermissions = isWebWithoutCameraPermission(cameraPermission);
   const saveKey = createCaptureReviewSaveKey(captureReview);
 
@@ -87,7 +87,7 @@ export async function saveCaptureReviewWorkflow({
         softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
       });
     stablePhotoUri = persistedPhoto.stablePhotoUri;
-    stableThumbnailUri = persistedPhoto.stableThumbnailUri ?? null;
+    stableThumbnailUri = persistedPhoto.stableThumbnailUri;
     let savedToMediaLibrary = persistedPhoto.savedToMediaLibrary;
 
     const meal = await MealService.createMeal({
@@ -101,7 +101,7 @@ export async function saveCaptureReviewWorkflow({
       longitude: locationSnapshot.longitude,
       is_homemade: captureReview.isHomemade,
       photo_path: stablePhotoUri,
-      photo_thumbnail_path: stableThumbnailUri ?? undefined,
+      photo_thumbnail_path: stableThumbnailUri,
       meal_datetime: new Date(),
     });
 
