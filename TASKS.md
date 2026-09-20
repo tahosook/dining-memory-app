@@ -1,10 +1,10 @@
 # TASKS
 
 ## Meta
-- Purpose: 今見えている作業候補を短く整理し、今後の Codex prompt を短くする。
-- Audience: repo 保守者、Codex、実装担当者。
+- Purpose: 今見えている作業候補を短く整理し、今後の開発 prompt を短くする。
+- Audience: repo 保守者、AI エージェント、実装担当者。
 - Update trigger: 優先順位、作業候補、完了状況、前提が変わったとき。
-- Related docs: [AGENTS.md](AGENTS.md), [PLANS.md](PLANS.md), [docs/engineering/codex-context-map.md](docs/engineering/codex-context-map.md), [docs/product/progress.md](docs/product/progress.md)
+- Related docs: [AGENTS.md](AGENTS.md), [PLANS.md](PLANS.md), [docs/engineering/context-map.md](docs/engineering/context-map.md), [docs/product/progress.md](docs/product/progress.md)
 
 ## Now
 - AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
@@ -21,7 +21,6 @@
 ## Later
 - EXIF / GPS / ファイル名保存方針: 要確認。保存時 EXIF / GPS は実装方針あり。backup / export / file naming まで広げる場合は data policy と privacy を再確認する。
 - X共有導線: 候補。現在は Records detail から OS share sheet へ明示操作で進む最小導線がある。投稿状態保存や自動送信はしない。
-- バックアップ / エクスポート / 復元: 候補。product progress では未実装。local-first と sensitive data の扱いを先に固める。
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
@@ -30,4 +29,5 @@
 - Settings の local AI opt-in、model status、runtime status は実装済み。
 - MediaPipe static-image path は Android native bridge まで groundwork 済み。ただし default runtime / Settings readiness への接続は未接続。
 - Records detail からの明示的な X共有導線は実装済み。
+- 内部データのバックアップ / エクスポート / 復元（ローカル ZIP バックアップ基盤、Issue #63）は実装済み。
 - 旧 `PLANS.md` の MVP completion plan は historical reference で、current plan ではない。

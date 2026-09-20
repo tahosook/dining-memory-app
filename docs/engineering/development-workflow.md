@@ -1,14 +1,14 @@
-# Codex Workflow
+# Development Workflow
 
 ## Meta
-- Purpose: define how Codex should work in this repository.
-- Audience: Codex and any agentic coding workflow.
-- Update trigger: when the team changes how it wants agents to read, edit, or verify work.
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/engineering/codex-context-map.md](codex-context-map.md), [docs/index.md](../index.md), [docs/engineering/coding-standards.md](coding-standards.md)
+- Purpose: define how developers and AI agents should work in this repository.
+- Audience: developers, AI agents, and code reviewers.
+- Update trigger: when the team changes how developers or AI agents should read, edit, or verify work.
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/engineering/context-map.md](context-map.md), [docs/index.md](../index.md), [docs/engineering/coding-standards.md](coding-standards.md)
 
 ## Workflow
 1. Read `AGENTS.md`.
-2. Open `docs/engineering/codex-context-map.md`.
+2. Open `docs/engineering/context-map.md`.
 3. Open `docs/index.md` only when you need the broader documentation map.
 4. Read the smallest set of docs, source files, and tests needed for the task.
 5. Confirm the source of truth for the area you are changing.
@@ -64,20 +64,11 @@
 - After editing source, check the matching canonical docs even if the task did not explicitly ask for docs.
 - If source changed but docs did not, state why the current docs still match.
 - If docs changed but source did not, verify the docs describe current behavior and not a planned or historical behavior.
-- Use `docs/engineering/codex-context-map.md` to choose the smallest doc set to check.
+- Use [docs/engineering/context-map.md](context-map.md) to choose the smallest doc set to check.
+- Refer to `Doc Sync Targets` in [docs/engineering/context-map.md](context-map.md) for the exact mapping between source areas and canonical docs.
 - Treat `docs/deprecated/` and `docs/working/` as history; do not use them as proof of current behavior.
 - Keep historical notes explicit when they mention old behavior.
 - For current-behavior drift phrases, run `bash scripts/check-doc-drift.sh` and review any matches before finishing.
-
-### Source Area to Canonical Docs
-- AI input assist / local AI runtime: `docs/architecture/tech-spec.md`, `docs/ux/screen-designs.md`, `docs/product/progress.md`, and relevant `docs/notes/ai-input-*`.
-- MediaPipe labeling scripts or classifier path: `docs/engineering/food-labeling-guidelines.md`, `docs/engineering/mediapipe-labeling-workflow.md`, `docs/architecture/tech-spec.md`, and relevant notes.
-- Camera / save / EXIF / GPS / file paths: `docs/architecture/tech-spec.md`, `docs/domain/database-design.md`, `docs/ux/user-flows.md`.
-- Records / Search / X share: `docs/ux/screen-designs.md`, `docs/ux/user-flows.md`, `docs/domain/database-design.md`, `docs/product/progress.md`.
-- Stats: `docs/product/progress.md`, `docs/ux/screen-designs.md`, and `docs/domain/database-design.md` when aggregation contracts change.
-- Settings / privacy / local data deletion: `docs/architecture/tech-spec.md`, `docs/ux/screen-designs.md`, `docs/product/progress.md`.
-- Schema or persistence services: `docs/domain/database-design.md` and `docs/architecture/tech-spec.md`.
-- Runtime, dependencies, CI, Expo, Android build: `README.md`, `docs/architecture/tech-spec.md`, `.github/workflows/ci.yml` when relevant.
 
 ## When to Run What
 - Docs-only changes: verify links, filenames, and document consistency.
@@ -109,7 +100,7 @@
 - If a screen or interaction changes, update `docs/ux/*`.
 - If schema or storage changes, update `docs/domain/database-design.md`.
 - If coding conventions change, update `docs/engineering/coding-standards.md`.
-- If the way Codex should work changes, update this file and `AGENTS.md`.
+- If the development workflow changes, update this file and `AGENTS.md`.
 - If a change affects permissions, local storage, export, backup, or external data transfer, update `docs/architecture/tech-spec.md`.
 - If a change touches photo paths, location, notes, raw AI output, export, or sharing, verify production-like logs do not expose sensitive user data.
 

@@ -4,7 +4,7 @@
 - Purpose: MediaPipe static-image food classifier 向けラベル設計の改善ループを、bounded task として自動反復する workflow を定義する。
 - Audience: `scripts/mediapipe_labeling_loop.py`、`scripts/compare_labeling_reports.py`、関連 prompt / config を保守する実装者とレビュー担当者。
 - Update trigger: 自動改善 loop の目的、停止条件、guardrail、役割分担、次フェーズ判断が変わったとき。
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/product/overview.md](../product/overview.md), [docs/product/progress.md](../product/progress.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/engineering/codex-workflow.md](codex-workflow.md), [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/product/overview.md](../product/overview.md), [docs/product/progress.md](../product/progress.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md)
 
 ## Summary
 この workflow の主目的は、MediaPipe static-image food classifier 用に学習可能で実用的なラベル体系を固め、教師データ追加フェーズへ進めるところまでを bounded に自動反復することです。  

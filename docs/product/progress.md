@@ -37,6 +37,7 @@ Settings には local AI の事前許可、meal input assist model のダウン�
 - 設定画面の最小構成
 - ローカル保存を前提にしたデータアクセス層
 - 内部データのエクスポート・インポート（バックアップ／復元）基盤（Issue #63）
+- 一覧表示用サムネイルの生成・永続化・遅延生成基盤（Issue #56, #64）
 
 ### 一部実装
 - AI 入力補助
@@ -54,8 +55,6 @@ Settings には local AI の事前許可、meal input assist model のダウン�
   - 7日 / 今月 / 先月 / 全期間の period tabs、ふりかえり文、summary cards、自炊・外食 balance bar、料理ジャンル・場所の Top 3 ranking まで
 - 検索
   - text、料理ジャンル、場所、自炊フィルターを使う local text/filter path まで
-- 画像表示
-  - サムネイル生成は未実装で、保存画像のフォールバック表示を使う
 
 ### 未実装
 - 自動的な AI 解析
@@ -116,11 +115,10 @@ Settings には local AI の事前許可、meal input assist model のダウン�
 - 自動解析や保存後 enrichment としての料理認識
 - クラウド API を使った補完解析
 - 検索 quality 改善
-- バックアップ、エクスポート、復元
+- クラウド自動同期・クラウドバックアップ（ローカル ZIP バックアップ／復元基盤は実装済み）
 - より深い統計・傾向分析
 
 ## 次に進める候補
-- バックアップとエクスポートの優先順位を決める
 - 統計に calendar、曜日 / 時間帯 trend、photo highlights などの深い insight を追加するか検討する
 - 記録作成フローの入力補助を増やす
 - AI 解析を入れる前に必要な最小データ項目を再確認する

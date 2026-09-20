@@ -4,7 +4,7 @@
 - Purpose: この repo に今すぐ入れるべき具体的な改善案を優先度付きで整理する。
 - Audience: リポジトリ保守者、実装担当者、レビュー担当者。
 - Update trigger: 既存課題の解消、運用フローの変更、新しい高優先度課題の発見時。
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/engineering/codex-workflow.md](codex-workflow.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
 
 ## Summary
 この文書は、現時点の repo を見た上で、すぐ着手価値の高い改善案を優先度順にまとめたものです。  
@@ -34,7 +34,7 @@
 - 現状: `.github/workflows/ci.yml` が `main` push / pull request で `npm ci`, `npm run lint`, `npm run type-check`, `npm test -- --runInBand` を実行します。
 - リスク: 手元では通っていたつもりの lint/type-check/test 不整合が main に入りやすくなります。
 - 推奨修正: GitHub Actions CI を main 向けに常設し、必要なら次段階で `pre-commit` / `pre-push` の軽量フックを追加します。
-- 関連ファイル: [docs/engineering/codex-workflow.md](codex-workflow.md), [package.json](../../package.json), [.github/workflows/ci.yml](../../.github/workflows/ci.yml)
+- 関連ファイル: [docs/engineering/development-workflow.md](development-workflow.md), [package.json](../../package.json), [.github/workflows/ci.yml](../../.github/workflows/ci.yml)
 - 導入後の確認方法: pull request で `npm ci`, `npm run lint`, `npm run type-check`, `npm test -- --runInBand` が自動実行されることを確認します。
 
 ## Medium
