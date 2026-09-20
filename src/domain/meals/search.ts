@@ -10,6 +10,8 @@ export interface SearchFilters {
   cooking_level?: CookingLevel | string;
   location_name?: string;
   text?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export function generateSearchText(data: {
@@ -62,9 +64,14 @@ export function applyNonTextFilters(rows: PersistedMealRow[], filters: SearchFil
   });
 }
 
-export function matchesTextFilter(row: PersistedMealRow, text: string) {
-  const haystack = `${row.meal_name} ${row.location_name ?? ''} ${row.notes ?? ''} ${row.search_text ?? ''}`.toLowerCase();
-  return haystack.includes(text.toLowerCase());
+export function matchesTextFilter(row: PersistedMealRow, text: string): boolean {
+  const query = text.toLowerCase();
+  return Boolean(
+    (row.search_text && row.search_text.toLowerCase().includes(query)) ||
+    (row.meal_name && row.meal_name.toLowerCase().includes(query)) ||
+    (row.notes && row.notes.toLowerCase().includes(query)) ||
+    (row.location_name && row.location_name.toLowerCase().includes(query))
+  );
 }
 
 export function sortByRecency(left: PersistedMealRow, right: PersistedMealRow) {

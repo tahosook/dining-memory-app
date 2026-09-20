@@ -234,24 +234,24 @@ export class MealService {
         }
 
         const whereClause = conditions.join(' AND ');
-        const rows = await db.getAllAsync<PersistedMealRow>(
-          `SELECT * FROM meals WHERE ${whereClause} ORDER BY meal_datetime DESC`,
-          ...params
-        );
+        let query = `SELECT * FROM meals WHERE ${whereClause} ORDER BY meal_datetime DESC`;
+        // NOTE: 目前はシングルユーザー・ローカルDB前提のためシンプルな LIMIT / OFFSET 方式を採用しています。
+        // 将来的にバックグラウンド同期や大量データ下での高速カーソル走査が必要になった場合は、
+        // (meal_datetime, id) を用いた keyset pagination への移行を検討してください。
+        if (typeof filters.limit === 'number') {
+          query += ' LIMIT ?';
+          params.push(filters.limit);
+          if (typeof filters.offset === 'number' && filters.offset > 0) {
+            query += ' OFFSET ?';
+            params.push(filters.offset);
+          }
+        } else if (typeof filters.offset === 'number' && filters.offset > 0) {
+          query += ' LIMIT -1 OFFSET ?';
+          params.push(filters.offset);
+        }
 
-        let resultRows = rows;
-        if (targetCookingLevel) {
-          resultRows = resultRows.filter((r) => normalizeCookingLevel(r.cooking_level) === targetCookingLevel);
-        }
-        if (locationQuery) {
-          const locLower = locationQuery.toLowerCase();
-          resultRows = resultRows.filter((r) => (r.location_name ?? '').toLowerCase().includes(locLower));
-        }
-        if (textQuery) {
-          resultRows = resultRows.filter((r) => matchesTextFilter(r, textQuery));
-        }
-
-        return resultRows.map(mapRowToMeal);
+        const rows = await db.getAllAsync<PersistedMealRow>(query, ...params);
+        return rows.map(mapRowToMeal);
       }
     }
 
@@ -259,16 +259,15 @@ export class MealService {
     const filteredRows = applyNonTextFilters(rows, filters);
     const textQuery = filters.text?.trim();
 
-    if (!textQuery) {
-      return filteredRows
-        .sort(sortByRecency)
-        .map(mapRowToMeal);
-    }
+    const sortedRows = textQuery
+      ? filteredRows.filter((row) => matchesTextFilter(row, textQuery)).sort(sortByRecency)
+      : filteredRows.sort(sortByRecency);
 
-    return filteredRows
-      .filter((row) => matchesTextFilter(row, textQuery))
-      .sort(sortByRecency)
-      .map(mapRowToMeal);
+    const start = typeof filters.offset === 'number' && filters.offset > 0 ? filters.offset : 0;
+    const end = typeof filters.limit === 'number' ? start + filters.limit : undefined;
+    const pagedRows = sortedRows.slice(start, end);
+
+    return pagedRows.map(mapRowToMeal);
   }
 
   static async searchMealsByText(searchText: string): Promise<Meal[]> {

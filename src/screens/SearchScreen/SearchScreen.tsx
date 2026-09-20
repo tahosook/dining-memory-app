@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Image, StyleSheet, Switch, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, StyleSheet, Switch, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { CuisineTypeSelector } from '../../components/common/CuisineTypeSelector';
@@ -18,6 +18,8 @@ type SearchFilterState = {
   homemadeOnly: boolean;
 };
 
+export const SEARCH_PAGE_SIZE = 60;
+
 export const SearchScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { width: windowWidth } = useWindowDimensions();
@@ -28,9 +30,15 @@ export const SearchScreen: React.FC = () => {
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [results, setResults] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const activeSearchIdRef = useRef(0);
+  const loadingRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(false);
+  const resultsLengthRef = useRef(0);
   const filtersRef = useRef<SearchFilterState>({
     searchQuery: '',
     cuisineFilter: '',
@@ -55,8 +63,11 @@ export const SearchScreen: React.FC = () => {
 
   const runSearch = useCallback(async (filters: SearchFilterState = filtersRef.current) => {
     const searchId = ++activeSearchIdRef.current;
+    loadingRef.current = true;
     setLoading(true);
     setErrorMessage(null);
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
 
     try {
       const meals = await MealService.searchMeals({
@@ -64,10 +75,16 @@ export const SearchScreen: React.FC = () => {
         cuisine_type: filters.cuisineFilter || undefined,
         location_name: filters.locationFilter.trim() || undefined,
         is_homemade: filters.homemadeOnly || undefined,
+        limit: SEARCH_PAGE_SIZE,
+        offset: 0,
       });
       if (searchId !== activeSearchIdRef.current) {
         return;
       }
+      const hasNext = meals.length === SEARCH_PAGE_SIZE;
+      hasMoreRef.current = hasNext;
+      setHasMore(hasNext);
+      resultsLengthRef.current = meals.length;
       setResults(meals);
     } catch (error) {
       if (searchId !== activeSearchIdRef.current) {
@@ -77,8 +94,54 @@ export const SearchScreen: React.FC = () => {
       setErrorMessage('検索結果の更新に失敗しました。');
     } finally {
       if (searchId === activeSearchIdRef.current) {
+        loadingRef.current = false;
         setHasLoadedOnce(true);
         setLoading(false);
+      }
+    }
+  }, []);
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingRef.current || loadingMoreRef.current || !hasMoreRef.current) {
+      return;
+    }
+
+    const searchId = activeSearchIdRef.current;
+    const currentFilters = filtersRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      const nextMeals = await MealService.searchMeals({
+        text: currentFilters.searchQuery.trim() || undefined,
+        cuisine_type: currentFilters.cuisineFilter || undefined,
+        location_name: currentFilters.locationFilter.trim() || undefined,
+        is_homemade: currentFilters.homemadeOnly || undefined,
+        limit: SEARCH_PAGE_SIZE,
+        offset: resultsLengthRef.current,
+      });
+
+      if (searchId !== activeSearchIdRef.current) {
+        return;
+      }
+
+      const hasNext = nextMeals.length === SEARCH_PAGE_SIZE;
+      hasMoreRef.current = hasNext;
+      setHasMore(hasNext);
+
+      if (nextMeals.length > 0) {
+        resultsLengthRef.current += nextMeals.length;
+        setResults((prev) => [...prev, ...nextMeals]);
+      }
+    } catch (error) {
+      if (searchId !== activeSearchIdRef.current) {
+        return;
+      }
+      console.error('Failed to load more search results:', error);
+    } finally {
+      if (searchId === activeSearchIdRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
       }
     }
   }, []);
@@ -134,7 +197,13 @@ export const SearchScreen: React.FC = () => {
   const showErrorState = Boolean(errorMessage) && results.length === 0;
   const showInlineError = Boolean(errorMessage) && results.length > 0;
   const showZeroState = hasLoadedOnce && !loading && !errorMessage && results.length === 0;
-  const resultsCountText = loading ? '読み込み中...' : errorMessage ? '更新失敗' : `${results.length}件`;
+  const resultsCountText = loading
+    ? '読み込み中...'
+    : errorMessage
+      ? '更新失敗'
+      : hasMore
+        ? `${results.length}件+`
+        : `${results.length}件`;
   const hasActiveFilters = Boolean(cuisineFilter || locationFilter.trim() || homemadeOnly);
   const gridGap = 3;
   const gridHorizontalPadding = 16;
@@ -237,9 +306,19 @@ export const SearchScreen: React.FC = () => {
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
+          testID="search-results-list"
           contentContainerStyle={styles.resultsList}
           columnWrapperStyle={styles.resultGridRow}
           numColumns={3}
+          onEndReached={handleLoadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loadingMore ? (
+              <View style={styles.loadingMoreContainer} testID="search-loading-more">
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : null
+          }
           renderItem={({ item }) => (
             <TouchableOpacity
               style={[styles.photoCell, { width: cellSize, height: cellSize }]}
@@ -380,5 +459,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#f1f3f4',
+  },
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
