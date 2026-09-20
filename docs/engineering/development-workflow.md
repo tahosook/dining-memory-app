@@ -57,7 +57,7 @@
 - If dependency install only passes on a different Node/npm version than CI, update the CI runtime and the setup docs in the same task or regenerate the lockfile for the existing CI version.
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
 - Add a security review pass when changes touch permissions, file storage, location, export, backup, or external AI calls.
-- Run `bash scripts/check-doc-drift.sh` when a task changes AI input assist, MediaPipe labeling, Records, Search, Stats, Settings, storage, runtime assumptions, or documentation about current behavior.
+- Run `npm run check:docs` when a task changes AI input assist, MediaPipe labeling, Records, Search, Stats, Settings, storage, runtime assumptions, or documentation about current behavior.
 
 ## Doc Sync Gate
 - Before editing, identify the source area and the canonical docs that describe it.
@@ -68,7 +68,7 @@
 - Refer to `Doc Sync Targets` in [docs/engineering/context-map.md](context-map.md) for the exact mapping between source areas and canonical docs.
 - Treat `docs/deprecated/` and `docs/working/` as history; do not use them as proof of current behavior.
 - Keep historical notes explicit when they mention old behavior.
-- For current-behavior drift phrases, run `bash scripts/check-doc-drift.sh` and review any matches before finishing.
+- For current-behavior drift phrases, run `npm run check:docs` and review any matches before finishing.
 
 ## When to Run What
 - Docs-only changes: verify links, filenames, and document consistency.

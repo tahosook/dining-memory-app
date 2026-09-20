@@ -103,4 +103,4 @@ When source changes, check the smallest matching canonical docs before finishing
 - `scripts/*food-labels.py`, `scripts/mediapipe_*`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md)
 - `app.json`, `eas.json`, `.github/workflows/ci.yml`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/development-workflow.md](development-workflow.md)
 
-Run `bash scripts/check-doc-drift.sh` when a change touches current behavior docs, AI input assist, MediaPipe, storage, runtime, or UX descriptions.
+Run `npm run check:docs` when a change touches current behavior docs, AI input assist, MediaPipe, storage, runtime, or UX descriptions.

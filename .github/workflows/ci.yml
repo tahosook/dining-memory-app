@@ -31,6 +31,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check documentation integrity
+        run: npm run check:docs
+
   type-check:
     runs-on: ubuntu-latest
 
