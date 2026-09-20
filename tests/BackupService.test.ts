@@ -148,6 +148,37 @@ describe('BackupService', () => {
 
       expect(deleteAsync).toHaveBeenCalled();
     });
+
+    test('rejects exportBackup when referenced photo does not exist on device', async () => {
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
+
+      await expect(BackupService.exportBackup()).rejects.toThrow('バックアップ対象の写真ファイルが端末内に見つかりません。');
+
+      // zip and share are not executed
+      expect(zip).not.toHaveBeenCalled();
+      expect(Sharing.shareAsync).not.toHaveBeenCalled();
+      expect(deleteAsync).toHaveBeenCalled();
+    });
+
+    test('rejects exportBackup when copying a photo to staging fails', async () => {
+      (copyAsync as jest.Mock).mockRejectedValue(new Error('Disk write error'));
+
+      await expect(BackupService.exportBackup()).rejects.toThrow('写真ファイルのバックアップ一時領域へのコピーに失敗しました。');
+
+      expect(zip).not.toHaveBeenCalled();
+      expect(Sharing.shareAsync).not.toHaveBeenCalled();
+      expect(deleteAsync).toHaveBeenCalled();
+    });
+
+    test('rejects exportBackup when getInfoAsync throws error', async () => {
+      (getInfoAsync as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+
+      await expect(BackupService.exportBackup()).rejects.toThrow('バックアップ対象の写真ファイルの読み取りに失敗しました。');
+
+      expect(zip).not.toHaveBeenCalled();
+      expect(Sharing.shareAsync).not.toHaveBeenCalled();
+      expect(deleteAsync).toHaveBeenCalled();
+    });
   });
 
   describe('pickAndValidateBackup', () => {
@@ -351,6 +382,7 @@ describe('BackupService', () => {
       (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
         if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
         if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        if (path.endsWith('app_settings.json')) return Promise.resolve('[]');
         return Promise.resolve('{}');
       });
 
@@ -396,6 +428,7 @@ describe('BackupService', () => {
       (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
         if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
         if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        if (path.endsWith('app_settings.json')) return Promise.resolve('[]');
         return Promise.resolve('{}');
       });
 
@@ -445,6 +478,78 @@ describe('BackupService', () => {
 
       const result = await BackupService.pickAndValidateBackup();
       expect(result.valid).toBe(false);
+    });
+
+    test('rejects backup when app_settings.json has invalid JSON syntax', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 0,
+        photoCount: 0,
+      });
+
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('database/app_settings.json')) return Promise.resolve({ exists: true });
+        return Promise.resolve({ exists: true });
+      });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve('[]');
+        if (path.endsWith('app_settings.json')) return Promise.resolve('{ broken json:');
+        return Promise.resolve('{}');
+      });
+
+      (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('JSON構文エラー');
+    });
+
+    test('rejects backup when app_settings.json fails schema validation', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 0,
+        photoCount: 0,
+      });
+
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('database/app_settings.json')) return Promise.resolve({ exists: true });
+        return Promise.resolve({ exists: true });
+      });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve('[]');
+        // Array of invalid setting object (missing required key)
+        if (path.endsWith('app_settings.json')) return Promise.resolve(JSON.stringify([{ invalid_key: 'value' }]));
+        return Promise.resolve('{}');
+      });
+
+      (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('設定データ');
+      expect(result.error).toContain('キーが不正です');
     });
   });
 
@@ -643,6 +748,41 @@ describe('BackupService', () => {
         { idempotent: true }
       );
       expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
+    });
+
+    test('warns and reports error when photo rollback restoration itself fails', async () => {
+      const validationResult = {
+        valid: true,
+        stagingDirectory: 'file:///mock-cache/dm-import-123/',
+        meals: [
+          {
+            id: 'meal-1',
+            uuid: 'uuid-1',
+            meal_name: '既存上書き写真の食事',
+            photo_file_name: 'existing-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713800000000,
+            created_at: 1713800000000,
+            updated_at: 1713800000000,
+          },
+        ],
+      };
+
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+      (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
+        // Rollback copy: restoring existing-photo.jpg from rollback directory to mock-documents
+        if (options.from.includes('/dm-restore-rollback-')) {
+          return Promise.reject(new Error('Rollback copy failed'));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      (replaceDatabaseWithBackup as jest.Mock).mockRejectedValue(new Error('DB failure'));
+
+      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow(
+        '写真のロールバック復元にも一部失敗しました'
+      );
     });
   });
 

@@ -90,36 +90,57 @@ export class BackupService {
         writeAsStringAsync(`${dbDir}app_settings.json`, JSON.stringify(portableSettings, null, 2)),
       ]);
 
-      // Copy referenced original photos to staging photos/ directory
-      let copiedPhotoCount = 0;
+      // Collect unique referenced original photos to export
+      const requiredPhotoMap = new Map<string, string>();
+      for (const meal of mealRows) {
+        if (!meal.photo_path) {
+          continue;
+        }
+        const fileName = extractPhotoFileName(meal.photo_path);
+        if (fileName && isOriginalPhotoFileName(fileName)) {
+          if (!requiredPhotoMap.has(fileName)) {
+            requiredPhotoMap.set(fileName, meal.photo_path);
+          }
+        }
+      }
+
+      // Copy all referenced original photos to staging photos/ directory.
+      // Must-fix 1 & 2: Fail-fast on any missing photo, read error, or copy failure.
       const copiedSet = new Set<string>();
 
-      for (const meal of mealRows) {
-        const fileName = extractPhotoFileName(meal.photo_path);
-        if (!fileName || !isOriginalPhotoFileName(fileName) || copiedSet.has(fileName)) {
-          continue;
+      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
+        let fileInfo;
+        try {
+          fileInfo = await getInfoAsync(photoPath);
+        } catch {
+          throw new Error('バックアップ対象の写真ファイルの読み取りに失敗しました。');
+        }
+
+        if (!fileInfo || !fileInfo.exists) {
+          throw new Error('バックアップ対象の写真ファイルが端末内に見つかりません。');
         }
 
         try {
-          const fileInfo = await getInfoAsync(meal.photo_path);
-          if (fileInfo.exists) {
-            await copyAsync({
-              from: meal.photo_path,
-              to: `${photosDir}${fileName}`,
-            });
-            copiedSet.add(fileName);
-            copiedPhotoCount++;
-          }
+          await copyAsync({
+            from: photoPath,
+            to: `${photosDir}${fileName}`,
+          });
         } catch {
-          // Skip unreadable photo without logging sensitive file path
+          throw new Error('写真ファイルのバックアップ一時領域へのコピーに失敗しました。');
         }
+
+        copiedSet.add(fileName);
+      }
+
+      if (copiedSet.size !== requiredPhotoMap.size) {
+        throw new Error('バックアップ対象の写真コピー数と要求数が一致しません。');
       }
 
       const manifest: BackupManifest = createBackupManifest({
         appVersion: getAppVersion() ?? '1.0.0',
         schemaVersion: DATABASE_SCHEMA_VERSION,
         mealCount: portableMeals.length,
-        photoCount: copiedPhotoCount,
+        photoCount: requiredPhotoMap.size,
       });
 
       await writeAsStringAsync(`${stagingDir}manifest.json`, JSON.stringify(manifest, null, 2));
@@ -141,12 +162,16 @@ export class BackupService {
       return {
         zipFileName,
         mealCount: portableMeals.length,
-        photoCount: copiedPhotoCount,
+        photoCount: requiredPhotoMap.size,
       };
     } finally {
-      // Ensure staging files and temporary ZIP archive are cleaned up
-      await deleteAsync(stagingDir, { idempotent: true }).catch(() => undefined);
-      await deleteAsync(zipFilePath, { idempotent: true }).catch(() => undefined);
+      // Ensure staging files and temporary ZIP archive are cleaned up (diagnostic log if failed)
+      await deleteAsync(stagingDir, { idempotent: true }).catch((err) => {
+        console.warn('[BackupService] Failed to clean up export staging directory:', err instanceof Error ? err.message : err);
+      });
+      await deleteAsync(zipFilePath, { idempotent: true }).catch((err) => {
+        console.warn('[BackupService] Failed to clean up temporary ZIP file:', err instanceof Error ? err.message : err);
+      });
     }
   }
 
@@ -217,15 +242,30 @@ export class BackupService {
         };
       }
 
-      // 3. Validate database/app_settings.json (optional)
+      // 3. Validate database/app_settings.json (optional file, but if present must be valid JSON and valid schema)
       let appSettings: PortableAppSettingRecord[] = [];
       const settingsInfo = await getInfoAsync(`${stagingDir}database/app_settings.json`);
       if (settingsInfo.exists) {
-        const rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
-        const settingsValidation = validatePortableAppSettings(rawSettings);
-        if (settingsValidation.valid && settingsValidation.appSettings) {
-          appSettings = settingsValidation.appSettings;
+        let rawSettings: unknown;
+        try {
+          rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
+        } catch {
+          await this.cleanupStaging(stagingDir);
+          return {
+            valid: false,
+            error: 'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
+          };
         }
+
+        const settingsValidation = validatePortableAppSettings(rawSettings);
+        if (!settingsValidation.valid || !settingsValidation.appSettings) {
+          await this.cleanupStaging(stagingDir);
+          return {
+            valid: false,
+            error: settingsValidation.error ?? 'アプリ設定データの形式が不正です。',
+          };
+        }
+        appSettings = settingsValidation.appSettings;
       }
 
       // Check meals count matches manifest
@@ -406,22 +446,42 @@ export class BackupService {
       };
     } catch (restoreError) {
       // Rollback photo modifications if anything failed
+      let rollbackFailedCount = 0;
+
       for (const fileName of newlyCreatedFiles) {
         if (copiedFiles.has(fileName)) {
-          await deleteAsync(`${targetDocDir}${fileName}`, { idempotent: true }).catch(() => undefined);
+          try {
+            await deleteAsync(`${targetDocDir}${fileName}`, { idempotent: true });
+          } catch {
+            rollbackFailedCount++;
+          }
         }
       }
+
       for (const fileName of backedUpFiles) {
         if (copiedFiles.has(fileName)) {
-          await copyAsync({
-            from: `${rollbackDir}${fileName}`,
-            to: `${targetDocDir}${fileName}`,
-          }).catch(() => undefined);
+          try {
+            await copyAsync({
+              from: `${rollbackDir}${fileName}`,
+              to: `${targetDocDir}${fileName}`,
+            });
+          } catch {
+            rollbackFailedCount++;
+          }
         }
       }
+
+      if (rollbackFailedCount > 0) {
+        console.warn(`[BackupService] Photo rollback encountered ${rollbackFailedCount} error(s) during recovery.`);
+        const baseMessage = restoreError instanceof Error ? restoreError.message : '復元処理に失敗しました。';
+        throw new Error(`${baseMessage}（写真のロールバック復元にも一部失敗しました）`);
+      }
+
       throw restoreError;
     } finally {
-      await deleteAsync(rollbackDir, { idempotent: true }).catch(() => undefined);
+      await deleteAsync(rollbackDir, { idempotent: true }).catch((err) => {
+        console.warn('[BackupService] Failed to clean up rollback directory:', err instanceof Error ? err.message : err);
+      });
       await this.cleanupStaging(stagingDir);
     }
   }
@@ -434,6 +494,8 @@ export class BackupService {
       return;
     }
 
-    await deleteAsync(stagingDirectory, { idempotent: true }).catch(() => undefined);
+    await deleteAsync(stagingDirectory, { idempotent: true }).catch((err) => {
+      console.warn('[BackupService] Failed to clean up staging directory:', err instanceof Error ? err.message : err);
+    });
   }
 }
