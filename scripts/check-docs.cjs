@@ -47,14 +47,16 @@ function getCanonicalDocsFromIndex(indexFilePath = path.join(ROOT_DIR, 'docs', '
   }
 
   const sectionContent = canonicalSectionMatch[1];
-  // Exclude ### Notes subsection (which links to temporary notes/ and retired deprecated/ folders)
+  // Exclude ### Notes subsection (which links to temporary notes/ and retired deprecated/ folders).
+  // Note: This relies specifically on the "### Notes" heading convention inside docs/index.md.
+  // If the heading naming or section structure of docs/index.md changes, this exclusion rule
+  // will need to be updated accordingly.
   const withoutNotes = sectionContent.replace(/### Notes\s*[\s\S]*?(?=\n### |\n## |$)/, '');
 
   const linkRegex = /\[([^\]]+)\]\(([^)#\s]+)(?:#[^)]*)?\)/g;
   let match;
   const canonicalDocs = [];
   const indexDir = path.dirname(indexFilePath);
-  const lines = content.split(/\r?\n/);
 
   // docs/index.md itself is also a canonical doc
   canonicalDocs.push({
@@ -71,9 +73,13 @@ function getCanonicalDocsFromIndex(indexFilePath = path.join(ROOT_DIR, 'docs', '
       continue;
     }
 
-    // Find exact line number in docs/index.md for precise error reporting
-    const matchOffset = canonicalSectionMatch.index + content.slice(canonicalSectionMatch.index).indexOf(withoutNotes) + match.index;
-    const lineNum = content.slice(0, matchOffset).split(/\r?\n/).length;
+    // Determine line number by locating the link string in the original index content.
+    // Line numbers are advisory for diagnostics; fall back to null if not found.
+    let lineNum = null;
+    const linkIndex = content.indexOf(match[0]);
+    if (linkIndex !== -1) {
+      lineNum = content.slice(0, linkIndex).split(/\r?\n/).length;
+    }
 
     const resolved = path.resolve(indexDir, rawTarget);
     const relPath = path.relative(ROOT_DIR, resolved).replace(/\\/g, '/');
@@ -222,6 +228,13 @@ function run(options = {}) {
 
   // 2. Scan active markdown files
   const activeFiles = getActiveMarkdownFiles();
+
+  // Markdown link regex: matches inline links [text](path) and images ![alt](path).
+  // Scope and Intentional Trade-offs:
+  // - Matches relative paths before optional anchor fragment (#anchor).
+  // - Intentionally includes image links (![...](...)) to verify asset references.
+  // - Excludes links with whitespace in target or title attributes [text](url "title").
+  // - Anchor fragments are ignored for file resolution (see Note on Anchors below).
   const linkRegex = /!?\[([^\]]*)\]\(([^)#\s]+)(?:#[^)]*)?\)/g;
 
   for (const filePath of activeFiles) {
