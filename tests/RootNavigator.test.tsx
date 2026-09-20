@@ -111,6 +111,29 @@ describe('RootNavigator Integration', () => {
     expect(getByTestId('mock-camera-screen')).toBeTruthy();
   });
 
+  test('controls header visibility declaratively per screen (Camera: false, Records: false, Search: true, Stats: true, Settings: true)', async () => {
+    const { getByText, getByRole, queryByRole } = render(<RootNavigator />);
+
+    // 1. Camera: headerShown === false (no header with role="heading" and name="撮影")
+    expect(queryByRole('heading', { name: '撮影' })).toBeNull();
+
+    // 2. Records: headerShown === false (no header with role="heading" and name="記録")
+    fireEvent.press(getByText('記録'));
+    expect(queryByRole('heading', { name: '記録' })).toBeNull();
+
+    // 3. Search: headerShown === true (header with role="heading" and name="検索" exists)
+    fireEvent.press(getByText('検索'));
+    expect(getByRole('heading', { name: '検索' })).toBeTruthy();
+
+    // 4. Stats: headerShown === true (header with role="heading" and name="統計" exists)
+    fireEvent.press(getByText('統計'));
+    expect(getByRole('heading', { name: '統計' })).toBeTruthy();
+
+    // 5. Settings: headerShown === true (header with role="heading" and name="設定" exists)
+    fireEvent.press(getByText('設定'));
+    expect(getByRole('heading', { name: '設定' })).toBeTruthy();
+  });
+
   test('navigates from tab to stack screen MealDetail', async () => {
     const { getByTestId, getByText } = render(<RootNavigator />);
 
