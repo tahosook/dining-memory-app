@@ -114,17 +114,25 @@ async function processMealThumbnail(mealId: string): Promise<string | null> {
       }
     }
 
-    // Stale Update 防止: DB の現在の状態を再確認
-    const latestMeal = await MealService.getMealById(mealId);
-    if (!latestMeal || latestMeal.photo_path !== initialPhotoPath) {
-      // ユーザーによって写真が差し替えられたか、Mealが削除されている
+    // Stale Update 防止: photo_path が生成開始時と一致する場合のみ原子的に DB を更新
+    let updated = false;
+    try {
+      updated = await MealService.updateMealThumbnail(
+        mealId,
+        stableThumbnailUri,
+        initialPhotoPath
+      );
+    } catch (dbError) {
+      console.warn('Failed to update meal thumbnail in DB:', dbError);
       await cleanupTempFile(stableThumbnailUri);
       return null;
     }
 
-    await MealService.updateMeal(mealId, {
-      photo_thumbnail_path: stableThumbnailUri,
-    });
+    if (!updated) {
+      // 写真が差し替えられたか、Mealが削除されたため stale result として破棄
+      await cleanupTempFile(stableThumbnailUri);
+      return null;
+    }
 
     return stableThumbnailUri;
   } catch (error) {

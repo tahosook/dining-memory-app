@@ -356,6 +356,41 @@ export class MealService {
     return mapRowToMeal(nextRow);
   }
 
+  static async updateMealThumbnail(
+    mealId: string,
+    thumbnailPath: string,
+    expectedPhotoPath: string
+  ): Promise<boolean> {
+    await initializeDatabase();
+
+    if (isUsingNativeDatabase()) {
+      const db = getDatabase();
+      if (db) {
+        const result = await db.runAsync(
+          'UPDATE meals SET photo_thumbnail_path = ?, updated_at = ? WHERE id = ? AND photo_path = ? AND is_deleted = 0',
+          thumbnailPath,
+          Date.now(),
+          mealId,
+          expectedPhotoPath
+        );
+        return result.changes > 0;
+      }
+    }
+
+    const rows = getInMemoryMeals();
+    const row = rows.find(
+      (item) => item.id === mealId && item.photo_path === expectedPhotoPath && !item.is_deleted
+    );
+    if (!row) {
+      return false;
+    }
+
+    row.photo_thumbnail_path = thumbnailPath;
+    row.updated_at = Date.now();
+    await saveRows(rows);
+    return true;
+  }
+
   static async getStatistics(options: StatisticsOptions = {}): Promise<StatisticsSummary> {
     const rows = filterRowsForStatistics(await getAllRows(), options);
     return buildStatisticsSummary(rows);

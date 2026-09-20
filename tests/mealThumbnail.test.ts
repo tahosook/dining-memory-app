@@ -39,6 +39,7 @@ jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     getMealById: jest.fn(),
     updateMeal: jest.fn(),
+    updateMealThumbnail: jest.fn(),
   },
 }));
 
@@ -74,7 +75,7 @@ describe('mealThumbnail', () => {
       'file:///docs/meal-1-thumb.jpg'
     );
     (cleanupTempFile as jest.Mock).mockResolvedValue(undefined);
-    (MealService.updateMeal as jest.Mock).mockResolvedValue(true);
+    (MealService.updateMealThumbnail as jest.Mock).mockResolvedValue(true);
   });
 
   describe('ensureMealThumbnail', () => {
@@ -101,9 +102,11 @@ describe('mealThumbnail', () => {
         'file:///docs/meal-1.jpg'
       );
       expect(cleanupTempFile).toHaveBeenCalledWith('file:///tmp/resized-thumb.jpg');
-      expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
-        photo_thumbnail_path: 'file:///docs/meal-1-thumb.jpg',
-      });
+      expect(MealService.updateMealThumbnail).toHaveBeenCalledWith(
+        'meal-1',
+        'file:///docs/meal-1-thumb.jpg',
+        'file:///docs/meal-1.jpg'
+      );
     });
 
     test('returns existing photo_thumbnail_path if file already exists', async () => {
@@ -117,7 +120,7 @@ describe('mealThumbnail', () => {
 
       expect(result).toBe('file:///docs/meal-1-thumb.jpg');
       expect(ImageResizer.createResizedImage).not.toHaveBeenCalled();
-      expect(MealService.updateMeal).not.toHaveBeenCalled();
+      expect(MealService.updateMealThumbnail).not.toHaveBeenCalled();
     });
 
     test('regenerates thumbnail if photo_thumbnail_path is set but file does not exist', async () => {
@@ -134,9 +137,11 @@ describe('mealThumbnail', () => {
 
       expect(result).toBe('file:///docs/meal-1-thumb.jpg');
       expect(ImageResizer.createResizedImage).toHaveBeenCalledTimes(1);
-      expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
-        photo_thumbnail_path: 'file:///docs/meal-1-thumb.jpg',
-      });
+      expect(MealService.updateMealThumbnail).toHaveBeenCalledWith(
+        'meal-1',
+        'file:///docs/meal-1-thumb.jpg',
+        'file:///docs/meal-1.jpg'
+      );
     });
 
     test('skips thumbnail generation if original photo file does not exist', async () => {
@@ -148,6 +153,7 @@ describe('mealThumbnail', () => {
 
       expect(result).toBeNull();
       expect(ImageResizer.createResizedImage).not.toHaveBeenCalled();
+      expect(MealService.updateMealThumbnail).not.toHaveBeenCalled();
     });
 
     test('preserves meal and returns null if ImageResizer fails', async () => {
@@ -162,7 +168,7 @@ describe('mealThumbnail', () => {
       const result = await ensureMealThumbnail('meal-1');
 
       expect(result).toBeNull();
-      expect(MealService.updateMeal).not.toHaveBeenCalled();
+      expect(MealService.updateMealThumbnail).not.toHaveBeenCalled();
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         'Meal thumbnail generation failed:',
         expect.any(Error)
@@ -261,30 +267,109 @@ describe('mealThumbnail', () => {
   });
 
   describe('Stale Update Prevention', () => {
-    test('discards generated thumbnail and cleans up file if photo_path was changed during generation', async () => {
+    test('Test A: discards generated thumbnail and cleans up file when conditional update returns false (0 rows updated)', async () => {
       const initialMeal = createMockMeal({
-        photo_path: 'file:///docs/meal-initial.jpg',
+        photo_path: 'file:///docs/photo-A.jpg',
       });
-      const changedMeal = createMockMeal({
-        photo_path: 'file:///docs/meal-replaced.jpg',
-      });
-
-      (MealService.getMealById as jest.Mock)
-        .mockResolvedValueOnce(initialMeal) // First call: before generation
-        .mockResolvedValueOnce(changedMeal); // Second call: before DB update check
-
+      (MealService.getMealById as jest.Mock).mockResolvedValue(initialMeal);
       (persistThumbnailToStablePath as jest.Mock).mockResolvedValue(
-        'file:///docs/meal-initial-thumb.jpg'
+        'file:///docs/photo-A-thumb.jpg'
       );
+      // 条件付きUPDATEが0件（false）を返す（photo_pathがBに変更されたなど）
+      (MealService.updateMealThumbnail as jest.Mock).mockResolvedValue(false);
 
       const result = await ensureMealThumbnail('meal-1');
 
-      // Result should be null (stale discarded)
       expect(result).toBeNull();
-      // DB should NOT be updated with stale thumbnail
-      expect(MealService.updateMeal).not.toHaveBeenCalled();
-      // Generated stable thumbnail must be cleaned up
-      expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/meal-initial-thumb.jpg');
+      expect(MealService.updateMealThumbnail).toHaveBeenCalledWith(
+        'meal-1',
+        'file:///docs/photo-A-thumb.jpg',
+        'file:///docs/photo-A.jpg'
+      );
+      // 生成された stable thumbnail はクリーンアップされる
+      expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/photo-A-thumb.jpg');
+    });
+
+    test('Test B: resolves race condition deterministically when photo_path is replaced during thumbnail generation', async () => {
+      let currentMealPhoto = 'file:///docs/photo-A.jpg';
+      let currentMealThumbnail: string | undefined;
+
+      (MealService.getMealById as jest.Mock).mockImplementation(async () =>
+        createMockMeal({
+          id: 'meal-1',
+          photo_path: currentMealPhoto,
+          photo_thumbnail_path: currentMealThumbnail,
+        })
+      );
+
+      // conditional update の挙動: 実行時点の currentMealPhoto と expectedPhoto が一致する場合のみ更新
+      (MealService.updateMealThumbnail as jest.Mock).mockImplementation(
+        async (_id: string, thumbPath: string, expectedPhoto: string) => {
+          if (currentMealPhoto === expectedPhoto) {
+            currentMealThumbnail = thumbPath;
+            return true;
+          }
+          return false;
+        }
+      );
+
+      let resolveThumbnailSave!: (uri: string) => void;
+      const thumbnailSavePromise = new Promise<string>((resolve) => {
+        resolveThumbnailSave = resolve;
+      });
+      (persistThumbnailToStablePath as jest.Mock).mockReturnValue(thumbnailSavePromise);
+
+      // ensureMealThumbnail を開始（photo_path = photo-A.jpg で開始）
+      const thumbnailPromise = ensureMealThumbnail('meal-1');
+
+      // サムネイル生成中/保存中のタイミングで、ユーザーが写真差し替え（photo-B.jpg へ変更）
+      currentMealPhoto = 'file:///docs/photo-B.jpg';
+
+      // サムネイル保存完了
+      resolveThumbnailSave('file:///docs/photo-A-thumb.jpg');
+
+      const result = await thumbnailPromise;
+
+      // 結果は null
+      expect(result).toBeNull();
+      // 条件付きUPDATEは expectedPhotoPath = photo-A.jpg で呼ばれるが、現在の photo は photo-B.jpg なので失敗
+      expect(MealService.updateMealThumbnail).toHaveBeenCalledWith(
+        'meal-1',
+        'file:///docs/photo-A-thumb.jpg',
+        'file:///docs/photo-A.jpg'
+      );
+      // currentMealThumbnail に photo-A-thumb.jpg が誤って設定されない
+      expect(currentMealThumbnail).toBeUndefined();
+      // 生成された photo-A のサムネイルはクリーンアップされる
+      expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/photo-A-thumb.jpg');
+    });
+
+    test('Test C: cleans up stable thumbnail and returns null when DB update throws an error without destroying meal', async () => {
+      const meal = createMockMeal({
+        photo_path: 'file:///docs/photo-A.jpg',
+      });
+      (MealService.getMealById as jest.Mock).mockResolvedValue(meal);
+      (persistThumbnailToStablePath as jest.Mock).mockResolvedValue(
+        'file:///docs/photo-A-thumb.jpg'
+      );
+      (MealService.updateMealThumbnail as jest.Mock).mockRejectedValue(
+        new Error('Disk I/O error during DB UPDATE')
+      );
+
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+
+      const result = await ensureMealThumbnail('meal-1');
+
+      // 例外は外側に漏れず null
+      expect(result).toBeNull();
+      // 生成された stable thumbnail は確実に cleanup される
+      expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/photo-A-thumb.jpg');
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'Failed to update meal thumbnail in DB:',
+        expect.any(Error)
+      );
+
+      consoleWarnSpy.mockRestore();
     });
   });
 
