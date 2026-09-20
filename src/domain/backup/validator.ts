@@ -1,4 +1,4 @@
-import { validateSafeFileName } from './pathNormalizer';
+import { isOriginalPhotoFileName, validateSafeFileName } from './pathNormalizer';
 import type { PortableAppSettingRecord, PortableMealRecord } from './types';
 
 export interface ValidateMealsResult {
@@ -44,10 +44,13 @@ export function validatePortableMeals(raw: unknown): ValidateMealsResult {
       return { valid: false, error: `食事データ #${i + 1} の写真ファイル名が不正です。` };
     }
 
-    if (!validateSafeFileName(row.photo_file_name)) {
+    if (
+      !validateSafeFileName(row.photo_file_name) ||
+      !isOriginalPhotoFileName(row.photo_file_name)
+    ) {
       return {
         valid: false,
-        error: `食事データ #${i + 1} の写真ファイル名に危険なパス文字が含まれています。`,
+        error: `食事データ #${i + 1} の写真ファイル名が不正または非オリジナルです。`,
       };
     }
 

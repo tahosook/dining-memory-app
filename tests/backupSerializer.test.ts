@@ -332,11 +332,44 @@ describe('backup validator', () => {
         created_at: 1713800000000,
         updated_at: 1713800000000,
       },
+      {
+        id: '2',
+        uuid: 'uuid-2',
+        meal_name: 'カレー',
+        photo_file_name: 'meal-01.jpeg',
+        is_homemade: 1,
+        meal_datetime: 1713800000000,
+        created_at: 1713800000000,
+        updated_at: 1713800000000,
+      },
     ];
 
     const result = validatePortableMeals(validData);
     expect(result.valid).toBe(true);
-    expect(result.meals).toHaveLength(1);
+    expect(result.meals).toHaveLength(2);
+    expect(result.meals?.[0].photo_file_name).toBe('meal-01.jpg');
+    expect(result.meals?.[1].photo_file_name).toBe('meal-01.jpeg');
+  });
+
+  test('validatePortableMeals rejects thumbnail photo files', () => {
+    const createRecord = (photo_file_name: string) => ({
+      id: '1',
+      uuid: 'uuid-1',
+      meal_name: 'ラーメン',
+      photo_file_name,
+      is_homemade: 0,
+      meal_datetime: 1713800000000,
+      created_at: 1713800000000,
+      updated_at: 1713800000000,
+    });
+
+    const thumbJpgResult = validatePortableMeals([createRecord('meal-01-thumb.jpg')]);
+    expect(thumbJpgResult.valid).toBe(false);
+    expect(thumbJpgResult.error).toContain('不正または非オリジナル');
+
+    const thumbJpegResult = validatePortableMeals([createRecord('meal-01-thumb.jpeg')]);
+    expect(thumbJpegResult.valid).toBe(false);
+    expect(thumbJpegResult.error).toContain('不正または非オリジナル');
   });
 
   test('validatePortableMeals rejects non-array and corrupted records', () => {
