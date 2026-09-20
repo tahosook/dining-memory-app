@@ -1,8 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Script to create GitHub Issues from docs/issues/ definitions
-# Usage: ./scripts/create-github-issues.sh
+# ==============================================================================
+# create-github-issues.sh
+#
+# 【注意 / WARNING】
+# 本スクリプトは、docs/issues/ 配下の Issue 仕様書から GitHub Issue を一括作成する
+# 「初回投入用ワンタイムツール」です。
+#
+# - 本スクリプトは GitHub Issue との「双方向同期ツール」ではありません。
+# - 再実行すると、GitHub 上に同じ内容の Issue が重複して新規作成されます。
+# - 本リポジトリでは既に Issue #73 〜 #83 が起票済みであるため、
+#   日常的な開発や CI 運用の中で本スクリプトを実行する必要はありません。
+#
+# どうしても再実行が必要な場合のみ、明示的に --force-create-all フラグを付与してください。
+#   Usage: ./scripts/create-github-issues.sh --force-create-all
+# ==============================================================================
+
+if [[ "${1:-}" != "--force-create-all" ]]; then
+  cat <<'EOF' >&2
+[WARNING] 本スクリプトは初回投入用のワンタイムスクリプトです。
+既にリポジトリ上には Issue #73 〜 #83 が登録されています。
+このスクリプトを再実行すると、GitHub 上に重複した Issue が新規作成されてしまいます。
+
+通常運用では本スクリプトを実行する必要はありません。
+意図して重複作成を行う場合のみ、以下のフラグを付与して実行してください:
+  ./scripts/create-github-issues.sh --force-create-all
+EOF
+  exit 1
+fi
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "Error: gh (GitHub CLI) is not installed." >&2
@@ -33,7 +59,7 @@ ensure_label "ci" "023047" "Continuous integration and workflow improvements"
 ensure_label "chore" "b0c4de" "Routine tasks, maintenance, and dependencies"
 ensure_label "database" "f77f00" "Database schemas, queries, and migrations"
 
-echo "=== Creating GitHub Issues for Dining Memory App ==="
+echo "=== Creating GitHub Issues for Dining Memory App (FORCE MODE) ==="
 
 create_issue() {
   local title="$1"
