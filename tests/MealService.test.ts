@@ -1,6 +1,7 @@
 import { MealService } from '../src/database/services/MealService';
-import { isUsingNativeDatabase, getDatabase } from '../src/database/services/localDatabase';
+import { isUsingNativeDatabase, getDatabase, setInMemoryMeals } from '../src/database/services/localDatabase';
 import { buildStatisticsSummary, filterRowsForStatistics } from '../src/domain/meals/statistics';
+import type { SearchFilters } from '../src/domain/meals/search';
 
 jest.mock('../src/database/services/localDatabase', () => {
   type MockMealRow = Record<string, unknown>;
@@ -1462,29 +1463,190 @@ describe('MealService', () => {
       ]);
     });
 
-    test('Parity: Real SQLite executes searchMeals with filters and pagination matching InMemory baseline', async () => {
-      // 1. 複数条件（和食・外食）+ ページネーション（limit: 1, offset: 0）
-      const nativePage1 = await MealService.searchMeals({
-        cuisine_type: '和食',
-        is_homemade: false,
-        limit: 1,
-        offset: 0,
-      });
-      expect(nativePage1).toHaveLength(1);
-      expect(nativePage1[0].id).toBe('3'); // 寿司 (datetime: 3000)
+    test('Parity: Real SQLite and InMemory return identical search results across Unicode, case, wildcards, and pagination', async () => {
+      const searchParityRows = [
+        // s1: meal_name ヒット + 日本語（漢字・カタカナ）
+        {
+          id: 's1',
+          uuid: 'u-s1',
+          meal_name: '特製醤油ラーメン',
+          cuisine_type: 'ラーメン',
+          location_name: '東京駅',
+          notes: 'チャーシュー増し 美味しい',
+          search_text: '特製醤油ラーメン ラーメン 東京駅 チャーシュー増し 美味しい',
+          meal_datetime: 10000,
+          is_homemade: 0,
+          cooking_level: 'daily',
+          is_deleted: 0,
+        },
+        // s2: 英語大文字小文字 + location_name ヒット (Shibuya) + notes ヒット (coffee)
+        {
+          id: 's2',
+          uuid: 'u-s2',
+          meal_name: 'Blue Bottle Cafe',
+          cuisine_type: 'カフェ',
+          location_name: 'Shibuya',
+          notes: 'Drip coffee with milk',
+          search_text: 'blue bottle cafe カフェ shibuya drip coffee with milk',
+          meal_datetime: 9000,
+          is_homemade: 0,
+          cooking_level: 'quick',
+          is_deleted: 0,
+        },
+        // s3: 日本語・英語混在 + 特殊文字 (%_\\) + cooking_level: gourmet
+        {
+          id: 's3',
+          uuid: 'u-s3',
+          meal_name: '東京 Cafe & Dining',
+          cuisine_type: 'カフェ',
+          location_name: '銀座',
+          notes: 'ランチセット 100%_juice\\special',
+          search_text: '東京 cafe & dining カフェ 銀座 ランチセット 100%_juice\\special',
+          meal_datetime: 8000,
+          is_homemade: 0,
+          cooking_level: 'gourmet',
+          is_deleted: 0,
+        },
+        // s4: 日本語ひらがな (てづくり) + 自宅 + is_homemade
+        {
+          id: 's4',
+          uuid: 'u-s4',
+          meal_name: 'てづくりカレー',
+          cuisine_type: 'カレー',
+          location_name: '自宅',
+          notes: 'スパイスから調合 からい',
+          search_text: 'てづくりカレー カレー 自宅 スパイスから調合 からい',
+          meal_datetime: 7000,
+          is_homemade: 1,
+          cooking_level: 'daily',
+          is_deleted: 0,
+        },
+        // s5: 特殊文字 (%) と 数字 + search_text ヒット (ドリンク)
+        {
+          id: 's5',
+          uuid: 'u-s5',
+          meal_name: '1000 Orange Juice',
+          cuisine_type: 'ドリンク',
+          location_name: 'コンビニ',
+          notes: '果汁1000ではなく果汁10%',
+          search_text: '1000 orange juice ドリンク コンビニ 果汁1000ではなく果汁10%',
+          meal_datetime: 6000,
+          is_homemade: 0,
+          cooking_level: 'quick',
+          is_deleted: 0,
+        },
+        // s6: カラム境界跨ぎ偽陽性検証用（search_text なし、meal_name と location_name の結合文字列で誤一致しないこと）
+        {
+          id: 's6',
+          uuid: 'u-s6',
+          meal_name: 'Super',
+          cuisine_type: 'その他',
+          location_name: 'Market',
+          notes: 'fresh food',
+          search_text: null,
+          meal_datetime: 5000,
+          is_homemade: 0,
+          cooking_level: 'quick',
+          is_deleted: 0,
+        },
+        // s7: 削除済みレコード（is_deleted = 1）: すべての検索で除外されること
+        {
+          id: 's7',
+          uuid: 'u-s7',
+          meal_name: '削除済みラーメン Cafe',
+          cuisine_type: 'ラーメン',
+          location_name: '新宿',
+          notes: 'deleted record',
+          search_text: '削除済みラーメン cafe ラーメン 新宿 deleted record',
+          meal_datetime: 4000,
+          is_homemade: 0,
+          cooking_level: 'quick',
+          is_deleted: 1,
+        },
+      ];
 
-      // 2. テキスト検索 ('ラーメン')
-      const ramenResult = await MealService.searchMeals({
-        text: 'ラーメン',
-      });
-      expect(ramenResult).toHaveLength(1);
-      expect(ramenResult[0].id).toBe('5');
-      expect(ramenResult[0].meal_name).toBe('ラーメン');
+      const searchDb = createRealSqliteDatabase();
+      searchParityRows.forEach((row) => searchDb.insertMeal(row));
+      setInMemoryMeals(searchParityRows as any);
 
-      // 3. 削除済みレコード (id: 9) が除外されること
-      const allActive = await MealService.searchMeals({});
-      expect(allActive.find((m) => m.id === '9')).toBeUndefined();
-      expect(allActive).toHaveLength(10); // 11件中 削除1件を除外
+      const assertParity = async (filters: SearchFilters, expectedIds?: string[]) => {
+        // 1. Native SQLite
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+        (getDatabase as jest.Mock).mockReturnValue(searchDb.adapter);
+        const nativeResults = await MealService.searchMeals(filters);
+
+        // 2. InMemory
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+        (getDatabase as jest.Mock).mockReturnValue(null);
+        const inMemoryResults = await MealService.searchMeals(filters);
+
+        const nativeIds = nativeResults.map((m) => m.id);
+        const inMemoryIds = inMemoryResults.map((m) => m.id);
+
+        expect(nativeIds).toEqual(inMemoryIds);
+        expect(nativeResults.length).toBe(inMemoryResults.length);
+
+        if (expectedIds) {
+          expect(nativeIds).toEqual(expectedIds);
+        }
+
+        // 削除済みレコードは一切含まれないこと
+        expect(nativeIds).not.toContain('s7');
+        expect(inMemoryIds).not.toContain('s7');
+
+        return nativeResults;
+      };
+
+      // 1. 日本語文字列の検索（ひらがな・カタカナ・漢字）
+      await assertParity({ text: 'てづくり' }, ['s4']);
+      await assertParity({ text: 'ラーメン' }, ['s1']);
+      await assertParity({ text: '特製' }, ['s1']);
+      await assertParity({ text: '東京' }, ['s1', 's3']);
+
+      // 2. 英語の大文字・小文字混在検索（Cafe, CAFE, cafe など）
+      await assertParity({ text: 'cafe' }, ['s2', 's3']);
+      await assertParity({ text: 'Cafe' }, ['s2', 's3']);
+      await assertParity({ text: 'CAFE' }, ['s2', 's3']);
+      await assertParity({ text: 'bLuE bOtTlE' }, ['s2']);
+
+      // 3. 日本語と英数字の混在検索
+      await assertParity({ text: '東京 Cafe' }, ['s3']);
+      await assertParity({ text: '1000 Orange' }, ['s5']);
+
+      // 4. 検索対象カラム（meal_name, location_name, notes, search_text）それぞれにヒットするケース
+      await assertParity({ text: '醤油ラーメン' }, ['s1']); // meal_name
+      await assertParity({ text: 'Shibuya' }, ['s2']); // location_name
+      await assertParity({ text: 'チャーシュー増し' }, ['s1']); // notes
+      await assertParity({ text: 'ドリンク' }, ['s5']); // search_text (cuisine_type 経由)
+
+      // 5. カラム境界の偽陽性が発生しないこと（カラム跨ぎの文字列検索）
+      // s6 は meal_name='Super', location_name='Market', search_text=null
+      await assertParity({ text: 'Super Market' }, []);
+      await assertParity({ text: 'er Mar' }, []);
+      await assertParity({ text: 'Super' }, ['s6']);
+      await assertParity({ text: 'Market' }, ['s6']);
+
+      // 6. ページネーション（limit/offset）の各ページでの結果一致
+      // 全アクティブ件数 (s1:10000, s2:9000, s3:8000, s4:7000, s5:6000, s6:5000)
+      await assertParity({ limit: 2, offset: 0 }, ['s1', 's2']);
+      await assertParity({ limit: 2, offset: 2 }, ['s3', 's4']);
+      await assertParity({ limit: 2, offset: 4 }, ['s5', 's6']);
+      await assertParity({ limit: 2, offset: 6 }, []);
+
+      // 検索クエリ + ページネーション
+      await assertParity({ text: 'cafe', limit: 1, offset: 0 }, ['s2']);
+      await assertParity({ text: 'cafe', limit: 1, offset: 1 }, ['s3']);
+      await assertParity({ text: 'cafe', limit: 1, offset: 2 }, []);
+
+      // 7. 特殊文字・LIKEワイルドカードのエスケープパリティ
+      await assertParity({ text: '%' }, ['s3', 's5']);
+      await assertParity({ text: '%_juice' }, ['s3']);
+      await assertParity({ text: '\\special' }, ['s3']);
+
+      // 8. 複合条件（text + non-text filters）のパリティ
+      await assertParity({ text: 'cafe', cooking_level: 'quick' }, ['s2']);
+      await assertParity({ cuisine_type: 'カフェ', location_name: '銀座' }, ['s3']);
+      await assertParity({ is_homemade: true }, ['s4']);
     });
   });
 });
