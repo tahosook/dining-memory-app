@@ -14,6 +14,7 @@ import {
 import {
   buildStatisticsSummary,
   filterRowsForStatistics,
+  rankTopEntries,
   type StatisticsOptions,
   type StatisticsSummary,
 } from '../../domain/meals/statistics';
@@ -151,25 +152,6 @@ async function upsertRow(row: PersistedMealRow) {
     row.created_at,
     row.updated_at
   );
-}
-
-function sortTopRankings(
-  rows: Array<{ label: string; count: number }>,
-  limit = 3
-): Array<{ label: string; count: number }> {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    const label = row.label?.trim();
-    if (!label) {
-      continue;
-    }
-    counts.set(label, (counts.get(label) ?? 0) + Number(row.count));
-  }
-
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'))
-    .slice(0, limit)
-    .map(([label, count]) => ({ label, count }));
 }
 
 export class MealService {
@@ -448,8 +430,8 @@ export class MealService {
         const totalMeals = Number(summaryRow?.total ?? 0);
         const homemadeMeals = Number(summaryRow?.homemade ?? 0);
         const takeoutMeals = totalMeals - homemadeMeals;
-        const topCuisines = sortTopRankings(cuisineRows);
-        const topLocations = sortTopRankings(locationRows);
+        const topCuisines = rankTopEntries(cuisineRows);
+        const topLocations = rankTopEntries(locationRows);
 
         return {
           totalMeals,

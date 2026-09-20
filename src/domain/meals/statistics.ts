@@ -34,23 +34,43 @@ export function filterRowsForStatistics(
   });
 }
 
-export function topCounts(
-  values: Array<string | null | undefined>,
+export interface RankedCountItem {
+  label: string;
+  count: number;
+}
+
+export interface RawCountCandidate {
+  label?: string | null;
+  count?: number;
+}
+
+export function rankTopEntries(
+  candidates: RawCountCandidate[],
   limit = 3
-): Array<{ label: string; count: number }> {
+): RankedCountItem[] {
   const counts = new Map<string, number>();
-  values.forEach((value) => {
-    const label = value?.trim();
+  for (const item of candidates) {
+    const label = item.label?.trim();
     if (!label) {
-      return;
+      continue;
     }
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  });
+    counts.set(label, (counts.get(label) ?? 0) + Number(item.count ?? 1));
+  }
 
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'))
     .slice(0, limit)
     .map(([label, count]) => ({ label, count }));
+}
+
+export function topCounts(
+  values: Array<string | null | undefined>,
+  limit = 3
+): RankedCountItem[] {
+  return rankTopEntries(
+    values.map((label) => ({ label, count: 1 })),
+    limit
+  );
 }
 
 export function buildStatisticsSummary(rows: PersistedMealRow[]): StatisticsSummary {
