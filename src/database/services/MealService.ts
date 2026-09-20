@@ -55,7 +55,7 @@ export type { StatisticsOptions, StatisticsSummary } from '../../domain/meals/st
 type MealUpdateData = Partial<CreateMealData>;
 
 function createId() {
-  return `${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
+  return `${Date.now()}-${Crypto.randomUUID()}`;
 }
 
 function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): PersistedMealRow {

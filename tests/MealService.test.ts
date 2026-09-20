@@ -71,6 +71,26 @@ describe('MealService', () => {
     expect(meals[0].is_homemade).toBe(true);
   });
 
+  test('generates meal id and uuid with timestamp and full UUID', async () => {
+    const before = Date.now();
+    const created = await MealService.createMeal({
+      meal_name: '親子丼',
+      is_homemade: true,
+      photo_path: 'file:///oyako.jpg',
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00'),
+    });
+    const after = Date.now();
+
+    const idParts = created.id.split('-');
+    const timestamp = Number(idParts[0]);
+    expect(timestamp).toBeGreaterThanOrEqual(before);
+    expect(timestamp).toBeLessThanOrEqual(after);
+    // UUID should have 5 parts separated by hyphens (e.g. 00000001-0000-0000-0000-000000000000)
+    const uuidPart = idParts.slice(1).join('-');
+    expect(uuidPart).toMatch(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/);
+    expect(uuidPart).toContain('-0000-0000-0000-000000000000');
+  });
+
   test('retrieves a meal by id and returns null if not found', async () => {
     const created = await MealService.createMeal({
       meal_name: '親子丼',
