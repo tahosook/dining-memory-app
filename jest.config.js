@@ -15,7 +15,7 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native|@expo-modules-core|@expo-modules-core/.*|@expo-modules-core/shared|@expo-modules-core/shared/.*|expo-modules-core/.*/.*|@expo/vector-icons|@expo/vector-icons/.*|expo/.*/.*|expo-file-system/.*|expo-document-picker/.*|expo-sharing/.*|llama\\.rn))'
+    'node_modules/(?!((jest-)?react-native|@react-native|@react-navigation|@react-navigation/.*|@expo-modules-core|@expo-modules-core/.*|@expo-modules-core/shared|@expo-modules-core/shared/.*|expo-modules-core/.*/.*|@expo/vector-icons|@expo/vector-icons/.*|expo/.*/.*|expo-file-system/.*|expo-document-picker/.*|expo-sharing/.*|llama\\.rn))'
   ],
   extensionsToTreatAsEsm: ['.ts'],
   globals: {

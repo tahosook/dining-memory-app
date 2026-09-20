@@ -97,6 +97,60 @@ describe('RecordsScreen', () => {
     expect(await findByText('ラーメン')).toBeTruthy();
   });
 
+  test('groups meals across today, yesterday, and older dates in correct order', async () => {
+    const now = new Date();
+    const todayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
+    const yesterdayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0).getTime();
+    const olderDate = new Date(2026, 3, 10, 12, 0, 0); // 2026-04-10
+    const olderTimestamp = olderDate.getTime();
+
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
+      {
+        id: '1',
+        uuid: '1',
+        meal_name: '今日のランチ',
+        meal_datetime: todayTimestamp,
+        is_homemade: false,
+        photo_path: 'file:///today.jpg',
+        is_deleted: false,
+        created_at: todayTimestamp,
+        updated_at: todayTimestamp,
+      },
+      {
+        id: '2',
+        uuid: '2',
+        meal_name: '昨日のディナー',
+        meal_datetime: yesterdayTimestamp,
+        is_homemade: true,
+        photo_path: 'file:///yesterday.jpg',
+        is_deleted: false,
+        created_at: yesterdayTimestamp,
+        updated_at: yesterdayTimestamp,
+      },
+      {
+        id: '3',
+        uuid: '3',
+        meal_name: '過去のカレー',
+        meal_datetime: olderTimestamp,
+        is_homemade: true,
+        photo_path: 'file:///older.jpg',
+        is_deleted: false,
+        created_at: olderTimestamp,
+        updated_at: olderTimestamp,
+      },
+    ]);
+
+    const { findByText } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('今日')).toBeTruthy();
+    expect(await findByText('昨日')).toBeTruthy();
+    expect(await findByText('4月10日')).toBeTruthy();
+    expect(await findByText('今日のランチ')).toBeTruthy();
+    expect(await findByText('昨日のディナー')).toBeTruthy();
+    expect(await findByText('過去のカレー')).toBeTruthy();
+  });
+
   test('falls back to photo_path when thumbnail is missing', async () => {
     (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
       {
