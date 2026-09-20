@@ -1,5 +1,10 @@
 import type { PersistedAppSettingRow, PersistedMealRow } from '../../database/services/localDatabase';
-import { extractPhotoFileName, isOriginalPhotoFileName, resolveRestoredPhotoUri } from './pathNormalizer';
+import {
+  extractPhotoFileName,
+  isOriginalPhotoFileName,
+  resolveRestoredPhotoUri,
+  validateSafeFileName,
+} from './pathNormalizer';
 import type { PortableAppSettingRecord, PortableMealRecord } from './types';
 
 export interface SerializeMealsResult {
@@ -12,11 +17,24 @@ export function serializeMeals(meals: PersistedMealRow[]): SerializeMealsResult 
   const portableMeals: PortableMealRecord[] = [];
 
   for (const meal of meals) {
-    const photoFileName = extractPhotoFileName(meal.photo_path);
-
-    if (photoFileName && isOriginalPhotoFileName(photoFileName)) {
-      photoFileNameSet.add(photoFileName);
+    if (!meal.photo_path || typeof meal.photo_path !== 'string' || meal.photo_path.trim() === '') {
+      throw new Error('食事記録の写真パスが指定されていないか不正です。');
     }
+
+    if (meal.photo_path.includes('..')) {
+      throw new Error('食事記録に無効または非オリジナルの写真パスが含まれています。');
+    }
+
+    const photoFileName = extractPhotoFileName(meal.photo_path);
+    if (
+      !photoFileName ||
+      !validateSafeFileName(photoFileName) ||
+      !isOriginalPhotoFileName(photoFileName)
+    ) {
+      throw new Error('食事記録に無効または非オリジナルの写真パスが含まれています。');
+    }
+
+    photoFileNameSet.add(photoFileName);
 
     portableMeals.push({
       id: meal.id,

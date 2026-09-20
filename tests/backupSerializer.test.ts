@@ -276,6 +276,21 @@ describe('backup serializer', () => {
     ]);
   });
 
+  test('serializeMeals rejects meals with empty or missing photo_path', () => {
+    const invalidMeal = { ...mockRows[0], photo_path: '' };
+    expect(() => serializeMeals([invalidMeal])).toThrow('写真パスが指定されていないか不正です');
+  });
+
+  test('serializeMeals rejects meals with thumbnail photo_path', () => {
+    const thumbnailMeal = { ...mockRows[0], photo_path: 'file:///data/user/0/meal-thumb.jpg' };
+    expect(() => serializeMeals([thumbnailMeal])).toThrow('無効または非オリジナルの写真パス');
+  });
+
+  test('serializeMeals rejects meals with path traversal or unsafe photo_path', () => {
+    const traversalMeal = { ...mockRows[0], photo_path: 'file:///data/../../evil.jpg' };
+    expect(() => serializeMeals([traversalMeal])).toThrow('無効または非オリジナルの写真パス');
+  });
+
   test('deserializeMeals restores photo_path with target directory and sets thumbnail_path to null', () => {
     const { portableMeals } = serializeMeals(mockRows);
     const restoredRows = deserializeMeals(portableMeals, 'file:///new-device/files/');

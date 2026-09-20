@@ -179,6 +179,42 @@ describe('BackupService', () => {
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
       expect(deleteAsync).toHaveBeenCalled();
     });
+
+    test('rejects exportBackup when meal has empty photo_path', async () => {
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
+        { ...mockMealRows[0], photo_path: '' },
+      ]);
+
+      await expect(BackupService.exportBackup()).rejects.toThrow('写真パスが指定されていないか不正です');
+
+      expect(zip).not.toHaveBeenCalled();
+      expect(Sharing.shareAsync).not.toHaveBeenCalled();
+      expect(deleteAsync).toHaveBeenCalled();
+    });
+
+    test('rejects exportBackup when meal has unsafe or traversal photo_path', async () => {
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
+        { ...mockMealRows[0], photo_path: 'file:///data/user/0/files/../../evil.jpg' },
+      ]);
+
+      await expect(BackupService.exportBackup()).rejects.toThrow('無効または非オリジナルの写真パス');
+
+      expect(zip).not.toHaveBeenCalled();
+      expect(Sharing.shareAsync).not.toHaveBeenCalled();
+      expect(deleteAsync).toHaveBeenCalled();
+    });
+
+    test('rejects exportBackup when meal photo_path points to thumbnail', async () => {
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
+        { ...mockMealRows[0], photo_path: 'file:///mock-documents/meal-20260422-01-thumb.jpg' },
+      ]);
+
+      await expect(BackupService.exportBackup()).rejects.toThrow('無効または非オリジナルの写真パス');
+
+      expect(zip).not.toHaveBeenCalled();
+      expect(Sharing.shareAsync).not.toHaveBeenCalled();
+      expect(deleteAsync).toHaveBeenCalled();
+    });
   });
 
   describe('pickAndValidateBackup', () => {
@@ -550,6 +586,119 @@ describe('BackupService', () => {
       expect(result.valid).toBe(false);
       expect(result.error).toContain('設定データ');
       expect(result.error).toContain('キーが不正です');
+    });
+
+    test('rejects backup when database/app_settings.json does not exist (mandatory component)', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 0,
+        photoCount: 0,
+      });
+
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('database/app_settings.json')) return Promise.resolve({ exists: false });
+        return Promise.resolve({ exists: true });
+      });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve('[]');
+        return Promise.resolve('{}');
+      });
+
+      (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('database/app_settings.json');
+      expect(result.error).toContain('見つかりません');
+    });
+
+    test('accepts backup when database/app_settings.json is valid empty array', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 0,
+        photoCount: 0,
+      });
+
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve('[]');
+        if (path.endsWith('app_settings.json')) return Promise.resolve('[]');
+        return Promise.resolve('{}');
+      });
+
+      (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(true);
+      expect(result.appSettings).toEqual([]);
+    });
+
+    test('rejects backup when photos directory contains unreferenced extraneous photos', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 1,
+        photoCount: 2,
+      });
+
+      const mealsContent = JSON.stringify([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: 'うどん',
+          photo_file_name: 'meal-udon.jpg',
+          is_homemade: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+      ]);
+
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        if (path.endsWith('app_settings.json')) return Promise.resolve('[]');
+        return Promise.resolve('{}');
+      });
+
+      // photos/ has 2 files: meal-udon.jpg (referenced) and extra-unreferenced.jpg (not referenced)
+      (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-udon.jpg', 'extra-unreferenced.jpg']);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('余分な写真');
     });
   });
 

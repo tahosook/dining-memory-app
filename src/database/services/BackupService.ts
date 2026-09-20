@@ -18,7 +18,6 @@ import {
   deserializeMeals,
   extractPhotoFileName,
   generateBackupFileName,
-  isOriginalPhotoFileName,
   serializeAppSettings,
   serializeMeals,
   validateBackupManifest,
@@ -93,14 +92,9 @@ export class BackupService {
       // Collect unique referenced original photos to export
       const requiredPhotoMap = new Map<string, string>();
       for (const meal of mealRows) {
-        if (!meal.photo_path) {
-          continue;
-        }
         const fileName = extractPhotoFileName(meal.photo_path);
-        if (fileName && isOriginalPhotoFileName(fileName)) {
-          if (!requiredPhotoMap.has(fileName)) {
-            requiredPhotoMap.set(fileName, meal.photo_path);
-          }
+        if (!requiredPhotoMap.has(fileName)) {
+          requiredPhotoMap.set(fileName, meal.photo_path);
         }
       }
 
@@ -242,31 +236,36 @@ export class BackupService {
         };
       }
 
-      // 3. Validate database/app_settings.json (optional file, but if present must be valid JSON and valid schema)
-      let appSettings: PortableAppSettingRecord[] = [];
+      // 3. Validate database/app_settings.json (mandatory file in backup specification)
       const settingsInfo = await getInfoAsync(`${stagingDir}database/app_settings.json`);
-      if (settingsInfo.exists) {
-        let rawSettings: unknown;
-        try {
-          rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
-        } catch {
-          await this.cleanupStaging(stagingDir);
-          return {
-            valid: false,
-            error: 'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
-          };
-        }
-
-        const settingsValidation = validatePortableAppSettings(rawSettings);
-        if (!settingsValidation.valid || !settingsValidation.appSettings) {
-          await this.cleanupStaging(stagingDir);
-          return {
-            valid: false,
-            error: settingsValidation.error ?? 'アプリ設定データの形式が不正です。',
-          };
-        }
-        appSettings = settingsValidation.appSettings;
+      if (!settingsInfo.exists) {
+        await this.cleanupStaging(stagingDir);
+        return {
+          valid: false,
+          error: 'アプリ設定データ（database/app_settings.json）が見つかりません。',
+        };
       }
+
+      let rawSettings: unknown;
+      try {
+        rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
+      } catch {
+        await this.cleanupStaging(stagingDir);
+        return {
+          valid: false,
+          error: 'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
+        };
+      }
+
+      const settingsValidation = validatePortableAppSettings(rawSettings);
+      if (!settingsValidation.valid || !settingsValidation.appSettings) {
+        await this.cleanupStaging(stagingDir);
+        return {
+          valid: false,
+          error: settingsValidation.error ?? 'アプリ設定データの形式が不正です。',
+        };
+      }
+      const appSettings: PortableAppSettingRecord[] = settingsValidation.appSettings;
 
       // Check meals count matches manifest
       if (mealsValidation.meals.length !== manifestValidation.manifest.mealCount) {
@@ -333,6 +332,22 @@ export class BackupService {
         return {
           valid: false,
           error: `バックアップ内の写真が不足しています。必要: ${requiredPhotos.size}枚, 検出: ${foundCount}枚（不足: ${missingPhotos.length}枚）。`,
+        };
+      }
+
+      // Ensure no unreferenced / extraneous photos exist in photos/ directory
+      const unreferencedPhotos: string[] = [];
+      for (const actualFile of actualPhotoFiles) {
+        if (!requiredPhotos.has(actualFile)) {
+          unreferencedPhotos.push(actualFile);
+        }
+      }
+
+      if (unreferencedPhotos.length > 0) {
+        await this.cleanupStaging(stagingDir);
+        return {
+          valid: false,
+          error: `バックアップの写真ディレクトリに食事記録から参照されていない余分な写真が含まれています（${unreferencedPhotos.length}枚）。`,
         };
       }
 
