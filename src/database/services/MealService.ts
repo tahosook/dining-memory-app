@@ -165,6 +165,11 @@ export class MealService {
     return mapRowToMeal(row);
   }
 
+  static async getMealById(mealId: string): Promise<Meal | null> {
+    const row = await getRowById(mealId);
+    return row ? mapRowToMeal(row) : null;
+  }
+
   static async getRecentNearbyHomemadeDefault(origin: { latitude: number; longitude: number }): Promise<boolean | null> {
     const rows = await getAllRows();
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;

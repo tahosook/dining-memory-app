@@ -5,6 +5,7 @@ import type { PersistPhotoOptions } from '../../media/photoStorage';
 import type { CaptureReviewState } from './captureReviewState';
 import { isWebWithoutCameraPermission } from './photoAcquisition';
 import type { LocationSnapshot } from './locationSnapshot';
+import { requestMealThumbnail } from '../../media/mealThumbnail';
 
 interface PersistedCapturePhoto {
   stablePhotoUri: string;
@@ -25,6 +26,7 @@ interface SaveCaptureWorkflowParams {
   ) => Promise<PersistedCapturePhoto>;
   savePhotoToMediaLibrary: (photoUri: string) => Promise<boolean>;
   cleanupTempFile: (photoUri: string) => Promise<void>;
+  triggerThumbnailGeneration?: (mealId: string) => void;
 }
 
 export type SaveCaptureWorkflowResult =
@@ -53,6 +55,7 @@ export async function saveCaptureReviewWorkflow({
   persistPhotoLocally,
   savePhotoToMediaLibrary,
   cleanupTempFile,
+  triggerThumbnailGeneration,
 }: SaveCaptureWorkflowParams): Promise<SaveCaptureWorkflowResult> {
   let stablePhotoUri: string | null = null;
   let stableThumbnailUri: string | undefined;
@@ -104,6 +107,11 @@ export async function saveCaptureReviewWorkflow({
       photo_thumbnail_path: stableThumbnailUri,
       meal_datetime: new Date(),
     });
+
+    if (!isWebWithoutPermissions) {
+      const triggerThumbnail = triggerThumbnailGeneration ?? requestMealThumbnail;
+      triggerThumbnail(meal.id);
+    }
 
     if (!isWebWithoutPermissions && !persistedPhoto.savedToMediaLibrary) {
       const saveSuccess = await savePhotoToMediaLibrary(stablePhotoUri);

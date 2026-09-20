@@ -59,6 +59,23 @@ describe('MealService', () => {
     expect(meals[0].is_homemade).toBe(true);
   });
 
+  test('retrieves a meal by id and returns null if not found', async () => {
+    const created = await MealService.createMeal({
+      meal_name: '親子丼',
+      is_homemade: true,
+      photo_path: 'file:///oyako.jpg',
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00'),
+    });
+
+    const found = await MealService.getMealById(created.id);
+    expect(found).not.toBeNull();
+    expect(found?.id).toBe(created.id);
+    expect(found?.meal_name).toBe('親子丼');
+
+    const notFound = await MealService.getMealById('non-existent-id');
+    expect(notFound).toBeNull();
+  });
+
   test('filters search results by text and location', async () => {
     await MealService.createMeal({
       meal_name: '醤油ラーメン',

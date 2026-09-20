@@ -2,6 +2,24 @@ import type { PermissionResponse } from 'expo-camera';
 import { saveCaptureReviewWorkflow } from '../src/hooks/cameraCapture/captureSaveWorkflow';
 import type { CaptureReviewState } from '../src/hooks/cameraCapture/captureReviewState';
 import { MealService } from '../src/database/services/MealService';
+import { requestMealThumbnail } from '../src/media/mealThumbnail';
+
+jest.mock('expo-media-library', () => ({
+  createAssetAsync: jest.fn(),
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
+  Album: {
+    get: jest.fn(),
+    create: jest.fn(),
+  },
+  Asset: {
+    create: jest.fn(),
+  },
+}));
+
+jest.mock('../src/media/mealThumbnail', () => ({
+  requestMealThumbnail: jest.fn(),
+}));
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
@@ -196,5 +214,53 @@ describe('saveCaptureReviewWorkflow', () => {
 
     expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/meal-1.jpg');
     expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/meal-1-thumb.jpg');
+  });
+
+  test('triggers asynchronous thumbnail generation after Meal create without waiting for it', async () => {
+    const captureReview = createCaptureReview();
+    const persistPhotoLocally = jest.fn().mockResolvedValue({
+      stablePhotoUri: 'file:///docs/meal-1.jpg',
+      stableThumbnailUri: undefined,
+      savedToMediaLibrary: true,
+    });
+    const triggerThumbnailGeneration = jest.fn();
+
+    const result = await saveCaptureReviewWorkflow({
+      captureReview,
+      cameraPermission,
+      ensurePhotoSavePermission: jest.fn().mockResolvedValue(true),
+      getLocationSnapshot: jest.fn().mockResolvedValue({}),
+      persistPhotoLocally,
+      savePhotoToMediaLibrary: jest.fn().mockResolvedValue(true),
+      cleanupTempFile: jest.fn().mockResolvedValue(undefined),
+      triggerThumbnailGeneration,
+    });
+
+    expect(result.kind).toBe('saved');
+    expect(MealService.createMeal).toHaveBeenCalledTimes(1);
+    expect(triggerThumbnailGeneration).toHaveBeenCalledWith('meal-1');
+  });
+
+  test('falls back to default requestMealThumbnail when triggerThumbnailGeneration is omitted', async () => {
+    const captureReview = createCaptureReview();
+    const persistPhotoLocally = jest.fn().mockResolvedValue({
+      stablePhotoUri: 'file:///docs/meal-1.jpg',
+      stableThumbnailUri: undefined,
+      savedToMediaLibrary: true,
+    });
+
+    const result = await saveCaptureReviewWorkflow({
+      captureReview,
+      cameraPermission,
+      ensurePhotoSavePermission: jest.fn().mockResolvedValue(true),
+      getLocationSnapshot: jest.fn().mockResolvedValue({}),
+      persistPhotoLocally,
+      savePhotoToMediaLibrary: jest.fn().mockResolvedValue(true),
+      cleanupTempFile: jest.fn().mockResolvedValue(undefined),
+    });
+
+    expect(result.kind).toBe('saved');
+    expect(MealService.createMeal).toHaveBeenCalledTimes(1);
+    expect(requestMealThumbnail).toHaveBeenCalledWith('meal-1');
   });
 });

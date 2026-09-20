@@ -18,6 +18,7 @@ import type { Meal } from '../../types/MealTypes';
 import type { RootStackParamList } from '../../navigation/types';
 import { getMealListImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
+import { requestMealThumbnails } from '../../media/mealThumbnail';
 
 interface MealSection {
   date: string;
@@ -155,6 +156,21 @@ export const RecordsScreen: React.FC = () => {
       const meals = await MealService.getRecentMeals(100);
       setFlatMeals(meals);
       setMealSections(groupMealsByDate(meals));
+      requestMealThumbnails(meals, {
+        onGenerated: (mealId, thumbUri) => {
+          setFlatMeals((current) =>
+            current.map((item) => (item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item))
+          );
+          setMealSections((current) =>
+            current.map((section) => ({
+              ...section,
+              data: section.data.map((item) =>
+                item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
+              ),
+            }))
+          );
+        },
+      });
     } catch (error) {
       console.error('Failed to load meals:', error);
       Alert.alert('エラー', '食事記録の読み込みに失敗しました。');
