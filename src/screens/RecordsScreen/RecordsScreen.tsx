@@ -244,7 +244,12 @@ export const RecordsScreen: React.FC = () => {
 
       <View style={styles.header}>
         <Text style={styles.headerTitle}>食事記録</Text>
-        <TouchableOpacity style={styles.settingsButton}>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          accessibilityRole="button"
+          accessibilityLabel="設定"
+          accessibilityHint="設定画面を開きます"
+        >
           <Text style={styles.settingsButtonText}>⚙️</Text>
         </TouchableOpacity>
       </View>
