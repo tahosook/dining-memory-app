@@ -20,9 +20,8 @@ Codex がこの repo で毎回同じ前提を使い、必要以上に context �
 - 実装変更では、近い既存パターンと関連テストを確認してから編集する。
 - product / UX / data / engineering convention が変わる場合は、対応する canonical doc も同じタスクで更新する。
 
-## AI / MediaPipe Rules
-- food-labeling、MediaPipe、AI labeling に関係する作業では、まず [docs/engineering/food-labeling-guidelines.md](docs/engineering/food-labeling-guidelines.md) を最優先で尊重する。
-- MediaPipe path は app 全体の default runtime や永続化契約へ勝手に昇格しない。
+## AI & Privacy Rules
+- 実験的・プロトタイプ機能（MediaPipe 等）は、指示なく default runtime や永続化契約へ昇格しない。
 - AI 入力補助は optional で、manual save を妨げない。
 - raw AI output、model metadata、photo path、location、notes などの sensitive data を不要に保存・ログ出力しない。
 
