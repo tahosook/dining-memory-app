@@ -41,7 +41,7 @@ export class CameraCaptureMock {
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit'
+      second: '2-digit',
     });
     ctx.fillText(`テスト撮影: ${timestamp}`, canvas.width / 2, canvas.height / 2);
 

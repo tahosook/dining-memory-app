@@ -14,7 +14,8 @@ import type {
 } from './types';
 
 const MEDIAPIPE_STATIC_IMAGE_MODE = 'mediapipe-static-image' as const;
-const MEDIAPIPE_MODEL_MISSING_REASON_PREFIX = 'MediaPipe meal input assist model asset が見つかりません:';
+const MEDIAPIPE_MODEL_MISSING_REASON_PREFIX =
+  'MediaPipe meal input assist model asset が見つかりません:';
 
 type MediaPipeMealInputAssistNativeModule = {
   getClassifierStatus?: () => Promise<MediaPipeStaticImageClassifierStatus>;
@@ -54,7 +55,11 @@ function getUnavailableCode(status: MediaPipeStaticImageClassifierStatus) {
 }
 
 export class MediaPipeStaticImageNativeModuleClassifier implements MediaPipeStaticImageClassifier {
-  constructor(private readonly nativeModule: Required<Pick<MediaPipeMealInputAssistNativeModule, 'classifyStaticImage'>>) {}
+  constructor(
+    private readonly nativeModule: Required<
+      Pick<MediaPipeMealInputAssistNativeModule, 'classifyStaticImage'>
+    >
+  ) {}
 
   async classifyStaticImage(photoUri: string): Promise<MediaPipeStaticImageRawResult> {
     return this.nativeModule.classifyStaticImage(photoUri);
@@ -78,9 +83,9 @@ export async function getMediaPipeStaticImageAvailability(): Promise<MealInputAs
 
   const nativeModule = getMediaPipeMealInputAssistNativeModule();
   if (
-    !nativeModule
-    || typeof nativeModule.classifyStaticImage !== 'function'
-    || typeof nativeModule.getClassifierStatus !== 'function'
+    !nativeModule ||
+    typeof nativeModule.classifyStaticImage !== 'function' ||
+    typeof nativeModule.getClassifierStatus !== 'function'
   ) {
     return createUnavailableAvailability('runtime_unavailable', getMissingBridgeReason());
   }

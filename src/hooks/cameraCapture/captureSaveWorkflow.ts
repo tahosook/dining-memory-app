@@ -31,13 +31,13 @@ interface SaveCaptureWorkflowParams {
 
 export type SaveCaptureWorkflowResult =
   | {
-    kind: 'saved';
-    resizedPhotoUri: string | null;
-    stablePhotoUri: string;
-    stableThumbnailUri?: string;
-    savedToMediaLibrary: boolean;
-    mealId: string;
-  }
+      kind: 'saved';
+      resizedPhotoUri: string | null;
+      stablePhotoUri: string;
+      stableThumbnailUri?: string;
+      savedToMediaLibrary: boolean;
+      mealId: string;
+    }
   | { kind: 'skipped'; reason: 'photo_permission_denied' | 'duplicate_in_flight' };
 
 const inFlightCaptureReviewSaves = new Set<string>();
@@ -79,16 +79,16 @@ export async function saveCaptureReviewWorkflow({
     const locationSnapshot = await getLocationSnapshot();
     const persistedPhoto = isWebWithoutPermissions
       ? {
-        stablePhotoUri: captureReview.photoUri,
-        stableThumbnailUri: undefined,
-        resizedPhotoUri: null,
-        savedToMediaLibrary: false,
-      }
+          stablePhotoUri: captureReview.photoUri,
+          stableThumbnailUri: undefined,
+          resizedPhotoUri: null,
+          savedToMediaLibrary: false,
+        }
       : await persistPhotoLocally(captureReview.photoUri, {
-        capturedAt: new Date(captureReview.capturedAtMs),
-        location: locationSnapshot,
-        softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
-      });
+          capturedAt: new Date(captureReview.capturedAtMs),
+          location: locationSnapshot,
+          softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
+        });
     stablePhotoUri = persistedPhoto.stablePhotoUri;
     stableThumbnailUri = persistedPhoto.stableThumbnailUri;
     let savedToMediaLibrary = persistedPhoto.savedToMediaLibrary;

@@ -2,7 +2,8 @@ export type AiCapability = 'meal-input-assist';
 
 export type AiRuntimeMode = 'local-runtime-prototype' | 'override';
 
-export type AiRuntimeUnavailableCode = 'runtime_unavailable' | 'model_unavailable' | 'unsupported_architecture';
+export type AiRuntimeUnavailableCode =
+  'runtime_unavailable' | 'model_unavailable' | 'unsupported_architecture';
 
 export type LocalAiRuntimeStatusCapability = 'meal-input-assist';
 
@@ -23,8 +24,7 @@ export interface AiUnavailableCapabilityAvailability {
 }
 
 export type AiCapabilityAvailability<TProvider> =
-  | AiReadyCapabilityAvailability<TProvider>
-  | AiUnavailableCapabilityAvailability;
+  AiReadyCapabilityAvailability<TProvider> | AiUnavailableCapabilityAvailability;
 
 export interface LocalAiRuntimeStatusEntry {
   capability: LocalAiRuntimeStatusCapability;

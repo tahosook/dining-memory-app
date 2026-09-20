@@ -22,10 +22,11 @@ export async function getCurrentLocationSnapshot(): Promise<LocationSnapshot> {
       requiredAccuracy: 200,
     });
 
-    const currentPosition = lastKnownPosition
-      ?? await Location.getCurrentPositionAsync({
+    const currentPosition =
+      lastKnownPosition ??
+      (await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
-      });
+      }));
 
     return {
       latitude: currentPosition.coords.latitude,

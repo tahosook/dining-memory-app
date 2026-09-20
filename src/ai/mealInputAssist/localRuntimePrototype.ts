@@ -89,8 +89,7 @@ type PlatformConstantsWithSupportedAbis = {
 
 function getSupportedAndroidAbis() {
   const constants = NativeModules.PlatformConstants as
-    | PlatformConstantsWithSupportedAbis
-    | undefined;
+    PlatformConstantsWithSupportedAbis | undefined;
   return constants?.SupportedAbis ?? constants?.supportedAbis ?? [];
 }
 

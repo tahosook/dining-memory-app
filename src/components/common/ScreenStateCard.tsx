@@ -27,7 +27,11 @@ export function ScreenStateCard({
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.description}>{description}</Text>
       {hasAction ? (
-        <TouchableOpacity style={styles.actionButton} onPress={onAction} testID={testIDPrefix ? `${testIDPrefix}-action` : undefined}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={onAction}
+          testID={testIDPrefix ? `${testIDPrefix}-action` : undefined}
+        >
           <Text style={styles.actionText}>{actionLabel}</Text>
         </TouchableOpacity>
       ) : null}

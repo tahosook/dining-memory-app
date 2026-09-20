@@ -42,9 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>
-            カメラ機能でエラーが発生しました
-          </Text>
+          <Text style={styles.errorTitle}>カメラ機能でエラーが発生しました</Text>
           <Text style={styles.errorMessage}>
             {this.state.error?.message || '不明なエラーが発生しました'}
           </Text>

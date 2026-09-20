@@ -1,12 +1,11 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { CAMERA_CONSTANTS } from '../../constants/CameraConstants';
-import {
-  persistPhotoToStablePath,
-  type PersistPhotoOptions,
-} from '../../media/photoStorage';
+import { persistPhotoToStablePath, type PersistPhotoOptions } from '../../media/photoStorage';
 import { cleanupTempFile } from '../../media/tempFiles';
 
-export type PersistedCapturePhotoWithResizeInfo = Awaited<ReturnType<typeof persistPhotoToStablePath>> & {
+export type PersistedCapturePhotoWithResizeInfo = Awaited<
+  ReturnType<typeof persistPhotoToStablePath>
+> & {
   resizedPhotoUri: string;
   stableThumbnailUri?: string;
 };

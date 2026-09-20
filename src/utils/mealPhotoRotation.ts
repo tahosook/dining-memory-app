@@ -1,10 +1,5 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer';
-import {
-  copyAsync,
-  deleteAsync,
-  documentDirectory,
-  getInfoAsync,
-} from 'expo-file-system/legacy';
+import { copyAsync, deleteAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
 import { CAMERA_CONSTANTS } from '../constants/CameraConstants';
 
 function createRotatedMealPhotoDestinationUri() {
@@ -67,10 +62,17 @@ export async function rotateMealPhotoClockwise(sourceUri: string): Promise<strin
   }
 }
 
-export async function deleteMealPhotoFileIfSafe(uri: string | null | undefined, replacementUri?: string | null): Promise<void> {
+export async function deleteMealPhotoFileIfSafe(
+  uri: string | null | undefined,
+  replacementUri?: string | null
+): Promise<void> {
   const targetUri = uri;
 
-  if (typeof targetUri !== 'string' || !isDeletableAppDocumentFile(targetUri) || targetUri === replacementUri) {
+  if (
+    typeof targetUri !== 'string' ||
+    !isDeletableAppDocumentFile(targetUri) ||
+    targetUri === replacementUri
+  ) {
     return;
   }
 

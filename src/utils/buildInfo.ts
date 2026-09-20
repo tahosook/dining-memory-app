@@ -22,7 +22,9 @@ export function getAndroidVersionCode(): number | null {
   if (Platform.OS === 'android') {
     const platformManifest = Constants.platform;
     if (platformManifest && 'android' in platformManifest) {
-      return (platformManifest as { android?: { versionCode?: number } }).android?.versionCode ?? null;
+      return (
+        (platformManifest as { android?: { versionCode?: number } }).android?.versionCode ?? null
+      );
     }
   }
   return null;

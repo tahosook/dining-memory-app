@@ -1,8 +1,14 @@
 export { defaultMealInputAssistProvider, MockMealInputAssistProvider } from './provider';
 export { normalizeMealInputAssistResult } from './normalizer';
-export { MEDIAPIPE_STATIC_IMAGE_SOURCE, normalizeMediaPipeStaticImageResult } from './mediapipeStaticImageNormalizer';
+export {
+  MEDIAPIPE_STATIC_IMAGE_SOURCE,
+  normalizeMediaPipeStaticImageResult,
+} from './mediapipeStaticImageNormalizer';
 export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
-export { LocalRuntimePrototypeMealInputAssistProvider, getLocalRuntimePrototypeAvailability } from './localRuntimePrototype';
+export {
+  LocalRuntimePrototypeMealInputAssistProvider,
+  getLocalRuntimePrototypeAvailability,
+} from './localRuntimePrototype';
 export {
   MediaPipeStaticImageMealInputAssistProvider,
   MediaPipeStaticImageNativeModuleClassifier,

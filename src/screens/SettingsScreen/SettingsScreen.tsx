@@ -1,5 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   getAndroidVersionCode,
@@ -22,7 +31,11 @@ import {
   installMealInputAssistModel,
   redownloadMealInputAssistModel,
 } from '../../ai/mealInputAssist/modelInstaller';
-import { getLocalAiRuntimeStatusSnapshot, type LocalAiRuntimeStatusEntry, type LocalAiRuntimeStatusSnapshot } from '../../ai/runtime';
+import {
+  getLocalAiRuntimeStatusSnapshot,
+  type LocalAiRuntimeStatusEntry,
+  type LocalAiRuntimeStatusSnapshot,
+} from '../../ai/runtime';
 import { Colors } from '../../constants/Colors';
 import { MealService } from '../../database/services/MealService';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
@@ -34,12 +47,15 @@ type BackupActionState = 'idle' | 'exporting' | 'importing';
 export default function SettingsScreen() {
   const [aiInputAssistEnabled, setAiInputAssistEnabled] = useState(false);
   const [aiInputAssistLoading, setAiInputAssistLoading] = useState(true);
-  const [mealInputAssistModelStatus, setMealInputAssistModelStatus] = useState<MealInputAssistModelStatus | null>(null);
+  const [mealInputAssistModelStatus, setMealInputAssistModelStatus] =
+    useState<MealInputAssistModelStatus | null>(null);
   const [mealInputAssistModelStatusLoading, setMealInputAssistModelStatusLoading] = useState(true);
-  const [localAiRuntimeStatus, setLocalAiRuntimeStatus] = useState<LocalAiRuntimeStatusSnapshot | null>(null);
+  const [localAiRuntimeStatus, setLocalAiRuntimeStatus] =
+    useState<LocalAiRuntimeStatusSnapshot | null>(null);
   const [localAiRuntimeStatusLoading, setLocalAiRuntimeStatusLoading] = useState(true);
   const [modelActionState, setModelActionState] = useState<ModelActionState>('idle');
-  const [modelDownloadProgress, setModelDownloadProgress] = useState<MealInputAssistModelDownloadProgress | null>(null);
+  const [modelDownloadProgress, setModelDownloadProgress] =
+    useState<MealInputAssistModelDownloadProgress | null>(null);
   const [backupActionState, setBackupActionState] = useState<BackupActionState>('idle');
   const [showAiDetails, setShowAiDetails] = useState(false);
 
@@ -86,10 +102,7 @@ export default function SettingsScreen() {
   }, []);
 
   const reloadLocalAiSection = useCallback(async () => {
-    await Promise.all([
-      loadMealInputAssistModelStatus(),
-      loadLocalAiRuntimeStatus(),
-    ]);
+    await Promise.all([loadMealInputAssistModelStatus(), loadLocalAiRuntimeStatus()]);
   }, [loadLocalAiRuntimeStatus, loadMealInputAssistModelStatus]);
 
   useFocusEffect(
@@ -106,81 +119,97 @@ export default function SettingsScreen() {
       await AppSettingsService.setAiInputAssistEnabled(nextValue);
     } catch (error) {
       console.error('Failed to save AI input assist setting:', error);
-      setAiInputAssistEnabled((current) => !current);
-      Alert.alert('設定を保存できませんでした', 'AI入力補助の設定を保存できませんでした。もう一度お試しください。');
+      setAiInputAssistEnabled(current => !current);
+      Alert.alert(
+        '設定を保存できませんでした',
+        'AI入力補助の設定を保存できませんでした。もう一度お試しください。'
+      );
     }
   }, []);
 
-  const handleModelDownload = useCallback(async (mode: 'install' | 'redownload') => {
-    setModelActionState('downloading');
-    setModelDownloadProgress(null);
-
-    try {
-      if (mode === 'redownload') {
-        await redownloadMealInputAssistModel({
-          onProgress: setModelDownloadProgress,
-        });
-      } else {
-        await installMealInputAssistModel({
-          onProgress: setModelDownloadProgress,
-        });
-      }
-
-      await reloadLocalAiSection();
-      Alert.alert('ダウンロード完了', 'AI入力補助に必要なデータを端末に保存しました。');
-    } catch (error) {
-      console.error('Failed to download meal input assist model:', error);
-      await reloadLocalAiSection().catch(() => undefined);
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'AI入力補助に必要なデータをダウンロードできませんでした。';
-      Alert.alert('ダウンロードに失敗しました', message);
-    } finally {
+  const handleModelDownload = useCallback(
+    async (mode: 'install' | 'redownload') => {
+      setModelActionState('downloading');
       setModelDownloadProgress(null);
-      setModelActionState('idle');
-    }
-  }, [reloadLocalAiSection]);
+
+      try {
+        if (mode === 'redownload') {
+          await redownloadMealInputAssistModel({
+            onProgress: setModelDownloadProgress,
+          });
+        } else {
+          await installMealInputAssistModel({
+            onProgress: setModelDownloadProgress,
+          });
+        }
+
+        await reloadLocalAiSection();
+        Alert.alert('ダウンロード完了', 'AI入力補助に必要なデータを端末に保存しました。');
+      } catch (error) {
+        console.error('Failed to download meal input assist model:', error);
+        await reloadLocalAiSection().catch(() => undefined);
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : 'AI入力補助に必要なデータをダウンロードできませんでした。';
+        Alert.alert('ダウンロードに失敗しました', message);
+      } finally {
+        setModelDownloadProgress(null);
+        setModelActionState('idle');
+      }
+    },
+    [reloadLocalAiSection]
+  );
 
   const handleDeleteAllModels = useCallback(() => {
-    Alert.alert('ダウンロード済みモデルを削除', '端末に保存したAI入力補助用データを削除します。写真や食事記録は削除されません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除する',
-        style: 'destructive',
-        onPress: async () => {
-          setModelActionState('deleting');
+    Alert.alert(
+      'ダウンロード済みモデルを削除',
+      '端末に保存したAI入力補助用データを削除します。写真や食事記録は削除されません。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: async () => {
+            setModelActionState('deleting');
 
-          try {
-            await deleteAllDownloadedLocalAiModels();
-            await reloadLocalAiSection();
-            Alert.alert('削除完了', 'ダウンロード済みモデルを削除しました。');
-          } catch (error) {
-            console.error('Failed to delete downloaded AI models:', error);
-            await reloadLocalAiSection().catch(() => undefined);
-            const message = error instanceof Error && error.message
-              ? error.message
-              : 'ダウンロード済みモデルを削除できませんでした。';
-            Alert.alert('削除に失敗しました', message);
-          } finally {
-            setModelActionState('idle');
-          }
+            try {
+              await deleteAllDownloadedLocalAiModels();
+              await reloadLocalAiSection();
+              Alert.alert('削除完了', 'ダウンロード済みモデルを削除しました。');
+            } catch (error) {
+              console.error('Failed to delete downloaded AI models:', error);
+              await reloadLocalAiSection().catch(() => undefined);
+              const message =
+                error instanceof Error && error.message
+                  ? error.message
+                  : 'ダウンロード済みモデルを削除できませんでした。';
+              Alert.alert('削除に失敗しました', message);
+            } finally {
+              setModelActionState('idle');
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   }, [reloadLocalAiSection]);
 
   const handleDeleteAllData = useCallback(() => {
-    Alert.alert('すべての食事記録を削除', '端末内の食事記録をすべて削除します。この操作は元に戻せません。', [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除する',
-        style: 'destructive',
-        onPress: async () => {
-          await MealService.clearAllMeals();
-          Alert.alert('削除完了', '食事記録を削除しました。');
+    Alert.alert(
+      'すべての食事記録を削除',
+      '端末内の食事記録をすべて削除します。この操作は元に戻せません。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: async () => {
+            await MealService.clearAllMeals();
+            Alert.alert('削除完了', '食事記録を削除しました。');
+          },
         },
-      },
-    ]);
+      ]
+    );
   }, []);
 
   const handleExportBackup = useCallback(async () => {
@@ -193,9 +222,10 @@ export default function SettingsScreen() {
       );
     } catch (error) {
       console.error('Failed to export backup:', error);
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'バックアップのエクスポートに失敗しました。';
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'バックアップのエクスポートに失敗しました。';
       Alert.alert('エクスポート失敗', message);
     } finally {
       setBackupActionState('idle');
@@ -246,9 +276,10 @@ export default function SettingsScreen() {
                 );
               } catch (restoreError) {
                 console.error('Failed to restore backup:', restoreError);
-                const message = restoreError instanceof Error && restoreError.message
-                  ? restoreError.message
-                  : 'バックアップの復元に失敗しました。';
+                const message =
+                  restoreError instanceof Error && restoreError.message
+                    ? restoreError.message
+                    : 'バックアップの復元に失敗しました。';
                 Alert.alert('復元失敗', message);
               } finally {
                 setBackupActionState('idle');
@@ -259,16 +290,20 @@ export default function SettingsScreen() {
       );
     } catch (error) {
       console.error('Failed to import backup:', error);
-      const message = error instanceof Error && error.message
-        ? error.message
-        : 'バックアップの読み込みに失敗しました。';
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'バックアップの読み込みに失敗しました。';
       Alert.alert('インポート失敗', message);
       setBackupActionState('idle');
     }
   }, []);
 
   const visibleModelStatus = useMemo(
-    () => modelActionState === 'downloading' ? 'downloading' : mealInputAssistModelStatus?.kind ?? null,
+    () =>
+      modelActionState === 'downloading'
+        ? 'downloading'
+        : (mealInputAssistModelStatus?.kind ?? null),
     [mealInputAssistModelStatus?.kind, modelActionState]
   );
   const showDeleteAllModelsAction = useMemo(() => {
@@ -276,9 +311,11 @@ export default function SettingsScreen() {
       return false;
     }
 
-    return mealInputAssistModelStatus.kind !== 'not_installed'
-      || mealInputAssistModelStatus.files.modelExists
-      || mealInputAssistModelStatus.files.projectorExists;
+    return (
+      mealInputAssistModelStatus.kind !== 'not_installed' ||
+      mealInputAssistModelStatus.files.modelExists ||
+      mealInputAssistModelStatus.files.projectorExists
+    );
   }, [mealInputAssistModelStatus]);
   const runtimeReady = localAiRuntimeStatus?.mealInputAssist.kind === 'ready';
   const modelReady = mealInputAssistModelStatus?.kind === 'ready';
@@ -304,51 +341,62 @@ export default function SettingsScreen() {
     modelReady,
     runtimeReady,
   ]);
-  const aiAssistSwitchDisabled = aiInputAssistLoading
-    || modelActionState !== 'idle'
-    || !modelReady
-    || !runtimeReady;
-  const aiAssistDisabledReason = aiAssistState === 'checking'
-    ? '状態を確認しています。'
-    : !modelReady
-      ? 'モデルをダウンロードすると利用できます。'
-      : !runtimeReady
-        ? 'この端末ではまだ利用できません。'
-        : null;
+  const aiAssistSwitchDisabled =
+    aiInputAssistLoading || modelActionState !== 'idle' || !modelReady || !runtimeReady;
+  const aiAssistDisabledReason =
+    aiAssistState === 'checking'
+      ? '状態を確認しています。'
+      : !modelReady
+        ? 'モデルをダウンロードすると利用できます。'
+        : !runtimeReady
+          ? 'この端末ではまだ利用できません。'
+          : null;
   const isBackupBusy = backupActionState !== 'idle';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Section title="プライバシー">
         <Text style={styles.bodyText}>食事記録と写真は端末内中心で扱います。</Text>
-        <Text style={styles.bodyText}>自動的な外部送信はしない設計です。Records 詳細などからユーザーが明示的に共有した場合のみ、外部アプリに渡ります。</Text>
-        <Text style={styles.bodyText}>AI入力補助は写真を外部送信しません。ただし、AI入力補助のモデルデータをダウンロードする時だけ外部通信が発生します。</Text>
+        <Text style={styles.bodyText}>
+          自動的な外部送信はしない設計です。Records
+          詳細などからユーザーが明示的に共有した場合のみ、外部アプリに渡ります。
+        </Text>
+        <Text style={styles.bodyText}>
+          AI入力補助は写真を外部送信しません。ただし、AI入力補助のモデルデータをダウンロードする時だけ外部通信が発生します。
+        </Text>
       </Section>
 
       <Section title="AI入力補助">
         <View style={styles.aiStatusHeader}>
           <Text style={styles.settingTitle}>状態: {formatAiAssistStateLabel(aiAssistState)}</Text>
-          <View style={[
-            styles.runtimeStatusBadge,
-            aiAssistState === 'ready'
-              ? styles.runtimeStatusBadgeReady
-              : aiAssistState === 'downloading' || aiAssistState === 'checking'
-                ? styles.runtimeStatusBadgeLoading
-                : styles.runtimeStatusBadgeUnavailable,
-          ]}
+          <View
+            style={[
+              styles.runtimeStatusBadge,
+              aiAssistState === 'ready'
+                ? styles.runtimeStatusBadgeReady
+                : aiAssistState === 'downloading' || aiAssistState === 'checking'
+                  ? styles.runtimeStatusBadgeLoading
+                  : styles.runtimeStatusBadgeUnavailable,
+            ]}
           >
-            <Text style={styles.runtimeStatusBadgeText}>{formatAiAssistStateLabel(aiAssistState)}</Text>
+            <Text style={styles.runtimeStatusBadgeText}>
+              {formatAiAssistStateLabel(aiAssistState)}
+            </Text>
           </View>
         </View>
         <Text style={styles.bodyText}>{buildAiAssistDescription(aiAssistState)}</Text>
 
-        {aiAssistState === 'downloading' ? <DownloadProgressCard progress={modelDownloadProgress} /> : null}
+        {aiAssistState === 'downloading' ? (
+          <DownloadProgressCard progress={modelDownloadProgress} />
+        ) : null}
 
         {aiAssistState === 'ready' ? (
           <View style={styles.settingRow}>
             <View style={styles.settingTextBlock}>
               <Text style={styles.settingTitle}>AI入力補助を使う</Text>
-              <Text style={styles.settingDescription}>撮影後の確認画面で、端末内だけでメモ下書きを作成します。</Text>
+              <Text style={styles.settingDescription}>
+                撮影後の確認画面で、端末内だけでメモ下書きを作成します。
+              </Text>
             </View>
             <Switch
               value={aiInputAssistEnabled}
@@ -364,7 +412,10 @@ export default function SettingsScreen() {
         <View style={styles.actionRow}>
           {aiAssistState === 'not_ready' && !modelReady ? (
             <TouchableOpacity
-              style={[styles.actionButton, modelActionState !== 'idle' ? styles.actionButtonDisabled : null]}
+              style={[
+                styles.actionButton,
+                modelActionState !== 'idle' ? styles.actionButtonDisabled : null,
+              ]}
               onPress={() => handleModelDownload('install')}
               disabled={modelActionState !== 'idle'}
               testID="meal-input-assist-model-download-button"
@@ -372,9 +423,14 @@ export default function SettingsScreen() {
               <Text style={styles.actionButtonText}>モデルをダウンロード</Text>
             </TouchableOpacity>
           ) : null}
-          {aiAssistState === 'ready' || aiAssistState === 'error' || (modelReady && !runtimeReady && aiAssistState !== 'checking') ? (
+          {aiAssistState === 'ready' ||
+          aiAssistState === 'error' ||
+          (modelReady && !runtimeReady && aiAssistState !== 'checking') ? (
             <TouchableOpacity
-              style={[styles.actionButton, modelActionState !== 'idle' ? styles.actionButtonDisabled : null]}
+              style={[
+                styles.actionButton,
+                modelActionState !== 'idle' ? styles.actionButtonDisabled : null,
+              ]}
               onPress={() => handleModelDownload('redownload')}
               disabled={modelActionState !== 'idle'}
               testID="meal-input-assist-model-redownload-button"
@@ -386,7 +442,10 @@ export default function SettingsScreen() {
 
         {showDeleteAllModelsAction ? (
           <TouchableOpacity
-            style={[styles.dangerOutlineButton, modelActionState !== 'idle' ? styles.actionButtonDisabled : null]}
+            style={[
+              styles.dangerOutlineButton,
+              modelActionState !== 'idle' ? styles.actionButtonDisabled : null,
+            ]}
             onPress={handleDeleteAllModels}
             disabled={modelActionState !== 'idle'}
             testID="delete-all-downloaded-ai-models-button"
@@ -397,10 +456,12 @@ export default function SettingsScreen() {
 
         <TouchableOpacity
           style={styles.secondaryButton}
-          onPress={() => setShowAiDetails((current) => !current)}
+          onPress={() => setShowAiDetails(current => !current)}
           testID="toggle-ai-details-button"
         >
-          <Text style={styles.secondaryButtonText}>{showAiDetails ? '詳細情報を隠す' : '詳細情報を表示'}</Text>
+          <Text style={styles.secondaryButtonText}>
+            {showAiDetails ? '詳細情報を隠す' : '詳細情報を表示'}
+          </Text>
         </TouchableOpacity>
         {showAiDetails ? (
           <View style={styles.detailBlock} testID="ai-details">
@@ -415,9 +476,13 @@ export default function SettingsScreen() {
                 onRedownload={() => handleModelDownload('redownload')}
               />
             ) : mealInputAssistModelStatusLoading ? (
-              <Text style={styles.metaText} testID="meal-input-assist-model-status-loading">model file status を確認しています...</Text>
+              <Text style={styles.metaText} testID="meal-input-assist-model-status-loading">
+                model file status を確認しています...
+              </Text>
             ) : (
-              <Text style={styles.metaText} testID="meal-input-assist-model-status-error">model file status を確認できませんでした。</Text>
+              <Text style={styles.metaText} testID="meal-input-assist-model-status-error">
+                model file status を確認できませんでした。
+              </Text>
             )}
             {localAiRuntimeStatus ? (
               <RuntimeStatusCard
@@ -426,9 +491,13 @@ export default function SettingsScreen() {
                 testID="meal-input-assist-runtime-status"
               />
             ) : localAiRuntimeStatusLoading ? (
-              <Text style={styles.metaText} testID="local-ai-runtime-status-loading">runtime status を確認しています...</Text>
+              <Text style={styles.metaText} testID="local-ai-runtime-status-loading">
+                runtime status を確認しています...
+              </Text>
             ) : (
-              <Text style={styles.metaText} testID="local-ai-runtime-status-error">runtime status を確認できませんでした。</Text>
+              <Text style={styles.metaText} testID="local-ai-runtime-status-error">
+                runtime status を確認できませんでした。
+              </Text>
             )}
           </View>
         ) : null}
@@ -447,9 +516,7 @@ export default function SettingsScreen() {
             <Text style={styles.actionButtonText}>バックアップをエクスポート</Text>
           )}
         </TouchableOpacity>
-        <Text style={styles.metaText}>
-          食事メタデータとオリジナル写真をZIP形式で書き出します。
-        </Text>
+        <Text style={styles.metaText}>食事メタデータとオリジナル写真をZIP形式で書き出します。</Text>
 
         <View style={styles.dataManagementSpacer} />
 
@@ -528,7 +595,9 @@ function formatModelStatusLabel(status: 'not_installed' | 'ready' | 'error' | 'd
   }
 }
 
-function formatAiAssistStateLabel(status: 'checking' | 'downloading' | 'ready' | 'error' | 'not_ready') {
+function formatAiAssistStateLabel(
+  status: 'checking' | 'downloading' | 'ready' | 'error' | 'not_ready'
+) {
   switch (status) {
     case 'checking':
       return '確認中';
@@ -543,7 +612,9 @@ function formatAiAssistStateLabel(status: 'checking' | 'downloading' | 'ready' |
   }
 }
 
-function buildAiAssistDescription(status: 'checking' | 'downloading' | 'ready' | 'error' | 'not_ready') {
+function buildAiAssistDescription(
+  status: 'checking' | 'downloading' | 'ready' | 'error' | 'not_ready'
+) {
   switch (status) {
     case 'checking':
       return 'AI入力補助を利用できるか確認しています。';
@@ -597,14 +668,18 @@ function DownloadProgressCard({
   progress: MealInputAssistModelDownloadProgress | null;
 }) {
   const progressPercentage = formatProgressPercentage(progress?.overallProgress ?? null);
-  const currentFileProgressPercentage = formatProgressPercentage(progress?.currentFileProgress ?? null);
+  const currentFileProgressPercentage = formatProgressPercentage(
+    progress?.currentFileProgress ?? null
+  );
   const currentBytesWritten = formatBytes(progress?.currentFileBytesWritten ?? null);
   const currentBytesExpected = formatBytes(progress?.currentFileBytesExpected ?? null);
 
   return (
     <View style={styles.downloadProgressCard} testID="meal-input-assist-model-download-progress">
       <Text style={styles.downloadProgressTitle}>
-        {progressPercentage ? `進捗の目安: ${progressPercentage}` : 'ダウンロードを準備しています...'}
+        {progressPercentage
+          ? `進捗の目安: ${progressPercentage}`
+          : 'ダウンロードを準備しています...'}
       </Text>
       {progress ? (
         <>
@@ -620,9 +695,7 @@ function DownloadProgressCard({
             完了ファイル: {progress.completedFiles} / {progress.totalFiles}
           </Text>
           {progress.currentFileSourceFileName ? (
-            <Text style={styles.runtimeStatusMode}>
-              現在: {progress.currentFileSourceFileName}
-            </Text>
+            <Text style={styles.runtimeStatusMode}>現在: {progress.currentFileSourceFileName}</Text>
           ) : null}
           {currentFileProgressPercentage ? (
             <Text style={styles.runtimeStatusMode}>
@@ -631,7 +704,8 @@ function DownloadProgressCard({
           ) : null}
           {currentBytesWritten ? (
             <Text style={styles.runtimeStatusMode}>
-              受信量: {currentBytesWritten}{currentBytesExpected ? ` / ${currentBytesExpected}` : ''}
+              受信量: {currentBytesWritten}
+              {currentBytesExpected ? ` / ${currentBytesExpected}` : ''}
             </Text>
           ) : null}
         </>
@@ -663,17 +737,22 @@ function ModelStatusCard({
   return (
     <View style={styles.runtimeStatusCard} testID="meal-input-assist-model-status">
       <View style={styles.runtimeStatusHeader}>
-        <Text style={styles.disabledLabel}>{MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} (meal input assist)</Text>
-        <View style={[
-          styles.runtimeStatusBadge,
-          visibleStatus === 'ready'
-            ? styles.runtimeStatusBadgeReady
-            : visibleStatus === 'downloading'
-              ? styles.runtimeStatusBadgeLoading
-              : styles.runtimeStatusBadgeUnavailable,
-        ]}
+        <Text style={styles.disabledLabel}>
+          {MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} (meal input assist)
+        </Text>
+        <View
+          style={[
+            styles.runtimeStatusBadge,
+            visibleStatus === 'ready'
+              ? styles.runtimeStatusBadgeReady
+              : visibleStatus === 'downloading'
+                ? styles.runtimeStatusBadgeLoading
+                : styles.runtimeStatusBadgeUnavailable,
+          ]}
         >
-          <Text style={styles.runtimeStatusBadgeText}>{formatModelStatusLabel(visibleStatus ?? status.kind)}</Text>
+          <Text style={styles.runtimeStatusBadgeText}>
+            {formatModelStatusLabel(visibleStatus ?? status.kind)}
+          </Text>
         </View>
       </View>
 
@@ -683,18 +762,25 @@ function ModelStatusCard({
           : status.kind === 'ready'
             ? `${MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} の model / projector が端末に導入されています。`
             : status.kind === 'error'
-              ? status.errorMessage ?? `${MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} model の状態に問題があります。`
+              ? (status.errorMessage ??
+                `${MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} model の状態に問題があります。`)
               : `${MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} の model / projector はまだ端末に導入されていません。`}
       </Text>
 
-      {visibleStatus === 'downloading' ? <DownloadProgressCard progress={downloadProgress} /> : null}
-      {status.version ? <Text style={styles.runtimeStatusMode}>Version: {status.version}</Text> : null}
+      {visibleStatus === 'downloading' ? (
+        <DownloadProgressCard progress={downloadProgress} />
+      ) : null}
+      {status.version ? (
+        <Text style={styles.runtimeStatusMode}>Version: {status.version}</Text>
+      ) : null}
       {status.downloadedAt ? (
-        <Text style={styles.runtimeStatusMode}>Downloaded: {new Date(status.downloadedAt).toLocaleString('ja-JP')}</Text>
+        <Text style={styles.runtimeStatusMode}>
+          Downloaded: {new Date(status.downloadedAt).toLocaleString('ja-JP')}
+        </Text>
       ) : null}
 
       <Text style={styles.runtimeStatusPathsLabel}>Download files</Text>
-      {managedFiles.map((file) => (
+      {managedFiles.map(file => (
         <View key={file.key} style={styles.modelFileCard}>
           <Text style={styles.modelFileLabel}>{file.label}</Text>
           <Text style={styles.modelFileName}>{file.sourceFileName}</Text>
@@ -748,19 +834,26 @@ function RuntimeStatusCard({
     <View style={styles.runtimeStatusCard} testID={testID}>
       <View style={styles.runtimeStatusHeader}>
         <Text style={styles.disabledLabel}>{title}</Text>
-        <View style={[
-          styles.runtimeStatusBadge,
-          entry.kind === 'ready' ? styles.runtimeStatusBadgeReady : styles.runtimeStatusBadgeUnavailable,
-        ]}
+        <View
+          style={[
+            styles.runtimeStatusBadge,
+            entry.kind === 'ready'
+              ? styles.runtimeStatusBadgeReady
+              : styles.runtimeStatusBadgeUnavailable,
+          ]}
         >
-          <Text style={styles.runtimeStatusBadgeText}>{entry.kind === 'ready' ? 'Ready' : 'Unavailable'}</Text>
+          <Text style={styles.runtimeStatusBadgeText}>
+            {entry.kind === 'ready' ? 'Ready' : 'Unavailable'}
+          </Text>
         </View>
       </View>
       <Text style={styles.runtimeStatusReason}>{entry.reason}</Text>
       <Text style={styles.runtimeStatusMode}>Mode: {entry.mode}</Text>
       <Text style={styles.runtimeStatusPathsLabel}>Expected paths</Text>
-      {entry.expectedPaths.map((path) => (
-        <Text key={path} style={styles.runtimeStatusPath}>{path}</Text>
+      {entry.expectedPaths.map(path => (
+        <Text key={path} style={styles.runtimeStatusPath}>
+          {path}
+        </Text>
       ))}
     </View>
   );

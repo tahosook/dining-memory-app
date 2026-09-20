@@ -24,9 +24,15 @@ export const useCameraPermission = (): CameraPermissionState => {
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage.includes('camera')) {
-      Alert.alert('カメラエラー', 'カメラの初期化に失敗しました。Expo Goを再起動するか、開発ビルドを使用してください。');
+      Alert.alert(
+        'カメラエラー',
+        'カメラの初期化に失敗しました。Expo Goを再起動するか、開発ビルドを使用してください。'
+      );
     } else if (errorMessage.includes('permission')) {
-      Alert.alert('権限エラー', 'カメラ権限が拒否されました。アプリの設定から権限を許可してください。');
+      Alert.alert(
+        '権限エラー',
+        'カメラ権限が拒否されました。アプリの設定から権限を許可してください。'
+      );
     } else {
       Alert.alert('エラー', `権限確認中にエラーが発生しました: ${errorMessage}`);
     }

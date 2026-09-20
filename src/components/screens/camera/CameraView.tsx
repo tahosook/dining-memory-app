@@ -93,7 +93,12 @@ export type CameraViewProps = Pick<
 > &
   Pick<
     CameraOperations,
-    'onTakePicture' | 'onAddPhotoFromLibrary' | 'onFlipCamera' | 'onClose' | 'onRequestPermission' | 'onOpenSettings'
+    | 'onTakePicture'
+    | 'onAddPhotoFromLibrary'
+    | 'onFlipCamera'
+    | 'onClose'
+    | 'onRequestPermission'
+    | 'onOpenSettings'
   > &
   Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
   Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
@@ -480,11 +485,7 @@ const CameraView: React.FC<CameraViewProps> = ({
         {captureReview ? <View style={styles.cameraReviewBackdrop} pointerEvents="none" /> : null}
 
         <View style={styles.overlay}>
-          <TopBar
-            onClosePress={onClose}
-            onFlipPress={onFlipCamera}
-            closeDisabled={savingCapture}
-          />
+          <TopBar onClosePress={onClose} onFlipPress={onFlipCamera} closeDisabled={savingCapture} />
 
           {captureReview ? (
             <CaptureReview

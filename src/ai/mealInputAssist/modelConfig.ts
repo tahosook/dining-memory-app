@@ -25,11 +25,11 @@ const MANAGED_FILE_LABELS = {
   projector: 'Projector',
 } as const;
 
-export type MealInputAssistManagedFileKey = typeof MANAGED_FILE_ORDER[number];
+export type MealInputAssistManagedFileKey = (typeof MANAGED_FILE_ORDER)[number];
 
 export interface MealInputAssistManagedFile {
   key: MealInputAssistManagedFileKey;
-  label: typeof MANAGED_FILE_LABELS[MealInputAssistManagedFileKey];
+  label: (typeof MANAGED_FILE_LABELS)[MealInputAssistManagedFileKey];
   fileName: string;
   sourceFileName: string;
   url: string;
@@ -61,14 +61,13 @@ export function resolveMealInputAssistProjectorPath() {
 }
 
 export function getMealInputAssistExpectedPaths() {
-  return [
-    resolveMealInputAssistModelPath(),
-    resolveMealInputAssistProjectorPath(),
-  ].filter((path): path is string => Boolean(path));
+  return [resolveMealInputAssistModelPath(), resolveMealInputAssistProjectorPath()].filter(
+    (path): path is string => Boolean(path)
+  );
 }
 
 export function getMealInputAssistManagedFiles(): MealInputAssistManagedFile[] {
-  return MANAGED_FILE_ORDER.map((key) => {
+  return MANAGED_FILE_ORDER.map(key => {
     const file = MEAL_INPUT_ASSIST_MODEL_CONFIG.files[key];
 
     return {

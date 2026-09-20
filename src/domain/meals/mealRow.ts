@@ -35,12 +35,15 @@ export function resolveCookingLevelForSave(
     return undefined;
   }
 
-  return normalizeCookingLevel(data.cooking_level) ?? inferCookingLevel({
-    mealName: data.meal_name,
-    cuisineType: data.cuisine_type,
-    notes: data.notes,
-    isHomemade: data.is_homemade,
-  });
+  return (
+    normalizeCookingLevel(data.cooking_level) ??
+    inferCookingLevel({
+      mealName: data.meal_name,
+      cuisineType: data.cuisine_type,
+      notes: data.notes,
+      isHomemade: data.is_homemade,
+    })
+  );
 }
 
 export function normalizeMealRow(

@@ -1,4 +1,7 @@
-import type { PersistedAppSettingRow, PersistedMealRow } from '../../database/services/localDatabase';
+import type {
+  PersistedAppSettingRow,
+  PersistedMealRow,
+} from '../../database/services/localDatabase';
 import {
   extractPhotoFileName,
   isOriginalPhotoFileName,
@@ -70,7 +73,7 @@ export function deserializeMeals(
   portableMeals: PortableMealRecord[],
   documentsDirectoryUri: string
 ): PersistedMealRow[] {
-  return portableMeals.map((record) => {
+  return portableMeals.map(record => {
     const photoPath = resolveRestoredPhotoUri(record.photo_file_name, documentsDirectoryUri);
 
     return {
@@ -102,7 +105,7 @@ export function deserializeMeals(
 export function serializeAppSettings(
   settings: PersistedAppSettingRow[]
 ): PortableAppSettingRecord[] {
-  return settings.map((s) => ({
+  return settings.map(s => ({
     key: s.key,
     value: s.value ?? null,
     updated_at: s.updated_at,
@@ -112,7 +115,7 @@ export function serializeAppSettings(
 export function deserializeAppSettings(
   portableSettings: PortableAppSettingRecord[]
 ): PersistedAppSettingRow[] {
-  return portableSettings.map((s) => ({
+  return portableSettings.map(s => ({
     key: s.key,
     value: s.value ?? null,
     updated_at: s.updated_at,

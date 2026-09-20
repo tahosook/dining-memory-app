@@ -10,7 +10,8 @@ export interface MealShareOptions {
   dialogTitle?: string;
 }
 
-export type StorageLocationType = 'cache' | 'document' | 'mediaStore' | 'external' | 'unknown' | 'none';
+export type StorageLocationType =
+  'cache' | 'document' | 'mediaStore' | 'external' | 'unknown' | 'none';
 
 export interface MealShareDebugInfo {
   platform: string;
@@ -61,11 +62,19 @@ export function detectStorageLocation(uri?: string): StorageLocationType {
     return 'mediaStore';
   }
 
-  if (normalized.includes('/cache/') || normalized.includes('cached_') || normalized.includes('cache')) {
+  if (
+    normalized.includes('/cache/') ||
+    normalized.includes('cached_') ||
+    normalized.includes('cache')
+  ) {
     return 'cache';
   }
 
-  if (normalized.includes('/files/') || normalized.includes('document') || normalized.includes('expo_files')) {
+  if (
+    normalized.includes('/files/') ||
+    normalized.includes('document') ||
+    normalized.includes('expo_files')
+  ) {
     return 'document';
   }
 
@@ -76,7 +85,10 @@ export function detectStorageLocation(uri?: string): StorageLocationType {
   return 'unknown';
 }
 
-export async function inspectSharePhoto(photoUri?: string, mimeType = 'image/jpeg'): Promise<MealShareDebugInfo> {
+export async function inspectSharePhoto(
+  photoUri?: string,
+  mimeType = 'image/jpeg'
+): Promise<MealShareDebugInfo> {
   const debugInfo: MealShareDebugInfo = {
     platform: Platform.OS,
     photoUri: sanitizeUriForLog(photoUri),
@@ -155,7 +167,10 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
             details: result,
           };
         } catch (nativeError) {
-          console.warn('[MealShare] Android native share threw, falling back to next available method:', nativeError);
+          console.warn(
+            '[MealShare] Android native share threw, falling back to next available method:',
+            nativeError
+          );
         }
       }
 
@@ -178,7 +193,10 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
             };
           }
         } catch (expoSharingError) {
-          console.warn('[MealShare] Fallback expo-sharing failed, attempting standard Share:', expoSharingError);
+          console.warn(
+            '[MealShare] Fallback expo-sharing failed, attempting standard Share:',
+            expoSharingError
+          );
         }
       }
 

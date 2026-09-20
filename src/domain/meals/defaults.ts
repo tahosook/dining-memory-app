@@ -30,8 +30,11 @@ export function getDistanceMeters(
   const startLatitude = toRadians(first.latitude);
   const endLatitude = toRadians(second.latitude);
   const haversine =
-    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2)
-    + Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(longitudeDelta / 2) * Math.sin(longitudeDelta / 2);
+    Math.sin(latitudeDelta / 2) * Math.sin(latitudeDelta / 2) +
+    Math.cos(startLatitude) *
+      Math.cos(endLatitude) *
+      Math.sin(longitudeDelta / 2) *
+      Math.sin(longitudeDelta / 2);
 
   return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
@@ -70,10 +73,16 @@ export function findMostRecentNearbyRow(
     if (typeof row.latitude !== 'number' || typeof row.longitude !== 'number' || row.is_deleted) {
       continue;
     }
-    if (typeof options?.minMealDatetime === 'number' && row.meal_datetime < options.minMealDatetime) {
+    if (
+      typeof options?.minMealDatetime === 'number' &&
+      row.meal_datetime < options.minMealDatetime
+    ) {
       continue;
     }
-    if (getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) > maxDistanceMeters) {
+    if (
+      getDistanceMeters(origin, { latitude: row.latitude, longitude: row.longitude }) >
+      maxDistanceMeters
+    ) {
       continue;
     }
 
@@ -107,9 +116,9 @@ export function resolveDefaultMealName(data: MealLocationInput, rows: PersistedM
 
 export function resolveNearbyLocationName(rows: PersistedMealRow[], data: MealLocationInput) {
   if (
-    data.location_name?.trim()
-    || typeof data.latitude !== 'number'
-    || typeof data.longitude !== 'number'
+    data.location_name?.trim() ||
+    typeof data.latitude !== 'number' ||
+    typeof data.longitude !== 'number'
   ) {
     return data.location_name;
   }

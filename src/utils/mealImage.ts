@@ -6,11 +6,11 @@ function normalizeMealImageUri(path?: string): string | undefined {
   }
 
   if (
-    path.startsWith('file://')
-    || path.startsWith('content://')
-    || path.startsWith('ph://')
-    || path.startsWith('http://')
-    || path.startsWith('https://')
+    path.startsWith('file://') ||
+    path.startsWith('content://') ||
+    path.startsWith('ph://') ||
+    path.startsWith('http://') ||
+    path.startsWith('https://')
   ) {
     return path;
   }
@@ -18,10 +18,14 @@ function normalizeMealImageUri(path?: string): string | undefined {
   return `file://${path}`;
 }
 
-export function getMealListImageUri(meal: Pick<Meal, 'photo_path' | 'photo_thumbnail_path'>): string | undefined {
+export function getMealListImageUri(
+  meal: Pick<Meal, 'photo_path' | 'photo_thumbnail_path'>
+): string | undefined {
   return normalizeMealImageUri(meal.photo_thumbnail_path ?? meal.photo_path);
 }
 
-export function getMealDetailImageUri(meal: Pick<Meal, 'photo_path' | 'photo_thumbnail_path'>): string | undefined {
+export function getMealDetailImageUri(
+  meal: Pick<Meal, 'photo_path' | 'photo_thumbnail_path'>
+): string | undefined {
   return normalizeMealImageUri(meal.photo_path ?? meal.photo_thumbnail_path);
 }

@@ -166,8 +166,11 @@ export class BackupService {
       // Note: zipFilePath is deliberately kept in FileSystem.cacheDirectory so that
       // Sharing.shareAsync and the system share sheet / background file saver can access it.
       // The OS will automatically clean up the cache directory.
-      await deleteAsync(stagingDir, { idempotent: true }).catch((err) => {
-        console.warn('[BackupService] Failed to clean up export staging directory:', err instanceof Error ? err.message : err);
+      await deleteAsync(stagingDir, { idempotent: true }).catch(err => {
+        console.warn(
+          '[BackupService] Failed to clean up export staging directory:',
+          err instanceof Error ? err.message : err
+        );
       });
     }
   }
@@ -210,7 +213,8 @@ export class BackupService {
         await this.cleanupStaging(stagingDir);
         return {
           valid: false,
-          error: 'バックアップファイルに manifest.json が見つかりません。対応外のアーカイブ形式です。',
+          error:
+            'バックアップファイルに manifest.json が見つかりません。対応外のアーカイブ形式です。',
         };
       }
 
@@ -256,12 +260,15 @@ export class BackupService {
 
       let rawSettings: unknown;
       try {
-        rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
+        rawSettings = JSON.parse(
+          await readAsStringAsync(`${stagingDir}database/app_settings.json`)
+        );
       } catch {
         await this.cleanupStaging(stagingDir);
         return {
           valid: false,
-          error: 'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
+          error:
+            'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
         };
       }
 
@@ -379,7 +386,8 @@ export class BackupService {
       await this.cleanupStaging(stagingDir);
       return {
         valid: false,
-        error: 'バックアップファイルの展開または検証中にエラーが発生しました。ファイルが破損している可能性があります。',
+        error:
+          'バックアップファイルの展開または検証中にエラーが発生しました。ファイルが破損している可能性があります。',
       };
     }
   }
@@ -392,11 +400,7 @@ export class BackupService {
   static async restoreVerifiedBackup(
     validationResult: BackupValidationResult
   ): Promise<RestoreBackupResult> {
-    if (
-      !validationResult.valid ||
-      !validationResult.stagingDirectory ||
-      !validationResult.meals
-    ) {
+    if (!validationResult.valid || !validationResult.stagingDirectory || !validationResult.meals) {
       throw new Error('復元に必要な検証データが不足しています。');
     }
 
@@ -503,15 +507,21 @@ export class BackupService {
       }
 
       if (rollbackFailedCount > 0) {
-        console.warn(`[BackupService] Photo rollback encountered ${rollbackFailedCount} error(s) during recovery.`);
-        const baseMessage = restoreError instanceof Error ? restoreError.message : '復元処理に失敗しました。';
+        console.warn(
+          `[BackupService] Photo rollback encountered ${rollbackFailedCount} error(s) during recovery.`
+        );
+        const baseMessage =
+          restoreError instanceof Error ? restoreError.message : '復元処理に失敗しました。';
         throw new Error(`${baseMessage}（写真のロールバック復元にも一部失敗しました）`);
       }
 
       throw restoreError;
     } finally {
-      await deleteAsync(rollbackDir, { idempotent: true }).catch((err) => {
-        console.warn('[BackupService] Failed to clean up rollback directory:', err instanceof Error ? err.message : err);
+      await deleteAsync(rollbackDir, { idempotent: true }).catch(err => {
+        console.warn(
+          '[BackupService] Failed to clean up rollback directory:',
+          err instanceof Error ? err.message : err
+        );
       });
       await this.cleanupStaging(stagingDir);
     }
@@ -525,8 +535,11 @@ export class BackupService {
       return;
     }
 
-    await deleteAsync(stagingDirectory, { idempotent: true }).catch((err) => {
-      console.warn('[BackupService] Failed to clean up staging directory:', err instanceof Error ? err.message : err);
+    await deleteAsync(stagingDirectory, { idempotent: true }).catch(err => {
+      console.warn(
+        '[BackupService] Failed to clean up staging directory:',
+        err instanceof Error ? err.message : err
+      );
     });
   }
 }

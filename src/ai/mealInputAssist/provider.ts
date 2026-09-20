@@ -1,4 +1,8 @@
-import type { MealInputAssistProvider, MealInputAssistProviderResult, MealInputAssistRequest } from './types';
+import type {
+  MealInputAssistProvider,
+  MealInputAssistProviderResult,
+  MealInputAssistRequest,
+} from './types';
 
 const MOCK_VARIANTS: MealInputAssistProviderResult[] = [
   {
@@ -58,4 +62,5 @@ export class MockMealInputAssistProvider implements MealInputAssistProvider {
   }
 }
 
-export const defaultMealInputAssistProvider: MealInputAssistProvider = new MockMealInputAssistProvider();
+export const defaultMealInputAssistProvider: MealInputAssistProvider =
+  new MockMealInputAssistProvider();
