@@ -35,6 +35,7 @@ export const SearchScreen: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const activeSearchIdRef = useRef(0);
+  const loadingRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(false);
   const resultsLengthRef = useRef(0);
@@ -62,6 +63,7 @@ export const SearchScreen: React.FC = () => {
 
   const runSearch = useCallback(async (filters: SearchFilterState = filtersRef.current) => {
     const searchId = ++activeSearchIdRef.current;
+    loadingRef.current = true;
     setLoading(true);
     setErrorMessage(null);
     loadingMoreRef.current = false;
@@ -92,6 +94,7 @@ export const SearchScreen: React.FC = () => {
       setErrorMessage('検索結果の更新に失敗しました。');
     } finally {
       if (searchId === activeSearchIdRef.current) {
+        loadingRef.current = false;
         setHasLoadedOnce(true);
         setLoading(false);
       }
@@ -99,7 +102,7 @@ export const SearchScreen: React.FC = () => {
   }, []);
 
   const handleLoadMore = useCallback(async () => {
-    if (loading || loadingMoreRef.current || !hasMoreRef.current) {
+    if (loadingRef.current || loadingMoreRef.current || !hasMoreRef.current) {
       return;
     }
 
@@ -141,7 +144,7 @@ export const SearchScreen: React.FC = () => {
         setLoadingMore(false);
       }
     }
-  }, [loading]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {

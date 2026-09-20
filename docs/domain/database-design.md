@@ -32,8 +32,7 @@
 - Photo persistence and EXIF writes are handled in `src/media/`; the database stores displayable file paths and does not store image blobs. `meals.photo_path` は高解像度の original 画像パスを保持し、`meals.photo_thumbnail_path` は一覧表示用サムネイル（長辺320px）の永続パスを保持する。thumbnail 生成は保存後に非同期実行または一覧表示時に lazy fill され、生成失敗や既存レコードでの NULL は許容され、一覧表示時は `photo_thumbnail_path ?? photo_path` でフォールバックする。
 
 ## Search and Analytics Intent
-- The schema currently supports text search and filter search.
-- `MealService.searchMeals` では、ネイティブ SQLite 実行時に SQL WHERE 句（`is_deleted`, `meal_datetime`, `cuisine_type`, `is_homemade`, `cooking_level`, `location_name`, `search_text` / `meal_name` / `notes`）を唯一のフィルタリング責務とし、無制限なデータロードを防ぐため `limit` および `offset` によるページネーションをサポートする。
+- `MealService.searchMeals` では、ネイティブ SQLite 実行時に SQL WHERE 句（`is_deleted`, `meal_datetime`, `cuisine_type`, `is_homemade`, `cooking_level`, `location_name`, `search_text` / `meal_name` / `notes`）を唯一のフィルタリング責務とし、無制限なデータロードを防ぐため `limit` および `offset` によるページネーションをサポートする（シングルユーザー・ローカル端末利用を前提とし、将来のバックグラウンド同期や大量データ高速走査時は `meal_datetime` + `id` による keyset pagination への発展を想定）。
 - Analysis tables should stay additive and not block core capture and browse flows.
 - Generated insights should be separable from raw meal records.
 - Export and backup formats should stay versioned and preserve the relationships needed to rebuild meals, ingredients, images, settings, and generated insights.

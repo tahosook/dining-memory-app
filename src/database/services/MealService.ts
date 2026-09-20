@@ -235,6 +235,9 @@ export class MealService {
 
         const whereClause = conditions.join(' AND ');
         let query = `SELECT * FROM meals WHERE ${whereClause} ORDER BY meal_datetime DESC`;
+        // NOTE: 目前はシングルユーザー・ローカルDB前提のためシンプルな LIMIT / OFFSET 方式を採用しています。
+        // 将来的にバックグラウンド同期や大量データ下での高速カーソル走査が必要になった場合は、
+        // (meal_datetime, id) を用いた keyset pagination への移行を検討してください。
         if (typeof filters.limit === 'number') {
           query += ' LIMIT ?';
           params.push(filters.limit);
