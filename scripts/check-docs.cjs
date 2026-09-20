@@ -31,30 +31,63 @@ const EXCLUDED_DIRS = [
 ];
 
 // -----------------------------------------------------------------------------
-// Canonical Documentation Requirements
+// Canonical Documentation Definition (Single Source of Truth: docs/index.md)
 // -----------------------------------------------------------------------------
-// All canonical documents defined in docs/index.md must exist in the repository.
-// If any of these are deleted or misplaced, CI must fail immediately.
-const REQUIRED_CANONICAL_DOCS = [
-  'README.md',
-  'AGENTS.md',
-  'TASKS.md',
-  'PLANS.md',
-  'docs/index.md',
-  'docs/product/overview.md',
-  'docs/product/progress.md',
-  'docs/architecture/tech-spec.md',
-  'docs/domain/database-design.md',
-  'docs/ux/screen-designs.md',
-  'docs/ux/user-flows.md',
-  'docs/engineering/context-map.md',
-  'docs/engineering/coding-standards.md',
-  'docs/engineering/development-workflow.md',
-  'docs/engineering/github-security-settings.md',
-  'docs/engineering/food-labeling-guidelines.md',
-  'docs/engineering/mediapipe-labeling-workflow.md',
-  'docs/engineering/immediate-improvements.md',
-];
+// Rather than maintaining a duplicate hardcoded array of canonical documents,
+// we dynamically extract them directly from the "## Canonical Docs" section in docs/index.md.
+// This guarantees that docs/index.md remains the single source of truth.
+function getCanonicalDocsFromIndex(indexFilePath = path.join(ROOT_DIR, 'docs', 'index.md')) {
+  if (!fs.existsSync(indexFilePath)) {
+    return [];
+  }
+  const content = fs.readFileSync(indexFilePath, 'utf-8');
+  const canonicalSectionMatch = content.match(/## Canonical Docs\s*([\s\S]*?)(?=\n## |$)/);
+  if (!canonicalSectionMatch) {
+    return [];
+  }
+
+  const sectionContent = canonicalSectionMatch[1];
+  // Exclude ### Notes subsection (which links to temporary notes/ and retired deprecated/ folders)
+  const withoutNotes = sectionContent.replace(/### Notes\s*[\s\S]*?(?=\n### |\n## |$)/, '');
+
+  const linkRegex = /\[([^\]]+)\]\(([^)#\s]+)(?:#[^)]*)?\)/g;
+  let match;
+  const canonicalDocs = [];
+  const indexDir = path.dirname(indexFilePath);
+  const lines = content.split(/\r?\n/);
+
+  // docs/index.md itself is also a canonical doc
+  canonicalDocs.push({
+    title: 'Documentation Index',
+    rawTarget: 'docs/index.md',
+    relPath: 'docs/index.md',
+    line: 1,
+  });
+
+  while ((match = linkRegex.exec(withoutNotes)) !== null) {
+    const rawTarget = match[2].trim();
+    // Exclude directory links (such as notes/ or deprecated/)
+    if (rawTarget.endsWith('/') || rawTarget.includes('deprecated') || rawTarget.includes('notes/')) {
+      continue;
+    }
+
+    // Find exact line number in docs/index.md for precise error reporting
+    const matchOffset = canonicalSectionMatch.index + content.slice(canonicalSectionMatch.index).indexOf(withoutNotes) + match.index;
+    const lineNum = content.slice(0, matchOffset).split(/\r?\n/).length;
+
+    const resolved = path.resolve(indexDir, rawTarget);
+    const relPath = path.relative(ROOT_DIR, resolved).replace(/\\/g, '/');
+
+    canonicalDocs.push({
+      title: match[1],
+      rawTarget,
+      relPath,
+      line: lineNum,
+    });
+  }
+
+  return canonicalDocs;
+}
 
 // -----------------------------------------------------------------------------
 // Specification Drift Rules
@@ -157,7 +190,15 @@ function getActiveMarkdownFiles() {
 
 function run(options = {}) {
   const silent = options.silent || false;
-  const canonicalDocs = options.requiredCanonicalDocs || REQUIRED_CANONICAL_DOCS;
+  const rawCanonicalDocs = options.requiredCanonicalDocs || getCanonicalDocsFromIndex();
+  // Normalize canonical docs list to objects with relPath, line, title, rawTarget
+  const canonicalDocs = rawCanonicalDocs.map(doc => {
+    if (typeof doc === 'string') {
+      return { title: doc, rawTarget: doc, relPath: doc, line: 1 };
+    }
+    return doc;
+  });
+
   const errors = [];
   const warnings = [];
 
@@ -167,12 +208,14 @@ function run(options = {}) {
 
   // 1. Verify required canonical documentation files exist
   for (const canonicalDoc of canonicalDocs) {
-    const fullPath = path.join(ROOT_DIR, canonicalDoc);
+    const fullPath = path.join(ROOT_DIR, canonicalDoc.relPath);
     if (!fs.existsSync(fullPath)) {
       errors.push({
         type: 'missing-canonical-doc',
-        file: canonicalDoc,
-        message: `Required canonical documentation file does not exist: ${canonicalDoc}`,
+        file: 'docs/index.md',
+        line: canonicalDoc.line,
+        target: canonicalDoc.relPath,
+        message: `Required canonical documentation file defined in docs/index.md does not exist: "${canonicalDoc.relPath}" (link text: "${canonicalDoc.title || canonicalDoc.relPath}", target: "${canonicalDoc.rawTarget || canonicalDoc.relPath}")`,
       });
     }
   }
@@ -223,6 +266,10 @@ function run(options = {}) {
     }
 
     // Markdown link checking
+    // Note on Anchors:
+    // Anchor fragments (e.g. #section or file.md#section) are stripped before resolving file paths.
+    // Deep anchor/heading existence checking is intentionally omitted to avoid parser complexity
+    // and false positives from GitHub Markdown heading slug rules (multibyte characters, punctuation, duplicate suffixes).
     let linkMatch;
     linkRegex.lastIndex = 0;
     while ((linkMatch = linkRegex.exec(content)) !== null) {
@@ -253,7 +300,7 @@ function run(options = {}) {
           type: 'internal-link',
           file: relFile,
           line: lineNum,
-          target: rawTarget,
+          link: rawTarget,
           resolved: relResolved,
           message: `Broken internal link: "${rawTarget}" -> resolved to non-existent "${relResolved}"`,
         });
@@ -264,7 +311,7 @@ function run(options = {}) {
             type: 'deprecated-reference',
             file: relFile,
             line: lineNum,
-            target: rawTarget,
+            link: rawTarget,
             resolved: relResolved,
             message: `Reference to deprecated document: "${rawTarget}" (points to ${relResolved})`,
           });
@@ -285,7 +332,7 @@ function run(options = {}) {
     for (const w of warnings) {
       warn(`  WARNING [${w.type}]`);
       warn(`    file: ${w.file}:${w.line}`);
-      if (w.target) warn(`    link: ${w.target}`);
+      if (w.link) warn(`    link: ${w.link}`);
       if (w.resolved) warn(`    target: ${w.resolved}`);
       warn(`    message: ${w.message}\n`);
     }
@@ -296,7 +343,8 @@ function run(options = {}) {
     for (const e of errors) {
       error(`  ERROR [${e.type}]`);
       error(`    file: ${e.file}${e.line ? `:${e.line}` : ''}`);
-      if (e.target) error(`    link: ${e.target}`);
+      if (e.link) error(`    link: ${e.link}`);
+      if (e.target) error(`    target: ${e.target}`);
       if (e.resolved) error(`    resolved: ${e.resolved}`);
       if (e.matched) error(`    matched: ${e.matched}`);
       error(`    message: ${e.message}\n`);
@@ -323,7 +371,7 @@ if (require.main === module) {
 
 module.exports = {
   run,
-  REQUIRED_CANONICAL_DOCS,
+  getCanonicalDocsFromIndex,
   SPEC_DRIFT_RULES,
   TOOL_NEUTRALITY_RULES,
   getActiveMarkdownFiles,
