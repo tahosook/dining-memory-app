@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -150,6 +150,14 @@ export const RecordsScreen: React.FC = () => {
   const [flatMeals, setFlatMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const loadMeals = useCallback(async () => {
     try {
@@ -158,6 +166,9 @@ export const RecordsScreen: React.FC = () => {
       setMealSections(groupMealsByDate(meals));
       requestMealThumbnails(meals, {
         onGenerated: (mealId, thumbUri) => {
+          if (!isMountedRef.current) {
+            return;
+          }
           setFlatMeals((current) =>
             current.map((item) => (item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item))
           );

@@ -231,4 +231,35 @@ describe('RecordsScreen', () => {
       onGenerated: expect.any(Function),
     });
   });
+
+  test('does not update state when onGenerated fires after component unmount', async () => {
+    let capturedOnGenerated: ((mealId: string, thumbUri: string) => void) | undefined;
+    (requestMealThumbnails as jest.Mock).mockImplementation((_meals, options) => {
+      capturedOnGenerated = options?.onGenerated;
+    });
+
+    const meal = {
+      id: '1',
+      uuid: '1',
+      meal_name: '朝ごはん',
+      meal_datetime: new Date('2026-04-12T08:00:00+09:00').getTime(),
+      is_homemade: true,
+      photo_path: 'file:///breakfast.jpg',
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    };
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([meal]);
+
+    const { unmount } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(capturedOnGenerated).toBeDefined();
+
+    unmount();
+
+    expect(() => {
+      capturedOnGenerated?.('1', 'file:///thumb.jpg');
+    }).not.toThrow();
+  });
 });

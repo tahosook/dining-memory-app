@@ -16,7 +16,6 @@ type QueueTask = {
   mealId: string;
   run: () => Promise<string | null>;
   resolve: (value: string | null) => void;
-  reject: (reason: unknown) => void;
 };
 
 const inFlightMap = new Map<string, Promise<string | null>>();
@@ -47,8 +46,8 @@ function pumpQueue() {
 }
 
 function enqueueThumbnailTask(mealId: string, run: () => Promise<string | null>): Promise<string | null> {
-  return new Promise<string | null>((resolve, reject) => {
-    taskQueue.push({ mealId, run, resolve, reject });
+  return new Promise<string | null>((resolve) => {
+    taskQueue.push({ mealId, run, resolve });
     pumpQueue();
   });
 }
@@ -169,27 +168,32 @@ export function requestMealThumbnails(
   options?: ThumbnailRequestOptions
 ): void {
   (async () => {
-    for (const meal of meals) {
-      if (!meal.photo_path) {
-        continue;
-      }
+    const candidateMealIds = await Promise.all(
+      meals.map(async (meal) => {
+        if (!meal.photo_path) {
+          return null;
+        }
 
-      let needsThumbnail = false;
-      if (!meal.photo_thumbnail_path) {
-        needsThumbnail = true;
-      } else {
+        if (!meal.photo_thumbnail_path) {
+          return meal.id;
+        }
+
         try {
           const info = await getInfoAsync(meal.photo_thumbnail_path);
           if (!info.exists) {
-            needsThumbnail = true;
+            return meal.id;
           }
         } catch {
-          needsThumbnail = true;
+          return meal.id;
         }
-      }
 
-      if (needsThumbnail) {
-        requestMealThumbnail(meal.id, options);
+        return null;
+      })
+    );
+
+    for (const mealId of candidateMealIds) {
+      if (mealId) {
+        requestMealThumbnail(mealId, options);
       }
     }
   })().catch((error) => {

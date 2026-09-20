@@ -108,6 +108,8 @@ export async function saveCaptureReviewWorkflow({
       meal_datetime: new Date(),
     });
 
+    // Web ではアプリ固有の安定パス + ファイルシステム操作が制限されるため、
+    // 現状はサムネイル生成をスキップする（将来 File System Access API 等で対応する可能性あり）
     if (!isWebWithoutPermissions) {
       const triggerThumbnail = triggerThumbnailGeneration ?? requestMealThumbnail;
       triggerThumbnail(meal.id);
