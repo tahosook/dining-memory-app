@@ -1,7 +1,7 @@
 # PLANS
 
 ## Meta
-- Purpose: 大きめ作業の短い実装方針を保存し、今後の AI prompt を短くする。
+- Purpose: 大きめ作業の短い実装方針を保存し、今後の開発 prompt を短くする。
 - Audience: repo 保守者、AI エージェント、実装担当者。
 - Update trigger: 大きめ作業の方針、制約、読み先、優先度が変わったとき。
 - Related docs: [AGENTS.md](AGENTS.md), [TASKS.md](TASKS.md), [docs/engineering/context-map.md](docs/engineering/context-map.md), [docs/product/progress.md](docs/product/progress.md)

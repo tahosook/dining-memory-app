@@ -31,7 +31,7 @@
 
 ### ドキュメント入口
 - [docs/index.md](docs/index.md): 誰がどの文書を読むかの案内板
-- [AGENTS.md](AGENTS.md): Codex の固定ルール
+- [AGENTS.md](AGENTS.md): AI エージェントの固定ルール
 - [TASKS.md](TASKS.md): 現在見えている作業候補
 - [PLANS.md](PLANS.md): 大きめ作業の短い実装方針
 

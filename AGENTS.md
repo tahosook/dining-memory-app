@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Purpose
-Codex がこの repo で毎回同じ前提を使い、必要以上に context を消費しないための固定ルールです。
+AI エージェントがこの repo で毎回同じ前提を使い、必要以上に context を消費しないための固定ルールです。
 詳細な読み先は [docs/engineering/context-map.md](docs/engineering/context-map.md) を参照してください。
 
 ## Read First

@@ -1,7 +1,7 @@
 # TASKS
 
 ## Meta
-- Purpose: 今見えている作業候補を短く整理し、今後の AI prompt を短くする。
+- Purpose: 今見えている作業候補を短く整理し、今後の開発 prompt を短くする。
 - Audience: repo 保守者、AI エージェント、実装担当者。
 - Update trigger: 優先順位、作業候補、完了状況、前提が変わったとき。
 - Related docs: [AGENTS.md](AGENTS.md), [PLANS.md](PLANS.md), [docs/engineering/context-map.md](docs/engineering/context-map.md), [docs/product/progress.md](docs/product/progress.md)

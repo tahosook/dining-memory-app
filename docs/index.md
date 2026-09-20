@@ -2,7 +2,7 @@
 
 ## Meta
 - Purpose: entry point for reading and maintaining project documentation.
-- Audience: Codex, contributors, and future maintainers.
+- Audience: AI agents, contributors, and future maintainers.
 - Update trigger: add, rename, or deprecate any canonical document.
 - Related docs: [AGENTS.md](../AGENTS.md), [docs/engineering/context-map.md](./engineering/context-map.md)
 
@@ -34,7 +34,7 @@
 
 ### Repository
 - [README.md](../README.md): setup, scripts, and high-level onboarding.
-- [AGENTS.md](../AGENTS.md): Codex fixed working rules.
+- [AGENTS.md](../AGENTS.md): AI agent fixed working rules.
 - [TASKS.md](../TASKS.md): current task candidates and rough priority.
 - [PLANS.md](../PLANS.md): short implementation plans for larger work.
 
