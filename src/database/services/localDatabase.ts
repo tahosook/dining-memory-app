@@ -303,6 +303,7 @@ export async function replaceDatabaseWithBackup(
       }
     }
     setInMemoryAppSettings(settingsMap);
+    setInMemorySearchVectors([]);
     return;
   }
 
@@ -354,6 +355,8 @@ export async function replaceDatabaseWithBackup(
         setting.updated_at
       );
     }
+
+    await db.runAsync('DELETE FROM search_vectors');
   });
 }
 

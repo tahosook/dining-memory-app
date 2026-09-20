@@ -137,8 +137,16 @@ describe('BackupService', () => {
         })
       );
 
-      // Cleanup called for staging directory and zip file
-      expect(deleteAsync).toHaveBeenCalledTimes(2);
+      // Cleanup called for staging directory, while temporary zip file is retained in cache directory for sharing
+      expect(deleteAsync).toHaveBeenCalledTimes(1);
+      expect(deleteAsync).toHaveBeenCalledWith(
+        expect.stringContaining('/dm-export-'),
+        { idempotent: true }
+      );
+      expect(deleteAsync).not.toHaveBeenCalledWith(
+        expect.stringContaining('.zip'),
+        expect.anything()
+      );
     });
 
     test('cleans up staging files even if zip or share throws error', async () => {

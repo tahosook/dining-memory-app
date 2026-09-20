@@ -76,7 +76,7 @@
 - Capture-review location lookup is best effort and may reuse the most recent nearby meal to initialize homemade state, but it must never block manual edits or saving.
 - Write GPS EXIF only when save-time location permission is granted and coordinates are actually available; otherwise save the JPEG without GPS metadata.
 - Treat photos, notes, location data, export data, and file paths as sensitive user data.
-- Do not assume external AI, cloud backup, or sync is allowed by default; require explicit user intent. Local ZIP backup export and restore require explicit user trigger and use sandboxed staging with strict path sanitization (Zip Slip prevention).
+- Do not assume external AI, cloud backup, or sync is allowed by default; require explicit user intent. Local ZIP backup export and restore require explicit user trigger and use sandboxed staging with strict path sanitization (Zip Slip prevention). Exported ZIP files are retained in the application cache directory until system cleanup to ensure the OS share sheet or file saver completes successfully, while staging directories are cleaned up immediately.
 - AI 入力補助では写真やメモを外部送信せず、新規保存時のメモ下書き採用では最小限の AI metadata だけを meal record に残す。detail edit modal では v1 として notes の追記だけを行い、新しい AI metadata は保存しない。
 - local AI spike でも写真やメモの外部送信は行わず、Settings の user opt-in がない限り AI 入力補助を無効にする。
 - Settings の runtime status も外部照会を行わず、端末内で native module / supported ABI / app-local model path の存在だけを確認する。
@@ -100,6 +100,6 @@
 - Camera is the main entry point for the app.
 - Search and stats exist as first-class tabs rather than hidden tools.
 - The project keeps a strong privacy and local-storage bias.
-- The current app supports local ZIP backup export and restore, while cloud backup, external export, and remote AI sync remain out of scope.
+- The current app supports local ZIP backup export and restore, while cloud backup, external export, and remote AI sync remain out of scope. In Expo SDK 52/57, staging and file operations utilize `expo-file-system/legacy`; non-legacy FileSystem migration is planned for a future release.
 - AI 入力補助は save / update flow の外側に置き、失敗時でも手入力保存を妨げない。
 - local AI runtime が未組み込みの build では、review に disabled reason を出し、mock 候補で自動的に置き換えない。

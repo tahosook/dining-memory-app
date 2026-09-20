@@ -1,3 +1,6 @@
+// Note on expo-file-system/legacy:
+// In Expo SDK 52/57, staging and file management operations rely on expo-file-system/legacy.
+// Migration to modern FileSystem APIs is tracked as a future task.
 import * as DocumentPicker from 'expo-document-picker';
 import {
   cacheDirectory,
@@ -159,12 +162,12 @@ export class BackupService {
         photoCount: requiredPhotoMap.size,
       };
     } finally {
-      // Ensure staging files and temporary ZIP archive are cleaned up (diagnostic log if failed)
+      // Ensure staging directory is cleaned up (diagnostic log if failed).
+      // Note: zipFilePath is deliberately kept in FileSystem.cacheDirectory so that
+      // Sharing.shareAsync and the system share sheet / background file saver can access it.
+      // The OS will automatically clean up the cache directory.
       await deleteAsync(stagingDir, { idempotent: true }).catch((err) => {
         console.warn('[BackupService] Failed to clean up export staging directory:', err instanceof Error ? err.message : err);
-      });
-      await deleteAsync(zipFilePath, { idempotent: true }).catch((err) => {
-        console.warn('[BackupService] Failed to clean up temporary ZIP file:', err instanceof Error ? err.message : err);
       });
     }
   }
@@ -172,6 +175,11 @@ export class BackupService {
   /**
    * Opens the file picker, extracts archive to a staging directory, and validates contents.
    * Does NOT modify database or existing photos.
+   *
+   * Note on staging lifecycle:
+   * When validation succeeds, the staging directory is retained while the caller displays
+   * the confirmation dialog to the user. The directory is cleaned up upon cancel
+   * (via cleanupStaging) or after restore execution (via restoreVerifiedBackup's finally block).
    */
   static async pickAndValidateBackup(): Promise<BackupValidationResult & { canceled?: boolean }> {
     if (!cacheDirectory) {
@@ -327,6 +335,10 @@ export class BackupService {
       }
 
       if (missingPhotos.length > 0) {
+        console.warn(
+          `[BackupService] Missing photos detected in backup archive (${missingPhotos.length} files):`,
+          missingPhotos
+        );
         await this.cleanupStaging(stagingDir);
         const foundCount = requiredPhotos.size - missingPhotos.length;
         return {
@@ -344,6 +356,10 @@ export class BackupService {
       }
 
       if (unreferencedPhotos.length > 0) {
+        console.warn(
+          `[BackupService] Unreferenced photos detected in backup archive (${unreferencedPhotos.length} files):`,
+          unreferencedPhotos
+        );
         await this.cleanupStaging(stagingDir);
         return {
           valid: false,

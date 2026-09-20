@@ -44,7 +44,7 @@
   - `database/meals.json`: `PersistedMealRow` をポータブル化した JSON 配列。端末依存の絶対パス `photo_path` は `photo_file_name`（ファイル名のみ）に正規化。`photo_thumbnail_path` は除外する。
   - `database/app_settings.json`: `app_settings` のポータブル JSON 配列。
   - `photos/<filename>.jpg`: 参照されているオリジナル写真ファイルのみを格納。サムネイル（`-thumb.jpg`）は同梱しない。
-- 復元（インポート）時は、一時展開ディレクトリでのマニフェスト・データ構造・写真整合性検証およびユーザー確認を経て、写真を `documentDirectory` へ配置し、SQLite トランザクション内で既存データを一括置換する。
+- 復元（インポート）時は、一時展開ディレクトリでのマニフェスト・データ構造・写真整合性検証およびユーザー確認を経て、写真を `documentDirectory` へ配置し、SQLite トランザクション内で既存データを一括置換する。復元時は `meals` および `app_settings` の置換と同時に `search_vectors` もクリアする（再インデックスは将来対応）。
 - 復元後の `meals.photo_path` は新環境の `${documentDirectory}${photo_file_name}` に書き換えられ、`photo_thumbnail_path` は NULL に設定される（一覧表示は既存の `photo_thumbnail_path ?? photo_path` フォールバックで即時表示される）。
 
 ## Current Implementation Notes

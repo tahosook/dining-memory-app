@@ -220,6 +220,8 @@ export default function SettingsScreen() {
       const { manifest } = validation;
       const formattedDate = new Date(manifest.exportedAt).toLocaleString('ja-JP');
 
+      // Staging directory is deliberately retained while the user reviews the confirmation dialog.
+      // Canceled dialog cleans it up via cleanupStaging; confirmed restore cleans it up in finally.
       Alert.alert(
         'バックアップから復元',
         `エクスポート日時: ${formattedDate}\n食事記録: ${manifest.mealCount}件\n写真: ${manifest.photoCount}枚\n\n現在の端末内の食事記録をすべて上書きして復元します。この操作は元に戻せません。`,
@@ -467,7 +469,7 @@ export default function SettingsScreen() {
           エクスポートしたZIPファイルからデータを復元します（現在のデータは置換されます）。
         </Text>
 
-        <View style={styles.dataManagementSpacer} />
+        <View style={styles.dangerZoneDivider} />
 
         <TouchableOpacity
           style={[styles.dangerButton, isBackupBusy && styles.actionButtonDisabled]}
@@ -1009,5 +1011,10 @@ const styles = StyleSheet.create({
   },
   dataManagementSpacer: {
     height: 12,
+  },
+  dangerZoneDivider: {
+    height: 1,
+    backgroundColor: '#d7d7d7',
+    marginVertical: 16,
   },
 });
