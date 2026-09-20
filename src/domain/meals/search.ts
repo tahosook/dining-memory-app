@@ -10,6 +10,8 @@ export interface SearchFilters {
   cooking_level?: CookingLevel | string;
   location_name?: string;
   text?: string;
+  limit?: number;
+  offset?: number;
 }
 
 export function generateSearchText(data: {

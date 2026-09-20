@@ -173,6 +173,41 @@ describe('MealService', () => {
     expect(meals.map((meal) => meal.meal_name)).toEqual(['醤油ラーメン']);
   });
 
+  test('applies limit and offset pagination in InMemory mode', async () => {
+    for (let i = 1; i <= 5; i++) {
+      await MealService.createMeal({
+        meal_name: `ラーメン${i}`,
+        is_homemade: false,
+        photo_path: `file:///ramen${i}.jpg`,
+        meal_datetime: new Date(`2026-04-${10 + i}T12:00:00+09:00`),
+      });
+    }
+
+    const page1 = await MealService.searchMeals({
+      text: 'ラーメン',
+      limit: 2,
+      offset: 0,
+    });
+    expect(page1).toHaveLength(2);
+    expect(page1.map((m) => m.meal_name)).toEqual(['ラーメン5', 'ラーメン4']);
+
+    const page2 = await MealService.searchMeals({
+      text: 'ラーメン',
+      limit: 2,
+      offset: 2,
+    });
+    expect(page2).toHaveLength(2);
+    expect(page2.map((m) => m.meal_name)).toEqual(['ラーメン3', 'ラーメン2']);
+
+    const page3 = await MealService.searchMeals({
+      text: 'ラーメン',
+      limit: 2,
+      offset: 4,
+    });
+    expect(page3).toHaveLength(1);
+    expect(page3.map((m) => m.meal_name)).toEqual(['ラーメン1']);
+  });
+
   test('aggregates summary statistics', async () => {
     await MealService.createMeal({
       meal_name: 'パスタ',
@@ -744,6 +779,81 @@ describe('MealService', () => {
         '%50\\%\\_discount%',
         '%50\\%\\_discount%'
       );
+    });
+
+    test('appends LIMIT and OFFSET clauses in SQL query when pagination parameters are provided', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.searchMeals({
+        limit: 60,
+        offset: 120,
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ? OFFSET ?',
+        60,
+        120
+      );
+    });
+
+    test('appends LIMIT clause without OFFSET when only limit is provided', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.searchMeals({
+        limit: 60,
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?',
+        60
+      );
+    });
+
+    test('appends LIMIT -1 OFFSET clause when only offset is provided', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.searchMeals({
+        offset: 30,
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT -1 OFFSET ?',
+        30
+      );
+    });
+
+    test('relies purely on SQL filtering without duplicate JS filtering in native DB mode', async () => {
+      const mockRows = [
+        {
+          id: 'sql-1',
+          uuid: 'sql-1',
+          meal_name: '特製ラーメン',
+          cuisine_type: 'ラーメン',
+          location_name: '東京駅',
+          notes: '魚介豚骨',
+          search_text: '特製ラーメン ラーメン 東京駅 魚介豚骨',
+          cooking_level: null,
+          meal_datetime: 5000,
+          is_homemade: 0,
+          photo_path: 'file:///ramen.jpg',
+          is_deleted: 0,
+          created_at: 5000,
+          updated_at: 5000,
+        },
+      ];
+      mockDb.getAllAsync.mockResolvedValue(mockRows);
+
+      const meals = await MealService.searchMeals({
+        text: '特製',
+        location_name: '東京',
+        limit: 10,
+        offset: 0,
+      });
+
+      // SQL provides the single filtering guarantee; rows returned from SQL are directly mapped
+      expect(meals).toHaveLength(1);
+      expect(meals[0].id).toBe('sql-1');
+      expect(meals[0].meal_name).toBe('特製ラーメン');
     });
 
     test('executes conditional atomic UPDATE for updateMealThumbnail in native DB mode', async () => {
@@ -1350,6 +1460,31 @@ describe('MealService', () => {
         { label: '自宅', count: 2 },
         { label: '渋谷', count: 1 },
       ]);
+    });
+
+    test('Parity: Real SQLite executes searchMeals with filters and pagination matching InMemory baseline', async () => {
+      // 1. 複数条件（和食・外食）+ ページネーション（limit: 1, offset: 0）
+      const nativePage1 = await MealService.searchMeals({
+        cuisine_type: '和食',
+        is_homemade: false,
+        limit: 1,
+        offset: 0,
+      });
+      expect(nativePage1).toHaveLength(1);
+      expect(nativePage1[0].id).toBe('3'); // 寿司 (datetime: 3000)
+
+      // 2. テキスト検索 ('ラーメン')
+      const ramenResult = await MealService.searchMeals({
+        text: 'ラーメン',
+      });
+      expect(ramenResult).toHaveLength(1);
+      expect(ramenResult[0].id).toBe('5');
+      expect(ramenResult[0].meal_name).toBe('ラーメン');
+
+      // 3. 削除済みレコード (id: 9) が除外されること
+      const allActive = await MealService.searchMeals({});
+      expect(allActive.find((m) => m.id === '9')).toBeUndefined();
+      expect(allActive).toHaveLength(10); // 11件中 削除1件を除外
     });
   });
 });

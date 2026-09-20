@@ -56,7 +56,8 @@
 ## Search Screen
 - Search bar should be the first thing the user sees; optional filters stay collapsed behind a compact conditions toggle.
 - Text input changes should automatically refresh search results with a short debounce; there is no separate search button.
-- Results should browse like a photo-first three-column grid, using thumbnails before full photo paths.
+- Results should browse like a photo-first three-column grid, using thumbnails before full photo paths. 大量データ転送を防ぐため初期表示および追加ロードは60件（3列×20行）単位のページネーション（infinite scroll）とし、スクロール末尾到達で次ページをシームレスに追加ロードする。
+- 検索結果件数表示は全件ロード完了時は「N件」、次ページが存在する読み込み途中は「N件+」と表示する。
 - The current optional filters are cuisine type, location, and homemade-only.
 - Search は current text/filter match だけを使い、semantic search は current scope に含めない。
 - Result cards should open the same root-level saved-record detail screen used from Records without switching to the Records tab first.

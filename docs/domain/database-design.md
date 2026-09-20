@@ -33,6 +33,7 @@
 
 ## Search and Analytics Intent
 - The schema currently supports text search and filter search.
+- `MealService.searchMeals` では、ネイティブ SQLite 実行時に SQL WHERE 句（`is_deleted`, `meal_datetime`, `cuisine_type`, `is_homemade`, `cooking_level`, `location_name`, `search_text` / `meal_name` / `notes`）を唯一のフィルタリング責務とし、無制限なデータロードを防ぐため `limit` および `offset` によるページネーションをサポートする。
 - Analysis tables should stay additive and not block core capture and browse flows.
 - Generated insights should be separable from raw meal records.
 - Export and backup formats should stay versioned and preserve the relationships needed to rebuild meals, ingredients, images, settings, and generated insights.

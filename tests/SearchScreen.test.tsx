@@ -293,5 +293,131 @@ describe('SearchScreen', () => {
     expect(await findByTestId('search-result-2')).toBeTruthy();
     expect(queryByTestId('search-result-1')).toBeNull();
   });
+
+  test('initial search requests paginated results with limit 60 and offset 0', async () => {
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
+
+    render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    expect(MealService.searchMeals).toHaveBeenCalledWith(
+      expect.objectContaining({
+        limit: 60,
+        offset: 0,
+      })
+    );
+  });
+
+  test('loads next page and appends results when onEndReached is triggered', async () => {
+    const page1Meals = Array.from({ length: 60 }, (_, i) =>
+      createMeal({ id: `page1-${i}`, meal_name: `食事1-${i}` })
+    );
+    const page2Meals = [
+      createMeal({ id: 'page2-0', meal_name: '食事2-0' }),
+      createMeal({ id: 'page2-1', meal_name: '食事2-1' }),
+    ];
+
+    (MealService.searchMeals as jest.Mock)
+      .mockResolvedValueOnce(page1Meals)
+      .mockResolvedValueOnce(page2Meals);
+
+    const { findByTestId, getByText } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    // 1ページ目の結果（60件）が表示され、hasMore=true のため 60件+ と表示
+    expect(await findByTestId('search-result-page1-0')).toBeTruthy();
+    expect(getByText('60件+')).toBeTruthy();
+
+    // FlatList の onEndReached を発火して次ページをロード
+    const flatList = await findByTestId('search-results-list');
+    await act(async () => {
+      flatList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    // 2回目の searchMeals は offset: 60, limit: 60 で呼ばれる
+    expect(MealService.searchMeals).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        limit: 60,
+        offset: 60,
+      })
+    );
+    expect(MealService.searchMeals).toHaveBeenCalledTimes(2);
+
+    // 2ページ目の結果が追加され、全62件となり hasMore=false のため 62件 と表示
+    expect(getByText('62件')).toBeTruthy();
+
+    // タップ時に遷移先へ渡される meals に全62件（2ページ目を含む）が含まれることを検証
+    fireEvent.press(await findByTestId('search-result-page1-0'));
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
+      meal: page1Meals[0],
+      meals: [...page1Meals, ...page2Meals],
+      initialIndex: 0,
+    });
+  });
+
+  test('does not trigger additional search when hasMore is false', async () => {
+    const fewMeals = [createMeal({ id: 'few-1', meal_name: '少数' })];
+    (MealService.searchMeals as jest.Mock).mockResolvedValueOnce(fewMeals);
+
+    const { findByTestId, getByText } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByTestId('search-result-few-1')).toBeTruthy();
+    expect(getByText('1件')).toBeTruthy();
+    expect(MealService.searchMeals).toHaveBeenCalledTimes(1);
+
+    // 取得件数が 60 未満なので hasMore=false、onEndReached を呼んでも追加リクエストは発生しない
+    const flatList = await findByTestId('search-results-list');
+    await act(async () => {
+      flatList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    expect(MealService.searchMeals).toHaveBeenCalledTimes(1);
+  });
+
+  test('discards stale loadMore results when search query changes during loadMore', async () => {
+    const page1Meals = Array.from({ length: 60 }, (_, i) =>
+      createMeal({ id: `item-${i}` })
+    );
+    const deferredLoadMore = createDeferred<unknown[]>();
+
+    (MealService.searchMeals as jest.Mock)
+      .mockResolvedValueOnce(page1Meals)
+      .mockReturnValueOnce(deferredLoadMore.promise)
+      .mockResolvedValueOnce([createMeal({ id: 'curry-1', meal_name: 'カレーライス' })]);
+
+    const { findByTestId, getByTestId, queryByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByTestId('search-result-item-0')).toBeTruthy();
+
+    // 1. loadMore を発火（非同期保留中）
+    const flatList = await findByTestId('search-results-list');
+    await act(async () => {
+      flatList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    // 2. loadMore が解決する前にユーザーが検索クエリを変更（新しい検索開始）
+    jest.useFakeTimers();
+    fireEvent.changeText(getByTestId('search-input'), 'カレー');
+    await act(async () => {
+      jest.advanceTimersByTime(300);
+      await Promise.resolve();
+    });
+    jest.useRealTimers();
+
+    // 3. 遅延していた古い loadMore が解決
+    await act(async () => {
+      deferredLoadMore.resolve([createMeal({ id: 'stale-page2' })]);
+      await Promise.resolve();
+    });
+
+    // 新しい検索結果 'curry-1' のみが表示され、古い loadMore の 'stale-page2' は混入しない
+    expect(await findByTestId('search-result-curry-1')).toBeTruthy();
+    expect(queryByTestId('search-result-stale-page2')).toBeNull();
+  });
 });
 
