@@ -1,10 +1,5 @@
-import {
-  createUnavailableRuntimeAvailability,
-} from './runtimeAvailability';
-import type {
-  MealInputAssistProviderMode,
-  MealInputAssistRuntimeAvailability,
-} from './types';
+import { createUnavailableRuntimeAvailability } from './runtimeAvailability';
+import type { MealInputAssistProviderMode, MealInputAssistRuntimeAvailability } from './types';
 
 export interface MealInputAssistEnvironment {
   isAiInputAssistEnabled: boolean;
@@ -21,9 +16,8 @@ type MealInputAssistRuntimeModule = typeof import('./runtime');
 export async function loadDefaultMealInputAssistRuntimeAvailability(
   mode: MealInputAssistProviderMode = 'local-runtime-prototype'
 ) {
-  const {
-    loadMealInputAssistRuntimeAvailability,
-  } = require('./runtime') as MealInputAssistRuntimeModule;
+  const { loadMealInputAssistRuntimeAvailability } =
+    require('./runtime') as MealInputAssistRuntimeModule;
 
   return loadMealInputAssistRuntimeAvailability(mode);
 }

@@ -1,6 +1,4 @@
-import {
-  getLocalRuntimePrototypeAvailability,
-} from '../mealInputAssist/localRuntimePrototype';
+import { getLocalRuntimePrototypeAvailability } from '../mealInputAssist/localRuntimePrototype';
 import { getMealInputAssistExpectedPaths } from '../mealInputAssist/modelConfig';
 import type {
   AiRuntimeUnavailableCode,

@@ -95,10 +95,7 @@ async function replaceFile(from: string, to: string) {
   });
 }
 
-function getCurrentFileProgress(
-  bytesWritten: number,
-  bytesExpected: number | null
-) {
+function getCurrentFileProgress(bytesWritten: number, bytesExpected: number | null) {
   if (!bytesExpected || bytesExpected <= 0) {
     return null;
   }
@@ -126,12 +123,10 @@ function buildProgressSnapshot({
     currentFileBytesExpected
   );
   const boundedCompletedFiles = Math.max(0, Math.min(completedFiles, totalFiles));
-  const overallProgress = totalFiles > 0
-    ? Math.max(
-      0,
-      Math.min(1, (boundedCompletedFiles + (currentFileProgress ?? 0)) / totalFiles)
-    )
-    : 1;
+  const overallProgress =
+    totalFiles > 0
+      ? Math.max(0, Math.min(1, (boundedCompletedFiles + (currentFileProgress ?? 0)) / totalFiles))
+      : 1;
 
   return {
     phase,
@@ -185,9 +180,10 @@ async function downloadToTemporaryFile(
     temporaryPath,
     {},
     (progressEvent: DownloadProgressData) => {
-      const currentFileBytesExpected = progressEvent.totalBytesExpectedToWrite > 0
-        ? progressEvent.totalBytesExpectedToWrite
-        : null;
+      const currentFileBytesExpected =
+        progressEvent.totalBytesExpectedToWrite > 0
+          ? progressEvent.totalBytesExpectedToWrite
+          : null;
 
       reportProgress(
         options,
@@ -268,31 +264,26 @@ async function installModelFiles(options?: MealInputAssistModelInstallerOptions)
 
     await persistReadyState();
   } catch (error) {
-    const message = toErrorMessage(error, `${MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} model のダウンロードに失敗しました`);
+    const message = toErrorMessage(
+      error,
+      `${MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME} model のダウンロードに失敗しました`
+    );
     await persistErrorState(message);
     throw new Error(message);
   } finally {
-    await Promise.all([
-      cleanupFile(temporaryModelPath),
-      cleanupFile(temporaryProjectorPath),
-    ]);
+    await Promise.all([cleanupFile(temporaryModelPath), cleanupFile(temporaryProjectorPath)]);
   }
 }
 
 export async function getMealInputAssistModelStatus(): Promise<MealInputAssistModelStatus> {
-  const [
-    persistedStatus,
-    persistedVersion,
-    downloadedAt,
-    persistedErrorMessage,
-    installedFiles,
-  ] = await Promise.all([
-    AppSettingsService.getMealInputAssistModelStatus(),
-    AppSettingsService.getMealInputAssistModelVersion(),
-    AppSettingsService.getMealInputAssistModelDownloadedAt(),
-    AppSettingsService.getMealInputAssistModelErrorMessage(),
-    getInstalledFileState(),
-  ]);
+  const [persistedStatus, persistedVersion, downloadedAt, persistedErrorMessage, installedFiles] =
+    await Promise.all([
+      AppSettingsService.getMealInputAssistModelStatus(),
+      AppSettingsService.getMealInputAssistModelVersion(),
+      AppSettingsService.getMealInputAssistModelDownloadedAt(),
+      AppSettingsService.getMealInputAssistModelErrorMessage(),
+      getInstalledFileState(),
+    ]);
 
   if (installedFiles.modelExists && installedFiles.projectorExists) {
     return {
@@ -310,7 +301,8 @@ export async function getMealInputAssistModelStatus(): Promise<MealInputAssistMo
       kind: 'error',
       version: persistedVersion,
       downloadedAt,
-      errorMessage: 'model / projector の一部だけが端末に残っています。再ダウンロードしてください。',
+      errorMessage:
+        'model / projector の一部だけが端末に残っています。再ダウンロードしてください。',
       expectedPaths: getMealInputAssistExpectedPaths(),
       files: installedFiles,
     };
@@ -321,7 +313,8 @@ export async function getMealInputAssistModelStatus(): Promise<MealInputAssistMo
       kind: 'error',
       version: persistedVersion,
       downloadedAt,
-      errorMessage: persistedErrorMessage ?? 'meal input assist model のダウンロード状態が不正です。',
+      errorMessage:
+        persistedErrorMessage ?? 'meal input assist model のダウンロード状態が不正です。',
       expectedPaths: getMealInputAssistExpectedPaths(),
       files: installedFiles,
     };
@@ -362,9 +355,7 @@ export async function deleteAllDownloadedLocalAiModels(): Promise<void> {
 
   if (directoryPath) {
     const entries = await readDirectoryAsync(directoryPath).catch(() => []);
-    await Promise.all(
-      entries.map((entry) => cleanupFile(`${directoryPath}/${entry}`))
-    );
+    await Promise.all(entries.map(entry => cleanupFile(`${directoryPath}/${entry}`)));
   }
 
   await persistNotInstalledState();

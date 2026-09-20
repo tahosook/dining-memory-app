@@ -1,7 +1,11 @@
 import React from 'react';
 import { InteractionManager } from 'react-native';
 import { CameraView } from '../../components/screens/camera';
-import { useCameraCapture, useCameraPermission, useMealInputAssist } from '../../hooks/cameraCapture';
+import {
+  useCameraCapture,
+  useCameraPermission,
+  useMealInputAssist,
+} from '../../hooks/cameraCapture';
 
 /**
  * カメラ画面コンテナコンポーネント

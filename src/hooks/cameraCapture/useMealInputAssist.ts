@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createMealInputAssistPolicy } from '../../ai/mealInputAssist/policy';
-import {
-  createOverrideRuntimeAvailability,
-} from '../../ai/mealInputAssist/runtimeAvailability';
+import { createOverrideRuntimeAvailability } from '../../ai/mealInputAssist/runtimeAvailability';
 import { normalizeMealInputAssistResult } from '../../ai/mealInputAssist/normalizer';
 import { mergeAppliedMetadata } from '../../ai/mealInputAssist/appliedMetadata';
 import {
@@ -243,12 +241,12 @@ export function useMealInputAssist({
     let cancelled = false;
 
     loadAiInputAssistEnabledSetting()
-      .then((nextAiInputAssistEnabled) => {
+      .then(nextAiInputAssistEnabled => {
         if (!cancelled) {
           setIsAiInputAssistEnabled(nextAiInputAssistEnabled);
         }
       })
-      .catch((error) => {
+      .catch(error => {
         console.error('Failed to load AI input assist setting:', error);
         if (!cancelled) {
           setIsAiInputAssistEnabled(false);
@@ -446,7 +444,10 @@ export function useMealInputAssist({
 
     try {
       const environment = await loadEnvironment();
-      if (!environment.isAiInputAssistEnabled || environment.runtimeAvailability?.kind !== 'ready') {
+      if (
+        !environment.isAiInputAssistEnabled ||
+        environment.runtimeAvailability?.kind !== 'ready'
+      ) {
         setPrewarmStatus('idle');
         return;
       }

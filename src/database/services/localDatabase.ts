@@ -137,7 +137,7 @@ function getNativeSchemaVersion(database: SQLiteDatabase) {
 function applyNativeMigrations(database: SQLiteDatabase) {
   let currentVersion = getNativeSchemaVersion(database);
 
-  DATABASE_MIGRATIONS.forEach((migration) => {
+  DATABASE_MIGRATIONS.forEach(migration => {
     if (currentVersion >= migration.version) {
       return;
     }
@@ -359,4 +359,3 @@ export async function replaceDatabaseWithBackup(
     await db.runAsync('DELETE FROM search_vectors');
   });
 }
-

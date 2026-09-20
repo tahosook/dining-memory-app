@@ -3,7 +3,11 @@ import { getMediaPipeStaticImageAvailability } from './mediapipeStaticImageProvi
 import { MockMealInputAssistProvider } from './provider';
 import type { MealInputAssistProviderMode, MealInputAssistRuntimeAvailability } from './types';
 
-export { createNoopRuntimeAvailability, createOverrideRuntimeAvailability, createUnavailableRuntimeAvailability } from './runtimeAvailability';
+export {
+  createNoopRuntimeAvailability,
+  createOverrideRuntimeAvailability,
+  createUnavailableRuntimeAvailability,
+} from './runtimeAvailability';
 
 export async function loadMealInputAssistRuntimeAvailability(
   mode: MealInputAssistProviderMode

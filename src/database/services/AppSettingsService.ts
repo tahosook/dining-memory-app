@@ -58,7 +58,9 @@ export class AppSettingsService {
     return value === 'ready' || value === 'error' ? value : 'not_installed';
   }
 
-  static async setMealInputAssistModelStatus(status: MealInputAssistModelStatusSetting): Promise<void> {
+  static async setMealInputAssistModelStatus(
+    status: MealInputAssistModelStatusSetting
+  ): Promise<void> {
     await this.setString(MEAL_INPUT_ASSIST_MODEL_STATUS_KEY, status);
   }
 

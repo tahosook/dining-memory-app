@@ -60,21 +60,27 @@ export default function StatsScreen() {
     }, [loadStats])
   );
 
-  const handlePeriodChange = useCallback((period: StatsPeriodKey) => {
-    selectedPeriodRef.current = period;
-    setSelectedPeriod(period);
-    loadStats(period).catch(() => undefined);
-  }, [loadStats]);
+  const handlePeriodChange = useCallback(
+    (period: StatsPeriodKey) => {
+      selectedPeriodRef.current = period;
+      setSelectedPeriod(period);
+      loadStats(period).catch(() => undefined);
+    },
+    [loadStats]
+  );
 
-  const homemadeRatio = stats.totalMeals > 0 ? Math.round((stats.homemadeMeals / stats.totalMeals) * 100) : 0;
+  const homemadeRatio =
+    stats.totalMeals > 0 ? Math.round((stats.homemadeMeals / stats.totalMeals) * 100) : 0;
   const hasStats = stats.totalMeals > 0;
   const showLoadingState = loading && !hasStats && !errorMessage;
   const showErrorState = Boolean(errorMessage) && !hasStats;
   const showInlineError = Boolean(errorMessage) && hasStats;
-  const headerDescription = loading && hasStats
-    ? '更新中...'
-    : '期間ごとの食事記録を、あとから見返しやすい形でまとめます。';
-  const selectedPeriodLabel = STATS_PERIODS.find((period) => period.key === selectedPeriod)?.label ?? '今月';
+  const headerDescription =
+    loading && hasStats
+      ? '更新中...'
+      : '期間ごとの食事記録を、あとから見返しやすい形でまとめます。';
+  const selectedPeriodLabel =
+    STATS_PERIODS.find(period => period.key === selectedPeriod)?.label ?? '今月';
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -82,7 +88,7 @@ export default function StatsScreen() {
       <Text style={styles.headerDescription}>{headerDescription}</Text>
 
       <View style={styles.periodSelector}>
-        {STATS_PERIODS.map((period) => {
+        {STATS_PERIODS.map(period => {
           const selected = selectedPeriod === period.key;
           return (
             <Pressable
@@ -91,7 +97,9 @@ export default function StatsScreen() {
               onPress={() => handlePeriodChange(period.key)}
               testID={`stats-period-${period.key}`}
             >
-              <Text style={[styles.periodButtonText, selected ? styles.periodButtonTextSelected : null]}>
+              <Text
+                style={[styles.periodButtonText, selected ? styles.periodButtonTextSelected : null]}
+              >
                 {period.label}
               </Text>
             </Pressable>
@@ -134,7 +142,9 @@ export default function StatsScreen() {
         <>
           <View style={styles.reflectionCard}>
             <Text style={styles.detailTitle}>ふりかえり</Text>
-            <Text style={styles.detailText}>{buildReflectionText(stats, selectedPeriodLabel, selectedPeriod)}</Text>
+            <Text style={styles.detailText}>
+              {buildReflectionText(stats, selectedPeriodLabel, selectedPeriod)}
+            </Text>
           </View>
 
           <View style={styles.grid}>
@@ -191,12 +201,16 @@ function TopRankingCard({
   return (
     <View style={styles.detailCard}>
       <Text style={styles.detailTitle}>{title}</Text>
-      {items.length > 0 ? items.map((item, index) => (
-        <View key={item.label} style={styles.rankingRow}>
-          <Text style={styles.rankingLabel}>{index + 1}. {item.label}</Text>
-          <Text style={styles.rankingCount}>{item.count}件</Text>
-        </View>
-      )) : (
+      {items.length > 0 ? (
+        items.map((item, index) => (
+          <View key={item.label} style={styles.rankingRow}>
+            <Text style={styles.rankingLabel}>
+              {index + 1}. {item.label}
+            </Text>
+            <Text style={styles.rankingCount}>{item.count}件</Text>
+          </View>
+        ))
+      ) : (
         <Text style={styles.detailText}>{emptyText}</Text>
       )}
     </View>
@@ -239,7 +253,11 @@ function endOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
 }
 
-function buildReflectionText(stats: StatisticsSummary, periodLabel: string, period: StatsPeriodKey) {
+function buildReflectionText(
+  stats: StatisticsSummary,
+  periodLabel: string,
+  period: StatsPeriodKey
+) {
   if (stats.totalMeals === 0) {
     return 'この期間の食事記録はまだありません。';
   }

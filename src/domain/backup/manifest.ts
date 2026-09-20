@@ -30,15 +30,24 @@ export interface ValidateManifestResult {
   error?: string;
 }
 
-export function validateBackupManifest(raw: unknown, currentSchemaVersion: number): ValidateManifestResult {
+export function validateBackupManifest(
+  raw: unknown,
+  currentSchemaVersion: number
+): ValidateManifestResult {
   if (!raw || typeof raw !== 'object') {
-    return { valid: false, error: 'マニフェストファイルが不正です（JSONオブジェクトではありません）。' };
+    return {
+      valid: false,
+      error: 'マニフェストファイルが不正です（JSONオブジェクトではありません）。',
+    };
   }
 
   const manifest = raw as Partial<BackupManifest>;
 
   if (typeof manifest.formatVersion !== 'number') {
-    return { valid: false, error: 'バックアップ形式バージョン（formatVersion）が指定されていません。' };
+    return {
+      valid: false,
+      error: 'バックアップ形式バージョン（formatVersion）が指定されていません。',
+    };
   }
 
   if (manifest.formatVersion > CURRENT_BACKUP_FORMAT_VERSION) {
@@ -55,7 +64,8 @@ export function validateBackupManifest(raw: unknown, currentSchemaVersion: numbe
   if (!manifest.appId || typeof manifest.appId !== 'string' || manifest.appId !== BACKUP_APP_ID) {
     return {
       valid: false,
-      error: 'このバックアップは別のアプリから作成されたか、アプリケーション識別子（appId）が不正です。',
+      error:
+        'このバックアップは別のアプリから作成されたか、アプリケーション識別子（appId）が不正です。',
     };
   }
 
@@ -74,11 +84,19 @@ export function validateBackupManifest(raw: unknown, currentSchemaVersion: numbe
     return { valid: false, error: 'エクスポート日時（exportedAt）が不正です。' };
   }
 
-  if (typeof manifest.mealCount !== 'number' || manifest.mealCount < 0 || !Number.isInteger(manifest.mealCount)) {
+  if (
+    typeof manifest.mealCount !== 'number' ||
+    manifest.mealCount < 0 ||
+    !Number.isInteger(manifest.mealCount)
+  ) {
     return { valid: false, error: '食事記録件数（mealCount）が不正です。' };
   }
 
-  if (typeof manifest.photoCount !== 'number' || manifest.photoCount < 0 || !Number.isInteger(manifest.photoCount)) {
+  if (
+    typeof manifest.photoCount !== 'number' ||
+    manifest.photoCount < 0 ||
+    !Number.isInteger(manifest.photoCount)
+  ) {
     return { valid: false, error: '写真件数（photoCount）が不正です。' };
   }
 

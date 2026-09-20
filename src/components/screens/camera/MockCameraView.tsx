@@ -24,7 +24,10 @@ const MockCameraPreview: React.FC = () => (
 
 const CameraPreviewSpacer: React.FC = () => <View style={styles.cameraPreviewSpacer} />;
 
-const BottomControls: React.FC<{ takingPhoto: boolean; onTakePicture: () => Promise<void> }> = ({ takingPhoto, onTakePicture }) => (
+const BottomControls: React.FC<{ takingPhoto: boolean; onTakePicture: () => Promise<void> }> = ({
+  takingPhoto,
+  onTakePicture,
+}) => (
   <View style={styles.bottomBar}>
     <View style={styles.captureActionsRow}>
       <CaptureButton takingPhoto={takingPhoto} onPress={onTakePicture} />
@@ -32,7 +35,10 @@ const BottomControls: React.FC<{ takingPhoto: boolean; onTakePicture: () => Prom
   </View>
 );
 
-const CaptureButton: React.FC<{ takingPhoto: boolean; onPress: () => Promise<void> }> = ({ takingPhoto, onPress }) => (
+const CaptureButton: React.FC<{ takingPhoto: boolean; onPress: () => Promise<void> }> = ({
+  takingPhoto,
+  onPress,
+}) => (
   <View testID="capture-button" style={styles.captureButton} onTouchEnd={onPress}>
     <View style={[styles.captureButtonInner, takingPhoto && styles.takingPhoto]}>
       {takingPhoto ? <Text style={styles.captureText}>撮影中...</Text> : null}
@@ -40,7 +46,14 @@ const CaptureButton: React.FC<{ takingPhoto: boolean; onPress: () => Promise<voi
   </View>
 );
 
-const MockCameraView: React.FC<MockCameraViewProps> = ({ takingPhoto, _facing, _cameraRef, onTakePicture, onFlipCamera, onClose }) => {
+const MockCameraView: React.FC<MockCameraViewProps> = ({
+  takingPhoto,
+  _facing,
+  _cameraRef,
+  onTakePicture,
+  onFlipCamera,
+  onClose,
+}) => {
   return (
     <ErrorBoundary>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>

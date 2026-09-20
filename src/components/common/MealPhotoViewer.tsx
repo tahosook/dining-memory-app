@@ -1,5 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, Modal, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import {
+  Image,
+  Modal,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -78,15 +86,7 @@ export function MealPhotoViewer({
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
     dismissY.value = withSpring(0);
-  }, [
-    dismissY,
-    savedScale,
-    savedTranslateX,
-    savedTranslateY,
-    scale,
-    translateX,
-    translateY,
-  ]);
+  }, [dismissY, savedScale, savedTranslateX, savedTranslateY, scale, translateX, translateY]);
 
   useEffect(() => {
     if (!visible) {
@@ -99,9 +99,10 @@ export function MealPhotoViewer({
 
   const changePhoto = useCallback(
     (direction: PhotoDirection) => {
-      const nextIndex = direction === 'next'
-        ? Math.min(activeIndex + 1, photos.length - 1)
-        : Math.max(activeIndex - 1, 0);
+      const nextIndex =
+        direction === 'next'
+          ? Math.min(activeIndex + 1, photos.length - 1)
+          : Math.max(activeIndex - 1, 0);
 
       if (nextIndex === activeIndex) {
         resetTransform();
@@ -142,14 +143,7 @@ export function MealPhotoViewer({
 
           savedScale.value = scale.value;
         }),
-    [
-      savedScale,
-      savedTranslateX,
-      savedTranslateY,
-      scale,
-      translateX,
-      translateY,
-    ]
+    [savedScale, savedTranslateX, savedTranslateY, scale, translateX, translateY]
   );
 
   const panGesture = useMemo(
@@ -166,7 +160,10 @@ export function MealPhotoViewer({
             return;
           }
 
-          if (event.translationY > 0 && Math.abs(event.translationY) > Math.abs(event.translationX)) {
+          if (
+            event.translationY > 0 &&
+            Math.abs(event.translationY) > Math.abs(event.translationX)
+          ) {
             dismissY.value = event.translationY;
           }
         })

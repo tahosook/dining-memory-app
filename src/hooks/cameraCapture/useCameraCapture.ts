@@ -102,11 +102,17 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   const applyNearbyHomemadeDefault = useCallback(async (reviewRequestId: number) => {
     try {
       const locationSnapshot = await getCurrentLocationSnapshot();
-      if (captureReviewRequestIdRef.current !== reviewRequestId || captureReviewManualHomemadeOverrideRef.current) {
+      if (
+        captureReviewRequestIdRef.current !== reviewRequestId ||
+        captureReviewManualHomemadeOverrideRef.current
+      ) {
         return;
       }
 
-      if (typeof locationSnapshot.latitude !== 'number' || typeof locationSnapshot.longitude !== 'number') {
+      if (
+        typeof locationSnapshot.latitude !== 'number' ||
+        typeof locationSnapshot.longitude !== 'number'
+      ) {
         return;
       }
 
@@ -115,7 +121,10 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         longitude: locationSnapshot.longitude,
       });
 
-      if (captureReviewRequestIdRef.current !== reviewRequestId || captureReviewManualHomemadeOverrideRef.current) {
+      if (
+        captureReviewRequestIdRef.current !== reviewRequestId ||
+        captureReviewManualHomemadeOverrideRef.current
+      ) {
         return;
       }
 
@@ -123,7 +132,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         return;
       }
 
-      setCaptureReview((current) => {
+      setCaptureReview(current => {
         if (!current) {
           return current;
         }
@@ -138,14 +147,17 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     }
   }, []);
 
-  const beginReview = useCallback((photo: ReviewablePhoto, source: CaptureReviewSource) => {
-    const reviewRequestId = captureReviewRequestIdRef.current + 1;
-    captureReviewRequestIdRef.current = reviewRequestId;
-    captureReviewManualHomemadeOverrideRef.current = false;
+  const beginReview = useCallback(
+    (photo: ReviewablePhoto, source: CaptureReviewSource) => {
+      const reviewRequestId = captureReviewRequestIdRef.current + 1;
+      captureReviewRequestIdRef.current = reviewRequestId;
+      captureReviewManualHomemadeOverrideRef.current = false;
 
-    setCaptureReview(createCaptureReviewState(photo, source));
-    void applyNearbyHomemadeDefault(reviewRequestId);
-  }, [applyNearbyHomemadeDefault]);
+      setCaptureReview(createCaptureReviewState(photo, source));
+      void applyNearbyHomemadeDefault(reviewRequestId);
+    },
+    [applyNearbyHomemadeDefault]
+  );
 
   // 写真撮影のメイン関数
   const takePicture = useCallback(async (): Promise<void> => {
@@ -172,7 +184,6 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         });
       }
       beginReview(photo, 'camera');
-
     } catch {
       if (shouldLogCaptureDiagnostics()) {
         console.info('Camera capture attempt failed.', { captureAttemptId });
@@ -210,7 +221,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
   // カメラ反転
   const flipCamera = useCallback(() => {
-    setFacing(current => current === 'back' ? 'front' : 'back');
+    setFacing(current => (current === 'back' ? 'front' : 'back'));
   }, []);
 
   const closeCamera = useCallback(() => {
@@ -227,7 +238,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         captureReviewManualHomemadeOverrideRef.current = true;
       }
 
-      setCaptureReview((current) => {
+      setCaptureReview(current => {
         if (!current) {
           return current;
         }
@@ -270,78 +281,76 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     }, [])
   );
 
-  const saveCapture = useCallback(async (options?: SaveCaptureOptions) => {
-    const review = captureReview;
-    if (!review || savingCaptureRef.current) {
-      return;
-    }
-
-    savingCaptureRef.current = true;
-    const saveAttemptId = saveAttemptIdRef.current + 1;
-    saveAttemptIdRef.current = saveAttemptId;
-
-    try {
-      setSavingCapture(true);
-      if (shouldLogCaptureDiagnostics()) {
-        console.info('Capture review save attempt started.', {
-          saveAttemptId,
-          sourcePhotoUri: review.photoUri,
-        });
-      }
-      const result = await saveCaptureReviewWorkflow({
-        captureReview: review,
-        cameraPermission,
-        aiMetadata: options?.aiMetadata,
-        ensurePhotoSavePermission,
-        getLocationSnapshot: getCurrentLocationSnapshot,
-        persistPhotoLocally: persistCapturePhotoLocally,
-        savePhotoToMediaLibrary,
-        cleanupTempFile,
-      });
-
-      if (result.kind === 'skipped') {
-        if (shouldLogCaptureDiagnostics()) {
-          console.info('Capture review save attempt skipped.', {
-            saveAttemptId,
-            sourcePhotoUri: review.photoUri,
-            reason: result.reason,
-          });
-        }
+  const saveCapture = useCallback(
+    async (options?: SaveCaptureOptions) => {
+      const review = captureReview;
+      if (!review || savingCaptureRef.current) {
         return;
       }
 
-      if (shouldLogCaptureDiagnostics()) {
-        console.info('Capture review save attempt completed.', {
-          saveAttemptId,
-          sourcePhotoUri: review.photoUri,
-          resizedPhotoUri: result.resizedPhotoUri,
-          stablePhotoUri: result.stablePhotoUri,
-          stableThumbnailUri: result.stableThumbnailUri,
-          savedToMediaLibrary: result.savedToMediaLibrary,
-          mealId: result.mealId,
+      savingCaptureRef.current = true;
+      const saveAttemptId = saveAttemptIdRef.current + 1;
+      saveAttemptIdRef.current = saveAttemptId;
+
+      try {
+        setSavingCapture(true);
+        if (shouldLogCaptureDiagnostics()) {
+          console.info('Capture review save attempt started.', {
+            saveAttemptId,
+            sourcePhotoUri: review.photoUri,
+          });
+        }
+        const result = await saveCaptureReviewWorkflow({
+          captureReview: review,
+          cameraPermission,
+          aiMetadata: options?.aiMetadata,
+          ensurePhotoSavePermission,
+          getLocationSnapshot: getCurrentLocationSnapshot,
+          persistPhotoLocally: persistCapturePhotoLocally,
+          savePhotoToMediaLibrary,
+          cleanupTempFile,
         });
+
+        if (result.kind === 'skipped') {
+          if (shouldLogCaptureDiagnostics()) {
+            console.info('Capture review save attempt skipped.', {
+              saveAttemptId,
+              sourcePhotoUri: review.photoUri,
+              reason: result.reason,
+            });
+          }
+          return;
+        }
+
+        if (shouldLogCaptureDiagnostics()) {
+          console.info('Capture review save attempt completed.', {
+            saveAttemptId,
+            sourcePhotoUri: review.photoUri,
+            resizedPhotoUri: result.resizedPhotoUri,
+            stablePhotoUri: result.stablePhotoUri,
+            stableThumbnailUri: result.stableThumbnailUri,
+            savedToMediaLibrary: result.savedToMediaLibrary,
+            mealId: result.mealId,
+          });
+        }
+        setCaptureReview(null);
+        navigateToRecords();
+      } catch {
+        if (shouldLogCaptureDiagnostics()) {
+          console.info('Capture review save attempt failed.', {
+            saveAttemptId,
+            sourcePhotoUri: review.photoUri,
+          });
+        }
+        console.error('Meal save failed.');
+        Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
+      } finally {
+        savingCaptureRef.current = false;
+        setSavingCapture(false);
       }
-      setCaptureReview(null);
-      navigateToRecords();
-    } catch {
-      if (shouldLogCaptureDiagnostics()) {
-        console.info('Capture review save attempt failed.', {
-          saveAttemptId,
-          sourcePhotoUri: review.photoUri,
-        });
-      }
-      console.error('Meal save failed.');
-      Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
-    } finally {
-      savingCaptureRef.current = false;
-      setSavingCapture(false);
-    }
-  }, [
-    cameraPermission,
-    captureReview,
-    ensurePhotoSavePermission,
-    navigateToRecords,
-  ]);
+    },
+    [cameraPermission, captureReview, ensurePhotoSavePermission, navigateToRecords]
+  );
 
   return {
     // State

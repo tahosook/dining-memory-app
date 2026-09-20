@@ -286,7 +286,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       });
 
       if (updatedMeal) {
-        setDetailMeals(current => current.map((item, index) => (index === currentIndex ? updatedMeal : item)));
+        setDetailMeals(current =>
+          current.map((item, index) => (index === currentIndex ? updatedMeal : item))
+        );
         if (!shareComposerVisible) {
           setShareText(buildInitialShareText(updatedMeal));
         }
@@ -324,7 +326,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
       const previousPhotoUri = photoUri;
       const previousThumbnailUri = meal.photo_thumbnail_path;
-      setDetailMeals(current => current.map((item, index) => (index === currentIndex ? updatedMeal : item)));
+      setDetailMeals(current =>
+        current.map((item, index) => (index === currentIndex ? updatedMeal : item))
+      );
       await deleteMealPhotoFileIfSafe(previousPhotoUri, rotatedUri).catch(() => undefined);
       if (previousThumbnailUri && previousThumbnailUri !== previousPhotoUri) {
         await deleteMealPhotoFileIfSafe(previousThumbnailUri, rotatedUri).catch(() => undefined);
@@ -359,26 +363,28 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     ]);
   }, [meal.id, meal.meal_name, navigation]);
 
-  const canNavigateDetail = canNavigateMealDetail(Boolean(editingMeal), shareComposerVisible || photoViewerVisible);
+  const canNavigateDetail = canNavigateMealDetail(
+    Boolean(editingMeal),
+    shareComposerVisible || photoViewerVisible
+  );
   const isAtFirstMeal = currentIndex === 0;
   const isAtLastMeal = currentIndex >= detailMeals.length - 1;
 
-  const navigateToAdjacentMeal = useCallback((direction: DetailNavigationDirection) => {
-    if (!canNavigateDetail) {
-      return;
-    }
+  const navigateToAdjacentMeal = useCallback(
+    (direction: DetailNavigationDirection) => {
+      if (!canNavigateDetail) {
+        return;
+      }
 
-    const nextIndex = getAdjacentMealIndex(
-      currentIndex,
-      detailMeals.length,
-      direction
-    );
+      const nextIndex = getAdjacentMealIndex(currentIndex, detailMeals.length, direction);
 
-    if (nextIndex !== currentIndex) {
-      setCurrentIndex(nextIndex);
-      setShareText(buildInitialShareText(detailMeals[nextIndex]));
-    }
-  }, [canNavigateDetail, currentIndex, detailMeals]);
+      if (nextIndex !== currentIndex) {
+        setCurrentIndex(nextIndex);
+        setShareText(buildInitialShareText(detailMeals[nextIndex]));
+      }
+    },
+    [canNavigateDetail, currentIndex, detailMeals]
+  );
 
   const submitShare = useCallback(async () => {
     try {
@@ -397,14 +403,8 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   }, [meal.meal_name, photoUri, shareText]);
 
   return (
-    <View
-      style={styles.container}
-      testID="meal-detail-container"
-    >
-      <ScrollView
-        testID="meal-detail-scroll"
-        contentContainerStyle={styles.content}
-      >
+    <View style={styles.container} testID="meal-detail-container">
+      <ScrollView testID="meal-detail-scroll" contentContainerStyle={styles.content}>
         <View style={styles.heroImageFrame}>
           {photoUri ? (
             <TouchableOpacity
@@ -465,7 +465,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
         <View style={styles.headerCard}>
           {detailMeals.length > 1 ? (
-            <Text style={styles.positionText}>{currentIndex + 1} / {detailMeals.length}</Text>
+            <Text style={styles.positionText}>
+              {currentIndex + 1} / {detailMeals.length}
+            </Text>
           ) : null}
           <Text style={styles.mealName}>{meal.meal_name}</Text>
           <Text style={styles.mealDate}>{formatMealDate(meal.meal_datetime)}</Text>

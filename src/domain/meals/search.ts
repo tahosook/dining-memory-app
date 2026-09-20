@@ -27,8 +27,11 @@ export function generateSearchText(data: {
     .toLowerCase();
 }
 
-export function applyNonTextFilters(rows: PersistedMealRow[], filters: SearchFilters): PersistedMealRow[] {
-  return rows.filter((row) => {
+export function applyNonTextFilters(
+  rows: PersistedMealRow[],
+  filters: SearchFilters
+): PersistedMealRow[] {
+  return rows.filter(row => {
     if (row.is_deleted) {
       return false;
     }
@@ -45,7 +48,10 @@ export function applyNonTextFilters(rows: PersistedMealRow[], filters: SearchFil
       return false;
     }
 
-    if (typeof filters.is_homemade === 'boolean' && Boolean(row.is_homemade) !== filters.is_homemade) {
+    if (
+      typeof filters.is_homemade === 'boolean' &&
+      Boolean(row.is_homemade) !== filters.is_homemade
+    ) {
       return false;
     }
 
@@ -56,7 +62,10 @@ export function applyNonTextFilters(rows: PersistedMealRow[], filters: SearchFil
       }
     }
 
-    if (filters.location_name && !(row.location_name ?? '').toLowerCase().includes(filters.location_name.toLowerCase())) {
+    if (
+      filters.location_name &&
+      !(row.location_name ?? '').toLowerCase().includes(filters.location_name.toLowerCase())
+    ) {
       return false;
     }
 

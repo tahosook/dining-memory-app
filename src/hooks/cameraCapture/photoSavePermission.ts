@@ -13,9 +13,10 @@ export async function ensureAndroidPhotoSavePermission(): Promise<boolean> {
     return true;
   }
 
-  const nextPermission = currentPermission.canAskAgain === false
-    ? currentPermission
-    : await MediaLibrary.requestPermissionsAsync(false, PHOTO_PERMISSION_SCOPE);
+  const nextPermission =
+    currentPermission.canAskAgain === false
+      ? currentPermission
+      : await MediaLibrary.requestPermissionsAsync(false, PHOTO_PERMISSION_SCOPE);
 
   return nextPermission.granted;
 }

@@ -7,8 +7,7 @@ export type MealInputAssistPrewarmStatus = 'idle' | 'running' | 'success' | 'err
 export type MealInputAssistField = 'mealName' | 'cuisineType' | 'notes';
 
 export type MealInputAssistAvailability =
-  | { kind: 'enabled' }
-  | { kind: 'disabled'; reason: string };
+  { kind: 'enabled' } | { kind: 'disabled'; reason: string };
 
 export interface MealInputAssistRequest {
   photoUri: string;
@@ -122,28 +121,27 @@ export interface MealInputAssistModelInstallerOptions {
 }
 
 export type MealInputAssistProviderMode =
-  | 'mock'
-  | 'local-runtime-prototype'
-  | 'mediapipe-static-image'
-  | 'override';
+  'mock' | 'local-runtime-prototype' | 'mediapipe-static-image' | 'override';
 
 export type MealInputAssistRuntimeUnavailableCode = AiRuntimeUnavailableCode;
 
 export type MealInputAssistRuntimeAvailability =
   | {
-    kind: 'ready';
-    mode: MealInputAssistProviderMode;
-    description: string;
-    provider: MealInputAssistProvider;
-  }
+      kind: 'ready';
+      mode: MealInputAssistProviderMode;
+      description: string;
+      provider: MealInputAssistProvider;
+    }
   | {
-    kind: 'unavailable';
-    mode: 'local-runtime-prototype' | 'mediapipe-static-image';
-    code: MealInputAssistRuntimeUnavailableCode;
-    reason: string;
-  };
+      kind: 'unavailable';
+      mode: 'local-runtime-prototype' | 'mediapipe-static-image';
+      code: MealInputAssistRuntimeUnavailableCode;
+      reason: string;
+    };
 
-export type MealInputAssistPolicy = (request: MealInputAssistRequest) => MealInputAssistAvailability;
+export type MealInputAssistPolicy = (
+  request: MealInputAssistRequest
+) => MealInputAssistAvailability;
 
 export const EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS: MealInputAssistSuggestions = {
   source: '',

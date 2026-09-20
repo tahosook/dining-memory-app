@@ -24,8 +24,8 @@
     "test:coverage": "npm test -- --coverage",
     "lint": "eslint App.tsx index.ts src tests --cache --cache-location .eslintcache",
     "lint:fix": "eslint App.tsx index.ts src tests --fix --cache --cache-location .eslintcache",
-    "format": "prettier --write src/**/*.{ts,tsx}",
-    "format:check": "prettier --check src/**/*.{ts,tsx}",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

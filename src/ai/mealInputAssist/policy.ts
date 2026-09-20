@@ -9,7 +9,7 @@ export function createMealInputAssistPolicy({
   isEnabled,
   runtimeAvailability,
 }: CreateMealInputAssistPolicyOptions): MealInputAssistPolicy {
-  return (request) => {
+  return request => {
     if (!request.photoUri.trim()) {
       return {
         kind: 'disabled',
@@ -49,7 +49,7 @@ export function createMealInputAssistPolicy({
   };
 }
 
-export const defaultMealInputAssistPolicy: MealInputAssistPolicy = (request) => {
+export const defaultMealInputAssistPolicy: MealInputAssistPolicy = request => {
   if (!request.photoUri.trim()) {
     return {
       kind: 'disabled',

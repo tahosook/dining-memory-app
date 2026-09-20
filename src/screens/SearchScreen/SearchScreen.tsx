@@ -1,5 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Switch, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { NavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { CuisineTypeSelector } from '../../components/common/CuisineTypeSelector';
@@ -131,7 +142,7 @@ export const SearchScreen: React.FC = () => {
 
       if (nextMeals.length > 0) {
         resultsLengthRef.current += nextMeals.length;
-        setResults((prev) => [...prev, ...nextMeals]);
+        setResults(prev => [...prev, ...nextMeals]);
       }
     } catch (error) {
       if (searchId !== activeSearchIdRef.current) {
@@ -184,14 +195,17 @@ export const SearchScreen: React.FC = () => {
     return () => clearTimeout(timeoutId);
   }, [cuisineFilter, hasLoadedOnce, homemadeOnly, locationFilter, runSearch, searchQuery]);
 
-  const handleMealPress = useCallback((meal: Meal) => {
-    const initialIndex = results.findIndex((candidate) => candidate.id === meal.id);
-    navigation.navigate('MealDetail', {
-      meal,
-      meals: results,
-      initialIndex: initialIndex >= 0 ? initialIndex : undefined,
-    });
-  }, [navigation, results]);
+  const handleMealPress = useCallback(
+    (meal: Meal) => {
+      const initialIndex = results.findIndex(candidate => candidate.id === meal.id);
+      navigation.navigate('MealDetail', {
+        meal,
+        meals: results,
+        initialIndex: initialIndex >= 0 ? initialIndex : undefined,
+      });
+    },
+    [navigation, results]
+  );
 
   const showLoadingState = loading && results.length === 0;
   const showErrorState = Boolean(errorMessage) && results.length === 0;
@@ -224,17 +238,25 @@ export const SearchScreen: React.FC = () => {
         </View>
         <TouchableOpacity
           style={[styles.filterToggle, filtersVisible ? styles.filterToggleActive : null]}
-          onPress={() => setFiltersVisible((current) => !current)}
+          onPress={() => setFiltersVisible(current => !current)}
           testID="search-filter-toggle"
         >
-          <Ionicons name="options-outline" size={20} color={filtersVisible ? Colors.primary : Colors.text} />
+          <Ionicons
+            name="options-outline"
+            size={20}
+            color={filtersVisible ? Colors.primary : Colors.text}
+          />
         </TouchableOpacity>
       </View>
       {hasActiveFilters ? <Text style={styles.activeFilterText}>条件あり</Text> : null}
 
       {filtersVisible ? (
         <View style={styles.filtersCard}>
-          <CuisineTypeSelector value={cuisineFilter} onChange={setCuisineFilter} testIDPrefix="search-cuisine" />
+          <CuisineTypeSelector
+            value={cuisineFilter}
+            onChange={setCuisineFilter}
+            testIDPrefix="search-cuisine"
+          />
           <TextInput
             style={styles.filterInput}
             placeholder="場所フィルター"
@@ -244,7 +266,11 @@ export const SearchScreen: React.FC = () => {
           />
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>自炊のみ</Text>
-            <Switch value={homemadeOnly} onValueChange={setHomemadeOnly} testID="search-homemade-switch" />
+            <Switch
+              value={homemadeOnly}
+              onValueChange={setHomemadeOnly}
+              testID="search-homemade-switch"
+            />
           </View>
         </View>
       ) : null}
@@ -305,7 +331,7 @@ export const SearchScreen: React.FC = () => {
       {results.length > 0 ? (
         <FlatList
           data={results}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           testID="search-results-list"
           contentContainerStyle={styles.resultsList}
           columnWrapperStyle={styles.resultGridRow}
@@ -333,7 +359,10 @@ export const SearchScreen: React.FC = () => {
                   testID={`search-result-image-${item.id}`}
                 />
               ) : (
-                <View style={styles.photoPlaceholder} testID={`search-result-placeholder-${item.id}`}>
+                <View
+                  style={styles.photoPlaceholder}
+                  testID={`search-result-placeholder-${item.id}`}
+                >
                   <Ionicons name="camera-outline" size={22} color={Colors.gray} />
                 </View>
               )}

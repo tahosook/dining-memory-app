@@ -55,7 +55,7 @@ function normalizeMealNameSuggestions(
   const seen = new Set<string>();
 
   return (candidates ?? [])
-    .map((candidate) => normalizeTextCandidate(candidate, source))
+    .map(candidate => normalizeTextCandidate(candidate, source))
     .filter((candidate): candidate is MealInputAssistTextSuggestion => {
       if (!candidate) {
         return false;
@@ -86,7 +86,7 @@ function normalizeCuisineSuggestions(
   const seen = new Set<string>();
 
   return (candidates ?? [])
-    .map((candidate) => normalizeTextCandidate(candidate, source))
+    .map(candidate => normalizeTextCandidate(candidate, source))
     .filter((candidate): candidate is MealInputAssistCuisineSuggestion => {
       if (!candidate || !VALID_CUISINES.has(candidate.value)) {
         return false;
@@ -99,17 +99,18 @@ function normalizeCuisineSuggestions(
       seen.add(candidate.value);
       return true;
     })
-    .map((candidate) => ({
+    .map(candidate => ({
       ...candidate,
       value: candidate.value as CuisineTypeOption,
     }))
     .slice(0, MAX_SUGGESTIONS_PER_GROUP);
 }
 
-export function normalizeMealInputAssistResult(result: MealInputAssistProviderResult): MealInputAssistSuggestions {
-  const source = typeof result.source === 'string' && result.source.trim()
-    ? result.source.trim()
-    : 'mock-local';
+export function normalizeMealInputAssistResult(
+  result: MealInputAssistProviderResult
+): MealInputAssistSuggestions {
+  const source =
+    typeof result.source === 'string' && result.source.trim() ? result.source.trim() : 'mock-local';
 
   return {
     source,

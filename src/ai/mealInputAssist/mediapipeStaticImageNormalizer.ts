@@ -111,13 +111,13 @@ export function normalizeMediaPipeStaticImageResult(
   const seenMealNames = new Set<string>();
   const seenCuisineTypes = new Set<CuisineTypeOption>();
   const sortableCategories = (rawResult.categories ?? [])
-    .map((category) => toSortableCategory(category))
+    .map(category => toSortableCategory(category))
     .filter((category): category is { label: string; score: number } => Boolean(category))
     .sort((left, right) => right.score - left.score);
 
   let matchedCategoryCount = 0;
 
-  sortableCategories.forEach((category) => {
+  sortableCategories.forEach(category => {
     const mapping = LABEL_MAPPING[category.label];
     if (!mapping) {
       return;
@@ -133,7 +133,10 @@ export function normalizeMediaPipeStaticImageResult(
       });
     }
 
-    if (cuisineTypes.length < MAX_CUISINE_SUGGESTIONS && !seenCuisineTypes.has(mapping.cuisineType)) {
+    if (
+      cuisineTypes.length < MAX_CUISINE_SUGGESTIONS &&
+      !seenCuisineTypes.has(mapping.cuisineType)
+    ) {
       seenCuisineTypes.add(mapping.cuisineType);
       cuisineTypes.push({
         value: mapping.cuisineType,

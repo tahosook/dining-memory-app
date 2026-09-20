@@ -19,7 +19,7 @@ export function filterRowsForStatistics(
   rows: PersistedMealRow[],
   options: StatisticsOptions = {}
 ): PersistedMealRow[] {
-  return rows.filter((row) => {
+  return rows.filter(row => {
     if (row.is_deleted) {
       return false;
     }
@@ -44,10 +44,7 @@ export interface RawCountCandidate {
   count?: number;
 }
 
-export function rankTopEntries(
-  candidates: RawCountCandidate[],
-  limit = 3
-): RankedCountItem[] {
+export function rankTopEntries(candidates: RawCountCandidate[], limit = 3): RankedCountItem[] {
   const counts = new Map<string, number>();
   for (const item of candidates) {
     const label = item.label?.trim();
@@ -63,21 +60,18 @@ export function rankTopEntries(
     .map(([label, count]) => ({ label, count }));
 }
 
-export function topCounts(
-  values: Array<string | null | undefined>,
-  limit = 3
-): RankedCountItem[] {
+export function topCounts(values: Array<string | null | undefined>, limit = 3): RankedCountItem[] {
   return rankTopEntries(
-    values.map((label) => ({ label, count: 1 })),
+    values.map(label => ({ label, count: 1 })),
     limit
   );
 }
 
 export function buildStatisticsSummary(rows: PersistedMealRow[]): StatisticsSummary {
-  const homemadeMeals = rows.filter((row) => Boolean(row.is_homemade)).length;
+  const homemadeMeals = rows.filter(row => Boolean(row.is_homemade)).length;
   const takeoutMeals = rows.length - homemadeMeals;
-  const topCuisines = topCounts(rows.map((row) => row.cuisine_type));
-  const topLocations = topCounts(rows.map((row) => row.location_name));
+  const topCuisines = topCounts(rows.map(row => row.cuisine_type));
+  const topLocations = topCounts(rows.map(row => row.location_name));
 
   return {
     totalMeals: rows.length,

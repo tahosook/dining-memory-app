@@ -48,7 +48,11 @@ const MealListItem = React.memo<MealItemProps>(({ item, onPress }) => {
   const cookingLevel = item.is_homemade ? normalizeCookingLevel(item.cooking_level) : undefined;
 
   return (
-    <TouchableOpacity style={styles.mealCard} onPress={() => onPress(item)} testID={`meal-card-${item.id}`}>
+    <TouchableOpacity
+      style={styles.mealCard}
+      onPress={() => onPress(item)}
+      testID={`meal-card-${item.id}`}
+    >
       <View style={styles.mealImageContainer}>
         {imageUri ? (
           <Image
@@ -92,9 +96,7 @@ const MealListItem = React.memo<MealItemProps>(({ item, onPress }) => {
           ) : null}
 
           <View style={[styles.tag, item.is_homemade ? styles.homemadeTag : styles.takeoutTag]}>
-            <Text style={styles.tagText}>
-              {item.is_homemade ? '自家製' : '外食'}
-            </Text>
+            <Text style={styles.tagText}>{item.is_homemade ? '自家製' : '外食'}</Text>
           </View>
 
           {cookingLevel ? (
@@ -127,7 +129,7 @@ function formatDateLabel(date: Date): string {
 function groupMealsByDate(records: Meal[]): MealSection[] {
   const groups: Record<string, Meal[]> = {};
 
-  records.forEach((meal) => {
+  records.forEach(meal => {
     const dateKey = new Date(meal.meal_datetime).toDateString();
     if (!groups[dateKey]) {
       groups[dateKey] = [];
@@ -169,13 +171,15 @@ export const RecordsScreen: React.FC = () => {
           if (!isMountedRef.current) {
             return;
           }
-          setFlatMeals((current) =>
-            current.map((item) => (item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item))
+          setFlatMeals(current =>
+            current.map(item =>
+              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
+            )
           );
-          setMealSections((current) =>
-            current.map((section) => ({
+          setMealSections(current =>
+            current.map(section => ({
               ...section,
-              data: section.data.map((item) =>
+              data: section.data.map(item =>
                 item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
               ),
             }))
@@ -202,14 +206,17 @@ export const RecordsScreen: React.FC = () => {
     await loadMeals();
   }, [loadMeals]);
 
-  const handleMealPress = useCallback((meal: Meal) => {
-    const initialIndex = flatMeals.findIndex((candidate) => candidate.id === meal.id);
-    navigation.navigate('MealDetail', {
-      meal,
-      meals: flatMeals,
-      initialIndex: initialIndex >= 0 ? initialIndex : undefined,
-    });
-  }, [flatMeals, navigation]);
+  const handleMealPress = useCallback(
+    (meal: Meal) => {
+      const initialIndex = flatMeals.findIndex(candidate => candidate.id === meal.id);
+      navigation.navigate('MealDetail', {
+        meal,
+        meals: flatMeals,
+        initialIndex: initialIndex >= 0 ? initialIndex : undefined,
+      });
+    },
+    [flatMeals, navigation]
+  );
 
   if (loading) {
     return (
@@ -243,7 +250,7 @@ export const RecordsScreen: React.FC = () => {
         ) : (
           <SectionList
             sections={mealSections}
-            keyExtractor={(meal) => meal.id}
+            keyExtractor={meal => meal.id}
             renderItem={({ item }) => <MealListItem item={item} onPress={handleMealPress} />}
             renderSectionHeader={({ section }) => <MealGroupHeader section={section} />}
             renderSectionFooter={() => <GroupSeparator />}

@@ -1,4 +1,12 @@
-import { getDatabase, getInMemoryMeals, initializeDatabase, isUsingNativeDatabase, mapRowToMeal, setInMemoryMeals, type PersistedMealRow } from './localDatabase';
+import {
+  getDatabase,
+  getInMemoryMeals,
+  initializeDatabase,
+  isUsingNativeDatabase,
+  mapRowToMeal,
+  setInMemoryMeals,
+  type PersistedMealRow,
+} from './localDatabase';
 import type { CookingLevel, Meal } from '../../types/MealTypes';
 import {
   resolveDefaultMealName,
@@ -97,7 +105,7 @@ async function getRowById(id: string): Promise<PersistedMealRow | null> {
   }
 
   const rows = getInMemoryMeals();
-  return rows.find((item) => item.id === id) ?? null;
+  return rows.find(item => item.id === id) ?? null;
 }
 
 async function saveRows(rows: PersistedMealRow[]) {
@@ -113,7 +121,7 @@ async function upsertRow(row: PersistedMealRow) {
 
   if (!isUsingNativeDatabase()) {
     const rows = getInMemoryMeals();
-    const nextRows = rows.filter((item) => item.id !== row.id);
+    const nextRows = rows.filter(item => item.id !== row.id);
     nextRows.push(row);
     setInMemoryMeals(nextRows);
     return;
@@ -171,7 +179,10 @@ export class MealService {
     return row ? mapRowToMeal(row) : null;
   }
 
-  static async getRecentNearbyHomemadeDefault(origin: { latitude: number; longitude: number }): Promise<boolean | null> {
+  static async getRecentNearbyHomemadeDefault(origin: {
+    latitude: number;
+    longitude: number;
+  }): Promise<boolean | null> {
     const rows = await getAllRows();
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     return resolveNearbyHomemadeDefault(rows, origin, {
@@ -230,7 +241,12 @@ export class MealService {
           conditions.push(
             "(search_text LIKE ? ESCAPE '\\' OR meal_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\')"
           );
-          params.push(escapedTextPattern, escapedTextPattern, escapedTextPattern, escapedTextPattern);
+          params.push(
+            escapedTextPattern,
+            escapedTextPattern,
+            escapedTextPattern,
+            escapedTextPattern
+          );
         }
 
         const whereClause = conditions.join(' AND ');
@@ -260,7 +276,7 @@ export class MealService {
     const textQuery = filters.text?.trim();
 
     const sortedRows = textQuery
-      ? filteredRows.filter((row) => matchesTextFilter(row, textQuery)).sort(sortByRecency)
+      ? filteredRows.filter(row => matchesTextFilter(row, textQuery)).sort(sortByRecency)
       : filteredRows.sort(sortByRecency);
 
     const start = typeof filters.offset === 'number' && filters.offset > 0 ? filters.offset : 0;
@@ -294,7 +310,7 @@ export class MealService {
 
     const rows = await getAllRows();
     return rows
-      .filter((row) => !row.is_deleted)
+      .filter(row => !row.is_deleted)
       .sort((a, b) => b.meal_datetime - a.meal_datetime)
       .slice(0, limit)
       .map(mapRowToMeal);
@@ -316,7 +332,7 @@ export class MealService {
     }
 
     const rows = await getAllRows();
-    const row = rows.find((item) => item.id === mealId);
+    const row = rows.find(item => item.id === mealId);
     if (!row) {
       return;
     }
@@ -379,7 +395,7 @@ export class MealService {
 
     const rows = getInMemoryMeals();
     const row = rows.find(
-      (item) => item.id === mealId && item.photo_path === expectedPhotoPath && !item.is_deleted
+      item => item.id === mealId && item.photo_path === expectedPhotoPath && !item.is_deleted
     );
     if (!row) {
       return false;

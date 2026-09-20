@@ -24,19 +24,29 @@ export function CuisineTypeSelector({
     <View style={styles.container}>
       {showLabel ? <Text style={[styles.label, { color: labelColor }]}>{label}</Text> : null}
       <View style={styles.optionsRow}>
-        {CUISINE_TYPE_OPTIONS.map((option) => {
+        {CUISINE_TYPE_OPTIONS.map(option => {
           const isSelected = value === option;
 
           return (
             <TouchableOpacity
               key={option}
-              style={[styles.optionChip, isSelected ? styles.optionChipSelected : styles.optionChipIdle]}
+              style={[
+                styles.optionChip,
+                isSelected ? styles.optionChipSelected : styles.optionChipIdle,
+              ]}
               onPress={() => onChange(isSelected ? '' : option)}
               accessibilityRole="button"
               accessibilityState={{ selected: isSelected }}
               testID={`${testIDPrefix}-${option}`}
             >
-              <Text style={[styles.optionText, isSelected ? styles.optionTextSelected : styles.optionTextIdle]}>{option}</Text>
+              <Text
+                style={[
+                  styles.optionText,
+                  isSelected ? styles.optionTextSelected : styles.optionTextIdle,
+                ]}
+              >
+                {option}
+              </Text>
             </TouchableOpacity>
           );
         })}
