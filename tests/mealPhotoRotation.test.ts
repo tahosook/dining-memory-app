@@ -53,7 +53,7 @@ describe('mealPhotoRotation', () => {
         onlyScaleDown: true,
       }
     );
-    expect(rotatedUri).toBe('file:///documents/meal-photo-rotated-2026-04-20T10-11-12-123Z-1f9add37.jpg');
+    expect(rotatedUri).toBe('file:///documents/meal-photo-rotated-2026-04-20T10-11-12-123Z-12345678.jpg');
     expect(copyAsync).toHaveBeenCalledWith({
       from: 'file:///cache/rotated-temp.jpg',
       to: rotatedUri,

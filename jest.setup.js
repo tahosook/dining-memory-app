@@ -20,8 +20,15 @@ Object.defineProperty(global, 'crypto', {
         arr[i] = Math.floor(Math.random() * 256);
       }
     }),
+    randomUUID: jest.fn(() => {
+      return '12345678-1234-1234-1234-123456789012';
+    })
   },
 });
+
+jest.mock('expo-crypto', () => ({
+  randomUUID: jest.fn(() => '12345678-1234-1234-1234-123456789012')
+}));
 
 // Expo Font mock
 jest.mock('expo-font', () => ({

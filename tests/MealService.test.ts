@@ -3,6 +3,16 @@ import { isUsingNativeDatabase, getDatabase, setInMemoryMeals } from '../src/dat
 import { buildStatisticsSummary, filterRowsForStatistics } from '../src/domain/meals/statistics';
 import type { SearchFilters } from '../src/domain/meals/search';
 
+jest.mock('expo-crypto', () => {
+  let idCounter = 0;
+  return {
+    randomUUID: jest.fn(() => {
+      idCounter += 1;
+      return idCounter.toString(16).padStart(8, '0') + '-0000-0000-0000-000000000000';
+    })
+  };
+});
+
 jest.mock('../src/database/services/localDatabase', () => {
   type MockMealRow = Record<string, unknown>;
   let meals: MockMealRow[] = [];

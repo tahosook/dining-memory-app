@@ -8,6 +8,7 @@ import {
   type DownloadProgressData,
 } from 'expo-file-system/legacy';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
+import * as Crypto from 'expo-crypto';
 import {
   getMealInputAssistExpectedPaths,
   getMealInputAssistManagedFiles,
@@ -161,7 +162,7 @@ async function downloadToTemporaryFile(
     throw new Error('Document directory is not available.');
   }
 
-  const temporaryPath = `${directoryPath}/${file.fileName}.download-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const temporaryPath = `${directoryPath}/${file.fileName}.download-${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
 
   reportProgress(
     options,

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { copyAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
+import * as Crypto from 'expo-crypto';
 import {
   buildMealPhotoFileName,
   formatPhotoTimestampForFilename,
@@ -43,7 +44,7 @@ async function resolveDestinationUri(capturedAt: Date) {
   }
 
   const timestamp = formatPhotoTimestampForFilename(capturedAt);
-  const fallbackSuffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const fallbackSuffix = `${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
   return `${documentDirectory}meal-${timestamp}-fallback-${fallbackSuffix}.jpg`;
 }
 

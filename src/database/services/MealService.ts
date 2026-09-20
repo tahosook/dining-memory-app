@@ -28,6 +28,7 @@ import {
 } from '../../domain/meals/statistics';
 import { normalizeMealRow } from '../../domain/meals/mealRow';
 import { normalizeCookingLevel } from '../../utils/cookingLevel';
+import * as Crypto from 'expo-crypto';
 
 export interface CreateMealData {
   meal_name: string;
@@ -54,7 +55,7 @@ export type { StatisticsOptions, StatisticsSummary } from '../../domain/meals/st
 type MealUpdateData = Partial<CreateMealData>;
 
 function createId() {
-  return `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+  return `${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
 }
 
 function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): PersistedMealRow {
