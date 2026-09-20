@@ -112,26 +112,65 @@ describe('RootNavigator Integration', () => {
   });
 
   test('controls header visibility declaratively per screen (Camera: false, Records: false, Search: true, Stats: true, Settings: true)', async () => {
-    const { getByText, getByRole, queryByRole } = render(<RootNavigator />);
+    const { getAllByText } = render(<RootNavigator />);
 
-    // 1. Camera: headerShown === false (no header with role="heading" and name="撮影")
-    expect(queryByRole('heading', { name: '撮影' })).toBeNull();
+    // ヘッダーコンポーネント（HeaderTitle / Header）の描画有無を判定するヘルパー。
+    // React Navigation の Bottom Tabs において：
+    // - headerShown: false の画面ではヘッダー要素・コンテナは一切レンダリングされず、
+    //   画面内に存在するタイトルテキストは下部タブバー（BottomTabBar）のボタンラベル 1 件のみとなる。
+    // - headerShown: true の画面では下部タブバーに加え、上部ヘッダー（Header / HeaderTitle）内にも
+    //   タイトルテキストが描画され、合計 2 件のテキストが存在する。
+    // role="heading" などの a11y 属性に依存せず、描画ツリー内のヘッダーコンポーネントの有無を直接検証する。
+    const getAncestorNames = (node: any): string[] => {
+      const names: string[] = [];
+      let curr = node.parent;
+      while (curr) {
+        const name =
+          typeof curr.type === 'string'
+            ? curr.type
+            : curr.type?.name || curr.type?.displayName || '';
+        if (name) names.push(name);
+        curr = curr.parent;
+      }
+      return names;
+    };
 
-    // 2. Records: headerShown === false (no header with role="heading" and name="記録")
-    fireEvent.press(getByText('記録'));
-    expect(queryByRole('heading', { name: '記録' })).toBeNull();
+    const isHeaderRendered = (title: string): boolean => {
+      const elements = getAllByText(title);
+      return elements.some((el) => {
+        const ancestors = getAncestorNames(el);
+        return ancestors.some((a) => a === 'HeaderTitle' || a === 'Header');
+      });
+    };
 
-    // 3. Search: headerShown === true (header with role="heading" and name="検索" exists)
-    fireEvent.press(getByText('検索'));
-    expect(getByRole('heading', { name: '検索' })).toBeTruthy();
+    // 1. Camera: headerShown === false
+    // 初期タブ Camera ではヘッダーコンポーネントが描画されず、タブバーのラベル 1 件のみ
+    expect(isHeaderRendered('撮影')).toBe(false);
+    expect(getAllByText('撮影')).toHaveLength(1);
 
-    // 4. Stats: headerShown === true (header with role="heading" and name="統計" exists)
-    fireEvent.press(getByText('統計'));
-    expect(getByRole('heading', { name: '統計' })).toBeTruthy();
+    // 2. Records: headerShown === false
+    // Records タブに切り替え後もヘッダーコンポーネントは描画されず、タブバーのラベル 1 件のみ
+    fireEvent.press(getAllByText('記録')[0]);
+    expect(isHeaderRendered('記録')).toBe(false);
+    expect(getAllByText('記録')).toHaveLength(1);
 
-    // 5. Settings: headerShown === true (header with role="heading" and name="設定" exists)
-    fireEvent.press(getByText('設定'));
-    expect(getByRole('heading', { name: '設定' })).toBeTruthy();
+    // 3. Search: headerShown === true
+    // Search タブでは上部ヘッダー（HeaderTitle）と下部タブバーの両方に描画される（合計 2 件）
+    fireEvent.press(getAllByText('検索')[0]);
+    expect(isHeaderRendered('検索')).toBe(true);
+    expect(getAllByText('検索')).toHaveLength(2);
+
+    // 4. Stats: headerShown === true
+    // Stats タブでも上部ヘッダー（HeaderTitle）と下部タブバーの両方に描画される（合計 2 件）
+    fireEvent.press(getAllByText('統計')[0]);
+    expect(isHeaderRendered('統計')).toBe(true);
+    expect(getAllByText('統計')).toHaveLength(2);
+
+    // 5. Settings: headerShown === true
+    // Settings タブでも上部ヘッダー（HeaderTitle）と下部タブバーの両方に描画される（合計 2 件）
+    fireEvent.press(getAllByText('設定')[0]);
+    expect(isHeaderRendered('設定')).toBe(true);
+    expect(getAllByText('設定')).toHaveLength(2);
   });
 
   test('navigates from tab to stack screen MealDetail', async () => {
