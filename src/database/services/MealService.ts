@@ -153,6 +153,25 @@ async function upsertRow(row: PersistedMealRow) {
   );
 }
 
+function sortTopRankings(
+  rows: Array<{ label: string; count: number }>,
+  limit = 3
+): Array<{ label: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const label = row.label?.trim();
+    if (!label) {
+      continue;
+    }
+    counts.set(label, (counts.get(label) ?? 0) + Number(row.count));
+  }
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ja'))
+    .slice(0, limit)
+    .map(([label, count]) => ({ label, count }));
+}
+
 export class MealService {
   static async createMeal(data: CreateMealData): Promise<Meal> {
     const rows = await getAllRows();
@@ -392,6 +411,58 @@ export class MealService {
   }
 
   static async getStatistics(options: StatisticsOptions = {}): Promise<StatisticsSummary> {
+    await initializeDatabase();
+
+    if (isUsingNativeDatabase()) {
+      const db = getDatabase();
+      if (db) {
+        const conditions: string[] = ['is_deleted = 0'];
+        const params: number[] = [];
+
+        if (options.dateFrom) {
+          conditions.push('meal_datetime >= ?');
+          params.push(options.dateFrom.getTime());
+        }
+        if (options.dateTo) {
+          conditions.push('meal_datetime <= ?');
+          params.push(options.dateTo.getTime());
+        }
+
+        const whereClause = conditions.join(' AND ');
+
+        const summaryRow = await db.getFirstAsync<{ total: number; homemade: number | null }>(
+          `SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE ${whereClause}`,
+          ...params
+        );
+
+        const cuisineRows = await db.getAllAsync<{ label: string; count: number }>(
+          `SELECT TRIM(cuisine_type) AS label, COUNT(*) AS count FROM meals WHERE ${whereClause} AND cuisine_type IS NOT NULL AND TRIM(cuisine_type) != '' GROUP BY TRIM(cuisine_type) ORDER BY count DESC`,
+          ...params
+        );
+
+        const locationRows = await db.getAllAsync<{ label: string; count: number }>(
+          `SELECT TRIM(location_name) AS label, COUNT(*) AS count FROM meals WHERE ${whereClause} AND location_name IS NOT NULL AND TRIM(location_name) != '' GROUP BY TRIM(location_name) ORDER BY count DESC`,
+          ...params
+        );
+
+        const totalMeals = Number(summaryRow?.total ?? 0);
+        const homemadeMeals = Number(summaryRow?.homemade ?? 0);
+        const takeoutMeals = totalMeals - homemadeMeals;
+        const topCuisines = sortTopRankings(cuisineRows);
+        const topLocations = sortTopRankings(locationRows);
+
+        return {
+          totalMeals,
+          homemadeMeals,
+          takeoutMeals,
+          favoriteCuisine: topCuisines[0]?.label,
+          favoriteLocation: topLocations[0]?.label,
+          topCuisines,
+          topLocations,
+        };
+      }
+    }
+
     const rows = filterRowsForStatistics(await getAllRows(), options);
     return buildStatisticsSummary(rows);
   }

@@ -1,5 +1,6 @@
 import { MealService } from '../src/database/services/MealService';
 import { isUsingNativeDatabase, getDatabase } from '../src/database/services/localDatabase';
+import { buildStatisticsSummary, filterRowsForStatistics } from '../src/domain/meals/statistics';
 
 jest.mock('../src/database/services/localDatabase', () => {
   type MockMealRow = Record<string, unknown>;
@@ -772,6 +773,301 @@ describe('MealService', () => {
       );
 
       expect(failure).toBe(false);
+    });
+
+    test('executes direct SQL aggregation for getStatistics and never executes SELECT * FROM meals', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 5, homemade: 3 });
+      mockDb.getAllAsync
+        .mockResolvedValueOnce([
+          { label: '和食', count: 3 },
+          { label: '洋食', count: 2 },
+        ])
+        .mockResolvedValueOnce([
+          { label: '自宅', count: 4 },
+          { label: '銀座', count: 1 },
+        ]);
+
+      const stats = await MealService.getStatistics();
+
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        'SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE is_deleted = 0'
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        1,
+        "SELECT TRIM(cuisine_type) AS label, COUNT(*) AS count FROM meals WHERE is_deleted = 0 AND cuisine_type IS NOT NULL AND TRIM(cuisine_type) != '' GROUP BY TRIM(cuisine_type) ORDER BY count DESC"
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        2,
+        "SELECT TRIM(location_name) AS label, COUNT(*) AS count FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND TRIM(location_name) != '' GROUP BY TRIM(location_name) ORDER BY count DESC"
+      );
+
+      // Verify SELECT * was NEVER called
+      const allSqlCalls = [
+        ...mockDb.getFirstAsync.mock.calls.map((call) => call[0]),
+        ...mockDb.getAllAsync.mock.calls.map((call) => call[0]),
+      ];
+      expect(allSqlCalls.some((sql) => typeof sql === 'string' && sql.includes('SELECT *'))).toBe(false);
+
+      expect(stats.totalMeals).toBe(5);
+      expect(stats.homemadeMeals).toBe(3);
+      expect(stats.takeoutMeals).toBe(2);
+      expect(stats.favoriteCuisine).toBe('和食');
+      expect(stats.favoriteLocation).toBe('自宅');
+      expect(stats.topCuisines).toEqual([
+        { label: '和食', count: 3 },
+        { label: '洋食', count: 2 },
+      ]);
+      expect(stats.topLocations).toEqual([
+        { label: '自宅', count: 4 },
+        { label: '銀座', count: 1 },
+      ]);
+    });
+
+    test('Case 1: handles empty dataset gracefully in native DB mode', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 0, homemade: null });
+      mockDb.getAllAsync.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      const stats = await MealService.getStatistics();
+
+      expect(stats).toEqual({
+        totalMeals: 0,
+        homemadeMeals: 0,
+        takeoutMeals: 0,
+        favoriteCuisine: undefined,
+        favoriteLocation: undefined,
+        topCuisines: [],
+        topLocations: [],
+      });
+    });
+
+    test('Case 2: handles single record correctly in native DB mode', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 1, homemade: 1 });
+      mockDb.getAllAsync
+        .mockResolvedValueOnce([{ label: '和食', count: 1 }])
+        .mockResolvedValueOnce([{ label: '自宅', count: 1 }]);
+
+      const stats = await MealService.getStatistics();
+
+      expect(stats).toEqual({
+        totalMeals: 1,
+        homemadeMeals: 1,
+        takeoutMeals: 0,
+        favoriteCuisine: '和食',
+        favoriteLocation: '自宅',
+        topCuisines: [{ label: '和食', count: 1 }],
+        topLocations: [{ label: '自宅', count: 1 }],
+      });
+    });
+
+    test('Case 3: includes is_deleted = 0 in all native statistics SQL queries', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 0, homemade: 0 });
+      mockDb.getAllAsync.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      await MealService.getStatistics();
+
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        expect.stringContaining('is_deleted = 0')
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining('is_deleted = 0')
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining('is_deleted = 0')
+      );
+    });
+
+    test('Case 4 & 5: excludes NULL and blank/whitespace values in SQL and JS normalization', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 3, homemade: 1 });
+      mockDb.getAllAsync
+        .mockResolvedValueOnce([
+          { label: '和食', count: 2 },
+          { label: '   ', count: 1 },
+          { label: '', count: 1 },
+        ])
+        .mockResolvedValueOnce([
+          { label: '自宅', count: 2 },
+          { label: '  ', count: 1 },
+        ]);
+
+      const stats = await MealService.getStatistics();
+
+      // Check SQL queries contain NULL and TRIM checks
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        1,
+        expect.stringContaining("cuisine_type IS NOT NULL AND TRIM(cuisine_type) != ''")
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        2,
+        expect.stringContaining("location_name IS NOT NULL AND TRIM(location_name) != ''")
+      );
+
+      // Verify JS post-normalization filters out any empty/whitespace rows
+      expect(stats.topCuisines).toEqual([{ label: '和食', count: 2 }]);
+      expect(stats.topLocations).toEqual([{ label: '自宅', count: 2 }]);
+    });
+
+    test('Case 6: limits top cuisines and locations to maximum 3 items', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 10, homemade: 5 });
+      mockDb.getAllAsync
+        .mockResolvedValueOnce([
+          { label: '和食', count: 4 },
+          { label: '洋食', count: 3 },
+          { label: '中華', count: 2 },
+          { label: 'イタリアン', count: 1 },
+        ])
+        .mockResolvedValueOnce([
+          { label: '自宅', count: 4 },
+          { label: '神田', count: 3 },
+          { label: '銀座', count: 2 },
+          { label: '渋谷', count: 1 },
+        ]);
+
+      const stats = await MealService.getStatistics();
+
+      expect(stats.topCuisines).toHaveLength(3);
+      expect(stats.topCuisines).toEqual([
+        { label: '和食', count: 4 },
+        { label: '洋食', count: 3 },
+        { label: '中華', count: 2 },
+      ]);
+      expect(stats.topLocations).toHaveLength(3);
+      expect(stats.topLocations).toEqual([
+        { label: '自宅', count: 4 },
+        { label: '神田', count: 3 },
+        { label: '銀座', count: 2 },
+      ]);
+    });
+
+    test('Case 7: breaks ties using ja localeCompare identically to existing JS implementation', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 6, homemade: 2 });
+      mockDb.getAllAsync
+        .mockResolvedValueOnce([
+          { label: '和食', count: 2 },
+          { label: '洋食', count: 2 },
+          { label: 'タイ', count: 1 },
+        ])
+        .mockResolvedValueOnce([
+          { label: '自宅', count: 2 },
+          { label: '銀座', count: 2 },
+          { label: '渋谷', count: 1 },
+        ]);
+
+      const stats = await MealService.getStatistics();
+
+      expect(stats.topCuisines).toEqual([
+        { label: '洋食', count: 2 },
+        { label: '和食', count: 2 },
+        { label: 'タイ', count: 1 },
+      ]);
+      expect(stats.topLocations).toEqual([
+        { label: '銀座', count: 2 },
+        { label: '自宅', count: 2 },
+        { label: '渋谷', count: 1 },
+      ]);
+      expect(stats.favoriteCuisine).toBe('洋食');
+      expect(stats.favoriteLocation).toBe('銀座');
+    });
+
+    test('Case 8: handles dateFrom and dateTo boundaries inclusively with correct SQL parameters', async () => {
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 2, homemade: 1 });
+      mockDb.getAllAsync.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      const from = new Date('2026-04-01T00:00:00.000+09:00');
+      const to = new Date('2026-04-30T23:59:59.999+09:00');
+
+      await MealService.getStatistics({ dateFrom: from, dateTo: to });
+
+      const expectedWhere =
+        'is_deleted = 0 AND meal_datetime >= ? AND meal_datetime <= ?';
+
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        `SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE ${expectedWhere}`,
+        from.getTime(),
+        to.getTime()
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        1,
+        `SELECT TRIM(cuisine_type) AS label, COUNT(*) AS count FROM meals WHERE ${expectedWhere} AND cuisine_type IS NOT NULL AND TRIM(cuisine_type) != '' GROUP BY TRIM(cuisine_type) ORDER BY count DESC`,
+        from.getTime(),
+        to.getTime()
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        2,
+        `SELECT TRIM(location_name) AS label, COUNT(*) AS count FROM meals WHERE ${expectedWhere} AND location_name IS NOT NULL AND TRIM(location_name) != '' GROUP BY TRIM(location_name) ORDER BY count DESC`,
+        from.getTime(),
+        to.getTime()
+      );
+    });
+
+    test('Case 9: supports various date filter configurations (dateFrom only, dateTo only, neither)', async () => {
+      const from = new Date('2026-04-01T00:00:00.000+09:00');
+      const to = new Date('2026-04-30T23:59:59.999+09:00');
+
+      // 1. dateFrom only
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 1, homemade: 0 });
+      mockDb.getAllAsync.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      await MealService.getStatistics({ dateFrom: from });
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        'SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE is_deleted = 0 AND meal_datetime >= ?',
+        from.getTime()
+      );
+
+      // 2. dateTo only
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 1, homemade: 0 });
+      mockDb.getAllAsync.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      await MealService.getStatistics({ dateTo: to });
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        'SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE is_deleted = 0 AND meal_datetime <= ?',
+        to.getTime()
+      );
+
+      // 3. neither (all period)
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 1, homemade: 0 });
+      mockDb.getAllAsync.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      await MealService.getStatistics({});
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        'SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE is_deleted = 0'
+      );
+    });
+
+    test('Parity: Native SQLite aggregation produces identical summary to InMemory aggregation', async () => {
+      const testRows = [
+        { id: '1', uuid: 'u1', meal_name: 'カレー1', cuisine_type: '洋食', location_name: '自宅', is_homemade: 1, meal_datetime: 1000, is_deleted: 0 },
+        { id: '2', uuid: 'u2', meal_name: 'カレー2', cuisine_type: '  洋食  ', location_name: '自宅', is_homemade: 0, meal_datetime: 2000, is_deleted: 0 },
+        { id: '3', uuid: 'u3', meal_name: '寿司', cuisine_type: '和食', location_name: '銀座', is_homemade: 0, meal_datetime: 3000, is_deleted: 0 },
+        { id: '4', uuid: 'u4', meal_name: 'そば', cuisine_type: '和食', location_name: '銀座', is_homemade: 1, meal_datetime: 4000, is_deleted: 0 },
+        { id: '5', uuid: 'u5', meal_name: 'ラーメン', cuisine_type: '中華', location_name: '神田', is_homemade: 0, meal_datetime: 5000, is_deleted: 0 },
+        { id: '6', uuid: 'u6', meal_name: '不明', cuisine_type: '   ', location_name: '   ', is_homemade: 0, meal_datetime: 6000, is_deleted: 0 },
+        { id: '7', uuid: 'u7', meal_name: 'タイ料理', cuisine_type: 'タイ', location_name: '渋谷', is_homemade: 0, meal_datetime: 7000, is_deleted: 0 },
+        { id: '8', uuid: 'u8', meal_name: '削除', cuisine_type: 'イタリアン', location_name: '新宿', is_homemade: 1, meal_datetime: 3500, is_deleted: 1 },
+      ] as any[];
+
+      // 1. Calculate using InMemory baseline
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+      const inMemoryBaseline = buildStatisticsSummary(filterRowsForStatistics(testRows));
+
+      // 2. Mock Native SQLite responses matching SQL execution on this dataset
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+      mockDb.getFirstAsync.mockResolvedValueOnce({ total: 7, homemade: 2 });
+      mockDb.getAllAsync
+        .mockResolvedValueOnce([
+          { label: '洋食', count: 2 },
+          { label: '和食', count: 2 },
+          { label: 'タイ', count: 1 },
+          { label: '中華', count: 1 },
+        ])
+        .mockResolvedValueOnce([
+          { label: '自宅', count: 2 },
+          { label: '銀座', count: 2 },
+          { label: '渋谷', count: 1 },
+          { label: '神田', count: 1 },
+        ]);
+
+      const nativeResult = await MealService.getStatistics();
+
+      expect(nativeResult).toEqual(inMemoryBaseline);
     });
   });
 });
