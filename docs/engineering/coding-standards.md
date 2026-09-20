@@ -4,7 +4,7 @@
 - Purpose: define implementation conventions for this app.
 - Audience: anyone writing or reviewing code in this repo.
 - Update trigger: architecture changes, file layout changes, or repeated code review issues.
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/engineering/codex-workflow.md](codex-workflow.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/engineering/development-workflow.md](development-workflow.md)
 
 ## Core Principles
 - Single responsibility first.

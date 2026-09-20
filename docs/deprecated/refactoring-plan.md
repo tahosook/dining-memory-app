@@ -1,10 +1,12 @@
 # Refactoring Plan
 
+> Completed. All Phase 1〜7 refactoring steps in this plan have been implemented and validated. Current architecture and storage rules live in [docs/architecture/tech-spec.md](../architecture/tech-spec.md) and [docs/domain/database-design.md](../domain/database-design.md). This file is preserved for historical reference only.
+
 ## Meta
 - Purpose: Phase 1〜7 の段階的リファクタリングで、現状棚卸し、対象ファイル、リスク、検証結果を一か所に残す。
-- Audience: repo 保守者、Codex、レビュー担当者。
+- Audience: repo 保守者、AI エージェント、レビュー担当者。
 - Update trigger: 各 Phase の開始時 / 完了時、責務境界や canonical docs の更新が必要になったとき。
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/engineering/codex-context-map.md](codex-context-map.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/engineering/context-map.md](../engineering/context-map.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md)
 
 ## Phase 1 Inventory
 

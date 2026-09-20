@@ -4,11 +4,11 @@
 - Purpose: entry point for reading and maintaining project documentation.
 - Audience: Codex, contributors, and future maintainers.
 - Update trigger: add, rename, or deprecate any canonical document.
-- Related docs: [AGENTS.md](../AGENTS.md), [docs/engineering/codex-context-map.md](./engineering/codex-context-map.md)
+- Related docs: [AGENTS.md](../AGENTS.md), [docs/engineering/context-map.md](./engineering/context-map.md)
 
 ## Read First
 1. [AGENTS.md](../AGENTS.md)
-2. [docs/engineering/codex-context-map.md](./engineering/codex-context-map.md)
+2. [docs/engineering/context-map.md](./engineering/context-map.md)
 3. This index when you need the broader documentation map
 4. The document that matches the task category
 
@@ -19,13 +19,13 @@
 - [docs/product/progress.md](./product/progress.md): 今どこまでできているか、何が未実装か
 
 ### For Implementation
-- [docs/engineering/codex-context-map.md](./engineering/codex-context-map.md): task ごとに読むべき最小 context の索引
+- [docs/engineering/context-map.md](./engineering/context-map.md): task ごとに読むべき最小 context の索引
 - [docs/architecture/tech-spec.md](./architecture/tech-spec.md): current implementation and runtime assumptions
 - [docs/ux/screen-designs.md](./ux/screen-designs.md): current screen behavior
 - [docs/ux/user-flows.md](./ux/user-flows.md): current implemented flows
 - [docs/domain/database-design.md](./domain/database-design.md): current storage rules
 - [docs/engineering/coding-standards.md](./engineering/coding-standards.md): coding rules
-- [docs/engineering/codex-workflow.md](./engineering/codex-workflow.md): verification and workflow
+- [docs/engineering/development-workflow.md](./engineering/development-workflow.md): verification and workflow
 - [docs/engineering/github-security-settings.md](./engineering/github-security-settings.md): GitHub security / quality settings and manual setup checklist
 - [docs/engineering/food-labeling-guidelines.md](./engineering/food-labeling-guidelines.md): 食事画像ラベリング用スクリプトの責務、優先度、打ち止めライン
 - [docs/engineering/mediapipe-labeling-workflow.md](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の目的、guardrail、停止条件
@@ -53,27 +53,26 @@
 - [User Flows](./ux/user-flows.md): main journeys, exception flows, and UX rules.
 
 ### Engineering
-- [Codex Context Map](./engineering/codex-context-map.md): task-specific reading map for reducing unnecessary context use.
+- [Context Map](./engineering/context-map.md): task-specific reading map for reducing unnecessary context use.
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
-- [Codex Workflow](./engineering/codex-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
+- [Development Workflow](./engineering/development-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
 - [GitHub Security Settings](./engineering/github-security-settings.md): CodeQL, Dependabot, Secret scanning, branch protection, and Actions permission setup.
-- [Refactoring Plan](./engineering/refactoring-plan.md): phased refactoring inventory, target files, risks, and verification log.
 - [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
 - [MediaPipe Labeling Workflow](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の自動化方針、guardrail、停止条件.
 - [Immediate Improvements](./engineering/immediate-improvements.md): 今すぐ入れるべき具体的な改善案と優先度.
 
 ### Notes
 - [notes/](./notes/): temporary investigations, incident follow-ups, and one-off fixes.
-- [deprecated/](./deprecated/): retired pre-reorganization documents kept only for historical reference.
+- [deprecated/](./deprecated/): retired pre-reorganization documents and completed refactoring plans kept only for historical reference.
 
 ## Writing Rules
 - Put each topic in one canonical document only.
-- Prefer links over repetition.
+- Prefer links over duplication.
 - If you create a new canonical doc, add it here and in `README.md`.
 - If a document is temporary or historical, place it under `docs/notes/` or `docs/deprecated/` and mark it clearly.
 
 ## Suggested Reading Paths
-- Codex task: AGENTS -> Codex Context Map -> only the docs, source, and tests needed for the task.
+- Development task: AGENTS -> Context Map -> only the docs, source, and tests needed for the task.
 - Product direction: Product Overview -> Product Progress.
 - Setup or scripts: README -> the task-specific canonical doc.
 - Broad documentation review: use this index after the context map when the task truly spans categories.

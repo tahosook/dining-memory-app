@@ -1,10 +1,10 @@
-# Codex Context Map
+# Context Map
 
 ## Meta
-- Purpose: Codex が task ごとに読むべき最小 context を選ぶための入口を定義する。
-- Audience: Codex、repo 保守者、実装担当者。
+- Purpose: task ごとに読むべき最小 context を選ぶための入口を定義する。
+- Audience: AI エージェント、repo 保守者、実装担当者。
 - Update trigger: 読むべき canonical docs、主要 source path、作業分類、AI / MediaPipe 方針が変わったとき。
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/engineering/codex-workflow.md](codex-workflow.md), [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md)
 
 ## Summary
 - この repo では、毎回すべての docs や code を読まない。
@@ -78,10 +78,10 @@
 ### Expo / Android / Build
 - Read first: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
 - Common files: `app.json`, `eas.json`, `metro.config.js`, `babel.config.js`, `android/app/build.gradle`, `.github/workflows/ci.yml`
-- If dependency or runtime assumptions change, also read `package.json`, `package-lock.json`, and [docs/engineering/codex-workflow.md](codex-workflow.md)
+- If dependency or runtime assumptions change, also read `package.json`, `package-lock.json`, and [docs/engineering/development-workflow.md](development-workflow.md)
 
 ### Tests / CI / Quality
-- Read first: [docs/engineering/codex-workflow.md](codex-workflow.md), [docs/engineering/coding-standards.md](coding-standards.md)
+- Read first: [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/coding-standards.md](coding-standards.md)
 - GitHub security settings: [docs/engineering/github-security-settings.md](github-security-settings.md)
 - Common files: `package.json`, `jest.config.js`, `jest.setup.js`, `eslint.config.js`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `tests/`, `scripts/tests/`
 - Use the narrowest useful check first, then broader gates for meaningful code changes.
@@ -101,16 +101,6 @@ When source changes, check the smallest matching canonical docs before finishing
 - `src/screens/StatsScreen/`, stats aggregation in `src/database/services/MealService.ts`: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/domain/database-design.md](../domain/database-design.md)
 - `src/database/services/`, `src/domain/meals/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
 - `scripts/*food-labels.py`, `scripts/mediapipe_*`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md)
-- `app.json`, `eas.json`, `.github/workflows/ci.yml`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/codex-workflow.md](codex-workflow.md)
+- `app.json`, `eas.json`, `.github/workflows/ci.yml`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/development-workflow.md](development-workflow.md)
 
 Run `bash scripts/check-doc-drift.sh` when a change touches current behavior docs, AI input assist, MediaPipe, storage, runtime, or UX descriptions.
-
-## Codex Working Rules
-- 変更前に読む予定ファイルを明確にする。
-- 今回のタスクに必要なファイルだけ読む。
-- 対象外ファイルを広く読まない。
-- 大きな変更は「調査」「計画」「実装」を分ける。
-- 変更は最小差分にする。
-- 大規模リファクタや無関係な cleanup を避ける。
-- food-labeling / MediaPipe / AI labeling では `food-labeling-guidelines.md` を最優先で尊重する。
-- 変更後に変更ファイル、確認コマンド、未確認事項を報告する。

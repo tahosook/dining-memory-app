@@ -4,7 +4,7 @@
 - Purpose: Phase 1-12 の実装進行、検証、commit 状態を追跡する。
 - Audience: 実装担当者、レビュー担当者。
 - Update trigger: 各 Phase の開始、完了、検証失敗、commit 作成時。
-- Related docs: [AGENTS.md](../../AGENTS.md), [docs/engineering/codex-workflow.md](../engineering/codex-workflow.md)
+- Related docs: [AGENTS.md](../../AGENTS.md), [docs/engineering/development-workflow.md](../engineering/development-workflow.md)
 
 ## Summary
 - Started: 2026-04-29

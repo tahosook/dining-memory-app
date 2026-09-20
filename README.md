@@ -17,15 +17,14 @@
 - [実装進捗](docs/product/progress.md): 今どこまでできているか、何が未実装か
 
 ### 実装向けドキュメント
-- [Codex コンテキストマップ](docs/engineering/codex-context-map.md): Codex が task ごとに読むべき最小 context の索引
+- [コンテキストマップ](docs/engineering/context-map.md): task ごとに読むべき最小 context の索引
 - [技術仕様](docs/architecture/tech-spec.md): current implementation と runtime assumptions
 - [画面設計](docs/ux/screen-designs.md): current screen behavior
 - [ユーザーフロー](docs/ux/user-flows.md): current implemented flows
 - [DB設計](docs/domain/database-design.md): current schema and storage rules
 - [実装規約](docs/engineering/coding-standards.md): coding rules
-- [Codex 作業ルール](docs/engineering/codex-workflow.md): review and verification workflow
+- [開発ワークフロー](docs/engineering/development-workflow.md): review and verification workflow
 - [GitHub セキュリティ設定](docs/engineering/github-security-settings.md): CodeQL、Dependabot、Secret scanning、branch protection、Actions permissions の運用手順
-- [リファクタリング計画](docs/engineering/refactoring-plan.md): phased refactoring inventory and verification log
 - [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けた script 修整の判断ルール
 - [MediaPipe ラベル改善ワークフロー](docs/engineering/mediapipe-labeling-workflow.md): 自動改善 loop の目的、guardrail、停止条件
 - [即時改善提案](docs/engineering/immediate-improvements.md): 今すぐ入れるべき改善案の整理
@@ -161,7 +160,7 @@ EXPO_PUBLIC_APP_VERSION=1.0.0
 - 統合テスト: 撮影から保存、表示までの一連フロー
 - 自動テスト: Jest + React Native Testing Library
 - ドキュメント同期確認: `bash scripts/check-doc-drift.sh`
-- 詳細な検証ルールは [docs/engineering/codex-workflow.md](docs/engineering/codex-workflow.md) を参照
+- 詳細な検証ルールは [docs/engineering/development-workflow.md](docs/engineering/development-workflow.md) を参照
 
 ## APK ビルド
 ### 日常運用のリリースAPK

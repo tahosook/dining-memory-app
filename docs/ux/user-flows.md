@@ -52,8 +52,9 @@
 2. Review privacy guidance and the AI 入力補助の端末内利用許可.
 3. Review meal input assist model status, then download or re-download the model from Settings when needed.
 4. Review `Local AI Runtime Status` to confirm ready / unavailable and the expected app-local model paths.
-5. Optionally change the AI setting, optionally delete the model, then optionally delete local data.
-6. Review the remaining feature scope and app info.
+5. Export meal records and original photos as a single backup ZIP file, or select a backup ZIP to restore data after reviewing the confirmation summary (date, record count, and overwrite warning).
+6. Optionally change the AI setting, optionally delete the model, then optionally delete local data.
+7. Review the remaining feature scope and app info.
 
 ## Camera Permission Flow
 1. Open the Camera tab.
