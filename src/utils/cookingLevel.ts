@@ -108,15 +108,15 @@ export function inferCookingLevel(input: CookingLevelInferenceInput): CookingLev
     return undefined;
   }
 
-  if (GOURMET_KEYWORDS.some((keyword) => text.includes(keyword))) {
+  if (GOURMET_KEYWORDS.some(keyword => text.includes(keyword))) {
     return 'gourmet';
   }
 
-  if (QUICK_KEYWORDS.some((keyword) => text.includes(keyword))) {
+  if (QUICK_KEYWORDS.some(keyword => text.includes(keyword))) {
     return 'quick';
   }
 
-  if (DAILY_KEYWORDS.some((keyword) => text.includes(keyword))) {
+  if (DAILY_KEYWORDS.some(keyword => text.includes(keyword))) {
     return 'daily';
   }
 

@@ -33,7 +33,7 @@ function pumpQueue() {
     nextTask
       .run()
       .then(nextTask.resolve)
-      .catch((error) => {
+      .catch(error => {
         console.warn(`Unexpected failure in thumbnail queue for meal ${nextTask.mealId}:`, error);
         nextTask.resolve(null);
       })
@@ -45,8 +45,11 @@ function pumpQueue() {
   }
 }
 
-function enqueueThumbnailTask(mealId: string, run: () => Promise<string | null>): Promise<string | null> {
-  return new Promise<string | null>((resolve) => {
+function enqueueThumbnailTask(
+  mealId: string,
+  run: () => Promise<string | null>
+): Promise<string | null> {
+  return new Promise<string | null>(resolve => {
     taskQueue.push({ mealId, run, resolve });
     pumpQueue();
   });
@@ -75,11 +78,17 @@ async function processMealThumbnail(mealId: string): Promise<string | null> {
     try {
       const originalInfo = await getInfoAsync(meal.photo_path);
       if (!originalInfo.exists) {
-        console.warn('Original photo does not exist for meal thumbnail generation:', meal.photo_path);
+        console.warn(
+          'Original photo does not exist for meal thumbnail generation:',
+          meal.photo_path
+        );
         return null;
       }
     } catch {
-      console.warn('Failed to verify original photo for meal thumbnail generation:', meal.photo_path);
+      console.warn(
+        'Failed to verify original photo for meal thumbnail generation:',
+        meal.photo_path
+      );
       return null;
     }
 
@@ -116,11 +125,7 @@ async function processMealThumbnail(mealId: string): Promise<string | null> {
     // Stale Update 防止: photo_path が生成開始時と一致する場合のみ原子的に DB を更新
     let updated = false;
     try {
-      updated = await MealService.updateMealThumbnail(
-        mealId,
-        stableThumbnailUri,
-        initialPhotoPath
-      );
+      updated = await MealService.updateMealThumbnail(mealId, stableThumbnailUri, initialPhotoPath);
     } catch (dbError) {
       console.warn('Failed to update meal thumbnail in DB:', dbError);
       await cleanupTempFile(stableThumbnailUri);
@@ -153,12 +158,12 @@ export function ensureMealThumbnail(mealId: string): Promise<string | null> {
 
 export function requestMealThumbnail(mealId: string, options?: ThumbnailRequestOptions): void {
   void ensureMealThumbnail(mealId)
-    .then((thumbUri) => {
+    .then(thumbUri => {
       if (thumbUri && options?.onGenerated) {
         options.onGenerated(mealId, thumbUri);
       }
     })
-    .catch((error) => {
+    .catch(error => {
       console.warn(`Background thumbnail request failed for meal ${mealId}:`, error);
     });
 }
@@ -169,7 +174,7 @@ export function requestMealThumbnails(
 ): void {
   (async () => {
     const candidateMealIds = await Promise.all(
-      meals.map(async (meal) => {
+      meals.map(async meal => {
         if (!meal.photo_path) {
           return null;
         }
@@ -196,7 +201,7 @@ export function requestMealThumbnails(
         requestMealThumbnail(mealId, options);
       }
     }
-  })().catch((error) => {
+  })().catch(error => {
     console.warn('Failed to inspect meals for thumbnail backfill:', error);
   });
 }

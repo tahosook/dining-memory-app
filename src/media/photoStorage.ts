@@ -9,7 +9,8 @@ import {
 } from './photoExif';
 
 export const ANDROID_PHOTO_ALBUM_NAME = 'Dining Memory';
-export const DEFAULT_PHOTO_SOFTWARE_NAME = process.env.EXPO_PUBLIC_APP_NAME ?? ANDROID_PHOTO_ALBUM_NAME;
+export const DEFAULT_PHOTO_SOFTWARE_NAME =
+  process.env.EXPO_PUBLIC_APP_NAME ?? ANDROID_PHOTO_ALBUM_NAME;
 export const MAX_PHOTO_COLLISION_ATTEMPTS = 100;
 
 export type PersistPhotoResult = {
@@ -55,7 +56,7 @@ export async function persistPhotoToStablePath(
   }
 
   const destination = await resolveDestinationUri(options.capturedAt);
-  
+
   try {
     await copyAsync({
       from: photoUri,
@@ -87,7 +88,7 @@ export async function persistPhotoToStablePath(
 
     try {
       const existingAlbum = await MediaLibrary.Album.get(ANDROID_PHOTO_ALBUM_NAME);
-      
+
       if (existingAlbum) {
         const asset = await MediaLibrary.Asset.create(destination, existingAlbum);
         console.info('Android photo saved directly to existing Dining Memory album:', {

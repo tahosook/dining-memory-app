@@ -42,7 +42,9 @@ function getTabIconName(routeName: string, focused: boolean): keyof typeof Ionic
 
 function renderTabIcon(routeName: string, focused: boolean) {
   const iconName = getTabIconName(routeName, focused);
-  return <Ionicons name={iconName} size={24} color={focused ? COLORS.activeTint : COLORS.inactiveTint} />;
+  return (
+    <Ionicons name={iconName} size={24} color={focused ? COLORS.activeTint : COLORS.inactiveTint} />
+  );
 }
 
 function MainTabs() {
@@ -59,31 +61,11 @@ function MainTabs() {
         headerShown: route.name !== 'Camera' && route.name !== 'Records',
       })}
     >
-      <Tab.Screen
-        name="Camera"
-        component={CameraScreen}
-        options={{ title: '撮影' }}
-      />
-      <Tab.Screen
-        name="Records"
-        component={RecordsScreen}
-        options={{ title: '記録' }}
-      />
-      <Tab.Screen
-        name="Search"
-        component={SearchScreen}
-        options={{ title: '検索' }}
-      />
-      <Tab.Screen
-        name="Stats"
-        component={StatsScreen}
-        options={{ title: '統計' }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{ title: '設定' }}
-      />
+      <Tab.Screen name="Camera" component={CameraScreen} options={{ title: '撮影' }} />
+      <Tab.Screen name="Records" component={RecordsScreen} options={{ title: '記録' }} />
+      <Tab.Screen name="Search" component={SearchScreen} options={{ title: '検索' }} />
+      <Tab.Screen name="Stats" component={StatsScreen} options={{ title: '統計' }} />
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: '設定' }} />
     </Tab.Navigator>
   );
 }
@@ -92,11 +74,7 @@ export default function RootNavigator() {
   return (
     <NavigationContainer>
       <RootStack.Navigator>
-        <RootStack.Screen
-          name="MainTabs"
-          component={MainTabs}
-          options={{ headerShown: false }}
-        />
+        <RootStack.Screen name="MainTabs" component={MainTabs} options={{ headerShown: false }} />
         <RootStack.Screen
           name="MealDetail"
           component={MealDetailScreen}

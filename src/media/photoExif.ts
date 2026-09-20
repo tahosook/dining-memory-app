@@ -1,8 +1,4 @@
-import {
-  EncodingType,
-  readAsStringAsync,
-  writeAsStringAsync,
-} from 'expo-file-system/legacy';
+import { EncodingType, readAsStringAsync, writeAsStringAsync } from 'expo-file-system/legacy';
 import piexif, { type ExifData } from 'piexifjs';
 
 export interface PhotoLocationSnapshot {
@@ -49,7 +45,9 @@ function formatExifGpsDateStamp(date: Date) {
   return `${padNumber(date.getUTCFullYear(), 4)}:${padNumber(date.getUTCMonth() + 1)}:${padNumber(date.getUTCDate())}`;
 }
 
-function hasCoordinates(location?: PhotoLocationSnapshot): location is { latitude: number; longitude: number } {
+function hasCoordinates(
+  location?: PhotoLocationSnapshot
+): location is { latitude: number; longitude: number } {
   return typeof location?.latitude === 'number' && typeof location?.longitude === 'number';
 }
 
