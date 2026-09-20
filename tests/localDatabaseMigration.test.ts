@@ -107,4 +107,69 @@ describe('localDatabase migrations', () => {
     expect(openDatabaseSync).not.toHaveBeenCalled();
     expect(localDatabase.getInMemorySearchVectors()).toEqual([]);
   });
+
+  test('replaceDatabaseWithBackup clears in-memory search_vectors on restore', async () => {
+    jest.doMock('react-native', () => ({
+      Platform: { OS: 'web' },
+    }));
+    jest.doMock('expo-sqlite', () => ({
+      openDatabaseSync: jest.fn(),
+    }));
+
+    let localDatabase!: typeof import('../src/database/services/localDatabase');
+    jest.isolateModules(() => {
+      localDatabase = require('../src/database/services/localDatabase');
+    });
+
+    await localDatabase.initializeDatabase();
+    localDatabase.setInMemorySearchVectors([
+      {
+        meal_id: 'meal-1',
+        vector_data: '[0.1,0.2]',
+        vector_model: 'local-semantic-search',
+        vector_dimension: 2,
+        indexed_text: '海鮮丼',
+        text_version: 1,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ]);
+    expect(localDatabase.getInMemorySearchVectors()).toHaveLength(1);
+
+    await localDatabase.replaceDatabaseWithBackup([], []);
+
+    expect(localDatabase.getInMemorySearchVectors()).toEqual([]);
+  });
+
+  test('replaceDatabaseWithBackup executes DELETE FROM search_vectors in native SQLite transaction', async () => {
+    const executedSql: string[] = [];
+    const mockDb = {
+      execSync: jest.fn(),
+      getFirstSync: jest.fn(() => ({ user_version: 2 })),
+      withTransactionAsync: jest.fn(async (cb: () => Promise<void>) => cb()),
+      runAsync: jest.fn(async (sql: string) => {
+        executedSql.push(sql);
+      }),
+    };
+
+    jest.doMock('react-native', () => ({
+      Platform: { OS: 'ios' },
+    }));
+    jest.doMock('expo-sqlite', () => ({
+      openDatabaseSync: jest.fn(() => mockDb),
+    }));
+
+    let localDatabase!: typeof import('../src/database/services/localDatabase');
+    jest.isolateModules(() => {
+      localDatabase = require('../src/database/services/localDatabase');
+    });
+
+    await localDatabase.initializeDatabase();
+    await localDatabase.replaceDatabaseWithBackup([], []);
+
+    expect(mockDb.withTransactionAsync).toHaveBeenCalledTimes(1);
+    expect(executedSql).toContain('DELETE FROM meals');
+    expect(executedSql).toContain('DELETE FROM app_settings');
+    expect(executedSql).toContain('DELETE FROM search_vectors');
+  });
 });
