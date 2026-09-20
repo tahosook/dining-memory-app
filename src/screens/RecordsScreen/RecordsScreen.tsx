@@ -147,7 +147,7 @@ function groupMealsByDate(records: Meal[]): MealSection[] {
 
   return Object.entries(groups)
     .map(([dateKey, groupMeals]) => {
-      const sortedMeals = groupMeals.sort((a, b) => b.meal_datetime - a.meal_datetime);
+      const sortedMeals = [...groupMeals].sort((a, b) => b.meal_datetime - a.meal_datetime);
       return {
         date: dateKey,
         dateLabel: formatDateLabel(new Date(sortedMeals[0].meal_datetime)),

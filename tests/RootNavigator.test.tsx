@@ -111,6 +111,10 @@ import RootNavigator from '../src/navigation/RootNavigator';
 import App from '../App';
 
 describe('RootNavigator Integration', () => {
+  beforeEach(() => {
+    mockCapturedNav = undefined;
+  });
+
   test('renders initial tab as CameraScreen', async () => {
     const { getByTestId } = render(<RootNavigator />);
 
@@ -173,7 +177,7 @@ describe('RootNavigator Integration', () => {
     const searchOptions = mockCapturedNav?.getCurrentOptions() as
       | Record<string, any>
       | undefined;
-    expect(searchOptions?.headerShown !== false).toBe(true);
+    expect(searchOptions?.headerShown ?? true).toBe(true);
     expect(getAllByText('検索')).toHaveLength(2);
 
     // 4. Stats: headerShown === true (デフォルト true)
@@ -182,7 +186,7 @@ describe('RootNavigator Integration', () => {
     const statsOptions = mockCapturedNav?.getCurrentOptions() as
       | Record<string, any>
       | undefined;
-    expect(statsOptions?.headerShown !== false).toBe(true);
+    expect(statsOptions?.headerShown ?? true).toBe(true);
     expect(getAllByText('統計')).toHaveLength(2);
 
     // 5. Settings: headerShown === true (デフォルト true)
@@ -191,7 +195,7 @@ describe('RootNavigator Integration', () => {
     const settingsOptions = mockCapturedNav?.getCurrentOptions() as
       | Record<string, any>
       | undefined;
-    expect(settingsOptions?.headerShown !== false).toBe(true);
+    expect(settingsOptions?.headerShown ?? true).toBe(true);
     expect(getAllByText('設定')).toHaveLength(2);
   });
 
