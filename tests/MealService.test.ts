@@ -59,6 +59,69 @@ describe('MealService', () => {
     expect(meals[0].is_homemade).toBe(true);
   });
 
+  test('retrieves a meal by id and returns null if not found', async () => {
+    const created = await MealService.createMeal({
+      meal_name: '親子丼',
+      is_homemade: true,
+      photo_path: 'file:///oyako.jpg',
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00'),
+    });
+
+    const found = await MealService.getMealById(created.id);
+    expect(found).not.toBeNull();
+    expect(found?.id).toBe(created.id);
+    expect(found?.meal_name).toBe('親子丼');
+
+    const notFound = await MealService.getMealById('non-existent-id');
+    expect(notFound).toBeNull();
+  });
+
+  test('updateMealThumbnail updates photo_thumbnail_path only when photo_path matches', async () => {
+    const created = await MealService.createMeal({
+      meal_name: '親子丼',
+      is_homemade: true,
+      photo_path: 'file:///photo-A.jpg',
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00'),
+    });
+
+    // 1. photo_path matches -> update succeeds
+    const success = await MealService.updateMealThumbnail(
+      created.id,
+      'file:///photo-A-thumb.jpg',
+      'file:///photo-A.jpg'
+    );
+    expect(success).toBe(true);
+
+    const updatedMeal = await MealService.getMealById(created.id);
+    expect(updatedMeal?.photo_thumbnail_path).toBe('file:///photo-A-thumb.jpg');
+
+    // 2. User replaced photo to photo-B.jpg
+    await MealService.updateMeal(created.id, {
+      photo_path: 'file:///photo-B.jpg',
+    });
+
+    // 3. Stale update with expectedPhotoPath = photo-A.jpg fails (0 rows updated)
+    const staleResult = await MealService.updateMealThumbnail(
+      created.id,
+      'file:///stale-A-thumb.jpg',
+      'file:///photo-A.jpg'
+    );
+    expect(staleResult).toBe(false);
+
+    // photo_thumbnail_path remains unchanged (not overwritten by stale thumbnail)
+    const currentMeal = await MealService.getMealById(created.id);
+    expect(currentMeal?.photo_path).toBe('file:///photo-B.jpg');
+    expect(currentMeal?.photo_thumbnail_path).toBe('file:///photo-A-thumb.jpg');
+
+    // 4. Non-existent id returns false
+    const notFound = await MealService.updateMealThumbnail(
+      'unknown-id',
+      'file:///thumb.jpg',
+      'file:///photo-A.jpg'
+    );
+    expect(notFound).toBe(false);
+  });
+
   test('filters search results by text and location', async () => {
     await MealService.createMeal({
       meal_name: '醤油ラーメン',
@@ -680,6 +743,35 @@ describe('MealService', () => {
         '%50\\%\\_discount%',
         '%50\\%\\_discount%'
       );
+    });
+
+    test('executes conditional atomic UPDATE for updateMealThumbnail in native DB mode', async () => {
+      mockDb.runAsync.mockResolvedValueOnce({ changes: 1, lastInsertRowId: 1 });
+
+      const success = await MealService.updateMealThumbnail(
+        'meal-123',
+        'file:///thumb.jpg',
+        'file:///photo-orig.jpg'
+      );
+
+      expect(mockDb.runAsync).toHaveBeenCalledWith(
+        'UPDATE meals SET photo_thumbnail_path = ?, updated_at = ? WHERE id = ? AND photo_path = ? AND is_deleted = 0',
+        'file:///thumb.jpg',
+        expect.any(Number),
+        'meal-123',
+        'file:///photo-orig.jpg'
+      );
+      expect(success).toBe(true);
+
+      mockDb.runAsync.mockResolvedValueOnce({ changes: 0, lastInsertRowId: 0 });
+
+      const failure = await MealService.updateMealThumbnail(
+        'meal-123',
+        'file:///thumb.jpg',
+        'file:///stale-photo.jpg'
+      );
+
+      expect(failure).toBe(false);
     });
   });
 });

@@ -22,6 +22,23 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+jest.mock('expo-media-library', () => ({
+  createAssetAsync: jest.fn(),
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
+  Album: {
+    get: jest.fn(),
+    create: jest.fn(),
+  },
+  Asset: {
+    create: jest.fn(),
+  },
+}));
+
+jest.mock('../src/media/mealThumbnail', () => ({
+  requestMealThumbnails: jest.fn(),
+}));
+
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
     getRecentMeals: jest.fn(),
@@ -30,6 +47,7 @@ jest.mock('../src/database/services/MealService', () => ({
 
 import { RecordsScreen } from '../src/screens/RecordsScreen/RecordsScreen';
 import { MealService } from '../src/database/services/MealService';
+import { requestMealThumbnails } from '../src/media/mealThumbnail';
 
 async function triggerLatestFocus() {
   await act(async () => {
@@ -190,5 +208,58 @@ describe('RecordsScreen', () => {
       meals,
       initialIndex: 1,
     });
+  });
+
+  test('triggers requestMealThumbnails to lazily fill missing thumbnails when records load', async () => {
+    const meal = {
+      id: '1',
+      uuid: '1',
+      meal_name: '朝ごはん',
+      meal_datetime: new Date('2026-04-12T08:00:00+09:00').getTime(),
+      is_homemade: true,
+      photo_path: 'file:///breakfast.jpg',
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    };
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([meal]);
+
+    render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(requestMealThumbnails).toHaveBeenCalledWith([meal], {
+      onGenerated: expect.any(Function),
+    });
+  });
+
+  test('does not update state when onGenerated fires after component unmount', async () => {
+    let capturedOnGenerated: ((mealId: string, thumbUri: string) => void) | undefined;
+    (requestMealThumbnails as jest.Mock).mockImplementation((_meals, options) => {
+      capturedOnGenerated = options?.onGenerated;
+    });
+
+    const meal = {
+      id: '1',
+      uuid: '1',
+      meal_name: '朝ごはん',
+      meal_datetime: new Date('2026-04-12T08:00:00+09:00').getTime(),
+      is_homemade: true,
+      photo_path: 'file:///breakfast.jpg',
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    };
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([meal]);
+
+    const { unmount } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(capturedOnGenerated).toBeDefined();
+
+    unmount();
+
+    expect(() => {
+      capturedOnGenerated?.('1', 'file:///thumb.jpg');
+    }).not.toThrow();
   });
 });
