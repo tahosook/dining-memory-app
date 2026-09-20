@@ -1032,24 +1032,7 @@ describe('MealService', () => {
       );
     });
 
-    test('Parity: Native SQLite aggregation produces identical summary to InMemory aggregation', async () => {
-      const testRows = [
-        { id: '1', uuid: 'u1', meal_name: 'カレー1', cuisine_type: '洋食', location_name: '自宅', is_homemade: 1, meal_datetime: 1000, is_deleted: 0 },
-        { id: '2', uuid: 'u2', meal_name: 'カレー2', cuisine_type: '  洋食  ', location_name: '自宅', is_homemade: 0, meal_datetime: 2000, is_deleted: 0 },
-        { id: '3', uuid: 'u3', meal_name: '寿司', cuisine_type: '和食', location_name: '銀座', is_homemade: 0, meal_datetime: 3000, is_deleted: 0 },
-        { id: '4', uuid: 'u4', meal_name: 'そば', cuisine_type: '和食', location_name: '銀座', is_homemade: 1, meal_datetime: 4000, is_deleted: 0 },
-        { id: '5', uuid: 'u5', meal_name: 'ラーメン', cuisine_type: '中華', location_name: '神田', is_homemade: 0, meal_datetime: 5000, is_deleted: 0 },
-        { id: '6', uuid: 'u6', meal_name: '不明', cuisine_type: '   ', location_name: '   ', is_homemade: 0, meal_datetime: 6000, is_deleted: 0 },
-        { id: '7', uuid: 'u7', meal_name: 'タイ料理', cuisine_type: 'タイ', location_name: '渋谷', is_homemade: 0, meal_datetime: 7000, is_deleted: 0 },
-        { id: '8', uuid: 'u8', meal_name: '削除', cuisine_type: 'イタリアン', location_name: '新宿', is_homemade: 1, meal_datetime: 3500, is_deleted: 1 },
-      ] as any[];
-
-      // 1. Calculate using InMemory baseline
-      (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
-      const inMemoryBaseline = buildStatisticsSummary(filterRowsForStatistics(testRows));
-
-      // 2. Mock Native SQLite responses matching SQL execution on this dataset
-      (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+    test('Unit Mock: Native SQLite aggregation query shape matches expected SQL and params', async () => {
       mockDb.getFirstAsync.mockResolvedValueOnce({ total: 7, homemade: 2 });
       mockDb.getAllAsync
         .mockResolvedValueOnce([
@@ -1067,7 +1050,306 @@ describe('MealService', () => {
 
       const nativeResult = await MealService.getStatistics();
 
+      expect(mockDb.getFirstAsync).toHaveBeenCalledWith(
+        'SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE is_deleted = 0'
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        1,
+        "SELECT TRIM(cuisine_type) AS label, COUNT(*) AS count FROM meals WHERE is_deleted = 0 AND cuisine_type IS NOT NULL AND TRIM(cuisine_type) != '' GROUP BY TRIM(cuisine_type) ORDER BY count DESC"
+      );
+      expect(mockDb.getAllAsync).toHaveBeenNthCalledWith(
+        2,
+        "SELECT TRIM(location_name) AS label, COUNT(*) AS count FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND TRIM(location_name) != '' GROUP BY TRIM(location_name) ORDER BY count DESC"
+      );
+      expect(nativeResult.totalMeals).toBe(7);
+      expect(nativeResult.homemadeMeals).toBe(2);
+      expect(nativeResult.takeoutMeals).toBe(5);
+    });
+  });
+
+  describe('real SQLite parity tests', () => {
+    function createRealSqliteDatabase() {
+      const { DatabaseSync } = require('node:sqlite');
+      const realDb = new DatabaseSync(':memory:');
+
+      realDb.exec(`
+        CREATE TABLE meals (
+          id TEXT PRIMARY KEY NOT NULL,
+          uuid TEXT NOT NULL,
+          meal_name TEXT NOT NULL,
+          meal_type TEXT,
+          cuisine_type TEXT,
+          ai_confidence REAL,
+          ai_source TEXT,
+          notes TEXT,
+          cooking_level TEXT,
+          is_homemade INTEGER NOT NULL DEFAULT 0,
+          photo_path TEXT NOT NULL,
+          photo_thumbnail_path TEXT,
+          location_name TEXT,
+          latitude REAL,
+          longitude REAL,
+          meal_datetime INTEGER NOT NULL,
+          search_text TEXT,
+          tags TEXT,
+          is_deleted INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        );
+      `);
+
+      const insertStmt = realDb.prepare(`
+        INSERT INTO meals (
+          id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source,
+          notes, cooking_level, is_homemade, photo_path, photo_thumbnail_path,
+          location_name, latitude, longitude, meal_datetime, search_text,
+          tags, is_deleted, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      return {
+        insertMeal(row: any) {
+          insertStmt.run(
+            row.id,
+            row.uuid ?? row.id,
+            row.meal_name,
+            row.meal_type ?? null,
+            row.cuisine_type ?? null,
+            row.ai_confidence ?? null,
+            row.ai_source ?? null,
+            row.notes ?? null,
+            row.cooking_level ?? null,
+            row.is_homemade ? 1 : 0,
+            row.photo_path ?? 'file:///photo.jpg',
+            row.photo_thumbnail_path ?? null,
+            row.location_name ?? null,
+            row.latitude ?? null,
+            row.longitude ?? null,
+            row.meal_datetime,
+            row.search_text ?? null,
+            row.tags ?? null,
+            row.is_deleted ? 1 : 0,
+            row.created_at ?? row.meal_datetime,
+            row.updated_at ?? row.meal_datetime
+          );
+        },
+        adapter: {
+          getAllAsync: async (sql: string, ...params: any[]) => {
+            return realDb.prepare(sql).all(...params);
+          },
+          getFirstAsync: async (sql: string, ...params: any[]) => {
+            return realDb.prepare(sql).get(...params) ?? null;
+          },
+          runAsync: async (sql: string, ...params: any[]) => {
+            const info = realDb.prepare(sql).run(...params);
+            return { changes: info.changes, lastInsertRowId: Number(info.lastInsertRowid) };
+          },
+        },
+      };
+    }
+
+    const parityTestRows = [
+      // 境界値1 (start boundary): 2000
+      {
+        id: '1',
+        uuid: 'u1',
+        meal_name: 'カレー1',
+        cuisine_type: '洋食',
+        location_name: '自宅',
+        is_homemade: 1,
+        meal_datetime: 2000,
+        is_deleted: 0,
+      },
+      // 範囲内: 2500 (空白付き -> TRIM対象)
+      {
+        id: '2',
+        uuid: 'u2',
+        meal_name: 'カレー2',
+        cuisine_type: '  洋食  ',
+        location_name: '自宅',
+        is_homemade: 0,
+        meal_datetime: 2500,
+        is_deleted: 0,
+      },
+      // 範囲内: 3000
+      {
+        id: '3',
+        uuid: 'u3',
+        meal_name: '寿司',
+        cuisine_type: '和食',
+        location_name: '銀座',
+        is_homemade: 0,
+        meal_datetime: 3000,
+        is_deleted: 0,
+      },
+      // 範囲内: 4000
+      {
+        id: '4',
+        uuid: 'u4',
+        meal_name: 'そば',
+        cuisine_type: '和食',
+        location_name: '銀座',
+        is_homemade: 1,
+        meal_datetime: 4000,
+        is_deleted: 0,
+      },
+      // 範囲内: 4500 (中華 1, 神田 1)
+      {
+        id: '5',
+        uuid: 'u5',
+        meal_name: 'ラーメン',
+        cuisine_type: '中華',
+        location_name: '神田',
+        is_homemade: 0,
+        meal_datetime: 4500,
+        is_deleted: 0,
+      },
+      // 範囲内: 5000 (タイ 1, 渋谷 1)
+      {
+        id: '6',
+        uuid: 'u6',
+        meal_name: 'タイ料理',
+        cuisine_type: 'タイ',
+        location_name: '渋谷',
+        is_homemade: 0,
+        meal_datetime: 5000,
+        is_deleted: 0,
+      },
+      // 境界値2 (end boundary): 6000 (空白のみ)
+      {
+        id: '7',
+        uuid: 'u7',
+        meal_name: '空白のみ',
+        cuisine_type: '   ',
+        location_name: '   ',
+        is_homemade: 0,
+        meal_datetime: 6000,
+        is_deleted: 0,
+      },
+      // 範囲内: 3500 (NULL値)
+      {
+        id: '8',
+        uuid: 'u8',
+        meal_name: 'NULL値',
+        cuisine_type: null,
+        location_name: null,
+        is_homemade: 0,
+        meal_datetime: 3500,
+        is_deleted: 0,
+      },
+      // 範囲内: 3600 (削除済み: is_deleted = 1)
+      {
+        id: '9',
+        uuid: 'u9',
+        meal_name: '削除済み',
+        cuisine_type: 'イタリアン',
+        location_name: '新宿',
+        is_homemade: 1,
+        meal_datetime: 3600,
+        is_deleted: 1,
+      },
+      // 範囲外 (過去): 1000 (< 2000)
+      {
+        id: '10',
+        uuid: 'u10',
+        meal_name: '過去データ',
+        cuisine_type: 'フレンチ',
+        location_name: '六本木',
+        is_homemade: 0,
+        meal_datetime: 1000,
+        is_deleted: 0,
+      },
+      // 範囲外 (未来): 7000 (> 6000)
+      {
+        id: '11',
+        uuid: 'u11',
+        meal_name: '未来データ',
+        cuisine_type: '韓国料理',
+        location_name: '新大久保',
+        is_homemade: 1,
+        meal_datetime: 7000,
+        is_deleted: 0,
+      },
+    ];
+
+    let realDbFixture: ReturnType<typeof createRealSqliteDatabase>;
+
+    beforeEach(() => {
+      realDbFixture = createRealSqliteDatabase();
+      parityTestRows.forEach((row) => realDbFixture.insertMeal(row));
+
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+      (getDatabase as jest.Mock).mockReturnValue(realDbFixture.adapter);
+    });
+
+    afterEach(() => {
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+      (getDatabase as jest.Mock).mockReturnValue(null);
+    });
+
+    test('Parity: Real SQLite executes actual SQL aggregation matching InMemory baseline for all periods', async () => {
+      // 1. InMemory基準値を算出（filterRowsForStatistics + buildStatisticsSummary）
+      const inMemoryBaseline = buildStatisticsSummary(
+        filterRowsForStatistics(parityTestRows as any[], {})
+      );
+
+      // 2. 実SQLiteに対して MealService.getStatistics を実行（クエリ結果をモックせず実SQL集計）
+      const nativeResult = await MealService.getStatistics({});
+
+      // 3. InMemory基準値と実SQLite集計結果の完全一致を検証
       expect(nativeResult).toEqual(inMemoryBaseline);
+
+      // 主要な集計値の内訳を明示的に検証
+      expect(nativeResult.totalMeals).toBe(10); // 11件中 is_deleted=1 の1件を除外
+      expect(nativeResult.homemadeMeals).toBe(3); // id 1, 4, 11 (id 9は削除済)
+      expect(nativeResult.takeoutMeals).toBe(7);
+
+      // Top 3 とタイブレーク（localeCompare 'ja'）の動作を実SQLite集計データで検証
+      expect(nativeResult.topCuisines).toEqual([
+        { label: '洋食', count: 2 },
+        { label: '和食', count: 2 },
+        { label: 'タイ', count: 1 },
+      ]);
+      expect(nativeResult.favoriteCuisine).toBe('洋食');
+
+      expect(nativeResult.topLocations).toEqual([
+        { label: '銀座', count: 2 },
+        { label: '自宅', count: 2 },
+        { label: '渋谷', count: 1 },
+      ]);
+      expect(nativeResult.favoriteLocation).toBe('銀座');
+    });
+
+    test('Parity: Real SQLite executes actual SQL aggregation matching InMemory baseline with date range', async () => {
+      const options = {
+        dateFrom: new Date(2000), // 境界値 2000 は含む
+        dateTo: new Date(6000), // 境界値 6000 は含む
+      };
+
+      // 1. InMemory基準値を算出
+      const inMemoryBaseline = buildStatisticsSummary(
+        filterRowsForStatistics(parityTestRows as any[], options)
+      );
+
+      // 2. 実SQLiteに対して日付範囲指定で集計実行（実SQL: meal_datetime >= 2000 AND meal_datetime <= 6000）
+      const nativeResult = await MealService.getStatistics(options);
+
+      // 3. 範囲内・境界値・範囲外（1000, 7000）・削除（3600）の除外がInMemoryと完全一致することを検証
+      expect(nativeResult).toEqual(inMemoryBaseline);
+
+      expect(nativeResult.totalMeals).toBe(8); // id 1..8 (id 9削除、10過去、11未来を除外)
+      expect(nativeResult.homemadeMeals).toBe(2); // id 1, 4
+      expect(nativeResult.takeoutMeals).toBe(6);
+      expect(nativeResult.topCuisines).toEqual([
+        { label: '洋食', count: 2 },
+        { label: '和食', count: 2 },
+        { label: 'タイ', count: 1 },
+      ]);
+      expect(nativeResult.topLocations).toEqual([
+        { label: '銀座', count: 2 },
+        { label: '自宅', count: 2 },
+        { label: '渋谷', count: 1 },
+      ]);
     });
   });
 });
