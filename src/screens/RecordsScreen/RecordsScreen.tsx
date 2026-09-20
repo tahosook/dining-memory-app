@@ -164,6 +164,12 @@ export const RecordsScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const isMountedRef = useRef(true);
+  // Store flatMeals in a ref to keep handleMealPress reference stable and prevent O(N^2) list re-renders
+  const flatMealsRef = useRef<Meal[]>(flatMeals);
+
+  useEffect(() => {
+    flatMealsRef.current = flatMeals;
+  }, [flatMeals]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -219,14 +225,20 @@ export const RecordsScreen: React.FC = () => {
 
   const handleMealPress = useCallback(
     (meal: Meal) => {
-      const initialIndex = flatMeals.findIndex(candidate => candidate.id === meal.id);
+      const currentMeals = flatMealsRef.current;
+      const initialIndex = currentMeals.findIndex(candidate => candidate.id === meal.id);
       navigation.navigate('MealDetail', {
         meal,
-        meals: flatMeals,
+        meals: currentMeals,
         initialIndex: initialIndex >= 0 ? initialIndex : undefined,
       });
     },
-    [flatMeals, navigation]
+    [navigation]
+  );
+
+  const renderItem = useCallback(
+    ({ item }: { item: Meal }) => <MealListItem item={item} onPress={handleMealPress} />,
+    [handleMealPress]
   );
 
   if (loading) {
@@ -262,7 +274,7 @@ export const RecordsScreen: React.FC = () => {
           <SectionList
             sections={mealSections}
             keyExtractor={meal => meal.id}
-            renderItem={({ item }) => <MealListItem item={item} onPress={handleMealPress} />}
+            renderItem={renderItem}
             renderSectionHeader={({ section }) => <MealGroupHeader section={section} />}
             renderSectionFooter={() => <GroupSeparator />}
             ItemSeparatorComponent={Separator}
