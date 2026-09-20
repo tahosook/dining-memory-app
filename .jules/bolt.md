@@ -1,0 +1,3 @@
+## 2024-09-20 - Preventing O(N^2) Re-renders in Lists
+**Learning:** In React Native, if a list item's `onPress` callback depends on the entire list data (e.g., to pass the full list to a detail screen for swiping), updating a single item (like lazily loading a thumbnail) changes the list data reference. This invalidates the `onPress` callback for ALL items, causing the entire list to re-render for every single thumbnail loaded, completely bypassing `React.memo`.
+**Action:** Use a `useRef` to hold the latest list data for the `onPress` callback to keep its reference stable. Combined with `useCallback` for `renderItem`, this allows `React.memo` to properly skip re-renders for unchanged list items.
