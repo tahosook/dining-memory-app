@@ -2,6 +2,8 @@
 
 process.env.BROWSERSLIST_IGNORE_OLD_DATA = 'true';
 
+require('react-native-gesture-handler/jestSetup');
+
 // Prevent React Native from redefining window
 if (typeof global.window === 'undefined') {
   Object.defineProperty(global, 'window', {

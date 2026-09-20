@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 const focusCallbacks: Array<() => void> = [];
@@ -95,6 +95,211 @@ describe('RecordsScreen', () => {
     await triggerLatestFocus();
 
     expect(await findByText('ラーメン')).toBeTruthy();
+  });
+
+  test('groups meals across today, yesterday, and older dates in correct order', async () => {
+    const now = new Date();
+    const todayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
+    const yesterdayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0).getTime();
+    const olderDate = new Date(2026, 3, 10, 12, 0, 0); // 2026-04-10
+    const olderTimestamp = olderDate.getTime();
+
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
+      {
+        id: '1',
+        uuid: '1',
+        meal_name: '今日のランチ',
+        meal_datetime: todayTimestamp,
+        is_homemade: false,
+        photo_path: 'file:///today.jpg',
+        is_deleted: false,
+        created_at: todayTimestamp,
+        updated_at: todayTimestamp,
+      },
+      {
+        id: '2',
+        uuid: '2',
+        meal_name: '昨日のディナー',
+        meal_datetime: yesterdayTimestamp,
+        is_homemade: true,
+        photo_path: 'file:///yesterday.jpg',
+        is_deleted: false,
+        created_at: yesterdayTimestamp,
+        updated_at: yesterdayTimestamp,
+      },
+      {
+        id: '3',
+        uuid: '3',
+        meal_name: '過去のカレー',
+        meal_datetime: olderTimestamp,
+        is_homemade: true,
+        photo_path: 'file:///older.jpg',
+        is_deleted: false,
+        created_at: olderTimestamp,
+        updated_at: olderTimestamp,
+      },
+    ]);
+
+    const { findByText, getAllByTestId, UNSAFE_getAllByType } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    await findByText('今日のランチ');
+
+    // Verify section headers appear in strict descending order: 1. 今日, 2. 昨日, 3. 過去の日付 (4月10日)
+    const headerTexts = UNSAFE_getAllByType(Text)
+      .map(node => node.props.children)
+      .filter(text => text === '今日' || text === '昨日' || text === '4月10日');
+    expect(headerTexts).toEqual(['今日', '昨日', '4月10日']);
+
+    // Verify full chronological sequence of headers and meal items
+    const renderedSequence = UNSAFE_getAllByType(Text)
+      .map(node => node.props.children)
+      .filter(t => ['今日', '今日のランチ', '昨日', '昨日のディナー', '4月10日', '過去のカレー'].includes(t));
+    expect(renderedSequence).toEqual([
+      '今日',
+      '今日のランチ',
+      '昨日',
+      '昨日のディナー',
+      '4月10日',
+      '過去のカレー',
+    ]);
+
+    // Verify card element order
+    const cardIds = getAllByTestId(/^meal-card-/).map(el => el.props.testID);
+    expect(cardIds).toEqual(['meal-card-1', 'meal-card-2', 'meal-card-3']);
+  });
+
+  test('orders meals within the same date in descending order of meal_datetime', async () => {
+    const targetDate = new Date(2026, 3, 15); // 2026-04-15
+    const timestamp08 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 8, 0, 0).getTime();
+    const timestamp12 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 12, 0, 0).getTime();
+    const timestamp18 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 18, 0, 0).getTime();
+
+    // Return meals out of order (08:00, 18:00, 12:00) to ensure component sorting logic is applied
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
+      {
+        id: 'meal-08',
+        uuid: 'meal-08',
+        meal_name: '朝ごはん (08:00)',
+        meal_datetime: timestamp08,
+        is_homemade: true,
+        photo_path: 'file:///breakfast.jpg',
+        is_deleted: false,
+        created_at: timestamp08,
+        updated_at: timestamp08,
+      },
+      {
+        id: 'meal-18',
+        uuid: 'meal-18',
+        meal_name: '夜ごはん (18:00)',
+        meal_datetime: timestamp18,
+        is_homemade: false,
+        photo_path: 'file:///dinner.jpg',
+        is_deleted: false,
+        created_at: timestamp18,
+        updated_at: timestamp18,
+      },
+      {
+        id: 'meal-12',
+        uuid: 'meal-12',
+        meal_name: '昼ごはん (12:00)',
+        meal_datetime: timestamp12,
+        is_homemade: true,
+        photo_path: 'file:///lunch.jpg',
+        is_deleted: false,
+        created_at: timestamp12,
+        updated_at: timestamp12,
+      },
+    ]);
+
+    const { findByText, getAllByTestId, UNSAFE_getAllByType } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    await findByText('朝ごはん (08:00)');
+
+    // Only one section header for 4月15日 should be rendered
+    const dateHeaders = UNSAFE_getAllByType(Text)
+      .map(node => node.props.children)
+      .filter(text => text === '4月15日');
+    expect(dateHeaders).toHaveLength(1);
+
+    // Verify meals within the same date are sorted descending: 18:00 -> 12:00 -> 08:00
+    const mealNames = UNSAFE_getAllByType(Text)
+      .map(node => node.props.children)
+      .filter(t => ['朝ごはん (08:00)', '昼ごはん (12:00)', '夜ごはん (18:00)'].includes(t));
+    expect(mealNames).toEqual([
+      '夜ごはん (18:00)',
+      '昼ごはん (12:00)',
+      '朝ごはん (08:00)',
+    ]);
+
+    // Verify card testID order
+    const cardIds = getAllByTestId(/^meal-card-/).map(el => el.props.testID);
+    expect(cardIds).toEqual(['meal-card-meal-18', 'meal-card-meal-12', 'meal-card-meal-08']);
+  });
+
+  test('groups meals according to local date boundaries (00:01 and 23:59 on the same local date)', async () => {
+    // Construct times explicitly using local Date methods to guarantee timezone-independent determinism
+    const startOfDay = new Date(2026, 4, 20, 0, 1, 0).getTime();
+    const endOfDay = new Date(2026, 4, 20, 23, 59, 0).getTime();
+    const prevDayEnd = new Date(2026, 4, 19, 23, 59, 0).getTime();
+
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
+      {
+        id: 'boundary-start',
+        uuid: 'boundary-start',
+        meal_name: '深夜食 (00:01)',
+        meal_datetime: startOfDay,
+        is_homemade: false,
+        photo_path: 'file:///midnight.jpg',
+        is_deleted: false,
+        created_at: startOfDay,
+        updated_at: startOfDay,
+      },
+      {
+        id: 'boundary-end',
+        uuid: 'boundary-end',
+        meal_name: '夜食 (23:59)',
+        meal_datetime: endOfDay,
+        is_homemade: false,
+        photo_path: 'file:///late.jpg',
+        is_deleted: false,
+        created_at: endOfDay,
+        updated_at: endOfDay,
+      },
+      {
+        id: 'prev-day-end',
+        uuid: 'prev-day-end',
+        meal_name: '前日の夜食 (23:59)',
+        meal_datetime: prevDayEnd,
+        is_homemade: true,
+        photo_path: 'file:///prev.jpg',
+        is_deleted: false,
+        created_at: prevDayEnd,
+        updated_at: prevDayEnd,
+      },
+    ]);
+
+    const { findByText, UNSAFE_getAllByType } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    await findByText('深夜食 (00:01)');
+
+    // Verify there are exactly two date sections: 5月20日 and 5月19日
+    const dateHeaders = UNSAFE_getAllByType(Text)
+      .map(node => node.props.children)
+      .filter(text => text === '5月20日' || text === '5月19日');
+    expect(dateHeaders).toEqual(['5月20日', '5月19日']);
+
+    // Verify the items order: May 20 (23:59) -> May 20 (00:01) -> May 19 (23:59)
+    const mealNames = UNSAFE_getAllByType(Text)
+      .map(node => node.props.children)
+      .filter(t => ['深夜食 (00:01)', '夜食 (23:59)', '前日の夜食 (23:59)'].includes(t));
+    expect(mealNames).toEqual([
+      '夜食 (23:59)',
+      '深夜食 (00:01)',
+      '前日の夜食 (23:59)',
+    ]);
   });
 
   test('falls back to photo_path when thumbnail is missing', async () => {

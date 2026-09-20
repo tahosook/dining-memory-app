@@ -58,11 +58,18 @@ function MainTabs() {
           backgroundColor: COLORS.tabBar,
           height: 70,
         },
-        headerShown: route.name !== 'Camera' && route.name !== 'Records',
       })}
     >
-      <Tab.Screen name="Camera" component={CameraScreen} options={{ title: '撮影' }} />
-      <Tab.Screen name="Records" component={RecordsScreen} options={{ title: '記録' }} />
+      <Tab.Screen
+        name="Camera"
+        component={CameraScreen}
+        options={{ title: '撮影', headerShown: false }}
+      />
+      <Tab.Screen
+        name="Records"
+        component={RecordsScreen}
+        options={{ title: '記録', headerShown: false }}
+      />
       <Tab.Screen name="Search" component={SearchScreen} options={{ title: '検索' }} />
       <Tab.Screen name="Stats" component={StatsScreen} options={{ title: '統計' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: '設定' }} />

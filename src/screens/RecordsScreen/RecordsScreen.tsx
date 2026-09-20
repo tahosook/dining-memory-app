@@ -110,16 +110,24 @@ const MealListItem = React.memo<MealItemProps>(({ item, onPress }) => {
   );
 });
 
+function getLocalDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function formatDateLabel(date: Date): string {
   const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
 
-  if (date.toDateString() === today.toDateString()) {
+  const targetKey = getLocalDateKey(date);
+  if (targetKey === getLocalDateKey(today)) {
     return '今日';
   }
 
-  if (date.toDateString() === yesterday.toDateString()) {
+  if (targetKey === getLocalDateKey(yesterday)) {
     return '昨日';
   }
 
@@ -130,7 +138,7 @@ function groupMealsByDate(records: Meal[]): MealSection[] {
   const groups: Record<string, Meal[]> = {};
 
   records.forEach(meal => {
-    const dateKey = new Date(meal.meal_datetime).toDateString();
+    const dateKey = getLocalDateKey(new Date(meal.meal_datetime));
     if (!groups[dateKey]) {
       groups[dateKey] = [];
     }
@@ -138,12 +146,15 @@ function groupMealsByDate(records: Meal[]): MealSection[] {
   });
 
   return Object.entries(groups)
-    .map(([dateKey, groupMeals]) => ({
-      date: dateKey,
-      dateLabel: formatDateLabel(new Date(dateKey)),
-      data: groupMeals.sort((a, b) => b.meal_datetime - a.meal_datetime),
-    }))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .map(([dateKey, groupMeals]) => {
+      const sortedMeals = [...groupMeals].sort((a, b) => b.meal_datetime - a.meal_datetime);
+      return {
+        date: dateKey,
+        dateLabel: formatDateLabel(new Date(sortedMeals[0].meal_datetime)),
+        data: sortedMeals,
+      };
+    })
+    .sort((a, b) => (b.data[0]?.meal_datetime ?? 0) - (a.data[0]?.meal_datetime ?? 0));
 }
 
 export const RecordsScreen: React.FC = () => {
