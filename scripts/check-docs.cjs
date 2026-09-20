@@ -318,8 +318,10 @@ function run(options = {}) {
           message: `Broken internal link: "${rawTarget}" -> resolved to non-existent "${relResolved}"`,
         });
       } else {
-        // If link exists but points to docs/deprecated, record an advisory WARNING
-        if (relResolved.startsWith('docs/deprecated')) {
+        // If link points to an individual retired document inside docs/deprecated, record an advisory WARNING.
+        // Directory links (e.g. "./deprecated/") representing high-level folder navigation are not warned.
+        const stat = fs.statSync(resolved);
+        if (relResolved.startsWith('docs/deprecated') && !stat.isDirectory()) {
           warnings.push({
             type: 'deprecated-reference',
             file: relFile,
