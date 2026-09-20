@@ -1,5 +1,6 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { copyAsync, deleteAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
+import * as Crypto from 'expo-crypto';
 import { CAMERA_CONSTANTS } from '../constants/CameraConstants';
 
 function createRotatedMealPhotoDestinationUri() {
@@ -8,7 +9,7 @@ function createRotatedMealPhotoDestinationUri() {
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const suffix = Math.random().toString(16).slice(2, 10);
+  const suffix = Crypto.randomUUID().slice(0, 8);
   return `${documentDirectory}meal-photo-rotated-${timestamp}-${suffix}.jpg`;
 }
 
