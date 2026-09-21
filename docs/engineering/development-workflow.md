@@ -50,9 +50,10 @@
 - For docs-only changes, confirm links and structure are correct.
 
 ## Review Gate
-- Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test`.
+- Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
-- Add `npm run check:deps` when dependencies are added, removed, or significantly reorganized.
+- Add `npm run check:deps` and `npm run check:react-versions` when dependencies are added, removed, or reorganized. Follow [docs/engineering/dependency-policy.md](dependency-policy.md).
+- If native dependencies (Tier 1) or Expo SDK change, run `npm run build:android:debug` locally (Jest tests pass via mocks and do not guarantee native compatibility).
 - If `package.json`, `package-lock.json`, or `.github/workflows/ci.yml` changes, run `npm ci` before finishing the task.
 - If dependency install only passes on a different Node/npm version than CI, update the CI runtime and the setup docs in the same task or regenerate the lockfile for the existing CI version.
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
@@ -74,7 +75,7 @@
 - Docs-only changes: verify links, filenames, and document consistency.
 - Type or interface changes: run `npm run type-check`.
 - Behavior changes: run `npm test`, and run `npm run lint` if touched files include application code.
-- Dependency changes: run `npm run check:deps` and review the dependency choice directly.
+- Dependency changes: run `npm run check:deps`, `npm run check:react-versions`, and follow [docs/engineering/dependency-policy.md](dependency-policy.md). If native modules (Tier 1) change, also run `npm run build:android:debug`.
 - Dependency or CI runtime changes: run `npm ci` and confirm `README.md` and `.github/workflows/ci.yml` still describe the same runtime expectation.
 - Permission, export, backup, location, file, or external-send changes: confirm what data is accessed, stored, logged, or sent.
 

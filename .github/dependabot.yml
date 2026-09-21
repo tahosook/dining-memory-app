@@ -7,13 +7,93 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Tokyo"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 3
+
+    # =========================================================================
+    # Tier 1: Expo / React Native Runtime & Native Boundary
+    # These dependencies must be updated in lockstep via 'npx expo upgrade'
+    # and require native build validation. Automated PRs are completely ignored.
+    # Reference: docs/engineering/dependency-policy.md
+    # =========================================================================
+    ignore:
+      # Expo Core & Modules
+      - dependency-name: "expo"
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/vector-icons"
+
+      # React & React Native Core
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      - dependency-name: "react-native"
+      - dependency-name: "react-test-renderer"
+      - dependency-name: "@types/react"
+      - dependency-name: "react-native-web"
+
+      # Bundled & Out-of-tree Native Modules
+      - dependency-name: "react-native-gesture-handler"
+      - dependency-name: "react-native-reanimated"
+      - dependency-name: "react-native-screens"
+      - dependency-name: "react-native-safe-area-context"
+      - dependency-name: "react-native-worklets"
+      - dependency-name: "llama.rn"
+      - dependency-name: "react-native-zip-archive"
+      - dependency-name: "@bam.tech/react-native-image-resizer"
+
+      # React Native CLI & Presets
+      - dependency-name: "@react-native/*"
+      - dependency-name: "@react-native-community/*"
+      - dependency-name: "@testing-library/react-native"
+      - dependency-name: "jest-expo"
+      - dependency-name: "jest-environment-jsdom"
+
+      # =======================================================================
+      # Tier 2: Major Update Restrictions
+      # Major updates break ecosystem configs (e.g. ESLint 10 vs RN config,
+      # Jest 30 vs jest-expo preset). Only minor/patch updates are permitted.
+      # =======================================================================
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/jest"
+        update-types: ["version-update:semver-major"]
+
+    # =========================================================================
+    # Tier 3: Pure JS / TS Tooling & Safe Ecosystem Libraries
+    # Grouped minor and patch updates for non-native dependencies.
+    # =========================================================================
     groups:
-      npm-minor-patch:
+      tooling:
+        patterns:
+          - "prettier"
+          - "knip"
+          - "semver"
+          - "typescript"
+          - "@typescript-eslint/*"
+          - "eslint-config-prettier"
+          - "eslint-plugin-react-hooks"
         update-types:
           - "minor"
           - "patch"
 
+      react-navigation:
+        patterns:
+          - "@react-navigation/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+      runtime-utils:
+        patterns:
+          - "piexifjs"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ===========================================================================
+  # Tier 4: GitHub Actions
+  # Stable CI workflow dependencies updated weekly.
+  # ===========================================================================
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
