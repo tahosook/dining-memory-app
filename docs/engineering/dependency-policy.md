@@ -226,21 +226,19 @@ npm run build:android:debug
 ## 5. CI Quality Gates & Verification (CI・検証ゲート)
 
 ### CI ワークフロー (`.github/workflows/ci.yml`) の構成
-- **`lint` ジョブ**:
+- **`static-analysis` ジョブ**:
   - `npm ci`
+  - `npm run check:react-versions` (**必須ゲート**: React と React Native のバージョン乖離を水際で防止)
+  - `npm run check:docs`
+  - `npm run type-check`
   - `npm run lint`
   - `npm run format:check`
-  - `npm run check:docs`
-  - `npm run check:react-versions` (**必須ゲート**: React と React Native のバージョン乖離を水際で防止)
   - `npx expo-doctor` (**実質的CIゲート**: Expo プロジェクト健全性とバージョン整合性を検証。Expo Doctor の exit code を直接 CI の成否として扱い、問題検出時は CI を失敗させる)
-- **`type-check` ジョブ**:
-  - `npm ci`
-  - `npm run type-check`
 - **`test` ジョブ**:
   - `npm ci`
   - `npm run test:coverage -- --runInBand`
 - **`native-build` ジョブ** (**条件付きネイティブビルドゲート**):
-  - 以下のいずれかのネイティブ影響ファイル・依存関係が変更された場合のみ、Ubuntu runner 上で Java 17 環境をセットアップし `npm run build:android:debug` を実行:
+  - 以下のいずれかのネイティブ影響ファイル・依存関係が変更された場合のみ、Ubuntu runner 上で Java 17 環境（Gradle キャッシュ有効）をセットアップし `npm run build:android:debug` を実行:
     - `android/**`
     - `package-lock.json`
     - `app.json`

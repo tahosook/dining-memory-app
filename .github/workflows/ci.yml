@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  lint:
+  static-analysis:
     runs-on: ubuntu-latest
 
     steps:
@@ -27,6 +27,15 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Check React version compatibility
+        run: npm run check:react-versions
+
+      - name: Check documentation integrity
+        run: npm run check:docs
+
+      - name: Type check
+        run: npm run type-check
 
       - name: Lint
         run: npm run lint
@@ -34,33 +43,8 @@ jobs:
       - name: Format check
         run: npm run format:check
 
-      - name: Check documentation integrity
-        run: npm run check:docs
-
-      - name: Check React version compatibility
-        run: npm run check:react-versions
-
       - name: Run Expo Doctor
         run: npx --yes expo-doctor
-
-  type-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24.x
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Type check
-        run: npm run type-check
 
   test:
     runs-on: ubuntu-latest
@@ -200,6 +184,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
       - name: Setup Node.js
         if: steps.filter.outputs.native_changed == 'true'
