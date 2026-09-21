@@ -42,7 +42,6 @@ updates:
       # React Native CLI & Presets
       - dependency-name: "@react-native/*"
       - dependency-name: "@react-native-community/*"
-      - dependency-name: "@testing-library/react-native"
       - dependency-name: "jest-expo"
       - dependency-name: "jest-environment-jsdom"
 
@@ -56,6 +55,8 @@ updates:
       - dependency-name: "jest"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@testing-library/react-native"
         update-types: ["version-update:semver-major"]
 
     # =========================================================================
@@ -72,6 +73,7 @@ updates:
           - "@typescript-eslint/*"
           - "eslint-config-prettier"
           - "eslint-plugin-react-hooks"
+          - "@testing-library/react-native"
         update-types:
           - "minor"
           - "patch"

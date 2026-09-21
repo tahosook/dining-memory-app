@@ -53,7 +53,7 @@
 - Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
 - Add `npm run check:deps` and `npm run check:react-versions` when dependencies are added, removed, or reorganized. Follow [docs/engineering/dependency-policy.md](dependency-policy.md).
-- If native dependencies (Tier 1) or Expo SDK change, run `npm run build:android:debug` locally (Jest tests pass via mocks and do not guarantee native compatibility).
+- If native dependencies (Tier 1) or Expo SDK change, run `npm run build:android:debug` locally (Jest tests pass via mocks and do not guarantee native compatibility). In CI, the `native-build` job automatically runs `build:android:debug` when native-sensitive files change.
 - If `package.json`, `package-lock.json`, or `.github/workflows/ci.yml` changes, run `npm ci` before finishing the task.
 - If dependency install only passes on a different Node/npm version than CI, update the CI runtime and the setup docs in the same task or regenerate the lockfile for the existing CI version.
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.

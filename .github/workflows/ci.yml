@@ -41,8 +41,7 @@ jobs:
         run: npm run check:react-versions
 
       - name: Diagnose Expo project health
-        run: npx --yes expo-doctor
-        continue-on-error: true
+        run: npm run check:expo-doctor
 
   type-check:
     runs-on: ubuntu-latest
@@ -81,3 +80,56 @@ jobs:
 
       - name: Test
         run: npm run test:coverage -- --runInBand
+
+  native-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check for native changes
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            DIFF_TARGET="origin/${{ github.base_ref }}...HEAD"
+          else
+            DIFF_TARGET="HEAD~1...HEAD"
+          fi
+          echo "Comparing changes with: $DIFF_TARGET"
+          CHANGED_FILES=$(git diff --name-only "$DIFF_TARGET" 2>/dev/null || git diff --name-only HEAD)
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          NATIVE_PATTERN='^(android/|package\.json$|package-lock\.json$|app\.json$|app\.config\..*|babel\.config\..*|metro\.config\..*|eas\.json$)'
+          if echo "$CHANGED_FILES" | grep -E -q "$NATIVE_PATTERN"; then
+            echo "native_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Native-sensitive changes detected. Native build will run."
+          else
+            echo "native_changed=false" >> "$GITHUB_OUTPUT"
+            echo "No native-sensitive changes detected. Skipping native build."
+          fi
+
+      - name: Setup Java
+        if: steps.filter.outputs.native_changed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Node.js
+        if: steps.filter.outputs.native_changed == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.filter.outputs.native_changed == 'true'
+        run: npm ci
+
+      - name: Build Android Debug APK
+        if: steps.filter.outputs.native_changed == 'true'
+        run: npm run build:android:debug

@@ -11,7 +11,7 @@
 - **通常の自動 Version Update の対象外**: 互換性境界に属する依存関係（Tier 1）は Dependabot の通常 Version Update から除外（`ignore`）し、壊れた PR の乱造を防ぎます。
 - **「Jest 通過」≠「ネイティブ互換性」**: ネイティブモジュールは Jest テスト実行時にモック化されているため、CI の単体テストが通ってもネイティブビルドや実機でクラッシュするリスクがあります。ネイティブ依存の変更時はネイティブビルドが必須検証ゲートです。
 - **Security Updates は別レーン**: `dependabot.yml` の `ignore` は自動 PR を抑制しますが、GitHub の **Dependabot Alerts（脆弱性通知）** は継続して機能します。Security Alert 検知時は人間（＋AI）が影響調査と Expo 整合性を確認し、手動で検証・更新します。
-- **Expo SDK アップグレードは専用メンテナンス**: 年 2〜3 回の Expo SDK リリースに合わせて、開発者 + AI coding agent による計画的スプリント（15ステップの手順書）として実施します。
+- **Expo SDK アップグレードは専用メンテナンス**: Expo SDK release をトリガーとして実施し、開発者 + AI coding agent による計画的スプリント（15ステップの手順書）として実施します。
 
 ---
 
@@ -45,7 +45,7 @@ Jest 単体テストは、以下のようにネイティブモジュールを完
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │ Tier 1: Expo / React Native Runtime & Native Boundary            │
-│         👉 Dependabot 完全 ignore ＋ 年2〜3回の手動/AIスプリント   │
+│         👉 Dependabot 完全 ignore ＋ Expo SDK release トリガーでの手動/AIスプリント │
 ├──────────────────────────────────────────────────────────────────┤
 │ Tier 2: Ecosystem Tooling with Strict Compatibility Bounds       │
 │         👉 Major update は手動確認、minor/patch は限定適用       │
@@ -91,7 +91,7 @@ React Native や Expo の公式プリセットが特定のメジャーバージ�
 | `jest`, `@types/jest` | Test Runner & Types | `jest-expo` および `@react-native/jest-preset` が Jest 29 系に依存。v30 はロックファイル肥大化と二重管理を招くため **メジャー更新 ignore**。 |
 | `@react-native/eslint-config` | RN Tooling | React Native 公式 ESLint 設定。React Native 本体更新時に手動追従。 |
 | `@react-native/jest-preset` | RN Tooling | `jest-expo` から厳格に peerDependency 指定されているため手動管理。 |
-| `@testing-library/react-native` | Testing Library | React / React Native との互換性を考慮し手動確認。 |
+| `@testing-library/react-native` | Testing Tooling | React Native テストユーティリティ（非ネイティブ）。メジャー更新は React / RN 互換境界を跨ぐ可能性があるため **メジャー更新 ignore**。minor / patch は `tooling` グループで安全に自動配信。 |
 | `@react-native-community/cli` | RN Tooling | React Native CLI ツール。本体と連動。 |
 | `jest-environment-jsdom` | Test Environment | `package.json` の `overrides` で jsdom バージョンを固定しているため手動管理。 |
 
@@ -113,17 +113,27 @@ GitHub Actions のワークフロー（`actions/checkout`, `actions/setup-node` 
 
 ## 3. Security Policy (脆弱性対応レーン)
 
-### Version Updates と Security Alerts の分離
-GitHub Dependabot の仕様上、`.github/dependabot.yml` で `ignore` されたパッケージは、Version Updates だけでなく **自動 Security Update PR の生成も抑制** されます。
+### Dependabot Alerts と Security Updates の役割分担
+GitHub のセキュリティ機能には **Dependabot Alerts（脆弱性検知・通知）** と **Dependabot Security Updates（自動 PR 生成）** の 2 つがあります。本リポジトリではこの 2 つを明確に区別して運用します。
 
-> \[!IMPORTANT]
-> **なぜ Tier 1 で自動 Security PR を抑制するのか**:
-> もし `react-native` や `expo-file-system` に脆弱性が出た場合、Dependabot が自動で作成する PR は、Expo SDK の互換性マトリクスを無視してバージョンを書き換えてしまいます。その PR をマージするとネイティブビルドや実機動作が即座に破壊されるため、**自動 PR ではなく人間が介在する運用の方が安全** です。
+1. **Dependabot Alerts（検知・通知）**:
+   - GitHub Advisory Database をもとにリポジトリ内の脆弱性を検知し、Security タブや通知で知らせる機能です。
+   - `.github/dependabot.yml` の `ignore` 設定にかかわらず、リポジトリ設定で Dependabot alerts が有効であれば **Tier 1〜Tier 4 のすべての依存関係について常時機能** します。
+2. **Dependabot Security Updates（自動 PR 生成）**:
+   - 脆弱性を解決するバージョンへの更新 PR を GitHub が自動作成する機能です。
+   - **GitHub の仕様上、`.github/dependabot.yml` で `ignore` されたパッケージは、通常 Version Updates だけでなく自動 Security Update PR の生成も抑制されます**。
+
+> [!IMPORTANT]
+> **なぜ Tier 1 で自動 Security PR を抑制し、手動/AIレビューを原則とするのか**:
+> Expo / React Native アプリケーションにおいて、`react-native`、`expo-file-system`、`react-native-reanimated` などの Tier 1 依存に脆弱性が発見された場合、一般的な npm パッケージのように Dependabot が自動 PR で最新パッチやメジャーバージョンに bump してしまうと、Expo SDK 互換性マトリクスを逸脱し、Gradle ネイティブビルドの失敗や実機クラッシュを引き起こします。
+> したがって、Tier 1 では自動 Security PR を抑制し、**Dependabot Alerts による通知を受けてから人間（＋AI coding agent）が Expo SDK 整合性・ネイティブビルドを慎重に検証して手動 PR を作成する運用が最も安全** です。
+
+### セキュリティパッチの自動マージ禁止
+いかなる Tier であっても、**セキュリティアップデートの自動マージ（Auto-merge）は行いません**。
+CI の単体テストを通過してもネイティブ連携や間接的な依存関係の衝突が潜んでいる可能性があるため、必ず検証ゲートの通過を確認した上で手動でレビュー・マージします。
 
 ### Security Alert 対応プロトコル
-Tier 1 / Tier 2 のパッケージを含め、GitHub の **Dependabot Alerts（脆弱性通知・Security Advisory）は常時監視** されます。
-
-脆弱性アラートが発報された場合の流れ：
+脆弱性アラート（Dependabot Alert）が発報された場合の流れ：
 1. **検知**: GitHub Security タブまたはメール通知で Alert を確認。
 2. **影響調査**: 本アプリでの該当コードパスの利用有無、重要度（CVSS / Severity）を評価。
 3. **Expo 互換パッチの確認**:
@@ -133,11 +143,12 @@ Tier 1 / Tier 2 のパッケージを含め、GitHub の **Dependabot Alerts（�
      ```
    - Expo SDK 57 の範囲内でパッチ（例: `~57.0.24`）が提供されていれば、`npx expo install <package>` で安全に適用。
 4. **ワークアラウンドまたは overrides の検討**:
-   - Expo SDK 側のパッチが未提供で緊急性が高い場合、`package.json` の `overrides` 等によるピンポイント対処が可能か検証。
+   - Expo SDK 側の公式パッチが未提供で緊急性が高い場合、`package.json` の `overrides` 等によるピンポイント対処が可能か検証。
 5. **検証ゲートの実行**:
    - `npm run check:react-versions`
+   - `npm run check:expo-doctor`
    - `npm test`
-   - `npm run build:android:debug`（ネイティブモジュールが関係する場合）
+   - `npm run build:android:debug`（ネイティブモジュールまたは package.json/lockfile が関係する場合）
    - 実機またはエミュレータでのスモークテスト
 6. **手動 PR 作成とマージ**:
    - 自動マージは一切行わず、影響範囲と検証ログを明記した PR を作成してマージ。
@@ -221,16 +232,27 @@ npm run build:android:debug
   - `npm run format:check`
   - `npm run check:docs`
   - `npm run check:react-versions` (**必須ゲート**: React と React Native のバージョン乖離を水際で防止)
-  - `npx expo-doctor` (**診断ゲート**: `continue-on-error: true` で Expo 互換性診断を CI ログに出力)
+  - `npm run check:expo-doctor` (**実質的CIゲート**: Expo プロジェクト健全性とバージョン整合性を検証。メジャー不整合や重大設定エラーは CI 失敗とし、リモート npm の非破壊パッチ差異はアドバイザリとしてハンドリング)
 - **`type-check` ジョブ**:
   - `npm ci`
   - `npm run type-check`
 - **`test` ジョブ**:
   - `npm ci`
-  - `npm test -- --runInBand`
+  - `npm run test:coverage -- --runInBand`
+- **`native-build` ジョブ** (**条件付きネイティブビルドゲート**):
+  - 以下のいずれかのネイティブ影響ファイルが変更された場合のみ、Ubuntu runner 上で Java 17 環境をセットアップし `npm run build:android:debug` を実行:
+    - `android/**`
+    - `package.json`
+    - `package-lock.json`
+    - `app.json`
+    - `app.config.*`
+    - `babel.config.*`
+    - `metro.config.*`
+    - `eas.json`
+  - 純粋な JS/TS（`src/**`）やドキュメント（`docs/**`）のみの PR ではネイティブビルドを安全にスキップし、CI コストと実行時間を最適化。
 
 ### ネイティブビルド検証ルール
-以下のいずれかに該当する PR / コミットでは、ローカル環境で **`npm run build:android:debug`** の実行を必須とします。
+CI での自動実行に加え、以下のいずれかに該当する PR / コミットでは、ローカル開発環境でも **`npm run build:android:debug`** の実行を必須とします。
 1. `llama.rn`, `react-native-gesture-handler`, `react-native-reanimated` 等のネイティブモジュールの変更
 2. `android/` ディレクトリ配下のネイティブ設定・Gradle スクリプトの変更
 3. Expo SDK のアップグレード

@@ -20,6 +20,7 @@
     "check:deps": "knip --include dependencies,unlisted --no-config-hints",
     "check:docs": "node ./scripts/check-docs.cjs",
     "check:react-versions": "node ./scripts/check-react-versions.cjs",
+    "check:expo-doctor": "node ./scripts/check-expo-doctor.cjs",
     "test": "jest",
     "test:coverage": "npm test -- --coverage",
     "lint": "eslint App.tsx index.ts src tests --cache --cache-location .eslintcache",
@@ -90,6 +91,9 @@
         "exclude": [
           "@bam.tech/react-native-image-resizer"
         ]
+      },
+      "appConfigFieldsNotSyncedCheck": {
+        "enabled": false
       }
     }
   },
