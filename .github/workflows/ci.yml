@@ -180,7 +180,7 @@ jobs:
 
       - name: Setup Java
         if: steps.filter.outputs.native_changed == 'true'
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '17'
