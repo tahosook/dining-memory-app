@@ -232,7 +232,7 @@ npm run build:android:debug
   - `npm run format:check`
   - `npm run check:docs`
   - `npm run check:react-versions` (**必須ゲート**: React と React Native のバージョン乖離を水際で防止)
-  - `npm run check:expo-doctor` (**実質的CIゲート**: Expo プロジェクト健全性とバージョン整合性を検証。メジャー不整合や重大設定エラーは CI 失敗とし、リモート npm の非破壊パッチ差異はアドバイザリとしてハンドリング)
+  - `npx expo-doctor` (**実質的CIゲート**: Expo プロジェクト健全性とバージョン整合性を検証。Expo Doctor の exit code を直接 CI の成否として扱い、問題検出時は CI を失敗させる)
 - **`type-check` ジョブ**:
   - `npm ci`
   - `npm run type-check`

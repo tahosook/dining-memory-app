@@ -40,8 +40,8 @@ jobs:
       - name: Check React version compatibility
         run: npm run check:react-versions
 
-      - name: Diagnose Expo project health
-        run: npm run check:expo-doctor
+      - name: Run Expo Doctor
+        run: npx --yes expo-doctor
 
   type-check:
     runs-on: ubuntu-latest
