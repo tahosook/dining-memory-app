@@ -361,7 +361,7 @@ export class MealService {
       photo_path: updates.photo_path ?? row.photo_path,
       photo_thumbnail_path:
         updates.photo_thumbnail_path !== undefined
-          ? (updates.photo_thumbnail_path ?? undefined)
+          ? updates.photo_thumbnail_path
           : (row.photo_thumbnail_path ?? undefined),
       location_name: updates.location_name ?? row.location_name ?? undefined,
       latitude: updates.latitude ?? row.latitude ?? undefined,

@@ -619,6 +619,7 @@ describe('MealDetailScreen', () => {
     });
     expect(requestMealThumbnail).toHaveBeenCalledWith(
       'meal-1',
+      'file:///rotated-photo.jpg',
       expect.objectContaining({
         onGenerated: expect.any(Function),
       })
@@ -629,7 +630,7 @@ describe('MealDetailScreen', () => {
     expect(deleteMealPhotoFileIfSafe).toHaveBeenCalledWith('file:///thumb-photo.jpg', 'file:///rotated-photo.jpg');
 
     // Simulate onGenerated callback
-    const thumbnailCallback = (requestMealThumbnail as jest.Mock).mock.calls[0][1].onGenerated;
+    const thumbnailCallback = (requestMealThumbnail as jest.Mock).mock.calls[0][2].onGenerated;
     act(() => {
       thumbnailCallback('meal-1', 'file:///docs/meal-1-rotated-thumb.jpg');
     });
@@ -679,7 +680,11 @@ describe('MealDetailScreen', () => {
       photo_path: 'file:///rotated-no-thumb.jpg',
       photo_thumbnail_path: null,
     });
-    expect(requestMealThumbnail).toHaveBeenCalledWith('meal-1', expect.any(Object));
+    expect(requestMealThumbnail).toHaveBeenCalledWith(
+      'meal-1',
+      'file:///rotated-no-thumb.jpg',
+      expect.any(Object)
+    );
   });
 
   test('disables the rotate action while rotation is running', async () => {

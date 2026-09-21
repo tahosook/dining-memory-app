@@ -343,7 +343,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         await deleteMealPhotoFileIfSafe(previousThumbnailUri, rotatedUri).catch(() => undefined);
       }
 
-      requestMealThumbnail(meal.id, {
+      requestMealThumbnail(meal.id, rotatedUri, {
         onGenerated: (mealId, thumbUri) => {
           if (!isMountedRef.current) {
             return;
