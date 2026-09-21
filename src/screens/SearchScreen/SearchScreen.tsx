@@ -31,6 +31,38 @@ type SearchFilterState = {
 
 export const SEARCH_PAGE_SIZE = 60;
 
+// Optimization: Extracted item rendering logic into a React.memo component.
+// This prevents all existing list items from re-rendering when new items are added
+// (e.g., during pagination) or when other search-related state updates occur,
+// which significantly reduces main-thread blocking on keystrokes.
+const SearchResultItem = React.memo<{
+  item: Meal;
+  cellSize: number;
+  onPress: (meal: Meal) => void;
+}>(({ item, cellSize, onPress }) => (
+  <TouchableOpacity
+    style={[styles.photoCell, { width: cellSize, height: cellSize }]}
+    onPress={() => onPress(item)}
+    testID={`search-result-${item.id}`}
+  >
+    {getMealListImageUri(item) ? (
+      <Image
+        source={{ uri: getMealListImageUri(item) }}
+        style={styles.photo}
+        resizeMode="cover"
+        testID={`search-result-image-${item.id}`}
+      />
+    ) : (
+      <View
+        style={styles.photoPlaceholder}
+        testID={`search-result-placeholder-${item.id}`}
+      >
+        <Ionicons name="camera-outline" size={22} color={Colors.gray} />
+      </View>
+    )}
+  </TouchableOpacity>
+));
+
 export const SearchScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const { width: windowWidth } = useWindowDimensions();
@@ -50,12 +82,20 @@ export const SearchScreen: React.FC = () => {
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(false);
   const resultsLengthRef = useRef(0);
+  // Optimization: Store the latest results in a ref.
+  // This allows handleMealPress to access the latest state without being recreated
+  // every time `results` changes, maintaining a stable reference for the memoized SearchResultItem.
+  const resultsRef = useRef<Meal[]>(results);
   const filtersRef = useRef<SearchFilterState>({
     searchQuery: '',
     cuisineFilter: '',
     locationFilter: '',
     homemadeOnly: false,
   });
+
+  useEffect(() => {
+    resultsRef.current = results;
+  }, [results]);
   const previousFiltersRef = useRef<SearchFilterState>({
     searchQuery: '',
     cuisineFilter: '',
@@ -197,15 +237,23 @@ export const SearchScreen: React.FC = () => {
 
   const handleMealPress = useCallback(
     (meal: Meal) => {
-      const initialIndex = results.findIndex(candidate => candidate.id === meal.id);
+      const currentMeals = resultsRef.current;
+      const initialIndex = currentMeals.findIndex(candidate => candidate.id === meal.id);
       navigation.navigate('MealDetail', {
         meal,
-        meals: results,
+        meals: currentMeals,
         initialIndex: initialIndex >= 0 ? initialIndex : undefined,
       });
     },
-    [navigation, results]
+    [navigation]
   );
+
+  // Optimization: Memoize the renderItem function passed to FlatList.
+  // This avoids passing a new function reference to FlatList on every render,
+  // which helps to skip unnecessary item re-renders.
+  const renderItem = useCallback(({ item }: { item: Meal }) => (
+    <SearchResultItem item={item} cellSize={cellSize} onPress={handleMealPress} />
+  ), [cellSize, handleMealPress]);
 
   const showLoadingState = loading && results.length === 0;
   const showErrorState = Boolean(errorMessage) && results.length === 0;
@@ -345,29 +393,7 @@ export const SearchScreen: React.FC = () => {
               </View>
             ) : null
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={[styles.photoCell, { width: cellSize, height: cellSize }]}
-              onPress={() => handleMealPress(item)}
-              testID={`search-result-${item.id}`}
-            >
-              {getMealListImageUri(item) ? (
-                <Image
-                  source={{ uri: getMealListImageUri(item) }}
-                  style={styles.photo}
-                  resizeMode="cover"
-                  testID={`search-result-image-${item.id}`}
-                />
-              ) : (
-                <View
-                  style={styles.photoPlaceholder}
-                  testID={`search-result-placeholder-${item.id}`}
-                >
-                  <Ionicons name="camera-outline" size={22} color={Colors.gray} />
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
+          renderItem={renderItem}
         />
       ) : null}
     </View>
