@@ -53,10 +53,7 @@ const SearchResultItem = React.memo<{
         testID={`search-result-image-${item.id}`}
       />
     ) : (
-      <View
-        style={styles.photoPlaceholder}
-        testID={`search-result-placeholder-${item.id}`}
-      >
+      <View style={styles.photoPlaceholder} testID={`search-result-placeholder-${item.id}`}>
         <Ionicons name="camera-outline" size={22} color={Colors.gray} />
       </View>
     )}
@@ -267,9 +264,12 @@ export const SearchScreen: React.FC = () => {
   // Optimization: Memoize the renderItem function passed to FlatList.
   // This avoids passing a new function reference to FlatList on every render,
   // which helps to skip unnecessary item re-renders.
-  const renderItem = useCallback(({ item }: { item: Meal }) => (
-    <SearchResultItem item={item} cellSize={cellSize} onPress={handleMealPress} />
-  ), [cellSize, handleMealPress]);
+  const renderItem = useCallback(
+    ({ item }: { item: Meal }) => (
+      <SearchResultItem item={item} cellSize={cellSize} onPress={handleMealPress} />
+    ),
+    [cellSize, handleMealPress]
+  );
 
   return (
     <View style={GlobalStyles.screen}>
