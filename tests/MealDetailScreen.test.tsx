@@ -13,7 +13,12 @@ import {
 import type { RootStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
-import { rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
+import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
+import { requestMealThumbnail } from '../src/media/mealThumbnail';
+
+jest.mock('../src/media/mealThumbnail', () => ({
+  requestMealThumbnail: jest.fn(),
+}));
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
@@ -597,7 +602,7 @@ describe('MealDetailScreen', () => {
     (MealService.updateMeal as jest.Mock).mockResolvedValue({
       ...baseMeal,
       photo_path: 'file:///rotated-photo.jpg',
-      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: null,
     });
 
     const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
@@ -610,13 +615,71 @@ describe('MealDetailScreen', () => {
     });
     expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
       photo_path: 'file:///rotated-photo.jpg',
-      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: null,
     });
+    expect(requestMealThumbnail).toHaveBeenCalledWith(
+      'meal-1',
+      expect.objectContaining({
+        onGenerated: expect.any(Function),
+      })
+    );
+
+    // Old photo and old thumbnail must be cleaned up
+    expect(deleteMealPhotoFileIfSafe).toHaveBeenCalledWith('file:///full-photo.jpg', 'file:///rotated-photo.jpg');
+    expect(deleteMealPhotoFileIfSafe).toHaveBeenCalledWith('file:///thumb-photo.jpg', 'file:///rotated-photo.jpg');
+
+    // Simulate onGenerated callback
+    const thumbnailCallback = (requestMealThumbnail as jest.Mock).mock.calls[0][1].onGenerated;
+    act(() => {
+      thumbnailCallback('meal-1', 'file:///docs/meal-1-rotated-thumb.jpg');
+    });
+
     await waitFor(() => {
       expect(getByTestId('meal-detail-image').props.source).toEqual({
         uri: 'file:///rotated-photo.jpg',
       });
     });
+  });
+
+  test('rotates successfully when meal has no existing thumbnail', async () => {
+    (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-no-thumb.jpg');
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      photo_thumbnail_path: null,
+      photo_path: 'file:///rotated-no-thumb.jpg',
+    });
+
+    const mealWithoutThumb = {
+      ...baseMeal,
+      photo_thumbnail_path: undefined,
+    };
+
+    const { getByTestId } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: mealWithoutThumb,
+              meals: [mealWithoutThumb],
+            },
+          },
+        })}
+      />
+    );
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+
+    await waitFor(() => {
+      expect(rotateMealPhotoClockwise).toHaveBeenCalledWith('file:///full-photo.jpg');
+    });
+    expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
+      photo_path: 'file:///rotated-no-thumb.jpg',
+      photo_thumbnail_path: null,
+    });
+    expect(requestMealThumbnail).toHaveBeenCalledWith('meal-1', expect.any(Object));
   });
 
   test('disables the rotate action while rotation is running', async () => {
@@ -625,7 +688,7 @@ describe('MealDetailScreen', () => {
     (MealService.updateMeal as jest.Mock).mockResolvedValue({
       ...baseMeal,
       photo_path: 'file:///rotated-photo.jpg',
-      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: null,
     });
 
     const { findByText, getByTestId } = render(<MealDetailScreen {...createProps()} />);

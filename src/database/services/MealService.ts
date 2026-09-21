@@ -40,7 +40,7 @@ export interface CreateMealData {
   cooking_level?: CookingLevel | string;
   is_homemade: boolean;
   photo_path: string; // Caller must provide a stable, displayable URI.
-  photo_thumbnail_path?: string;
+  photo_thumbnail_path?: string | null;
   location_name?: string;
   latitude?: number;
   longitude?: number;
@@ -359,7 +359,10 @@ export class MealService {
       cooking_level: updates.cooking_level ?? row.cooking_level ?? undefined,
       is_homemade: updates.is_homemade ?? Boolean(row.is_homemade),
       photo_path: updates.photo_path ?? row.photo_path,
-      photo_thumbnail_path: updates.photo_thumbnail_path ?? row.photo_thumbnail_path ?? undefined,
+      photo_thumbnail_path:
+        updates.photo_thumbnail_path !== undefined
+          ? (updates.photo_thumbnail_path ?? undefined)
+          : (row.photo_thumbnail_path ?? undefined),
       location_name: updates.location_name ?? row.location_name ?? undefined,
       latitude: updates.latitude ?? row.latitude ?? undefined,
       longitude: updates.longitude ?? row.longitude ?? undefined,

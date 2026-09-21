@@ -371,6 +371,43 @@ describe('mealThumbnail', () => {
 
       consoleWarnSpy.mockRestore();
     });
+
+    test('Test D: regenerates 320px thumbnail for rotated photo when photo_thumbnail_path is reset to null', async () => {
+      const rotatedMeal = createMockMeal({
+        id: 'meal-1',
+        photo_path: 'file:///docs/photo-rotated.jpg',
+        photo_thumbnail_path: undefined,
+      });
+      (MealService.getMealById as jest.Mock).mockResolvedValue(rotatedMeal);
+      (persistThumbnailToStablePath as jest.Mock).mockResolvedValue(
+        'file:///docs/photo-rotated-thumb.jpg'
+      );
+      (MealService.updateMealThumbnail as jest.Mock).mockResolvedValue(true);
+
+      const result = await ensureMealThumbnail('meal-1');
+
+      expect(result).toBe('file:///docs/photo-rotated-thumb.jpg');
+      expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
+        'file:///docs/photo-rotated.jpg',
+        320,
+        320,
+        'JPEG',
+        70,
+        0,
+        undefined,
+        true,
+        { mode: 'contain', onlyScaleDown: true }
+      );
+      expect(persistThumbnailToStablePath).toHaveBeenCalledWith(
+        'file:///tmp/resized-thumb.jpg',
+        'file:///docs/photo-rotated.jpg'
+      );
+      expect(MealService.updateMealThumbnail).toHaveBeenCalledWith(
+        'meal-1',
+        'file:///docs/photo-rotated-thumb.jpg',
+        'file:///docs/photo-rotated.jpg'
+      );
+    });
   });
 
   describe('Fallback and Resilience', () => {

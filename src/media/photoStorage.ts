@@ -2,6 +2,9 @@ import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { copyAsync, documentDirectory, getInfoAsync } from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
+import { CAMERA_CONSTANTS } from '../constants/CameraConstants';
+import { cleanupTempFile } from './tempFiles';
 import {
   buildMealPhotoFileName,
   formatPhotoTimestampForFilename,
@@ -58,30 +61,61 @@ export async function persistPhotoToStablePath(
 
   const destination = await resolveDestinationUri(options.capturedAt);
 
-  try {
-    await copyAsync({
-      from: photoUri,
-      to: destination,
-    });
-  } catch (copyError: unknown) {
-    const errorMessage = copyError instanceof Error ? copyError.message : String(copyError);
-    throw new Error(`Failed to copy photo to stable path: ${errorMessage}`);
-  }
-
-  // Verify the file was actually copied
-  const destinationInfo = await getInfoAsync(destination);
-  if (!destinationInfo.exists) {
-    throw new Error(`Photo copy completed but file not found at ${destination}`);
-  }
+  let sourceToCopy = photoUri;
+  let resizedTempUri: string | null = null;
 
   try {
-    await writePhotoExifToJpeg(destination, {
-      capturedAt: options.capturedAt,
-      location: options.location,
-      softwareName: options.softwareName?.trim() || DEFAULT_PHOTO_SOFTWARE_NAME,
-    });
-  } catch (photoExifError: unknown) {
-    console.warn('Photo EXIF update skipped, but local photo copy is preserved:', photoExifError);
+    const resizedPhoto = await ImageResizer.createResizedImage(
+      photoUri,
+      CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH,
+      CAMERA_CONSTANTS.SAVED_PHOTO_MAX_HEIGHT,
+      'JPEG',
+      CAMERA_CONSTANTS.SAVED_PHOTO_QUALITY_PERCENT,
+      0,
+      undefined,
+      true,
+      {
+        mode: 'contain',
+        onlyScaleDown: true,
+      }
+    );
+    resizedTempUri = resizedPhoto.uri;
+    sourceToCopy = resizedPhoto.uri;
+  } catch (resizeError: unknown) {
+    console.warn('Photo native resize failed, falling back to original image:', resizeError);
+    sourceToCopy = photoUri;
+  }
+
+  try {
+    try {
+      await copyAsync({
+        from: sourceToCopy,
+        to: destination,
+      });
+    } catch (copyError: unknown) {
+      const errorMessage = copyError instanceof Error ? copyError.message : String(copyError);
+      throw new Error(`Failed to copy photo to stable path: ${errorMessage}`);
+    }
+
+    // Verify the file was actually copied
+    const destinationInfo = await getInfoAsync(destination);
+    if (!destinationInfo.exists) {
+      throw new Error(`Photo copy completed but file not found at ${destination}`);
+    }
+
+    try {
+      await writePhotoExifToJpeg(destination, {
+        capturedAt: options.capturedAt,
+        location: options.location,
+        softwareName: options.softwareName?.trim() || DEFAULT_PHOTO_SOFTWARE_NAME,
+      });
+    } catch (photoExifError: unknown) {
+      console.warn('Photo EXIF update skipped, but local photo copy is preserved:', photoExifError);
+    }
+  } finally {
+    if (resizedTempUri && resizedTempUri !== photoUri) {
+      await cleanupTempFile(resizedTempUri);
+    }
   }
 
   if (Platform.OS === 'android') {
