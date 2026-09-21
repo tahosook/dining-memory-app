@@ -248,13 +248,6 @@ export const SearchScreen: React.FC = () => {
     [navigation]
   );
 
-  // Optimization: Memoize the renderItem function passed to FlatList.
-  // This avoids passing a new function reference to FlatList on every render,
-  // which helps to skip unnecessary item re-renders.
-  const renderItem = useCallback(({ item }: { item: Meal }) => (
-    <SearchResultItem item={item} cellSize={cellSize} onPress={handleMealPress} />
-  ), [cellSize, handleMealPress]);
-
   const showLoadingState = loading && results.length === 0;
   const showErrorState = Boolean(errorMessage) && results.length === 0;
   const showInlineError = Boolean(errorMessage) && results.length > 0;
@@ -270,6 +263,13 @@ export const SearchScreen: React.FC = () => {
   const gridGap = 3;
   const gridHorizontalPadding = 16;
   const cellSize = Math.floor((windowWidth - gridHorizontalPadding * 2 - gridGap * 2) / 3);
+
+  // Optimization: Memoize the renderItem function passed to FlatList.
+  // This avoids passing a new function reference to FlatList on every render,
+  // which helps to skip unnecessary item re-renders.
+  const renderItem = useCallback(({ item }: { item: Meal }) => (
+    <SearchResultItem item={item} cellSize={cellSize} onPress={handleMealPress} />
+  ), [cellSize, handleMealPress]);
 
   return (
     <View style={GlobalStyles.screen}>
