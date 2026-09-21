@@ -240,6 +240,10 @@ export const SearchScreen: React.FC = () => {
           style={[styles.filterToggle, filtersVisible ? styles.filterToggleActive : null]}
           onPress={() => setFiltersVisible(current => !current)}
           testID="search-filter-toggle"
+          accessibilityRole="button"
+          accessibilityLabel="検索フィルター"
+          accessibilityHint="タップして検索フィルターの表示を切り替えます"
+          accessibilityState={{ expanded: filtersVisible }}
         >
           <Ionicons
             name="options-outline"
