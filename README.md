@@ -25,6 +25,7 @@
 - [実装規約](docs/engineering/coding-standards.md): coding rules
 - [開発ワークフロー](docs/engineering/development-workflow.md): review and verification workflow
 - [GitHub セキュリティ設定](docs/engineering/github-security-settings.md): CodeQL、Dependabot、Secret scanning、branch protection、Actions permissions の運用手順
+- [依存関係管理ポリシー](docs/engineering/dependency-policy.md): 依存関係の4層分類、Expo SDK アップグレード手順、Dependabot 運用方針、ネイティブ互換性ゲート
 - [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けた script 修整の判断ルール
 - [MediaPipe ラベル改善ワークフロー](docs/engineering/mediapipe-labeling-workflow.md): 自動改善 loop の目的、guardrail、停止条件
 - [即時改善提案](docs/engineering/immediate-improvements.md): 今すぐ入れるべき改善案の整理
