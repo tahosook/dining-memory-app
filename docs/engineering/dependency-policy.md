@@ -240,16 +240,16 @@ npm run build:android:debug
   - `npm ci`
   - `npm run test:coverage -- --runInBand`
 - **`native-build` ジョブ** (**条件付きネイティブビルドゲート**):
-  - 以下のいずれかのネイティブ影響ファイルが変更された場合のみ、Ubuntu runner 上で Java 17 環境をセットアップし `npm run build:android:debug` を実行:
+  - 以下のいずれかのネイティブ影響ファイル・依存関係が変更された場合のみ、Ubuntu runner 上で Java 17 環境をセットアップし `npm run build:android:debug` を実行:
     - `android/**`
-    - `package.json`
     - `package-lock.json`
     - `app.json`
     - `app.config.*`
     - `babel.config.*`
     - `metro.config.*`
     - `eas.json`
-  - 純粋な JS/TS（`src/**`）やドキュメント（`docs/**`）のみの PR ではネイティブビルドを安全にスキップし、CI コストと実行時間を最適化。
+    - `package.json` 内の native compatibility に影響する依存関係変更（Tier 1 コア・ネイティブモジュール等。scripts や metadata のみの変更ではスキップ）
+  - 純粋な JS/TS（`src/**`）やドキュメント（`docs/**`）、`package.json` の scripts / metadata 変更のみの PR ではネイティブビルドを安全にスキップし、CI コストと実行時間を最適化。
 
 ### ネイティブビルド検証ルール
 CI での自動実行に加え、以下のいずれかに該当する PR / コミットでは、ローカル開発環境でも **`npm run build:android:debug`** の実行を必須とします。

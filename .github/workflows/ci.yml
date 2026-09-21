@@ -95,22 +95,104 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             DIFF_TARGET="origin/${{ github.base_ref }}...HEAD"
+            BASE_REF="origin/${{ github.base_ref }}"
           else
             DIFF_TARGET="HEAD~1...HEAD"
+            BASE_REF="HEAD~1"
           fi
-          echo "Comparing changes with: $DIFF_TARGET"
+          echo "Comparing changes with: $DIFF_TARGET (base: $BASE_REF)"
           CHANGED_FILES=$(git diff --name-only "$DIFF_TARGET" 2>/dev/null || git diff --name-only HEAD)
           echo "Changed files:"
           echo "$CHANGED_FILES"
 
-          NATIVE_PATTERN='^(android/|package\.json$|package-lock\.json$|app\.json$|app\.config\..*|babel\.config\..*|metro\.config\..*|eas\.json$)'
-          if echo "$CHANGED_FILES" | grep -E -q "$NATIVE_PATTERN"; then
+          # 1. Direct native configuration and lockfile changes
+          STATIC_NATIVE_PATTERN='^(android/|package-lock\.json$|app\.json$|app\.config\..*|babel\.config\..*|metro\.config\..*|eas\.json$)'
+          if echo "$CHANGED_FILES" | grep -E -q "$STATIC_NATIVE_PATTERN"; then
             echo "native_changed=true" >> "$GITHUB_OUTPUT"
-            echo "Native-sensitive changes detected. Native build will run."
-          else
-            echo "native_changed=false" >> "$GITHUB_OUTPUT"
-            echo "No native-sensitive changes detected. Skipping native build."
+            echo "Native-sensitive files detected. Native build will run."
+            exit 0
           fi
+
+          # 2. Inspect package.json if it was changed
+          if echo "$CHANGED_FILES" | grep -q '^package\.json$'; then
+            echo "package.json changed. Inspecting dependency changes..."
+            HAS_NATIVE_DEP_CHANGE=$(node -e '
+              const cp = require("child_process");
+              const fs = require("fs");
+
+              function isNativePackage(name, inDeps) {
+                if (
+                  name === "expo" ||
+                  name.startsWith("expo-") ||
+                  name.startsWith("@expo/") ||
+                  name === "react" ||
+                  name === "react-dom" ||
+                  name === "react-native" ||
+                  name === "react-native-web" ||
+                  name.startsWith("react-native-") ||
+                  name.startsWith("@react-native/") ||
+                  name.startsWith("@react-native-community/") ||
+                  name === "react-test-renderer" ||
+                  name === "@types/react" ||
+                  name === "llama.rn" ||
+                  name.startsWith("@bam.tech/") ||
+                  name === "jest-expo"
+                ) {
+                  return true;
+                }
+                const isPureJs = name === "piexifjs" || name.startsWith("@react-navigation/");
+                return !isPureJs && inDeps;
+              }
+
+              let baseObj = {};
+              try {
+                const baseRaw = cp.execSync(`git show "${process.argv[1]}:package.json"`, { encoding: "utf8" });
+                baseObj = JSON.parse(baseRaw);
+              } catch (e) {
+                console.error("Could not read base package.json, triggering build for safety:", e.message);
+                process.stdout.write("true");
+                process.exit(0);
+              }
+
+              let headObj = {};
+              try {
+                headObj = JSON.parse(fs.readFileSync("package.json", "utf8"));
+              } catch (e) {
+                console.error("Could not read head package.json, triggering build for safety:", e.message);
+                process.stdout.write("true");
+                process.exit(0);
+              }
+
+              const baseDeps = { ...(baseObj.dependencies || {}), ...(baseObj.devDependencies || {}) };
+              const headDeps = { ...(headObj.dependencies || {}), ...(headObj.devDependencies || {}) };
+
+              const changedKeys = new Set();
+              for (const k of Object.keys(baseDeps)) {
+                if (baseDeps[k] !== headDeps[k]) changedKeys.add(k);
+              }
+              for (const k of Object.keys(headDeps)) {
+                if (baseDeps[k] !== headDeps[k]) changedKeys.add(k);
+              }
+
+              const nativeChanged = Array.from(changedKeys).filter(k => isNativePackage(k, k in (headObj.dependencies || {}) || k in (baseObj.dependencies || {})));
+              if (nativeChanged.length > 0) {
+                console.error("Native dependencies changed:", nativeChanged);
+                process.stdout.write("true");
+              } else {
+                console.error("No native dependencies changed (changes are scripts, metadata, or pure JS tooling).");
+                process.stdout.write("false");
+              }
+            ' "$BASE_REF")
+
+            if [ "$HAS_NATIVE_DEP_CHANGE" = "true" ]; then
+              echo "native_changed=true" >> "$GITHUB_OUTPUT"
+              echo "Native dependency changes detected in package.json. Native build will run."
+              exit 0
+            fi
+          fi
+
+          echo "native_changed=false" >> "$GITHUB_OUTPUT"
+          echo "No native-sensitive changes detected. Skipping native build."
 
       - name: Setup Java
         if: steps.filter.outputs.native_changed == 'true'
