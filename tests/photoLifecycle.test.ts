@@ -425,6 +425,56 @@ describe('photoLifecycle', () => {
       expect(mockFileSystem.has('meal-A.jpg')).toBe(false);
       expect(cleanupResult.skippedFileNames).not.toContain('meal-A.jpg');
     });
+
+    test('Case D: protects file if thumbnail generation starts during deletion loop after DB snapshot', async () => {
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([]);
+
+      let inFlightCallCount = 0;
+      (getInFlightThumbnailPhotoPaths as jest.Mock).mockImplementation(() => {
+        inFlightCallCount++;
+        // 1st call: scan -> not in-flight
+        // 2nd call: loop prep -> not in-flight
+        if (inFlightCallCount <= 2) {
+          return new Set<string>();
+        }
+        // 3rd call: right before deleteAsync inside loop -> thumbnail generation started!
+        return new Set<string>(['file:///mock-documents/meal-A.jpg']);
+      });
+
+      setupMockFileSystem({
+        'meal-A.jpg': { exists: true },
+      });
+
+      const cleanupResult = await cleanupOrphanedPhotoFiles();
+
+      expect(cleanupResult.deletedFileNames).not.toContain('meal-A.jpg');
+      expect(cleanupResult.skippedFileNames).toContain('meal-A.jpg');
+      expect(mockFileSystem.has('meal-A.jpg')).toBe(true);
+      expect(deleteAsync).not.toHaveBeenCalled();
+    });
+
+    test('Performance: queries DB at most twice (scan + loop prep) even when multiple orphans are deleted', async () => {
+      let dbQueryCount = 0;
+      (getAllPersistedMealRows as jest.Mock).mockImplementation(async () => {
+        dbQueryCount++;
+        return [];
+      });
+      (getInFlightThumbnailPhotoPaths as jest.Mock).mockReturnValue(new Set<string>());
+
+      setupMockFileSystem({
+        'meal-1.jpg': { exists: true },
+        'meal-2.jpg': { exists: true },
+        'meal-3.jpg': { exists: true },
+        'meal-4.jpg': { exists: true },
+        'meal-5.jpg': { exists: true },
+      });
+
+      const cleanupResult = await cleanupOrphanedPhotoFiles();
+
+      expect(cleanupResult.deletedFileNames.length).toBe(5);
+      // Scan: 1 time, Loop prep: 1 time. Never 1 + 5 = 6 times.
+      expect(dbQueryCount).toBe(2);
+    });
   });
 
   describe('Path Safety & Boundary Invariants', () => {
