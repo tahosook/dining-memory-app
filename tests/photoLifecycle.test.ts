@@ -345,7 +345,7 @@ describe('photoLifecycle', () => {
     // getAllPersistedMealRows is called at 3 points:
     // 1st call: inside findOrphanedPhotoFiles (scan)
     // 2nd call: dbReferenced snapshot before deletion loop
-    // 3rd call: latestReferenced right before deleteAsync
+    // 3rd call: latestReferenced right before deleteAsync (always fetches from real DB)
 
     test('Case A: does not delete photo if DB reference is restored right before deleteAsync', async () => {
       let callCount = 0;
@@ -448,11 +448,11 @@ describe('photoLifecycle', () => {
       (getInFlightThumbnailPhotoPaths as jest.Mock).mockImplementation(() => {
         inFlightCallCount++;
         if (inFlightCallCount <= 2) {
-          // 1st call: scan -> not in-flight
-          // 2nd call: loop prep DB snapshot includes in-flight -> not in-flight
+          // 1st call: via getReferencedPhotoPaths during scan -> not in-flight
+          // 2nd call: via getReferencedPhotoPaths during dbReferenced snapshot -> not in-flight
           return new Set<string>();
         }
-        // 3rd call: right before deleteAsync inside loop -> thumbnail generation started!
+        // 3rd call: getInFlightThumbnailProtectionSet() right before deleteAsync -> started!
         return new Set<string>(['file:///mock-documents/meal-A.jpg']);
       });
 
@@ -490,6 +490,40 @@ describe('photoLifecycle', () => {
       expect(deleteAsync).not.toHaveBeenCalled();
       expect(mockFileSystem.has('meal-soft.jpg')).toBe(true);
       expect(mockFileSystem.has('meal-soft-thumb.jpg')).toBe(true);
+    });
+
+    test('Case F: options.referencedPaths stale snapshot does not bypass pre-delete DB check', async () => {
+      // Scenario: caller passes an old referencedPaths that does NOT include meal-A.jpg,
+      // but the real DB currently DOES reference meal-A.jpg.
+      // The final latestReferenced check must use the real DB, not options.referencedPaths.
+      const staleSnapshot = new Set<string>(); // does not contain meal-A.jpg
+
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
+        {
+          id: 'meal-1',
+          photo_path: 'file:///mock-documents/meal-A.jpg',
+          photo_thumbnail_path: null,
+          is_deleted: 0,
+        },
+      ]);
+      (getInFlightThumbnailPhotoPaths as jest.Mock).mockReturnValue(new Set<string>());
+
+      setupMockFileSystem({
+        'meal-A.jpg': { exists: true },
+      });
+
+      // Pass staleSnapshot as referencedPaths: scan treats meal-A.jpg as an orphan candidate,
+      // but the pre-delete DB check MUST read the real DB and protect it.
+      const cleanupResult = await cleanupOrphanedPhotoFiles({ referencedPaths: staleSnapshot });
+
+      // meal-A.jpg is in the real DB -> must NOT be deleted
+      expect(cleanupResult.deletedFileNames).not.toContain('meal-A.jpg');
+      expect(deleteAsync).not.toHaveBeenCalledWith(
+        'file:///mock-documents/meal-A.jpg',
+        expect.anything()
+      );
+      expect(mockFileSystem.has('meal-A.jpg')).toBe(true);
+      expect(cleanupResult.skippedFileNames).toContain('meal-A.jpg');
     });
   });
 

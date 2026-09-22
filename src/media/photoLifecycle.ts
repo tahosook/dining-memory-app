@@ -266,8 +266,10 @@ export async function cleanupOrphanedPhotoFiles(
       continue;
     }
 
-    // 2. 最新DB参照を確認（削除直前の最新状態を再取得して race condition を完全に防止）
-    const latestReferenced = options.referencedPaths ?? (await getReferencedPhotoPaths(options));
+    // 2. 最新DB参照を確認（削除直前に必ず実DBから最新状態を取得して race condition を完全に防止）
+    // options.referencedPaths は使用しない：古いスナップショットで最終判定を行うと
+    // scan 後〜delete 直前にDB参照が追加された写真を誤削除する可能性があるため
+    const latestReferenced = await getReferencedPhotoPaths(options);
     if (latestReferenced.has(fileName) || latestReferenced.has(uri)) {
       skippedFileNames.push(fileName);
       continue;
