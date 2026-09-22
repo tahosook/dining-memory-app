@@ -164,6 +164,13 @@ async function processMealThumbnail(
   }
 }
 
+/**
+ * 食事サムネイルの生成タスクをキューイングする。
+ *
+ * @param mealId 食事ID
+ * @param targetPhotoPath 写真世代のパス。指定時は `mealId:targetPhotoPath` で即座に世代キューへ登録する。
+ *                        省略時は DB から最新の photo_path を取得して該当世代へ委譲する（互換用）。
+ */
 export function ensureMealThumbnail(
   mealId: string,
   targetPhotoPath?: string
@@ -204,6 +211,12 @@ export function ensureMealThumbnail(
   return promise;
 }
 
+export function requestMealThumbnail(mealId: string, options?: ThumbnailRequestOptions): void;
+export function requestMealThumbnail(
+  mealId: string,
+  photoPath: string,
+  options?: ThumbnailRequestOptions
+): void;
 export function requestMealThumbnail(
   mealId: string,
   photoPathOrOptions?: string | ThumbnailRequestOptions,
