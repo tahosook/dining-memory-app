@@ -29,6 +29,7 @@ import {
 import { normalizeMealRow } from '../../domain/meals/mealRow';
 import { normalizeCookingLevel } from '../../utils/cookingLevel';
 import * as Crypto from 'expo-crypto';
+import { cleanupOrphanedPhotoFiles } from '../../media/photoLifecycle';
 
 export interface CreateMealData {
   meal_name: string;
@@ -468,19 +469,27 @@ export class MealService {
     return buildStatisticsSummary(rows);
   }
 
-  static async clearAllMeals(): Promise<void> {
+  static async clearAllMeals(options: { cleanupPhotos?: boolean } = {}): Promise<void> {
     await initializeDatabase();
 
     if (!isUsingNativeDatabase()) {
       await saveRows([]);
-      return;
+    } else {
+      const db = getDatabase();
+      if (db) {
+        await db.runAsync('DELETE FROM meals');
+      }
     }
 
-    const db = getDatabase();
-    if (!db) {
-      return;
+    if (options.cleanupPhotos) {
+      try {
+        await cleanupOrphanedPhotoFiles();
+      } catch (cleanupError) {
+        console.warn(
+          '[MealService] Non-fatal warning: Failed to clean up orphaned photos after clearAllMeals:',
+          cleanupError
+        );
+      }
     }
-
-    await db.runAsync('DELETE FROM meals');
   }
 }
