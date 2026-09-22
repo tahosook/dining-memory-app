@@ -275,6 +275,28 @@ export function requestMealThumbnails(
   });
 }
 
+export function getInFlightThumbnailPhotoPaths(): Set<string> {
+  const inFlightPaths = new Set<string>();
+
+  for (const task of taskQueue) {
+    if (task.photoPath) {
+      inFlightPaths.add(task.photoPath);
+    }
+  }
+
+  for (const key of inFlightGenerationMap.keys()) {
+    const colonIndex = key.indexOf(':');
+    if (colonIndex !== -1) {
+      const path = key.slice(colonIndex + 1);
+      if (path) {
+        inFlightPaths.add(path);
+      }
+    }
+  }
+
+  return inFlightPaths;
+}
+
 export function __clearThumbnailQueueForTest(): void {
   taskQueue.length = 0;
   inFlightGenerationMap.clear();

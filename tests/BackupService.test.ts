@@ -761,8 +761,78 @@ describe('BackupService', () => {
       expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
     });
 
+    test('cleans up orphaned old photos and thumbnails not referenced in restored database', async () => {
+      // Setup mock files in documentDirectory:
+      // - old unreferenced photo: meal-old.jpg
+      // - old unreferenced thumbnail: meal-old-thumb.jpg
+      // - new photo being restored: meal-20260422-01.jpg
+      // - non-photo file: DiningMemory.db
+      (readDirectoryAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path === 'file:///mock-documents/' || path === 'file:///mock-documents') {
+          return Promise.resolve([
+            'meal-old.jpg',
+            'meal-old-thumb.jpg',
+            'meal-20260422-01.jpg',
+            'DiningMemory.db',
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      // After restore, DB only references meal-20260422-01.jpg
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
+        {
+          id: 'meal-1',
+          photo_path: 'file:///mock-documents/meal-20260422-01.jpg',
+          photo_thumbnail_path: null,
+          is_deleted: 0,
+        },
+      ]);
+
+      const validationResult = {
+        valid: true,
+        stagingDirectory: 'file:///mock-cache/dm-import-123/',
+        meals: [
+          {
+            id: 'meal-1',
+            uuid: 'uuid-1',
+            meal_name: 'とんかつ定食',
+            photo_file_name: 'meal-20260422-01.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713800000000,
+            created_at: 1713800000000,
+            updated_at: 1713800000000,
+          },
+        ],
+      };
+
+      await BackupService.restoreVerifiedBackup(validationResult);
+
+      // Orphan old photos were deleted
+      expect(deleteAsync).toHaveBeenCalledWith(
+        'file:///mock-documents/meal-old.jpg',
+        { idempotent: true }
+      );
+      expect(deleteAsync).toHaveBeenCalledWith(
+        'file:///mock-documents/meal-old-thumb.jpg',
+        { idempotent: true }
+      );
+
+      // Restored photo and DB file were NOT deleted
+      expect(deleteAsync).not.toHaveBeenCalledWith(
+        'file:///mock-documents/meal-20260422-01.jpg',
+        expect.anything()
+      );
+      expect(deleteAsync).not.toHaveBeenCalledWith(
+        'file:///mock-documents/DiningMemory.db',
+        expect.anything()
+      );
+    });
+
     // Test E: Photo copy failure rollback
     test('rolls back photo changes when copying a photo fails midway, without modifying DB', async () => {
+
       const validationResult = {
         valid: true,
         stagingDirectory: 'file:///mock-cache/dm-import-123/',
