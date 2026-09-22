@@ -44,6 +44,8 @@ const SearchResultItem = React.memo<{
     style={[styles.photoCell, { width: cellSize, height: cellSize }]}
     onPress={() => onPress(item)}
     testID={`search-result-${item.id}`}
+    accessibilityRole="button"
+    accessibilityLabel={item.meal_name || '食事の記録'}
   >
     {getMealListImageUri(item) ? (
       <Image

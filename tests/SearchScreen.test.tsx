@@ -149,6 +149,18 @@ describe('SearchScreen', () => {
     });
   });
 
+  test('has accessibility attributes on search result items', async () => {
+    const meal = createMeal({ id: '1', meal_name: 'ラーメン' });
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([meal]);
+
+    const { findByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    const resultItem = await findByTestId('search-result-1');
+    expect(resultItem.props.accessibilityRole).toBe('button');
+    expect(resultItem.props.accessibilityLabel).toBe('ラーメン');
+  });
+
   test('shows only the text search and filter toggle by default', async () => {
     (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
 
