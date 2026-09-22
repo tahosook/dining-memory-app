@@ -1,6 +1,9 @@
 import { Platform } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import { copyAsync, getInfoAsync } from 'expo-file-system/legacy';
+import ImageResizer from '@bam.tech/react-native-image-resizer';
+import { CAMERA_CONSTANTS } from '../src/constants/CameraConstants';
+import { cleanupTempFile } from '../src/media/tempFiles';
 import { writePhotoExifToJpeg } from '../src/media/photoExif';
 import {
   ANDROID_PHOTO_ALBUM_NAME,
@@ -8,6 +11,17 @@ import {
   persistThumbnailToStablePath,
   resolveThumbnailDestinationUri,
 } from '../src/media/photoStorage';
+
+jest.mock('@bam.tech/react-native-image-resizer', () => ({
+  __esModule: true,
+  default: {
+    createResizedImage: jest.fn(),
+  },
+}));
+
+jest.mock('../src/media/tempFiles', () => ({
+  cleanupTempFile: jest.fn(),
+}));
 
 jest.mock('expo-media-library', () => ({
   Asset: {
@@ -43,6 +57,14 @@ describe('photoStorage', () => {
     // Default: all files exist after copy (for file verification check)
     (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
     (writePhotoExifToJpeg as jest.Mock).mockResolvedValue(undefined);
+    (cleanupTempFile as jest.Mock).mockResolvedValue(undefined);
+    (ImageResizer.createResizedImage as jest.Mock).mockResolvedValue({
+      uri: 'file:///tmp/resized-temp.jpg',
+      path: '/tmp/resized-temp.jpg',
+      width: 1600,
+      height: 1200,
+      size: 290000,
+    });
   });
 
   test('stores Android photos in the dedicated Dining Memory album', async () => {
@@ -61,7 +83,7 @@ describe('photoStorage', () => {
     });
 
     expect(copyAsync).toHaveBeenCalledWith({
-      from: 'file:///tmp/resized-photo.jpg',
+      from: 'file:///tmp/resized-temp.jpg',
       to: 'file:///mock-documents/meal-20260422213507.jpg',
     });
     expect(writePhotoExifToJpeg).toHaveBeenCalledWith(
@@ -138,7 +160,7 @@ describe('photoStorage', () => {
     });
 
     expect(copyAsync).toHaveBeenCalledWith({
-      from: 'file:///tmp/resized-photo.jpg',
+      from: 'file:///tmp/resized-temp.jpg',
       to: 'file:///mock-documents/meal-20260422213507.jpg',
     });
     expect(result.savedToMediaLibrary).toBe(false);
@@ -156,7 +178,7 @@ describe('photoStorage', () => {
     });
 
     expect(copyAsync).toHaveBeenCalledWith({
-      from: 'file:///tmp/resized-photo.jpg',
+      from: 'file:///tmp/resized-temp.jpg',
       to: 'file:///mock-documents/meal-20260422213507-1.jpg',
     });
     expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507-1.jpg');
@@ -196,6 +218,116 @@ describe('photoStorage', () => {
     );
     // 100 collision checks + 1 file verification check = 101 calls
     expect(getInfoAsync).toHaveBeenCalledTimes(101);
+  });
+
+  describe('native resize and fallback pipeline', () => {
+    test('resizes photo to max 1600px, JPEG quality 80, contain mode, onlyScaleDown: true before stable copy and EXIF write', async () => {
+      Platform.OS = 'ios';
+      (getInfoAsync as jest.Mock)
+        .mockResolvedValueOnce({ exists: false }) // collision check
+        .mockResolvedValueOnce({ exists: true }); // file verification
+
+      const result = await persistPhotoToStablePath('file:///tmp/raw-camera-photo.jpg', {
+        capturedAt,
+        location: { latitude: 35.6895, longitude: 139.6917 },
+        softwareName: 'Dining Memory',
+      });
+
+      // 1. Native resize is performed first with expected parameters
+      expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
+        'file:///tmp/raw-camera-photo.jpg',
+        CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH,
+        CAMERA_CONSTANTS.SAVED_PHOTO_MAX_HEIGHT,
+        'JPEG',
+        CAMERA_CONSTANTS.SAVED_PHOTO_QUALITY_PERCENT,
+        0,
+        undefined,
+        true,
+        {
+          mode: 'contain',
+          onlyScaleDown: true,
+        }
+      );
+      expect(CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH).toBe(1600);
+      expect(CAMERA_CONSTANTS.SAVED_PHOTO_MAX_HEIGHT).toBe(1600);
+      expect(CAMERA_CONSTANTS.SAVED_PHOTO_QUALITY_PERCENT).toBe(80);
+
+      // 2. Resized temp file is copied to destination
+      expect(copyAsync).toHaveBeenCalledWith({
+        from: 'file:///tmp/resized-temp.jpg',
+        to: 'file:///mock-documents/meal-20260422213507.jpg',
+      });
+
+      // 3. EXIF is written to destination (the downsized copy)
+      expect(writePhotoExifToJpeg).toHaveBeenCalledWith(
+        'file:///mock-documents/meal-20260422213507.jpg',
+        expect.objectContaining({
+          capturedAt,
+          location: { latitude: 35.6895, longitude: 139.6917 },
+          softwareName: 'Dining Memory',
+        })
+      );
+
+      // 4. Temporary resized file is cleaned up
+      expect(cleanupTempFile).toHaveBeenCalledWith('file:///tmp/resized-temp.jpg');
+
+      expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507.jpg');
+    });
+
+    test('falls back safely to copying original image when native resize fails, preserving persistence', async () => {
+      Platform.OS = 'ios';
+      (getInfoAsync as jest.Mock)
+        .mockResolvedValueOnce({ exists: false }) // collision check
+        .mockResolvedValueOnce({ exists: true }); // file verification
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+      (ImageResizer.createResizedImage as jest.Mock).mockRejectedValueOnce(
+        new Error('Out of memory during native resize')
+      );
+
+      const result = await persistPhotoToStablePath('file:///tmp/raw-camera-photo.jpg', {
+        capturedAt,
+      });
+
+      // Warning logged for resize failure
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'Photo native resize failed, falling back to original image:',
+        expect.any(Error)
+      );
+
+      // Falls back to copying original file
+      expect(copyAsync).toHaveBeenCalledWith({
+        from: 'file:///tmp/raw-camera-photo.jpg',
+        to: 'file:///mock-documents/meal-20260422213507.jpg',
+      });
+
+      // EXIF is still updated on destination
+      expect(writePhotoExifToJpeg).toHaveBeenCalledWith(
+        'file:///mock-documents/meal-20260422213507.jpg',
+        expect.objectContaining({ capturedAt })
+      );
+
+      // Original raw photo is not cleaned up by photoStorage
+      expect(cleanupTempFile).not.toHaveBeenCalledWith('file:///tmp/raw-camera-photo.jpg');
+
+      expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507.jpg');
+      consoleWarnSpy.mockRestore();
+    });
+
+    test('does not cleanup source photoUri if resized URI is identical to source URI', async () => {
+      Platform.OS = 'ios';
+      (getInfoAsync as jest.Mock)
+        .mockResolvedValueOnce({ exists: false }) // collision check
+        .mockResolvedValueOnce({ exists: true }); // file verification
+      (ImageResizer.createResizedImage as jest.Mock).mockResolvedValueOnce({
+        uri: 'file:///tmp/raw-camera-photo.jpg',
+      });
+
+      await persistPhotoToStablePath('file:///tmp/raw-camera-photo.jpg', {
+        capturedAt,
+      });
+
+      expect(cleanupTempFile).not.toHaveBeenCalledWith('file:///tmp/raw-camera-photo.jpg');
+    });
   });
 
   describe('resolveThumbnailDestinationUri', () => {

@@ -154,6 +154,39 @@ describe('MealService', () => {
     expect(notFound).toBe(false);
   });
 
+  test('updateMeal allows explicitly resetting photo_thumbnail_path to null', async () => {
+    const created = await MealService.createMeal({
+      meal_name: 'うどん',
+      is_homemade: true,
+      photo_path: 'file:///udon.jpg',
+      photo_thumbnail_path: 'file:///udon-thumb.jpg',
+      meal_datetime: new Date('2026-04-12T13:00:00+09:00'),
+    });
+    expect(created.photo_thumbnail_path).toBe('file:///udon-thumb.jpg');
+
+    // 1. Explicitly reset photo_thumbnail_path to null (e.g. during photo rotation)
+    const updated = await MealService.updateMeal(created.id, {
+      photo_path: 'file:///udon-rotated.jpg',
+      photo_thumbnail_path: null,
+    });
+    expect(updated?.photo_path).toBe('file:///udon-rotated.jpg');
+    expect(updated?.photo_thumbnail_path).toBeUndefined();
+
+    const fetched = await MealService.getMealById(created.id);
+    expect(fetched?.photo_thumbnail_path).toBeUndefined();
+
+    // 2. Updating without photo_thumbnail_path preserves existing value
+    await MealService.updateMealThumbnail(
+      created.id,
+      'file:///udon-rotated-thumb.jpg',
+      'file:///udon-rotated.jpg'
+    );
+    const afterThumb = await MealService.updateMeal(created.id, {
+      meal_name: '天ぷらうどん',
+    });
+    expect(afterThumb?.photo_thumbnail_path).toBe('file:///udon-rotated-thumb.jpg');
+  });
+
   test('filters search results by text and location', async () => {
     await MealService.createMeal({
       meal_name: '醤油ラーメン',

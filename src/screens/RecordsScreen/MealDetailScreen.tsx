@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Image,
@@ -30,6 +30,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { getMealDetailImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils/mealPhotoRotation';
+import { requestMealThumbnail } from '../../media/mealThumbnail';
 
 type MealDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'MealDetail'>;
 export type DetailNavigationDirection = 'previous' | 'next';
@@ -160,6 +161,14 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
   const [shareComposerVisible, setShareComposerVisible] = useState(false);
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
   const [shareText, setShareText] = useState(() => buildInitialShareText(meal));
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const photoUri = useMemo(() => getMealDetailImageUri(meal), [meal]);
   const viewerPhotos = useMemo(() => createMealDetailViewerPhotos(detailMeals), [detailMeals]);
@@ -315,7 +324,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       rotatedUri = await rotateMealPhotoClockwise(photoUri);
       const updatedMeal = await MealService.updateMeal(meal.id, {
         photo_path: rotatedUri,
-        photo_thumbnail_path: rotatedUri,
+        photo_thumbnail_path: null,
       });
 
       if (!updatedMeal) {
@@ -324,15 +333,22 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         return;
       }
 
-      const previousPhotoUri = photoUri;
-      const previousThumbnailUri = meal.photo_thumbnail_path;
       setDetailMeals(current =>
         current.map((item, index) => (index === currentIndex ? updatedMeal : item))
       );
-      await deleteMealPhotoFileIfSafe(previousPhotoUri, rotatedUri).catch(() => undefined);
-      if (previousThumbnailUri && previousThumbnailUri !== previousPhotoUri) {
-        await deleteMealPhotoFileIfSafe(previousThumbnailUri, rotatedUri).catch(() => undefined);
-      }
+
+      requestMealThumbnail(meal.id, rotatedUri, {
+        onGenerated: (mealId, thumbUri) => {
+          if (!isMountedRef.current) {
+            return;
+          }
+          setDetailMeals(current =>
+            current.map(item =>
+              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
+            )
+          );
+        },
+      });
     } catch {
       if (rotatedUri) {
         await deleteMealPhotoFileIfSafe(rotatedUri).catch(() => undefined);
@@ -340,9 +356,11 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
       console.error('Failed to rotate meal photo.');
       Alert.alert('エラー', '写真の回転に失敗しました。');
     } finally {
-      setRotatingPhoto(false);
+      if (isMountedRef.current) {
+        setRotatingPhoto(false);
+      }
     }
-  }, [currentIndex, meal.id, meal.photo_thumbnail_path, photoUri, rotatingPhoto]);
+  }, [currentIndex, meal.id, photoUri, rotatingPhoto]);
 
   const confirmDelete = useCallback(() => {
     Alert.alert('削除確認', `${meal.meal_name} を削除してもよろしいですか？`, [
