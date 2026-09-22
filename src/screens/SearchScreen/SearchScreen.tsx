@@ -267,6 +267,7 @@ export const SearchScreen: React.FC = () => {
             value={locationFilter}
             onChangeText={setLocationFilter}
             testID="search-location-input"
+            accessibilityLabel="場所フィルター"
           />
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>自炊のみ</Text>
@@ -274,6 +275,7 @@ export const SearchScreen: React.FC = () => {
               value={homemadeOnly}
               onValueChange={setHomemadeOnly}
               testID="search-homemade-switch"
+              accessibilityLabel="自炊のみ"
             />
           </View>
         </View>
