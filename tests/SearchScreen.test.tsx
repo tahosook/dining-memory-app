@@ -149,6 +149,18 @@ describe('SearchScreen', () => {
     });
   });
 
+  test('has accessibility attributes on search result items', async () => {
+    const meal = createMeal({ id: '1', meal_name: 'ラーメン' });
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([meal]);
+
+    const { findByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    const resultItem = await findByTestId('search-result-1');
+    expect(resultItem.props.accessibilityRole).toBe('button');
+    expect(resultItem.props.accessibilityLabel).toBe('ラーメン');
+  });
+
   test('shows only the text search and filter toggle by default', async () => {
     (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
 
@@ -161,6 +173,31 @@ describe('SearchScreen', () => {
     expect(queryByPlaceholderText('場所フィルター')).toBeNull();
     expect(queryByText('自炊のみ')).toBeNull();
     expect(queryByText('検索する')).toBeNull();
+  });
+
+  test('has correct accessibility attributes on search filter toggle and updates expanded state', async () => {
+    (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
+
+    const { getByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    const toggleButton = getByTestId('search-filter-toggle');
+    expect(toggleButton.props.accessibilityRole).toBe('button');
+    expect(toggleButton.props.accessibilityLabel).toBe('検索フィルター');
+    expect(toggleButton.props.accessibilityHint).toBe('タップして検索フィルターの表示を切り替えます');
+    expect(toggleButton.props.accessibilityState).toEqual({ expanded: false });
+
+    fireEvent.press(toggleButton);
+    expect(toggleButton.props.accessibilityState).toEqual({ expanded: true });
+
+    const locationInput = getByTestId('search-location-input');
+    expect(locationInput.props.accessibilityLabel).toBe('場所フィルター');
+
+    const homemadeSwitch = getByTestId('search-homemade-switch');
+    expect(homemadeSwitch.props.accessibilityLabel).toBe('自炊のみ');
+
+    fireEvent.press(toggleButton);
+    expect(toggleButton.props.accessibilityState).toEqual({ expanded: false });
   });
 
   test('automatically searches after text input changes', async () => {
