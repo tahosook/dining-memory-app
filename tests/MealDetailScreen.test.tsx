@@ -625,9 +625,9 @@ describe('MealDetailScreen', () => {
       })
     );
 
-    // Old photo and old thumbnail must be cleaned up
-    expect(deleteMealPhotoFileIfSafe).toHaveBeenCalledWith('file:///full-photo.jpg', 'file:///rotated-photo.jpg');
-    expect(deleteMealPhotoFileIfSafe).toHaveBeenCalledWith('file:///thumb-photo.jpg', 'file:///rotated-photo.jpg');
+    // Old photo and thumbnail files are not deleted immediately during rotation to prevent
+    // race conditions with in-flight thumbnail generation (lifecycle decoupled to #88)
+    expect(deleteMealPhotoFileIfSafe).not.toHaveBeenCalled();
 
     // Simulate onGenerated callback
     const thumbnailCallback = (requestMealThumbnail as jest.Mock).mock.calls[0][2].onGenerated;
@@ -730,6 +730,21 @@ describe('MealDetailScreen', () => {
     expect(getByTestId('meal-detail-image').props.source).toEqual({
       uri: 'file:///full-photo.jpg',
     });
+  });
+
+  test('cleans up rotated photo file when MealService.updateMeal fails', async () => {
+    (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-fail.jpg');
+    (MealService.updateMeal as jest.Mock).mockResolvedValue(null);
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '写真の回転に失敗しました。');
+    });
+    expect(deleteMealPhotoFileIfSafe).toHaveBeenCalledWith('file:///rotated-fail.jpg');
   });
 
   test('opens the share composer with photo preview and shares the edited text', async () => {

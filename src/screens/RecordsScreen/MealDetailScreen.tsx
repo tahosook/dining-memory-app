@@ -333,15 +333,9 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         return;
       }
 
-      const previousPhotoUri = photoUri;
-      const previousThumbnailUri = meal.photo_thumbnail_path;
       setDetailMeals(current =>
         current.map((item, index) => (index === currentIndex ? updatedMeal : item))
       );
-      await deleteMealPhotoFileIfSafe(previousPhotoUri, rotatedUri).catch(() => undefined);
-      if (previousThumbnailUri && previousThumbnailUri !== previousPhotoUri) {
-        await deleteMealPhotoFileIfSafe(previousThumbnailUri, rotatedUri).catch(() => undefined);
-      }
 
       requestMealThumbnail(meal.id, rotatedUri, {
         onGenerated: (mealId, thumbUri) => {
@@ -366,7 +360,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         setRotatingPhoto(false);
       }
     }
-  }, [currentIndex, meal.id, meal.photo_thumbnail_path, photoUri, rotatingPhoto]);
+  }, [currentIndex, meal.id, photoUri, rotatingPhoto]);
 
   const confirmDelete = useCallback(() => {
     Alert.alert('削除確認', `${meal.meal_name} を削除してもよろしいですか？`, [
