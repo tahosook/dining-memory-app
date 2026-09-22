@@ -213,10 +213,14 @@ export interface CleanupOrphansResult {
 /**
  * 検出された孤児写真ファイルを安全に物理削除する。
  *
- * 削除ループ開始前に最新の DB 参照集合を 1 回取得してスナップショット化（N 回の DB クエリを排除）。
- * さらに各ファイルの削除直前には、超高速なインメモリの非同期サムネイル生成タスク（in-flight）を
- * 再確認することで、Issue #102 との競合を完全に防止しつつパフォーマンスを最大化する。
- * また、対象が documentDirectory 直下であり、かつ安全な命名規則を満たしていることを再確認する。
+ * 各ファイルの削除前に3段階の保護チェックを行う:
+ * 1. 早期スキップ: ループ開始前に取得した DB 参照スナップショットで明らかに保護対象を除外
+ * 2. 最新DB参照: 削除直前に getReferencedPhotoPaths() を再取得し、scan 後に DB 参照が
+ *    復活した場合の race condition を完全に防止する
+ * 3. 最新in-flight: 削除直前にインメモリの非同期サムネイル生成タスクを確認し、
+ *    Issue #102 との競合を防止する
+ *
+ * 対象が documentDirectory 直下であり、かつ安全な命名規則を満たしていることも再確認する。
  */
 export async function cleanupOrphanedPhotoFiles(
   options: OrphanScanOptions = {}
@@ -235,7 +239,7 @@ export async function cleanupOrphanedPhotoFiles(
   const docDir = documentDirectory.endsWith('/') ? documentDirectory : `${documentDirectory}/`;
   const matcher = options.matcher ?? isManagedMealPhotoFileName;
 
-  // 1. 削除ループ前に最新の DB 参照集合を 1 回取得（orphan が多数ある場合の N 回 DB クエリを排除）
+  // 削除ループ準備時点での初期DB参照（早期スキップ用補助スナップショット）
   const dbReferenced = options.referencedPaths ?? (await getReferencedPhotoPaths(options));
 
   const deletedFileNames: string[] = [];
@@ -246,7 +250,7 @@ export async function cleanupOrphanedPhotoFiles(
     const uri = scanResult.orphanUris[i];
     const fileName = scanResult.orphanFileNames[i];
 
-    // 最終防衛線: documentDirectory 直下、かつ命名規則を満たしていることを確認
+    // 1. 安全な対象か（documentDirectory 直下、かつ命名規則を満たしていることを確認）
     if (!uri.startsWith(docDir) || !matcher(fileName)) {
       console.warn(
         '[photoLifecycle] Refusing to delete file that violated safety invariants:',
@@ -256,15 +260,20 @@ export async function cleanupOrphanedPhotoFiles(
       continue;
     }
 
-    // DB 参照スナップショットのチェック（scan 〜 ループ開始までの間の DB 参照復活を保護）
+    // 早期スキップ判定（ループ開始時点で既に参照されていた場合）
     if (dbReferenced.has(fileName) || dbReferenced.has(uri)) {
       skippedFileNames.push(fileName);
       continue;
     }
 
-    // 2. 削除直前の最新状態を再取得 (Race condition 防止)
-    // 非同期サムネイル生成 (in-flight) はメモリ上の Set のみを参照する超軽量処理 ($O(1)$) のため、
-    // 各ファイルの削除直前にも最新状態を確認して Issue #102 との競合を完全に防止する
+    // 2. 最新DB参照を確認（削除直前の最新状態を再取得して race condition を完全に防止）
+    const latestReferenced = options.referencedPaths ?? (await getReferencedPhotoPaths(options));
+    if (latestReferenced.has(fileName) || latestReferenced.has(uri)) {
+      skippedFileNames.push(fileName);
+      continue;
+    }
+
+    // 3. 最新in-flight thumbnail状態を確認 (Issue #102 競合防止)
     const currentInFlight = getInFlightThumbnailProtectionSet();
     if (currentInFlight.has(fileName) || currentInFlight.has(uri)) {
       skippedFileNames.push(fileName);
