@@ -290,6 +290,10 @@ export const SearchScreen: React.FC = () => {
           style={[styles.filterToggle, filtersVisible ? styles.filterToggleActive : null]}
           onPress={() => setFiltersVisible(current => !current)}
           testID="search-filter-toggle"
+          accessibilityRole="button"
+          accessibilityLabel="検索フィルター"
+          accessibilityHint="タップして検索フィルターの表示を切り替えます"
+          accessibilityState={{ expanded: filtersVisible }}
         >
           <Ionicons
             name="options-outline"
@@ -313,6 +317,7 @@ export const SearchScreen: React.FC = () => {
             value={locationFilter}
             onChangeText={setLocationFilter}
             testID="search-location-input"
+            accessibilityLabel="場所フィルター"
           />
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>自炊のみ</Text>
@@ -320,6 +325,7 @@ export const SearchScreen: React.FC = () => {
               value={homemadeOnly}
               onValueChange={setHomemadeOnly}
               testID="search-homemade-switch"
+              accessibilityLabel="自炊のみ"
             />
           </View>
         </View>
