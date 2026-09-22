@@ -190,13 +190,16 @@ export async function findOrphanedPhotoFiles(
 export interface CleanupOrphansResult {
   deletedFileNames: string[];
   failedFileNames: string[];
+  skippedFileNames?: string[];
   scannedFileCount: number;
 }
 
 /**
  * 検出された孤児写真ファイルを安全に物理削除する。
  *
- * 削除直前にも、対象が documentDirectory 直下であり、かつ安全な命名規則を満たしていることを再確認する。
+ * 削除直前にも最新の保護対象集合を再取得し、初回 scan から現在までの間に
+ * DB 参照が復活したり、非同期サムネイル生成が開始された場合の race condition を防止する。
+ * また、対象が documentDirectory 直下であり、かつ安全な命名規則を満たしていることを再確認する。
  */
 export async function cleanupOrphanedPhotoFiles(
   options: OrphanScanOptions = {}
@@ -207,6 +210,7 @@ export async function cleanupOrphanedPhotoFiles(
     return {
       deletedFileNames: [],
       failedFileNames: [],
+      skippedFileNames: [],
       scannedFileCount: scanResult.scannedFileCount,
     };
   }
@@ -216,23 +220,29 @@ export async function cleanupOrphanedPhotoFiles(
 
   const deletedFileNames: string[] = [];
   const failedFileNames: string[] = [];
+  const skippedFileNames: string[] = [];
 
   for (let i = 0; i < scanResult.orphanUris.length; i++) {
     const uri = scanResult.orphanUris[i];
     const fileName = scanResult.orphanFileNames[i];
 
-    // 最終防衛線: documentDirectory 直下、かつ命名規則を満たし、参照集合に含まれないことを確認
-    if (
-      !uri.startsWith(docDir) ||
-      !matcher(fileName) ||
-      scanResult.referencedFileNames.has(fileName) ||
-      scanResult.referencedFileNames.has(uri)
-    ) {
+    // 1. 最終防衛線: documentDirectory 直下、かつ命名規則を満たしていることを確認
+    if (!uri.startsWith(docDir) || !matcher(fileName)) {
       console.warn(
         '[photoLifecycle] Refusing to delete file that violated safety invariants:',
         uri
       );
       failedFileNames.push(fileName);
+      continue;
+    }
+
+    // 2. 削除直前の最新状態を再取得 (Race condition 防止)
+    // 初回 scan 後〜削除直前までの間に、別処理によって DB 参照が追加されたり、
+    // 当該写真を対象とする thumbnail generation が開始されていないか最終確認する
+    const latestReferenced = options.referencedPaths ?? (await getReferencedPhotoPaths(options));
+
+    if (latestReferenced.has(fileName) || latestReferenced.has(uri)) {
+      skippedFileNames.push(fileName);
       continue;
     }
 
@@ -248,6 +258,7 @@ export async function cleanupOrphanedPhotoFiles(
   return {
     deletedFileNames,
     failedFileNames,
+    skippedFileNames,
     scannedFileCount: scanResult.scannedFileCount,
   };
 }

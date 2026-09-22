@@ -341,6 +341,92 @@ describe('photoLifecycle', () => {
     });
   });
 
+  describe('Race Condition Protection between Scan and Delete', () => {
+    test('Case A: does not delete photo if DB reference is restored after initial orphan scan', async () => {
+      let callCount = 0;
+      (getAllPersistedMealRows as jest.Mock).mockImplementation(async () => {
+        callCount++;
+        if (callCount === 1) {
+          // 1st call (during findOrphanedPhotoFiles scan): A.jpg is NOT in DB -> identified as orphan
+          return [];
+        }
+        // 2nd call (right before deleteAsync): A.jpg was restored/referenced in DB by a concurrent operation!
+        return [
+          {
+            id: 'meal-1',
+            photo_path: 'file:///mock-documents/meal-A.jpg',
+            photo_thumbnail_path: null,
+            is_deleted: 0,
+          },
+        ];
+      });
+
+      setupMockFileSystem({
+        'meal-A.jpg': { exists: true },
+      });
+
+      const cleanupResult = await cleanupOrphanedPhotoFiles();
+
+      // Verified: meal-A.jpg is NOT deleted
+      expect(cleanupResult.deletedFileNames).not.toContain('meal-A.jpg');
+      expect(deleteAsync).not.toHaveBeenCalledWith(
+        'file:///mock-documents/meal-A.jpg',
+        expect.anything()
+      );
+      expect(mockFileSystem.has('meal-A.jpg')).toBe(true);
+      expect(cleanupResult.skippedFileNames).toContain('meal-A.jpg');
+    });
+
+    test('Case B: does not delete photo if thumbnail generation starts after initial orphan scan', async () => {
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([]);
+
+      let inFlightCallCount = 0;
+      (getInFlightThumbnailPhotoPaths as jest.Mock).mockImplementation(() => {
+        inFlightCallCount++;
+        if (inFlightCallCount === 1) {
+          // 1st call (during findOrphanedPhotoFiles scan): not in-flight -> identified as orphan
+          return new Set<string>();
+        }
+        // 2nd call (right before deleteAsync): thumbnail generation started for meal-A.jpg!
+        return new Set<string>(['file:///mock-documents/meal-A.jpg']);
+      });
+
+      setupMockFileSystem({
+        'meal-A.jpg': { exists: true },
+      });
+
+      const cleanupResult = await cleanupOrphanedPhotoFiles();
+
+      // Verified: meal-A.jpg is NOT deleted
+      expect(cleanupResult.deletedFileNames).not.toContain('meal-A.jpg');
+      expect(deleteAsync).not.toHaveBeenCalledWith(
+        'file:///mock-documents/meal-A.jpg',
+        expect.anything()
+      );
+      expect(mockFileSystem.has('meal-A.jpg')).toBe(true);
+      expect(cleanupResult.skippedFileNames).toContain('meal-A.jpg');
+    });
+
+    test('Case C: deletes photo when it remains an unreferenced orphan through final check', async () => {
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([]);
+      (getInFlightThumbnailPhotoPaths as jest.Mock).mockReturnValue(new Set<string>());
+
+      setupMockFileSystem({
+        'meal-A.jpg': { exists: true },
+      });
+
+      const cleanupResult = await cleanupOrphanedPhotoFiles();
+
+      expect(cleanupResult.deletedFileNames).toContain('meal-A.jpg');
+      expect(deleteAsync).toHaveBeenCalledWith(
+        'file:///mock-documents/meal-A.jpg',
+        { idempotent: true }
+      );
+      expect(mockFileSystem.has('meal-A.jpg')).toBe(false);
+      expect(cleanupResult.skippedFileNames).not.toContain('meal-A.jpg');
+    });
+  });
+
   describe('Path Safety & Boundary Invariants', () => {
     test('never deletes subdirectories or non-managed files in documentDirectory', async () => {
       (getAllPersistedMealRows as jest.Mock).mockResolvedValue([]);
