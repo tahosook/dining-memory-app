@@ -488,36 +488,150 @@ describe('mealThumbnail', () => {
       expect(cleanupTempFile).toHaveBeenCalledWith('file:///docs/photo-A-thumb.jpg');
     });
 
-    test('Case G: duplicate requests for identical photo generation are deduplicated, while different generations are independent', async () => {
-      let resolveResizer!: (value: any) => void;
-      const resizerPromise = new Promise(resolve => {
-        resolveResizer = resolve;
+    test('Case G: duplicate requests for identical photo generation are deduplicated, while different generations execute independently with distinct promises and sources', async () => {
+      let currentMealPhoto = 'file:///docs/photo-A.jpg';
+      (MealService.getMealById as jest.Mock).mockImplementation(async (id: string) => {
+        return createMockMeal({ id, photo_path: currentMealPhoto });
       });
-      (ImageResizer.createResizedImage as jest.Mock).mockReturnValue(resizerPromise);
 
-      const mealA = createMockMeal({ photo_path: 'file:///docs/photo-A.jpg' });
-      (MealService.getMealById as jest.Mock).mockResolvedValue(mealA);
+      let resolveResizerA!: (value: any) => void;
+      const resizerPromiseA = new Promise(resolve => {
+        resolveResizerA = resolve;
+      });
 
-      // Duplicate requests for the same photo generation
-      const req1 = ensureMealThumbnail('meal-1', 'file:///docs/photo-A.jpg');
-      const req2 = ensureMealThumbnail('meal-1', 'file:///docs/photo-A.jpg');
-      const req3 = ensureMealThumbnail('meal-1', 'file:///docs/photo-A.jpg');
+      let resolveResizerB!: (value: any) => void;
+      const resizerPromiseB = new Promise(resolve => {
+        resolveResizerB = resolve;
+      });
 
-      expect(req1).toBe(req2);
-      expect(req2).toBe(req3);
+      (ImageResizer.createResizedImage as jest.Mock).mockImplementation((sourceUri: string) => {
+        if (sourceUri === 'file:///docs/photo-A.jpg') {
+          return resizerPromiseA;
+        }
+        if (sourceUri === 'file:///docs/photo-B.jpg') {
+          return resizerPromiseB;
+        }
+        return Promise.resolve({ uri: 'file:///tmp/resized-default.jpg' });
+      });
 
-      // Request for a different photo generation on the same meal
-      const reqOtherPhoto = ensureMealThumbnail('meal-1', 'file:///docs/photo-B.jpg');
-      expect(reqOtherPhoto).not.toBe(req1);
+      (persistThumbnailToStablePath as jest.Mock).mockImplementation(
+        async (_tempUri: string, originalUri: string) => {
+          return originalUri.replace('.jpg', '-thumb.jpg');
+        }
+      );
 
-      resolveResizer({
-        uri: 'file:///tmp/resized-thumb.jpg',
-        path: '/tmp/resized-thumb.jpg',
+      // 1. Multiple duplicate requests for Generation A
+      const reqA1 = ensureMealThumbnail('meal-1', 'file:///docs/photo-A.jpg');
+      const reqA2 = ensureMealThumbnail('meal-1', 'file:///docs/photo-A.jpg');
+      const reqA3 = ensureMealThumbnail('meal-1', 'file:///docs/photo-A.jpg');
+
+      // Assert identical promise deduplication for generation A
+      expect(reqA1).toBe(reqA2);
+      expect(reqA2).toBe(reqA3);
+
+      // Wait a microtask so Generation A passes getMealById and reaches createResizedImage (resizerPromiseA)
+      await new Promise(r => setTimeout(r, 10));
+
+      // 2. Photo is rotated to B in DB, and multiple duplicate requests are made for Generation B
+      currentMealPhoto = 'file:///docs/photo-B.jpg';
+      const reqB1 = ensureMealThumbnail('meal-1', 'file:///docs/photo-B.jpg');
+      const reqB2 = ensureMealThumbnail('meal-1', 'file:///docs/photo-B.jpg');
+
+      // Assert identical promise deduplication for generation B
+      expect(reqB1).toBe(reqB2);
+
+      // Assert A and B are completely distinct promise instances (separate photo generations)
+      expect(reqB1).not.toBe(reqA1);
+
+      // Wait a microtask so Generation B reaches createResizedImage (resizerPromiseB)
+      await new Promise(r => setTimeout(r, 10));
+
+      // 3. Verify independent execution and distinct sources
+      expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
+        'file:///docs/photo-A.jpg',
+        320,
+        320,
+        'JPEG',
+        70,
+        0,
+        undefined,
+        true,
+        { mode: 'contain', onlyScaleDown: true }
+      );
+
+      expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
+        'file:///docs/photo-B.jpg',
+        320,
+        320,
+        'JPEG',
+        70,
+        0,
+        undefined,
+        true,
+        { mode: 'contain', onlyScaleDown: true }
+      );
+
+      // ImageResizer was called exactly once for A and once for B (deduplication verified)
+      expect(ImageResizer.createResizedImage).toHaveBeenCalledTimes(2);
+
+      // 4. Verify independent resolution: Resolve A while B remains pending
+      let aResolved = false;
+      let bResolved = false;
+
+      reqA1.then(() => {
+        aResolved = true;
+      });
+      reqB1.then(() => {
+        bResolved = true;
+      });
+
+      resolveResizerA({
+        uri: 'file:///tmp/resized-A.jpg',
+        path: '/tmp/resized-A.jpg',
         width: 320,
         height: 240,
       });
 
-      await Promise.all([req1, req2, req3, reqOtherPhoto]);
+      const [resA1, resA2, resA3] = await Promise.all([reqA1, reqA2, reqA3]);
+      expect(aResolved).toBe(true);
+      expect(bResolved).toBe(false); // B must remain pending independently!
+      expect(resA1).toBe('file:///docs/photo-A-thumb.jpg');
+      expect(resA2).toBe('file:///docs/photo-A-thumb.jpg');
+      expect(resA3).toBe('file:///docs/photo-A-thumb.jpg');
+
+      // 5. Resolve B independently
+      resolveResizerB({
+        uri: 'file:///tmp/resized-B.jpg',
+        path: '/tmp/resized-B.jpg',
+        width: 320,
+        height: 240,
+      });
+
+      const [resB1, resB2] = await Promise.all([reqB1, reqB2]);
+      expect(bResolved).toBe(true);
+      expect(resB1).toBe('file:///docs/photo-B-thumb.jpg');
+      expect(resB2).toBe('file:///docs/photo-B-thumb.jpg');
+
+      // 6. Verify persistThumbnailToStablePath and MealService.updateMealThumbnail called with respective sources
+      expect(persistThumbnailToStablePath).toHaveBeenCalledWith(
+        'file:///tmp/resized-A.jpg',
+        'file:///docs/photo-A.jpg'
+      );
+      expect(persistThumbnailToStablePath).toHaveBeenCalledWith(
+        'file:///tmp/resized-B.jpg',
+        'file:///docs/photo-B.jpg'
+      );
+
+      expect(MealService.updateMealThumbnail).toHaveBeenCalledWith(
+        'meal-1',
+        'file:///docs/photo-A-thumb.jpg',
+        'file:///docs/photo-A.jpg'
+      );
+      expect(MealService.updateMealThumbnail).toHaveBeenCalledWith(
+        'meal-1',
+        'file:///docs/photo-B-thumb.jpg',
+        'file:///docs/photo-B.jpg'
+      );
     });
 
     test('cleans up stable thumbnail and returns null when DB update throws an error without destroying meal', async () => {
