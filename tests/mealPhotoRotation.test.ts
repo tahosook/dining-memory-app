@@ -53,6 +53,9 @@ describe('mealPhotoRotation', () => {
         onlyScaleDown: true,
       }
     );
+    expect(CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH).toBe(1600);
+    expect(CAMERA_CONSTANTS.SAVED_PHOTO_MAX_HEIGHT).toBe(1600);
+    expect(CAMERA_CONSTANTS.SAVED_PHOTO_QUALITY_PERCENT).toBe(80);
     expect(rotatedUri).toBe('file:///documents/meal-photo-rotated-2026-04-20T10-11-12-123Z-12345678.jpg');
     expect(copyAsync).toHaveBeenCalledWith({
       from: 'file:///cache/rotated-temp.jpg',
