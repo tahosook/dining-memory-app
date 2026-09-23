@@ -1,0 +1,70 @@
+name: Sync GitHub Status to Google Drive
+
+on:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled]
+  pull_request:
+    types: [opened, closed, reopened, labeled, unlabeled]
+  schedule:
+    - cron: '0 0 * * *' # 毎日 UTC 0:00 (日本時間 9:00) に自動同期
+  workflow_dispatch:      # GitHub Actions 画面から手動実行可能
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate Status Markdown
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat << 'EOF' > generate.sh
+          echo "# Dining Memory App - GitHub Status"
+          echo "最終更新日時: $(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')"
+          echo ""
+
+          echo "## 📌 オープン中の Pull Requests"
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 20 \
+            --json number,title,author,headRefName,updatedAt \
+            --template '{{if not .}}オープン中の PR はありません。{{"\n"}}{{end}}{{range .}}- [PR #{{.number}}] {{.title}} (by @{{.author.login}}, branch: `{{.headRefName}}`){{"\n"}}{{end}}'
+          echo ""
+
+          echo "## 📋 オープン中の Issues"
+          gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 20 \
+            --json number,title,labels,body \
+            --template '{{if not .}}オープン中の Issue はありません。{{"\n"}}{{end}}{{range .}}### [Issue #{{.number}}] {{.title}}
+          ラベル: {{range .labels}}`[{{.name}}]` {{end}}
+          本文:
+          {{if .body}}{{.body}}{{else}}（本文なし）{{end}}
+          ---
+          {{end}}'
+          echo ""
+          EOF
+
+          bash generate.sh > status.md
+
+      - name: Send to Google Drive via GAS
+        env:
+          WEBHOOK_URL: ${{ secrets.GAS_WEBHOOK_URL }}
+          AUTH_TOKEN: ${{ secrets.GAS_AUTH_TOKEN }}
+        run: |
+          # 改行を含む Markdown を安全に JSON 文字列化
+          JSON_PAYLOAD=$(jq -n \
+            --arg token "$AUTH_TOKEN" \
+            --rawfile content status.md \
+            '{token: $token, content:$content}')
+
+          # GAS エンドポイントへ POST 送信 (-L でリダイレクトを自動追随)
+          RESPONSE=$(curl -s -L -w "%{http_code}" -o response.txt -X POST \
+            -H "Content-Type: application/json" \
+            -d "$JSON_PAYLOAD" \
+            "$WEBHOOK_URL")
+
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Failed to sync: HTTP $RESPONSE"
+            cat response.txt
+            exit 1
+          fi
+          echo "Successfully synced status to Google Docs!"
