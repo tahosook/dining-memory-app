@@ -2,13 +2,13 @@
 set -euo pipefail
 
 PACKAGE="com.tahosook.diningmemory"
-PID=$(adb shell pidof "$PACKAGE" || true)
+PID=$(adb shell pidof "$PACKAGE" 2>/dev/null | tr ' ' '\n' | head -n1 || true)
 
 if [[ -z "$PID" ]]; then
   echo "App is not running. Starting app..."
   adb shell am start -n "$PACKAGE/.MainActivity"
   sleep 2
-  PID=$(adb shell pidof "$PACKAGE")
+  PID=$(adb shell pidof "$PACKAGE" 2>/dev/null | tr ' ' '\n' | head -n1 || true)
 fi
 
 echo "=================================================="
@@ -24,11 +24,11 @@ echo "2. Baseline memory usage:"
 adb shell dumpsys meminfo "$PACKAGE" | grep -E "TOTAL PSS:|Java Heap:|Native Heap:" || true
 
 TEMP_MEM_LOG=$(mktemp)
-SAMPLER_RUNNING=1
 
 # Start background memory sampler
 (
-  while [[ $SAMPLER_RUNNING -eq 1 ]]; do
+  trap 'exit 0' SIGTERM
+  while true; do
     pss=$(adb shell dumpsys meminfo "$PACKAGE" 2>/dev/null | grep "TOTAL PSS:" | awk '{print $3}' || echo "0")
     if [[ -n "$pss" && "$pss" -gt 0 ]]; then
       echo "$pss" >> "$TEMP_MEM_LOG"

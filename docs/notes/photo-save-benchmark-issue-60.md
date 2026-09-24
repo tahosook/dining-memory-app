@@ -15,7 +15,7 @@
 - **メモリ健全性**:
   - **今回の測定条件（Google Pixel 9a / RAM 8GB / 2回施行）においては**、かつて懸念されたヒープ肥大化（288MB）や OOM の兆候は観測されず、Java Heap PSS は **11.3 MB 〜 22.4 MB** の範囲で推移した。
 - **GC 影響・UI 描画安定性**:
-  - 今回の測定条件では、GC による UI スレッド一時停止時間は **2.97 ms**（3ミリ秒未満）であり、顕著な UI 停止は確認されなかった。
+  - 今回の測定条件では、ART GC による全スレッド一時停止時間（STW pause time）は **2.97 ms**（3ミリ秒未満）であり、UI 描画への顕著な影響は確認されなかった。
   - UI 描画の Janky frames 率は **3.92% 〜 5.39%**（90% のフレームが 10ms 以内で描画され、今回の測定では顕著な UI 停止は観測されなかった）。
 - **主要なボトルネックの所在**:
   - 保存ワークフロー所要時間（平均 1,283.8 ms）の大部分は、**Android MediaStore へのアルバム保存（`MediaLibrary.Asset.create` / 370〜909 ms）** および **ネイティブリサイズ（`ImageResizer` / 194〜347 ms）** が占めており、JavaScript / Base64 レイヤーには起因しない。
@@ -78,12 +78,16 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
 
 実機（Pixel 9a）において、実際にカメラで撮影・保存を行った 2 回の実測値を以下に示します。
 
+> [!NOTE]
+> **測定上の限界と分散について**:
+> 施行回数は 2 回の実測値です。特に `MediaLibrary.Asset.create`（370〜909 ms）は端末の MediaStore インデックス負荷等により大きく変動し得ます。本結果は「ボトルネックの所在と EXIF 処理の相対的な寄与度（約 3.3%）」を客観的に示すものであり、絶対的なレイテンシ保証ではありません。
+
 ### 4.1 パイプライン各ステップの所要時間 (ms)
 
 | Step | パイプライン処理ステップ | 施行 1 | 施行 2 | **平均値** | 処理責務 / レイヤー |
 |---|---|---|---|---|---|
 | **Step 1** | **Camera 生画像取り込み** (`takePictureAsync`) | - ※1 | 328.5 ms | **~328 ms** | ネイティブカメラセンサー / 一時書き込み（※保存外） |
-| **Step 2** | **1600x1200 ネイティブリサイズ** (`ImageResizer`) | 346.7 ms | 194.0 ms | **270.4 ms** | ネイティブ Bitmap/Matrix（長辺1600px縮小） |
+| **Step 2** | **長辺1600px ネイティブリサイズ** (`ImageResizer`) | 346.7 ms | 194.0 ms | **270.4 ms** | ネイティブ Bitmap/Matrix（アスペクト比維持縮小） |
 | **Step 3** | **Base64 読み込み** (`readAsStringAsync`) | 17.9 ms | 3.5 ms | **10.7 ms** | JS / FileSystem（約 200〜300KB のみ） |
 | **Step 4** | **EXIF 挿入・パース** (`piexif.load/dump/insert`) | 33.0 ms | 23.8 ms | **28.4 ms** | JS (piexifjs) / メタデータ注入 |
 | **Step 5** | **Base64 書き出し** (`writeAsStringAsync`) | 4.0 ms | 2.5 ms | **3.3 ms** | JS / FileSystem（ディスク同期） |
@@ -170,6 +174,7 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
 | **Total RSS** | 208.8 MB | 358.8 MB | 399.0 MB | 今回の測定条件ではこの範囲で推移 |
 
 - **今回の測定範囲（Pixel 9a、2回施行）では**、かつて 6MB RAW 画像で試算されていた「JS ヒープ増分 288MB」のような急激なメモリ圧迫や OOM の兆候は観測されず、Java Heap PSS は 11〜22MB に収まりました。
+- **Native Heap の推移に関する補足**: 起動直後（26.6 MB）から保存後（194〜219 MB）への増加は、CameraX プレビューの Surface バッファやネイティブ Bitmap メモリが、Android OS の非同期 GC およびグラフィックパイプラインのライフサイクルに依存して保持されていることによるものです。今回の測定範囲では OOM の兆候なく安定推移しました。
 
 ### 5.2 ART ランタイムの GC 挙動
 - **GC ログ**:
@@ -177,12 +182,12 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
   Explicit concurrent mark compact GC freed 1802KB AllocSpace bytes, paused 2.967ms, 7.871ms total 188.199ms
   ```
 - **評価**:
-  - 今回の測定環境では、GC による UI スレッド一時停止時間（pause time）は **わずか 2.967 ms** でした。
-  - 人間の知覚限界（約 16ms / 1フレーム）を大きく下回っており、UI スレッドの顕著な停止やカクつきは確認されませんでした。
+  - 今回の測定環境では、ART GC による全スレッド一時停止時間（Stop-The-World pause time）は **2.967 ms** でした。
+  - 60fps における 1 フレームの許容描画時間（16.6 ms）に対して極めて小さく、UI 描画への顕著な影響やフレームドロップは確認されませんでした（第 5.3 節 gfxinfo 参照）。
 
 ### 5.3 UI 描画フレームレート・遅延 (gfxinfo)
 - **レンダリング総フレーム数**: 332 frames
-- **Janky frames 率**: **3.92%**（13 / 332 frames）
+- **Janky frames 率**: **3.92%**（13 / 332 frames、施行 2 完了時の累積値。※施行 1 完了時点は 9 / 167 frames で 5.39%）
 - **フレーム所要時間パーセンタイル**:
   - 50th percentile: **5 ms**
   - 90th percentile: **10 ms** (100 fps 相当)
