@@ -56,6 +56,10 @@ fi
 echo ""
 echo "3. Collecting Performance Logs from Logcat..."
 echo "--------------------------------------------------"
+echo "Note: Step 1 (Camera capture) is prior to save workflow."
+echo "      Total is the synchronous duration of saveCaptureReviewWorkflow."
+echo "      Step 6 (Thumbnail generation) runs asynchronously in background."
+echo "--------------------------------------------------"
 adb logcat -d -s ReactNativeJS | grep -E "\[PERF_STEP\]" || echo "No [PERF_STEP] logs found."
 echo "--------------------------------------------------"
 

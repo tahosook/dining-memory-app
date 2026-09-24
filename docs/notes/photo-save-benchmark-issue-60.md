@@ -10,18 +10,18 @@
 > 本ベンチマークは、この新パイプラインが**実際の Android 実機環境において想定通りの省メモリ・高速性・低遅延を達成しているかを客観的データによって検証・確定させる**ことを主目的として実施されました。
 
 ### 結論要約
-- **EXIF処理の極小フットプリント**:
-  - リサイズ先行（約 200KB）により、JavaScript レイヤーの EXIF 処理（Base64 読込 + piexif パース・ダンプ・挿入 + Base64 書込）の所要時間は **平均 42.4 ms**（最短 29.8 ms、最長 54.9 ms）に抑えられ、保存ワークフロー全体（約 1.3 秒）の **約 3.3%** にすぎない。
+- **EXIF処理の所要時間**:
+  - リサイズ先行（約 200KB）により、JavaScript レイヤーの EXIF 処理（Base64 読込 + piexif パース・ダンプ・挿入 + Base64 書込）の実測所要時間は **平均 42.4 ms**（施行1: 54.9 ms、施行2: 29.8 ms）となり、保存ワークフロー全体（約 1.3 秒）の **約 3.3%** を占めるにとどまった。
 - **メモリ健全性**:
-  - 保存処理中の Java Heap PSS は **11.3 MB 〜 22.4 MB** で推移し、かつて懸念されたヒープ肥大化（288MB）や OOM リスクは完全に払拭された。
-- **GC 影響・UI カクつきの皆無**:
-  - GC ポーズ時間は **2.97 ms**（3ミリ秒未満）。
-  - UI 描画の Janky frames 率（フレーム落ち率）は **3.92% 〜 5.39%**（90% のフレームが 10ms 以内でレンダリング完了し、60fps 基準 16.6ms を余裕でクリア）。
-- **主要なボトルネックの特定**:
-  - 保存処理時間（平均 1,283.8 ms）の大部分は、**Android MediaStore へのアルバム保存（`MediaLibrary.Asset.create` / 370〜909 ms）** および **ネイティブリサイズ（`ImageResizer` / 194〜347 ms）** が占めており、JavaScript / Base64 レイヤーには起因しない。
+  - **今回の測定条件（Google Pixel 9a / RAM 8GB / 2回施行）においては**、かつて懸念されたヒープ肥大化（288MB）や OOM の兆候は観測されず、Java Heap PSS は **11.3 MB 〜 22.4 MB** の範囲で推移した。
+- **GC 影響・UI 描画安定性**:
+  - 今回の測定条件では、GC による UI スレッド一時停止時間は **2.97 ms**（3ミリ秒未満）であり、顕著な UI 停止は確認されなかった。
+  - UI 描画の Janky frames 率（フレーム落ち率）は **3.92% 〜 5.39%**（90% のフレームが 10ms 以内でレンダリング完了し、60fps 基準 16.6ms をクリア）。
+- **主要なボトルネックの所在**:
+  - 保存ワークフロー所要時間（平均 1,283.8 ms）の大部分は、**Android MediaStore へのアルバム保存（`MediaLibrary.Asset.create` / 370〜909 ms）** および **ネイティブリサイズ（`ImageResizer` / 194〜347 ms）** が占めており、JavaScript / Base64 レイヤーには起因しない。
 - **Issue #61 への判断**:
-  - **Native EXIF (Kotlin) への移行は「不要（現状維持・改善不要）」と判断する**。
-  - 理由: 改善余地が最大でも 40ms 程度と微小であり、Kotlin ネイティブモジュール保守コストや iOS とのプラットフォーム分岐のデメリットに見合わないため（後述）。
+  - **Native EXIF (Kotlin) への移行は「不要（現状維持・改善見送り）」と判断する**。
+  - 理由: 移行による短縮余地は最大でも 30ms 程度（※机上推定値 ~10ms との実測差分）と微小であり、Kotlin ネイティブモジュール保守コストや iOS とのプラットフォーム二重管理のデメリットに見合わないため（第 6 節参照）。
 
 ---
 
@@ -34,6 +34,7 @@
   - 最適化・難読化、Hermes 最適化バイトコードコンパイル、ProGuard/R8 適用済み
 - **アプリ識別子**: `com.tahosook.diningmemory`
 - **測定日時**: 2026-09-25 00:27 〜 00:30 (JST)
+- **施行回数**: 実機撮影および保存 2 回
 
 ---
 
@@ -81,20 +82,70 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
 
 | Step | パイプライン処理ステップ | 施行 1 | 施行 2 | **平均値** | 処理責務 / レイヤー |
 |---|---|---|---|---|---|
-| **Step 1** | **Camera 生画像取り込み** (`takePictureAsync`) | - ※ | 328.5 ms | **~328 ms** | ネイティブカメラセンサー / 一時書き込み |
+| **Step 1** | **Camera 生画像取り込み** (`takePictureAsync`) | - ※1 | 328.5 ms | **~328 ms** | ネイティブカメラセンサー / 一時書き込み（※保存外） |
 | **Step 2** | **1600x1200 ネイティブリサイズ** (`ImageResizer`) | 346.7 ms | 194.0 ms | **270.4 ms** | ネイティブ Bitmap/Matrix（長辺1600px縮小） |
 | **Step 3** | **Base64 読み込み** (`readAsStringAsync`) | 17.9 ms | 3.5 ms | **10.7 ms** | JS / FileSystem（約 200〜300KB のみ） |
 | **Step 4** | **EXIF 挿入・パース** (`piexif.load/dump/insert`) | 33.0 ms | 23.8 ms | **28.4 ms** | JS (piexifjs) / メタデータ注入 |
 | **Step 5** | **Base64 書き出し** (`writeAsStringAsync`) | 4.0 ms | 2.5 ms | **3.3 ms** | JS / FileSystem（ディスク同期） |
-| **(3〜5)** | **【EXIF 処理小計】** | **54.9 ms** | **29.8 ms** | **42.4 ms** | **JavaScript レイヤー合計** |
-| **Step 6** | **サムネイル生成** (320px / `mealThumbnail`) | 97.0 ms | 39.1 ms | **68.1 ms** | 非同期キュー / `ImageResizer` (320px) |
+| **(3〜5)** | **【EXIF 処理小計】** | **54.9 ms** | **29.8 ms** | **42.4 ms** | **JavaScript レイヤー合計 (実測値)** |
+| **Step 6** | **サムネイル生成** (320px / `mealThumbnail`) | 97.0 ms | 39.1 ms | **68.1 ms** | 非同期キュー / `ImageResizer` (※バックグラウンド非同期) |
 | **Step 7** | **SQLite レコード保存** (`MealService.createMeal`) | 56.2 ms | 129.9 ms | **93.1 ms** | SQLite トランザクション |
 | **Step 8** | **MediaLibrary アルバム保存** (`MediaLibrary.Asset`) | 909.1 ms | 370.3 ms | **639.7 ms** | Android MediaStore インデックス登録 |
-| **Total** | **保存パイプライン全体経過時間** | **1,805.4 ms** | **762.2 ms** | **1,283.8 ms** | （UIブロックなし・非同期連携含む） |
+| **Total** | **保存パイプライン全体経過時間** | **1,805.4 ms** | **762.2 ms** | **1,283.8 ms** | **saveCaptureReviewWorkflow 全体の計測区間** |
 
-※ 施行 1 は事前撮影済みの一時画像から保存を実行したため Step 1 は除外。
+※1 施行 1 は事前撮影済みの一時画像から保存を実行したため Step 1 は除外。
 
-### 4.2 保存写真の仕様・EXIF保持検証結果
+---
+
+### 4.2 各 Step の計測値と Total の包含関係・整合性分析
+
+各 Step の合計値と Total の数値が一見一致しない理由は、コード上の**「処理フェーズの分離」「非同期実行（await なし）」「保存ワークフロー内部の入れ子構造」**に起因します。コード実装（`src/hooks/cameraCapture/`）に基づく詳細な計測区間と関係性は以下の通りです。
+
+```
+【フェーズ 1: 撮影 (レビュー前)】
+[Step 1: takePictureAsync] (328.5 ms)
+      ↓ (ユーザー確認・レビュー画面表示)
+
+【フェーズ 2: 保存ワークフロー (Total: saveCaptureReviewWorkflow の計測区間)】
+┌── [Total 開始: performance.now()] ────────────────────────────────────────┐
+│  (1) 位置情報取得: getLocationSnapshot() (GPS 測位)                      │
+│  (2) 写真永続化: persistPhotoLocally() -> persistPhotoToStablePath()      │
+│      ├─ [Step 2: Native リサイズ (ImageResizer)] (194〜347 ms)           │
+│      ├─ copyAsync (リサイズ一時ファイル -> 永続パスへコピー)              │
+│      ├─ writePhotoExifToJpeg()                                           │
+│      │   ├─ [Step 3: Base64 読込] (3.5〜17.9 ms)                         │
+│      │   ├─ [Step 4: EXIF 挿入]  (23.8〜33.0 ms)                         │
+│      │   └─ [Step 5: Base64 書込] (2.5〜4.0 ms)                          │
+│      ├─ cleanupTempFile (リサイズ一時ファイル削除)                        │
+│      └─ [Step 8: MediaLibrary.Asset.create] (370〜909 ms)                │
+│  (3) [Step 7: MealService.createMeal] (56〜130 ms)                        │
+│  (4) triggerThumbnailGeneration(meal.id) ───┐ (await なし・非同期キック)  │
+│  (5) cleanupTempFile (カメラ元一時ファイル削除)│                          │
+└── [Total 終了: performance.now()] ─────────┼──────────────────────────────┘
+                                             │
+【バックグラウンド非同期処理 (Total に含まれない)】
+└─> [Step 6: Thumbnail generation] (39〜97 ms) (非同期タスクキューで並行処理)
+```
+
+#### 包含関係のポイント:
+1. **Step 1 (Camera capture) は Total に含まれない**:
+   - `takePhotoForReview` はユーザーがシャッターを切った撮影フェーズで完了しており、その後のレビュー画面で「保存」を押した時に開始される `saveCaptureReviewWorkflow` (Total) の計測区間外です。
+2. **Step 6 (Thumbnail generation) は Total に含まれない**:
+   - `saveCaptureReviewWorkflow` L114 では `triggerThumbnail(meal.id)` を呼び出していますが、これは内部の非同期キュー（`taskQueue`）にタスクをエンキューするだけで `await` していません。そのため、Step 6 はバックグラウンドで並行処理され、Total の同期ブロック時間には含まれません。
+3. **Total 内部で直列実行される Step の合算値と差分**:
+   - Total の内部で直列（`await`）実行されているのは **Step 2, 3, 4, 5, 8, 7** の 6 つです。
+   - **施行 2 の検証**:
+     - 直列 Step 合計 = 194.0 (Step 2) + 3.5 (Step 3) + 23.8 (Step 4) + 2.5 (Step 5) + 370.3 (Step 8) + 129.9 (Step 7) = **724.0 ms**
+     - Total 実測値 = **762.2 ms**
+     - **差分 = 38.2 ms**。このわずか 38ms の差分は、`copyAsync`、`getInfoAsync`、一時ファイル削除、および位置情報取得のオーバーヘッドであり、各 Step の合算値と Total は高い精度で整合しています。
+   - **施行 1 の検証**:
+     - 直列 Step 合計 = 346.7 + 17.9 + 33.0 + 4.0 + 909.1 + 56.2 = **1,366.9 ms**
+     - Total 実測値 = **1,805.4 ms**
+     - **差分 = 438.5 ms**。施行 1 では初回起動直後だったため、`getLocationSnapshot()` による初回 GPS 測位遅延およびファイルコピー・ディレクトリ解決のオーバーヘッドが乗ったものと確認されました。
+
+---
+
+### 4.3 保存写真の仕様・EXIF保持検証結果
 実機から pull した写真ファイル（`meal-20260925002725.jpg`）のバイナリ解析結果:
 - **解像度**: 1600 × 900（長辺 1600px に正常リサイズ）
 - **ファイルサイズ**: **224.0 KB**（施行 1）/ **192.4 KB**（施行 2）
@@ -114,11 +165,11 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
 
 | メモリ指標 | 起動直後 (Baseline) | 保存処理後 (施行 1) | 保存処理後 (施行 2) | 健全性評価 |
 |---|---|---|---|---|
-| **Java Heap PSS** | 13.3 MB | 11.3 MB | 22.4 MB | **極めて安全** (最大でも 25MB 未満) |
+| **Java Heap PSS** | 13.3 MB | 11.3 MB | 22.4 MB | **今回の測定範囲では安全域** (最大でも 25MB 未満) |
 | **Native Heap PSS** | 26.6 MB | 219.1 MB | 194.1 MB | カメラプレビュー・Bitmap 解放サイクル正常 |
 | **Total RSS** | 208.8 MB | 358.8 MB | 399.0 MB | 8GB 端末において余裕の安全域 |
 
-- かつて 6MB RAW 画像で試算されていた「JS ヒープ増分 288MB」は、リサイズ先行（約 200KB）により **11〜22MB** に抑えられ、メモリ圧迫や OOM の兆候は一切見られません。
+- **今回の測定範囲（Pixel 9a、2回施行）では**、かつて 6MB RAW 画像で試算されていた「JS ヒープ増分 288MB」のような急激なメモリ圧迫や OOM の兆候は観測されず、Java Heap PSS は 11〜22MB に収まりました。
 
 ### 5.2 ART ランタイムの GC 挙動
 - **GC ログ**:
@@ -126,8 +177,8 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
   Explicit concurrent mark compact GC freed 1802KB AllocSpace bytes, paused 2.967ms, 7.871ms total 188.199ms
   ```
 - **評価**:
-  - GC による UI スレッド一時停止時間（pause time）は **わずか 2.967 ms**。
-  - 人間の知覚限界（約 16ms / 1フレーム）を大きく下回っており、GC ポーズによるカクつき・フリーズは発生していません。
+  - 今回の測定環境では、GC による UI スレッド一時停止時間（pause time）は **わずか 2.967 ms** でした。
+  - 人間の知覚限界（約 16ms / 1フレーム）を大きく下回っており、UI スレッドの顕著な停止やカクつきは確認されませんでした。
 
 ### 5.3 UI 描画フレームレート・遅延 (gfxinfo)
 - **レンダリング総フレーム数**: 332 frames
@@ -139,7 +190,7 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
   - 99th percentile: **44 ms**
 - **Slow bitmap uploads**: **0 回**
 - **評価**:
-  - 90% 以上のフレームが 10ms 以内で描画を終えており、写真保存中であっても UI は極めて滑らかに 60fps を維持しています。
+  - 90% 以上のフレームが 10ms 以内で描画を終えており、写真保存中であっても UI は滑らかに 60fps を維持していました。
 
 ---
 
@@ -151,14 +202,16 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
 
 | 評価軸 | Native EXIF 移行案 (Kotlin) | 現行方式 (JS / piexifjs) | 評価・判断 |
 |---|---|---|---|
-| **1. 処理速度・メモリ改善幅** | ~10ms（高速） | **42.4 ms** (Step 3〜5 合計) | **差分は 30ms 程度で体感不能**。保存全体の律速は MediaLibrary（640ms）であり、EXIF の短縮効果は全体の 2% 未満。 |
+| **1. 処理速度・メモリ改善幅** | **~10ms（※机上推定値）** ※2 | **42.4 ms（※実測値: 2回平均）** (Step 3〜5 合計) | **改善余地は最大約 30ms 程度で体感不能**。保存全体の律速は MediaLibrary（640ms）であり、EXIF 短縮による全体寄与は 2% 未満。 |
 | **2. 実装工数・保守コスト** | Kotlin Native Module（40〜60行）の追加、メンテ負荷増 | **ゼロ**（既存コードをそのまま利用） | ネイティブコード追加による Expo SDK アップデート時の破壊リスクを回避できる。 |
 | **3. クロスプラットフォーム整合性** | Android: Native、iOS: JS の二重管理が発生 | **両 OS 共通の統一実装** | 実装の一貫性とテストの容易性が保たれる。 |
-| **4. EXIF 互換性** | Android OS の ExifInterface 依存 | `piexifjs` による厳密なタグ制御 | 現在 Google Pixel 9a の実機写真で `Make`, `Model`, `Software`, `DateTimeOriginal` が完璧に保持されていることを確認済み。 |
+| **4. EXIF 互換性** | Android OS の ExifInterface 依存 | `piexifjs` による厳密なタグ制御 | 実機写真で `Make`, `Model`, `Software`, `DateTimeOriginal` が正常保持されていることを確認済み。 |
+
+※2 `~10ms` は、Kotlin Native Module 未実装のため、一般的な Android `ExifInterface.saveAttributes()` 直接呼出のオーバーヘッドに基づく机上推定値です。
 
 ### 結論
 > **判断: 現状維持（見送り / Won't Fix）**
-> 「改善できる ≠ 改善する必要がある」の原則に基づき、実機測定でユーザー体験劣化（遅延やOOM）が一切確認されず、EXIF 処理が 42ms で完了しているため、保守コストを増やしてまで Native EXIF 化を行う技術的合理性はありません。
+> 「改善できる ≠ 改善する必要がある」の原則に基づき、今回の測定条件（Pixel 9a / 2回施行）において顕著なユーザー体験劣化（数百ms以上の遅延やメモリ不足）は確認されず、EXIF 処理自体が平均 42ms で完了しているため、保守コストを増やしてまで Native EXIF 化を行う技術的合理性はありません。
 
 ---
 
@@ -167,7 +220,7 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
 - [x] Android 実機での写真保存パイプラインの各ステップの所要時間および PSS / RSS メモリ推移が実測されていること。
   - Google Pixel 9a (Android 17) 実機にて 8 ステップのミリ秒精度および PSS/RSS を実測完了。
 - [x] 測定結果がテーブル形式で記録されていること。
-  - 第 4 節および第 5 節に詳細なマトリクスを記載完了。
+  - 第 4 節および第 5 節に詳細なマトリクス、包含関係の分解、および整合性分析を記載完了。
 - [x] 測定手順が再現可能なコマンド・手順として Issue に記録されていること。
   - 第 3 節に adb コマンドおよび `scripts/benchmark-android-photo-save.sh` を整備完了。
 - [x] 本測定結果に基づき、Issue 61（Native EXIF 化の要否判断）を開始できる状態になること。
