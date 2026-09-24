@@ -1,4 +1,7 @@
-# [Chore/Config] knip.json のスキーマ定義バージョン更新 (v5 → v6)
+# [Chore/Config] knip.json のスキーマ定義バージョン更新 (v5 → v6)（Issue #83）
+
+- **ステータス**: 完了 (Closed)
+- **完了 PR**: PR #84
 
 ## 概要
 `knip.json` の `$schema` プロパティが `https://unpkg.com/knip@5/schema.json`（v5 用スキーマ）を指定していますが、`package.json` で導入されている Knip のバージョンは `^6.36.0`（v6）です。エディタでの補完や検証を正しく機能させるため、スキーマ URL を v6 に更新します。
@@ -11,5 +14,5 @@
 2. `npm run check:deps` を実行し、正常に動作することを確認する。
 
 ## 受入基準
-- [ ] `knip.json` の `$schema` が v6 を参照していること。
-- [ ] `npm run check:deps` がエラーなく実行されること。
+- [x] `knip.json` の `$schema` が v6 を参照していること。
+- [x] `npm run check:deps` がエラーなく実行されること。

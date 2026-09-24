@@ -8,7 +8,6 @@
 
 ## Now
 ### Investigation / evaluation candidates（調査・評価候補）
-- 撮影写真の保存時圧縮・リサイズ機構の検討（ストレージ肥大化対策）: 調査・評価候補（Issue #75）。既存依存 `@bam.tech/react-native-image-resizer` の活用前提で実測評価を行い、適切な保存仕様（解像度・JPEG品質・フォールバック等）を検討・決定（※本Issueでは決め打ち実装せず仕様決定後に別Issue切り出し） ([docs/issues/issue-03-photo-storage-compression.md](docs/issues/issue-03-photo-storage-compression.md))。
 - AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
 - AIメモ下書きの面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、下書きの実用性と表現を改善する。
 - AIコード品質・セキュリティガードレール: 候補。raw AI output、photo path、location、notes の保存・ログ出力を増やさない方針を維持する。
@@ -20,6 +19,7 @@
 - MediaPipe分類モデル同梱: 要確認。現在 `.task` model は repo commit せず manual local drop-in 前提。配布方法、license、size、build impact の判断が必要。
 - ローカルLLM / Ollama を使ったラベリング支援: 候補。既存 workflow は bounded loop と local executor 前提。生成 state の扱いに注意する。
 - Android / Expo ビルド運用: 候補。CI はあり、実機 smoke と model asset / native build 前提の確認手順は必要に応じて整理する。
+- リリースビルド署名鍵（Keystore）の管理・注入方針の策定: 調査・方針策定候補（Issue #12）。本番リリース時の Keystore 生成規格、多重保管・バックアップ運用、および各ビルド環境（ローカル / CI / EAS）へのシークレット注入方法の確立 ([docs/issues/issue-12-release-keystore-management.md](docs/issues/issue-12-release-keystore-management.md))。
 
 ## Later
 ### Future-triggered evaluation（将来トリガー待ち評価）
@@ -32,6 +32,7 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
+- 写真保存時圧縮・リサイズおよびライフサイクル管理 (#75, #86, #87, #88): 撮影写真の保存時圧縮・リサイズ実測評価（Issue #75、`docs/notes/photo-compression-evaluation-issue-75.md`）、メイン写真保存時ネイティブリサイズ（最大長辺1600px / JPEG 80%）およびフォールバック（Issue #86）、写真世代ベースのサムネイル非同期生成と写真回転競合耐性（Issue #87）、孤立写真ファイル回収とファイルライフサイクル保護（Issue #88）。
 - Phase 2 (#77, #78, #79): RecordsScreen の日付グルーピング改善（YYYY-MM-DD 化 & タイムスタンプ直接ソート、Issue #77）、RootNavigator のタブヘッダー宣言的設定移行（Issue #78）、RootNavigator / App.tsx ナビゲーション結合テスト追加（Issue #79）。
 - Phase 1 (#73, #74, #76, #83): Jest テスト環境設定健全化（Issue #73）、ESLint flat config / Prettier CI フォーマットチェック（Issue #74）、CI Node.js 24 LTS 固定（Issue #76）、Knip スキーマ v6 更新（Issue #83）（PR #84 にて完了）。
 - `src/ai/search/` ディレクトリの確認（Issue #82）: Git リポジトリ上で未追跡（存在しない）ことを確認し Close 済み。

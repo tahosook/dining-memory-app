@@ -1,4 +1,7 @@
-# [Test] RootNavigator / App.tsx のナビゲーション結合テストの追加
+# [Test] RootNavigator / App.tsx のナビゲーション結合テストの追加（Issue #79）
+
+- **ステータス**: 完了 (Closed)
+- **完了 PR**: PR #85（Phase 2）
 
 ## 概要
 現在、`src/screens/` 配下の各画面に対する単体テストは充実していますが、アプリ全体のルーティングを束ねる `RootNavigator.tsx` およびエントリーポイントである `App.tsx` に対する結合テストが存在しません。タブの切り替えやスタック画面（`MealDetail` 等）の導線が壊れていないかを検証するテストを追加します。

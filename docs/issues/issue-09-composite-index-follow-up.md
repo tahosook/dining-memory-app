@@ -1,3 +1,9 @@
+# [Investigation] 大量データ規模における複合インデックス導入の再評価（Issue #81）
+
+- **ステータス**: 将来トリガー待ち評価 (Later / Future-triggered)
+- **根拠ドキュメント**: [docs/notes/composite-index-evaluation-issue-59.md](../notes/composite-index-evaluation-issue-59.md)（現時点見送り確認済み）
+- **対象トリガー**: 保存件数10,000件超、または実機体感遅延の報告時
+
 ## 概要
 本Issueは、**Issue #59 の実測評価レポート（`docs/notes/composite-index-evaluation-issue-59.md`）の結論（現時点は見送り）を引き継ぐ将来追跡用 Issue** です。
 Records 一覧クエリに対する複合インデックス `idx_meals_is_deleted_datetime ON meals(is_deleted, meal_datetime DESC)` の導入について、現時点（データ規模 1,000 件以下）では体感改善効果が 0.1ms 未満であり不要なスキーマ更新を避けるため見送りと判断されました。本Issueは、将来データ件数の増大時やクエリ要件変更時に再評価を行うためのトリガー管理タスクとして位置付けられます。

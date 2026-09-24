@@ -1,3 +1,8 @@
+# [Chore/Test] Jest テスト環境設定健全化（Issue #73）
+
+- **ステータス**: 完了 (Closed)
+- **完了 PR**: PR #84
+
 ## 概要
 現在、`jest.config.js` で `jest.setup.js` が読み込まれておらず（`setupFilesAfterEnv` 未設定）、また `testEnvironment: 'node'` が指定されているため、`jest-expo` の提供する React Native 向けテスト環境が一部バイパスされています。加えて、`BROWSERSLIST_IGNORE_OLD_DATA` 環境変数が `package.json` と `jest.setup.js` で重複しており、さらに `jest.setup.js` 内にプロジェクトで未導入のパッケージに対する不要なモックが残留しています。
 
@@ -24,7 +29,7 @@
 5. 既存テストスイート全 28 件が正常に PASS することを確認する。
 
 ## 受入基準
-- [ ] `jest.setup.js` のモックがテスト実行時に確実にロードされていること。
-- [ ] `jest.setup.js` 内に未導入パッケージへの不要な死んだモックが残っていないこと（または残す意図がコメントで説明されていること）。
-- [ ] `package.json` のテストスクリプトおよび環境変数設定が簡素化されていること。
-- [ ] `npm test` で既存テストスイート全件が正常に PASS すること。
+- [x] `jest.setup.js` のモックがテスト実行時に確実にロードされていること。
+- [x] `jest.setup.js` 内に未導入パッケージへの不要な死んだモックが残っていないこと（または残す意図がコメントで説明されていること）。
+- [x] `package.json` のテストスクリプトおよび環境変数設定が簡素化されていること。
+- [x] `npm test` で既存テストスイート全件が正常に PASS すること。

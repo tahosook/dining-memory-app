@@ -1,3 +1,8 @@
+# [CI] CI Node.js バージョンの LTS 固定（Issue #76）
+
+- **ステータス**: 完了 (Closed)
+- **完了 PR**: PR #84
+
 ## 概要
 現在、`.github/workflows/ci.yml` において Node.js のバージョンが `25.9.0` に固定されています。Node.js 25 は奇数番号リリースであり、既に **2026年6月1日に EOL（End of Life / サポート終了）** を迎えています。現在サポート切れのランタイムを CI で使用している状態を解消し、長期安定運用のために LTS（Long Term Support）バージョンへ移行します。
 
@@ -16,5 +21,5 @@
 2. 変更後の Node.js バージョンで `npm ci`, `npm run lint`, `npm run type-check`, `npm test` が全て正常に通過することを確認する。
 
 ## 受入基準
-- [ ] `.github/workflows/ci.yml` でサポート中の LTS Node.js バージョン（推奨: `24.x` または `22.x`）が指定されていること。
-- [ ] 全 CI ジョブ（lint, type-check, test）が安定してグリーンになること。
+- [x] `.github/workflows/ci.yml` でサポート中の LTS Node.js バージョン（推奨: `24.x` または `22.x`）が指定されていること。
+- [x] 全 CI ジョブ（lint, type-check, test）が安定してグリーンになること。

@@ -1,4 +1,7 @@
-# [Refactor] RootNavigator のタブヘッダー制御を画面ごとの宣言的設定に移行
+# [Refactor] RootNavigator のタブヘッダー制御を画面ごとの宣言的設定に移行（Issue #78）
+
+- **ステータス**: 完了 (Closed)
+- **完了 PR**: PR #85（Phase 2）
 
 ## 概要
 `src/navigation/RootNavigator.tsx` の `MainTabs` コンポーネントにおいて、タブ全体の `screenOptions` 内で `headerShown: route.name !== 'Camera' && route.name !== 'Records'` という文字列比較による条件分岐を行っています。この手法は画面名変更や画面追加時の変更漏れに弱いため、各画面定義（`Tab.Screen`）における明示的な宣言へ移行することを推奨します。

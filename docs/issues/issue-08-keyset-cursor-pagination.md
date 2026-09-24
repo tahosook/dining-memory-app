@@ -1,3 +1,8 @@
+# [Investigation] Keyset (Cursor) ページネーション移行条件の検討（Issue #80）
+
+- **ステータス**: 将来トリガー待ち評価 (Later / Future-triggered)
+- **対象トリガー**: データ規模の拡大（保存件数10,000件超）または実機性能課題の顕在化
+
 ## 目的
 現在のLIMIT/OFFSET方式について、実際のデータ規模・利用形態を踏まえてKeyset paginationへの移行が必要になる条件を明確化する。
 

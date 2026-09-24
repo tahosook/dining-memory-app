@@ -1,4 +1,7 @@
-# [Bug/Refactor] RecordsScreen の日付グルーピングにおけるタイムゾーン依存・日付再パースの改善
+# [Bug/Refactor] RecordsScreen の日付グルーピングにおけるタイムゾーン依存・日付再パースの改善（Issue #77）
+
+- **ステータス**: 完了 (Closed)
+- **完了 PR**: PR #85（Phase 2）
 
 ## 概要
 `src/screens/RecordsScreen/RecordsScreen.tsx` の `groupMealsByDate` 関数において、`new Date(meal.meal_datetime).toDateString()` で日付キーを生成し、セクションのソート時に `new Date(b.date).getTime()` で文字列を再パースしています。この処理は JS エンジン間の日付文字列解釈の差異やタイムゾーンの境界で意図しない日付のずれ（off-by-one エラー）を引き起こすリスクがあります。

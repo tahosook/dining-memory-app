@@ -25,6 +25,31 @@
 - Avoid mixing unrelated changes in one pass.
 - Separate behavior changes from cleanup-only changes unless combining them clearly reduces risk.
 
+## Issue and Task Tracking Policy
+To prevent double-maintenance overhead and synchronization drift between GitHub Issues and the codebase, follow the three-tier tracking model:
+
+1. **Three-Tier Tracking Model**:
+   - **Candidate Index ([TASKS.md](../../TASKS.md))**: lightweight index of immediate (`Now`), planned (`Next`), and triggered (`Later`) tasks. Used to prioritize work without reading the entire repository.
+   - **Specification & Acceptance Criteria ([docs/issues/](../issues/) and [docs/notes/](../notes/))**: single source of truth for technical specifications, investigation benchmarks, and acceptance criteria. Version-controlled directly alongside source code.
+   - **Ticket Lifecycle & Automation (GitHub Issues)**: tracks open/closed lifecycle, assignees, milestones, and pull request linkages.
+
+2. **Thin GitHub Issues**:
+   - When opening a GitHub Issue, keep the issue body thin: state the high-level objective and link directly to the corresponding `docs/issues/issue-XX-xxx.md` file.
+   - Do not copy-paste detailed acceptance checklists into GitHub Issues to avoid synchronization drift.
+
+3. **PR Automation & Auto-Close**:
+   - Every PR addressing an issue should include `Closes #<issue-number>` (or `Fixes #<issue-number>`) in its description.
+   - Merging the PR automatically closes the corresponding GitHub Issue.
+
+4. **Synchronous Ledger Updates**:
+   - In the same PR that implements or completes the task, update:
+     - [TASKS.md](../../TASKS.md): move the task from `Now` to `Done / Historical Notes`.
+     - `docs/issues/issue-XX.md`: update status to closed, mark acceptance checkboxes `[x]`, and record the PR number.
+
+5. **Future-Triggered Tasks (`Later`)**:
+   - Tasks awaiting future trigger conditions (e.g., Issue #80 Keyset pagination or Issue #81 composite index awaiting 10,000 records) remain classified as `Later / Future-triggered`.
+   - On GitHub, tag these issues with `later` or `future-triggered` to keep the active backlog clean.
+
 ## Before Editing
 - Identify the canonical doc and the implementation files that are the source of truth.
 - Prefer `src/` and current canonical docs over deprecated docs and historical notes.
