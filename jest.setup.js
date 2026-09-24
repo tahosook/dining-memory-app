@@ -61,3 +61,17 @@ jest.mock('react-native-zip-archive', () => ({
   unzip: jest.fn(),
 }));
 
+// Expo MediaLibrary mock
+jest.mock('expo-media-library', () => ({
+  Asset: {
+    create: jest.fn(),
+  },
+  Album: {
+    get: jest.fn(),
+    create: jest.fn(),
+  },
+  requestPermissionsAsync: jest.fn(),
+  getPermissionsAsync: jest.fn(),
+}));
+
+

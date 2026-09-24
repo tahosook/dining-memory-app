@@ -204,7 +204,7 @@ export default function SettingsScreen() {
           text: '削除する',
           style: 'destructive',
           onPress: async () => {
-            await MealService.clearAllMeals();
+            await MealService.clearAllMeals({ cleanupPhotos: true });
             Alert.alert('削除完了', '食事記録を削除しました。');
           },
         },
@@ -458,6 +458,10 @@ export default function SettingsScreen() {
           style={styles.secondaryButton}
           onPress={() => setShowAiDetails(current => !current)}
           testID="toggle-ai-details-button"
+          accessibilityRole="button"
+          accessibilityLabel="AIアシストの詳細情報"
+          accessibilityHint="AIアシストモデルの詳細情報の表示を切り替えます"
+          accessibilityState={{ expanded: showAiDetails }}
         >
           <Text style={styles.secondaryButtonText}>
             {showAiDetails ? '詳細情報を隠す' : '詳細情報を表示'}

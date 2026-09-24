@@ -38,6 +38,7 @@ import {
   getAllPersistedMealRows,
   replaceDatabaseWithBackup,
 } from './localDatabase';
+import { cleanupOrphanedPhotoFiles } from '../../media/photoLifecycle';
 
 function stripFileScheme(uri: string): string {
   return uri.replace(/^file:\/\//, '');
@@ -474,6 +475,16 @@ export class BackupService {
 
       // 4. Atomically replace database records inside SQLite transaction
       await replaceDatabaseWithBackup(restoredMeals, restoredSettings);
+
+      // 5. Clean up orphaned photo and thumbnail files no longer referenced by the restored database
+      try {
+        await cleanupOrphanedPhotoFiles();
+      } catch (cleanupError) {
+        console.warn(
+          '[BackupService] Non-fatal warning: Failed to clean up orphaned photos after restore:',
+          cleanupError
+        );
+      }
 
       return {
         restoredMealCount: restoredMeals.length,
