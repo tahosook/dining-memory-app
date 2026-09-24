@@ -117,7 +117,7 @@ export function MealEditModal({
                     onPress={onRotateImage}
                     disabled={saving || rotatingImage}
                     accessibilityRole="button"
-                    accessibilityLabel="画像を右に90度回転"
+                    accessibilityLabel={rotatingImage ? '画像を回転中' : '画像を右に90度回転'}
                     accessibilityState={{ disabled: saving || rotatingImage }}
                     testID={`${testIDPrefix}-rotate-image-button`}
                   >
