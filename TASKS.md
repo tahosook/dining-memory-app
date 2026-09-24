@@ -8,7 +8,6 @@
 
 ## Now
 ### Investigation / evaluation candidates（調査・評価候補）
-- 撮影写真の保存時圧縮・リサイズ機構の検討（ストレージ肥大化対策）: 調査・評価候補（Issue #75）。既存依存 `@bam.tech/react-native-image-resizer` の活用前提で実測評価を行い、適切な保存仕様（解像度・JPEG品質・フォールバック等）を検討・決定（※本Issueでは決め打ち実装せず仕様決定後に別Issue切り出し） ([docs/issues/issue-03-photo-storage-compression.md](docs/issues/issue-03-photo-storage-compression.md))。
 - AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
 - AIメモ下書きの面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、下書きの実用性と表現を改善する。
 - AIコード品質・セキュリティガードレール: 候補。raw AI output、photo path、location、notes の保存・ログ出力を増やさない方針を維持する。
@@ -20,11 +19,12 @@
 - MediaPipe分類モデル同梱: 要確認。現在 `.task` model は repo commit せず manual local drop-in 前提。配布方法、license、size、build impact の判断が必要。
 - ローカルLLM / Ollama を使ったラベリング支援: 候補。既存 workflow は bounded loop と local executor 前提。生成 state の扱いに注意する。
 - Android / Expo ビルド運用: 候補。CI はあり、実機 smoke と model asset / native build 前提の確認手順は必要に応じて整理する。
+- リリースビルド署名鍵（Keystore）の管理・注入方針の策定: 調査・方針策定候補（内部ドキュメント issue-12、GitHub Issue: 未起票）。本番リリース時の Keystore 生成規格、多重保管・バックアップ運用、および各ビルド環境（ローカル / CI / EAS）へのシークレット注入方法の確立（※方針策定後に実装タスクとして必要に応じて GitHub Issue を起票予定） ([docs/issues/issue-12-release-keystore-management.md](docs/issues/issue-12-release-keystore-management.md))。
 
 ## Later
 ### Future-triggered evaluation（将来トリガー待ち評価）
-- Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（Issue #80）。`searchMeals` の大量データ時における性能劣化条件と移行トリガーの評価（※本IssueではKeyset実装を行わず、必要と判断された場合に別Issue切り出し） ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
-- 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（Issue #81）。Issue #59 実測評価レポート（現時点見送り）を引き継ぎ、10,000件超等のトリガー到達時に再評価（※今すぐインデックス追加せず実機性能とクエリ計画を確認して判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
+- Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能劣化条件と移行トリガーの評価（※本IssueではKeyset実装を行わず、必要と判断された場合に別Issue切り出し） ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
+- 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。Issue #59 実測評価レポート（現時点見送り）を引き継ぎ、10,000件超等のトリガー到達時に再評価（※今すぐインデックス追加せず実機性能とクエリ計画を確認して判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
 
 ### Backlog / Future ideas（バックログ・将来検討）
 - EXIF / GPS / ファイル名保存方針: 要確認。保存時 EXIF / GPS は実装方針あり。backup / export / file naming まで広げる場合は data policy と privacy を再確認する。
@@ -32,13 +32,14 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
-- Phase 2 (#77, #78, #79): RecordsScreen の日付グルーピング改善（YYYY-MM-DD 化 & タイムスタンプ直接ソート、Issue #77）、RootNavigator のタブヘッダー宣言的設定移行（Issue #78）、RootNavigator / App.tsx ナビゲーション結合テスト追加（Issue #79）。
-- Phase 1 (#73, #74, #76, #83): Jest テスト環境設定健全化（Issue #73）、ESLint flat config / Prettier CI フォーマットチェック（Issue #74）、CI Node.js 24 LTS 固定（Issue #76）、Knip スキーマ v6 更新（Issue #83）（PR #84 にて完了）。
-- `src/ai/search/` ディレクトリの確認（Issue #82）: Git リポジトリ上で未追跡（存在しない）ことを確認し Close 済み。
+- 写真保存時圧縮・リサイズおよびライフサイクル管理 (GitHub Issue #75, #86, #87, #88): 撮影写真の保存時圧縮・リサイズ実測評価（GitHub Issue #75、`docs/notes/photo-compression-evaluation-issue-75.md`、完了 / Closed）、メイン写真保存時ネイティブリサイズ（最大長辺1600px / JPEG 80%）およびフォールバック（GitHub Issue #86、PR #102 にてマージ済み）、写真世代ベースのサムネイル非同期生成と写真回転競合耐性（GitHub Issue #87、PR #102 にてマージ済み）、孤立写真ファイル回収とファイルライフサイクル保護（GitHub Issue #88、PR #105 にてマージ済み）。
+- Phase 2 (GitHub Issue #77, #78, #79): RecordsScreen の日付グルーピング改善（YYYY-MM-DD 化 & タイムスタンプ直接ソート、GitHub Issue #77）、RootNavigator のタブヘッダー宣言的設定移行（GitHub Issue #78）、RootNavigator / App.tsx ナビゲーション結合テスト追加（GitHub Issue #79）（PR #85 にて完了）。
+- Phase 1 (GitHub Issue #73, #74, #76, #83): Jest テスト環境設定健全化（GitHub Issue #73）、ESLint flat config / Prettier CI フォーマットチェック（GitHub Issue #74）、CI Node.js 24 LTS 固定（GitHub Issue #76）、Knip スキーマ v6 更新（GitHub Issue #83）（PR #84 にて完了）。
+- `src/ai/search/` ディレクトリの確認（GitHub Issue #82）: Git リポジトリ上で未追跡（存在しない）ことを確認し Close 済み。
 - 基本の capture -> save -> records / search / stats flow は実装済み。
 - review 画面の tap-to-apply AI 入力補助は一部実装済みで、current visible UI は `noteDraft` を notes に追記する形。
 - Settings の local AI opt-in、model status、runtime status は実装済み。
 - MediaPipe static-image path は Android native bridge まで groundwork 済み。ただし default runtime / Settings readiness への接続は未接続。
 - Records detail からの明示的な X共有導線は実装済み。
-- 内部データのバックアップ / エクスポート / 復元（ローカル ZIP バックアップ基盤、Issue #63）は実装済み。
+- 内部データのバックアップ / エクスポート / 復元（ローカル ZIP バックアップ基盤、GitHub Issue #63）は実装済み。
 - 旧 `PLANS.md` の MVP completion plan は historical reference で、current plan ではない。
