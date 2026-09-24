@@ -4,7 +4,7 @@
 - **対応 GitHub Issue**: GitHub Issue #75
 - **ステータス**: 完了 (Closed)
 - **実測評価レポート**: [docs/notes/photo-compression-evaluation-issue-75.md](../notes/photo-compression-evaluation-issue-75.md)
-- **完了 PR**: PR #102（GitHub Issue #86, #87: ネイティブリサイズ・サムネイル世代分離）、PR #105（GitHub Issue #88: 孤立写真回収とライフサイクル保護）
+- **派生実装 PR**: PR #102（GitHub Issue #86, #87: ネイティブリサイズ・サムネイル世代分離）、PR #105（GitHub Issue #88: 孤立写真回収とライフサイクル保護）
 
 ## 目的
 撮影写真の保存容量を削減しつつ、食事記録として十分な画質を維持できる保存仕様を検討・決定する。

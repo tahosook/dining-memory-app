@@ -20,5 +20,5 @@
 - [ ] `npm run check:docs`
 - [ ] `npm run format:check`
 - [ ] `npm run lint`
-- [ ] `npm run type-check`
+- [ ] `npm run type-check` (if code/types changed)
 - [ ] `npm test`

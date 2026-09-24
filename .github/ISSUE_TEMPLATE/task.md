@@ -2,7 +2,7 @@
 name: Implementation Task / Feature
 about: Implementation task referencing a spec in docs/issues/
 title: '[Feature/Refactor] '
-labels: ['task']
+labels: ''
 assignees: ''
 ---
 

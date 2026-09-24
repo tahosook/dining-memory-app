@@ -2,7 +2,7 @@
 name: Investigation / Evaluation
 about: Technical spike, evaluation, or benchmark investigation
 title: '[Investigation] '
-labels: ['investigation']
+labels: ''
 assignees: ''
 ---
 
