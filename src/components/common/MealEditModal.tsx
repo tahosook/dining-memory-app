@@ -116,6 +116,9 @@ export function MealEditModal({
                     ]}
                     onPress={onRotateImage}
                     disabled={saving || rotatingImage}
+                    accessibilityRole="button"
+                    accessibilityLabel={rotatingImage ? '画像を回転中' : '画像を右に90度回転'}
+                    accessibilityState={{ disabled: saving || rotatingImage }}
                     testID={`${testIDPrefix}-rotate-image-button`}
                   >
                     <Text style={styles.rotateButtonText}>
@@ -130,6 +133,7 @@ export function MealEditModal({
               value={draft.mealName}
               onChangeText={value => updateDraft('mealName', value)}
               placeholder="料理名"
+              accessibilityLabel="料理名"
               testID={`${testIDPrefix}-meal-name-input`}
             />
             <TextInput
@@ -137,6 +141,7 @@ export function MealEditModal({
               value={draft.location}
               onChangeText={value => updateDraft('location', value)}
               placeholder="場所"
+              accessibilityLabel="場所"
               testID={`${testIDPrefix}-location-input`}
             />
             <CuisineTypeSelector
@@ -173,6 +178,7 @@ export function MealEditModal({
               value={draft.notes}
               onChangeText={value => updateDraft('notes', value)}
               placeholder="メモ"
+              accessibilityLabel="メモ"
               multiline
               testID={`${testIDPrefix}-notes-input`}
             />
@@ -181,6 +187,9 @@ export function MealEditModal({
               <Switch
                 value={draft.isHomemade}
                 onValueChange={updateHomemade}
+                accessibilityRole="switch"
+                accessibilityLabel="自炊として記録"
+                accessibilityState={{ checked: draft.isHomemade }}
                 testID={`${testIDPrefix}-homemade-switch`}
               />
             </View>
@@ -198,6 +207,9 @@ export function MealEditModal({
                           selected ? styles.segmentButtonSelected : null,
                         ]}
                         onPress={() => updateDraft('cookingLevel', level)}
+                        accessibilityRole="button"
+                        accessibilityLabel={formatCookingLevel(level)}
+                        accessibilityState={{ selected }}
                         testID={`${testIDPrefix}-cooking-level-${level}`}
                       >
                         <Text
@@ -220,6 +232,9 @@ export function MealEditModal({
               style={styles.cancelButton}
               onPress={onClose}
               disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel="閉じる"
+              accessibilityState={{ disabled: saving }}
               testID={`${testIDPrefix}-close-button`}
             >
               <Text style={styles.cancelText}>閉じる</Text>
@@ -228,6 +243,9 @@ export function MealEditModal({
               style={[styles.saveButton, saving && styles.saveButtonDisabled]}
               onPress={onSave}
               disabled={saving}
+              accessibilityRole="button"
+              accessibilityLabel={saving ? '保存中' : '保存'}
+              accessibilityState={{ disabled: saving }}
               testID={`${testIDPrefix}-save-button`}
             >
               {saving ? (
