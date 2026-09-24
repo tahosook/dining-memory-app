@@ -207,7 +207,7 @@ def fetch_issues(repo_root: Path, local_only: bool) -> list[dict[str, Any]]:
     )
 
 
-def is_later_issue(issue_num: int, title: str, labels: list[str], doc_map: dict[int, DocIssue]) -> bool:
+def is_later_issue(issue_num: int, labels: list[str], doc_map: dict[int, DocIssue]) -> bool:
     # 1. labels に later / future-triggered があるか
     lower_labels = [l.lower() for l in labels]
     if any(k in lower_labels for k in ["later", "future-triggered", "future"]):
@@ -295,7 +295,7 @@ def generate_status_markdown(
             num = issue.get("number", 0)
             title = issue.get("title", "")
             label_names = [l.get("name", "") for l in issue.get("labels", [])]
-            if is_later_issue(num, title, label_names, doc_map):
+            if is_later_issue(num, label_names, doc_map):
                 later_issues.append(issue)
             else:
                 active_issues.append(issue)

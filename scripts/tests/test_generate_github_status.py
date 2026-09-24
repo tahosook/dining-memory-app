@@ -73,16 +73,14 @@ class GenerateGitHubStatusTests(unittest.TestCase):
         }
 
         # Issue 80 は doc_map にて "将来トリガー待ち" のため Later
-        self.assertTrue(is_later_issue(80, "Keyset pagination", [], doc_map))
+        self.assertTrue(is_later_issue(80, [], doc_map))
         # later ラベル付きは Later
-        self.assertTrue(is_later_issue(999, "Some task", ["later"], {}))
+        self.assertTrue(is_later_issue(999, ["later"], {}))
         # future-triggered ラベル付きは Later
-        self.assertTrue(is_later_issue(998, "Another task", ["future-triggered"], {}))
-        # タイトルに "Later" が含まれていてもラベル/docsステータスがなければ Active (誤検知防止)
-        self.assertFalse(is_later_issue(997, "Fix bug in Later queue", [], {}))
+        self.assertTrue(is_later_issue(998, ["future-triggered"], {}))
         # 通常の Issue は Active (False)
-        self.assertFalse(is_later_issue(73, "Jest config", ["test"], doc_map))
-        self.assertFalse(is_later_issue(100, "Normal feature", ["enhancement"], {}))
+        self.assertFalse(is_later_issue(73, ["test"], doc_map))
+        self.assertFalse(is_later_issue(100, ["enhancement"], {}))
 
     def test_format_criteria_progress(self) -> None:
         doc_done = DocIssue(
