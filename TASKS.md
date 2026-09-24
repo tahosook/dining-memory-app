@@ -32,7 +32,7 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
-- 写真保存時圧縮・リサイズおよびライフサイクル管理 (#75, #86, #87, #88): 撮影写真の保存時圧縮・リサイズ実測評価（GitHub Issue #75、`docs/notes/photo-compression-evaluation-issue-75.md`、※GitHub Issue #75 は Open）、メイン写真保存時ネイティブリサイズ（最大長辺1600px / JPEG 80%）およびフォールバック（GitHub Issue #86、PR #102 にてマージ済み）、写真世代ベースのサムネイル非同期生成と写真回転競合耐性（GitHub Issue #87、PR #102 にてマージ済み）、孤立写真ファイル回収とファイルライフサイクル保護（GitHub Issue #88、PR #105 にてマージ済み）。
+- 写真保存時圧縮・リサイズおよびライフサイクル管理 (#75, #86, #87, #88): 撮影写真の保存時圧縮・リサイズ実測評価（GitHub Issue #75、`docs/notes/photo-compression-evaluation-issue-75.md`、完了 / Closed）、メイン写真保存時ネイティブリサイズ（最大長辺1600px / JPEG 80%）およびフォールバック（GitHub Issue #86、PR #102 にてマージ済み）、写真世代ベースのサムネイル非同期生成と写真回転競合耐性（GitHub Issue #87、PR #102 にてマージ済み）、孤立写真ファイル回収とファイルライフサイクル保護（GitHub Issue #88、PR #105 にてマージ済み）。
 - Phase 2 (#77, #78, #79): RecordsScreen の日付グルーピング改善（YYYY-MM-DD 化 & タイムスタンプ直接ソート、GitHub Issue #77）、RootNavigator のタブヘッダー宣言的設定移行（GitHub Issue #78）、RootNavigator / App.tsx ナビゲーション結合テスト追加（GitHub Issue #79）（PR #85 にて完了）。
 - Phase 1 (#73, #74, #76, #83): Jest テスト環境設定健全化（GitHub Issue #73）、ESLint flat config / Prettier CI フォーマットチェック（GitHub Issue #74）、CI Node.js 24 LTS 固定（GitHub Issue #76）、Knip スキーマ v6 更新（GitHub Issue #83）（PR #84 にて完了）。
 - `src/ai/search/` ディレクトリの確認（GitHub Issue #82）: Git リポジトリ上で未追跡（存在しない）ことを確認し Close 済み。
