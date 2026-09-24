@@ -20,6 +20,7 @@
 - Dependabot version updates は `.github/dependabot.yml` で管理する。詳細な 4 層分類方針と運用プロトコルは [docs/engineering/dependency-policy.md](dependency-policy.md) を参照する。
 - npm updates は週1回、月曜 09:00 JST、open PR 上限 3、Tier 1（Expo/RN コア・ネイティブ境界）は除外し Tier 3 の純粋 JS / TS ツールを中心にグループ化。
 - GitHub Actions updates は週1回、月曜 09:30 JST、open PR 上限 3。
+- GitHub / プロジェクトステータスの Google Drive 同期は `.github/workflows/sync-github-status.yml` で管理し、権限は `contents: read`, `issues: read`, `pull-requests: read` に制限する。ステータス生成には `scripts/generate_github_status.py` を使用し、Three-Tier Tracking Model（`TASKS.md` の優先度インデックス、`docs/issues/` の仕様・受入基準進捗、GitHub PR/Issue の Active vs Later 分類）を統合して同期する。
 
 ## GitHub UI Checklist
 GitHub の repository 画面で以下を確認する。画面名は GitHub UI の変更で揺れることがあるため、見つからない場合は同名の Code security / Actions / Rulesets 設定を探す。

@@ -5,6 +5,13 @@ on:
     types: [opened, closed, reopened, labeled, unlabeled]
   pull_request:
     types: [opened, closed, reopened, labeled, unlabeled]
+  push:
+    branches: [main]
+    paths:
+      - 'TASKS.md'
+      - 'docs/issues/**'
+      - '.github/workflows/sync-github-status.yml'
+      - 'scripts/generate_github_status.py'
   schedule:
     - cron: '0 0 * * *' # 毎日 UTC 0:00 (日本時間 9:00) に自動同期
   workflow_dispatch:      # GitHub Actions 画面から手動実行可能
@@ -23,31 +30,9 @@ jobs:
       - name: Generate Status Markdown
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
-          cat << 'EOF' > generate.sh
-          echo "# Dining Memory App - GitHub Status"
-          echo "最終更新日時: $(TZ='Asia/Tokyo' date '+%Y-%m-%d %H:%M:%S JST')"
-          echo ""
-
-          echo "## 📌 オープン中の Pull Requests"
-          gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 20 \
-            --json number,title,author,headRefName,updatedAt \
-            --template '{{if not .}}オープン中の PR はありません。{{"\n"}}{{end}}{{range .}}- [PR #{{.number}}] {{.title}} (by @{{.author.login}}, branch: `{{.headRefName}}`){{"\n"}}{{end}}'
-          echo ""
-
-          echo "## 📋 オープン中の Issues"
-          gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 20 \
-            --json number,title,labels,body \
-            --template '{{if not .}}オープン中の Issue はありません。{{"\n"}}{{end}}{{range .}}### [Issue #{{.number}}] {{.title}}
-          ラベル: {{range .labels}}`[{{.name}}]` {{end}}
-          本文:
-          {{if .body}}{{.body}}{{else}}（本文なし）{{end}}
-          ---
-          {{end}}'
-          echo ""
-          EOF
-
-          bash generate.sh > status.md
+          python3 scripts/generate_github_status.py --output status.md
 
       - name: Send to Google Drive via GAS
         env:
