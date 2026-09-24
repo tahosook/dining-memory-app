@@ -1,17 +1,21 @@
-from __future__ import annotations
-
 import datetime
+import subprocess
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from scripts.generate_github_status import (
     DocIssue,
+    GitHubCliError,
     TasksIndex,
+    fetch_issues,
+    fetch_prs,
     format_criteria_progress,
     generate_status_markdown,
     is_later_issue,
     parse_docs_issues,
     parse_tasks_md,
+    run_gh_command,
 )
 
 
@@ -117,6 +121,46 @@ class GenerateGitHubStatusTests(unittest.TestCase):
         self.assertIn("## 📑 仕様・受入基準ドキュメント (docs/issues/) 一覧", md)
         self.assertIn("| [`issue-01`](docs/issues/issue-01-jest-config-cleanup.md) | #73 |", md)
         self.assertIn("| [`issue-08`](docs/issues/issue-08-keyset-cursor-pagination.md) | #80 |", md)
+
+    @patch("subprocess.run")
+    def test_run_gh_command_failure_raises_github_cli_error(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd=["gh", "issue", "list"], stderr="HTTP 401: Requires authentication"
+        )
+        with self.assertRaises(GitHubCliError) as ctx:
+            run_gh_command(["issue", "list"], self.repo_root)
+        self.assertIn("exit code 1", str(ctx.exception))
+        self.assertIn("HTTP 401", str(ctx.exception))
+
+    @patch("subprocess.run")
+    def test_run_gh_command_file_not_found_raises_github_cli_error(self, mock_run: MagicMock) -> None:
+        mock_run.side_effect = FileNotFoundError("No such file or directory: 'gh'")
+        with self.assertRaises(GitHubCliError) as ctx:
+            run_gh_command(["pr", "list"], self.repo_root)
+        self.assertIn("not installed or not in PATH", str(ctx.exception))
+
+    @patch("subprocess.run")
+    def test_generate_status_markdown_fails_on_gh_error_without_outputting_zero_status(
+        self, mock_run: MagicMock
+    ) -> None:
+        # GitHub CLI 呼び出しが失敗したとき、0件メッセージで成功完了せず GitHubCliError が送出されること
+        mock_run.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd=["gh", "pr", "list"], stderr="API rate limit exceeded"
+        )
+        with self.assertRaises(GitHubCliError):
+            generate_status_markdown(self.repo_root, local_only=False)
+
+    @patch("subprocess.run")
+    def test_generate_status_markdown_success_with_zero_items_produces_empty_message(
+        self, mock_run: MagicMock
+    ) -> None:
+        # GitHub CLI 呼び出しが成功して 0 件（[]）の場合は正常に「ありません」と表示されること
+        mock_run.return_value = MagicMock(stdout="[]", returncode=0)
+        fixed_time = datetime.datetime(2026, 9, 25, 12, 0, 0, tzinfo=datetime.timezone.utc)
+        md = generate_status_markdown(self.repo_root, local_only=False, now=fixed_time)
+
+        self.assertIn("オープン中の PR はありません。", md)
+        self.assertIn("現在アクティブなオープン Issue はありません。", md)
 
 
 if __name__ == "__main__":

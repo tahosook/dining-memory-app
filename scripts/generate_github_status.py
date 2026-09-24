@@ -145,13 +145,17 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
     return results
 
 
-def run_gh_command(args: list[str], repo_root: Path) -> Any | None:
-    try:
-        repo_env = os.environ.get("GITHUB_REPOSITORY")
-        cmd = ["gh"] + args
-        if repo_env and "--repo" not in args:
-            cmd.extend(["--repo", repo_env])
+class GitHubCliError(RuntimeError):
+    """Raised when GitHub CLI execution fails or returns invalid output."""
 
+
+def run_gh_command(args: list[str], repo_root: Path) -> list[dict[str, Any]]:
+    repo_env = os.environ.get("GITHUB_REPOSITORY")
+    cmd = ["gh"] + args
+    if repo_env and "--repo" not in args:
+        cmd.extend(["--repo", repo_env])
+
+    try:
         result = subprocess.run(
             cmd,
             cwd=str(repo_root),
@@ -159,29 +163,41 @@ def run_gh_command(args: list[str], repo_root: Path) -> Any | None:
             text=True,
             check=True,
         )
-        return json.loads(result.stdout)
-    except (subprocess.SubprocessError, FileNotFoundError, json.JSONDecodeError):
-        return None
+    except FileNotFoundError as exc:
+        raise GitHubCliError(f"GitHub CLI ('gh') is not installed or not in PATH: {exc}") from exc
+    except subprocess.CalledProcessError as exc:
+        stderr = exc.stderr.strip() if exc.stderr else "(no stderr output)"
+        raise GitHubCliError(
+            f"GitHub CLI command failed with exit code {exc.returncode}: {' '.join(cmd)}\nStderr: {stderr}"
+        ) from exc
+
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise GitHubCliError(f"Failed to parse JSON from GitHub CLI output: {exc}") from exc
+
+    if not isinstance(data, list):
+        raise GitHubCliError(f"Expected JSON list from GitHub CLI, got {type(data).__name__}")
+
+    return data
 
 
 def fetch_prs(repo_root: Path, local_only: bool) -> list[dict[str, Any]]:
     if local_only:
         return []
-    data = run_gh_command(
+    return run_gh_command(
         ["pr", "list", "--state", "open", "--limit", "20", "--json", "number,title,author,headRefName,updatedAt"],
         repo_root,
     )
-    return data if isinstance(data, list) else []
 
 
 def fetch_issues(repo_root: Path, local_only: bool) -> list[dict[str, Any]]:
     if local_only:
         return []
-    data = run_gh_command(
+    return run_gh_command(
         ["issue", "list", "--state", "open", "--limit", "30", "--json", "number,title,labels,body"],
         repo_root,
     )
-    return data if isinstance(data, list) else []
 
 
 def is_later_issue(issue_num: int, title: str, labels: list[str], doc_map: dict[int, DocIssue]) -> bool:
@@ -385,7 +401,11 @@ def main() -> int:
     )
 
     args = parser.parse_args()
-    md_content = generate_status_markdown(args.repo_root, local_only=args.local_only)
+    try:
+        md_content = generate_status_markdown(args.repo_root, local_only=args.local_only)
+    except GitHubCliError as err:
+        print(f"[ERROR] Failed to generate status from GitHub CLI:\n{err}", file=sys.stderr)
+        return 1
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
