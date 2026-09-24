@@ -216,7 +216,7 @@ export const RecordsScreen: React.FC = () => {
     setLoadingMore(false);
 
     try {
-      const meals = await MealService.getRecentMeals(RECORDS_PAGE_SIZE, 0);
+      const meals = await MealService.getRecentMeals(RECORDS_PAGE_SIZE);
       if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
         return;
       }
@@ -246,13 +246,22 @@ export const RecordsScreen: React.FC = () => {
       return;
     }
 
+    const currentMeals = flatMealsRef.current;
+    if (currentMeals.length === 0) {
+      return;
+    }
+    const lastMeal = currentMeals[currentMeals.length - 1];
+
     const loadId = activeLoadIdRef.current;
-    const currentOffset = flatMealsRef.current.length;
     loadingMoreRef.current = true;
     setLoadingMore(true);
 
     try {
-      const nextMeals = await MealService.getRecentMeals(RECORDS_PAGE_SIZE, currentOffset);
+      const nextMeals = await MealService.getRecentMeals({
+        limit: RECORDS_PAGE_SIZE,
+        beforeMealDatetime: lastMeal.meal_datetime,
+        beforeId: lastMeal.id,
+      });
       if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
         return;
       }

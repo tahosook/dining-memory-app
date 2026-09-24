@@ -97,6 +97,41 @@ describe('MealService', () => {
     expect(page3[0].meal_name).toBe('料理 1');
   });
 
+  test('applies cursor pagination (beforeMealDatetime, beforeId) in InMemory mode for getRecentMeals', async () => {
+    for (let i = 1; i <= 5; i++) {
+      await MealService.createMeal({
+        meal_name: `料理 ${i}`,
+        is_homemade: true,
+        photo_path: `file:///meal-${i}.jpg`,
+        meal_datetime: new Date(2026, 3, 10, i, 0, 0),
+      });
+    }
+
+    const page1 = await MealService.getRecentMeals(2);
+    expect(page1).toHaveLength(2);
+    expect(page1[0].meal_name).toBe('料理 5');
+    expect(page1[1].meal_name).toBe('料理 4');
+
+    const lastOfPage1 = page1[page1.length - 1];
+    const page2 = await MealService.getRecentMeals({
+      limit: 2,
+      beforeMealDatetime: lastOfPage1.meal_datetime,
+      beforeId: lastOfPage1.id,
+    });
+    expect(page2).toHaveLength(2);
+    expect(page2[0].meal_name).toBe('料理 3');
+    expect(page2[1].meal_name).toBe('料理 2');
+
+    const lastOfPage2 = page2[page2.length - 1];
+    const page3 = await MealService.getRecentMeals({
+      limit: 2,
+      beforeMealDatetime: lastOfPage2.meal_datetime,
+      beforeId: lastOfPage2.id,
+    });
+    expect(page3).toHaveLength(1);
+    expect(page3[0].meal_name).toBe('料理 1');
+  });
+
   test('generates meal id and uuid with timestamp and full UUID', async () => {
     const before = Date.now();
     const created = await MealService.createMeal({
@@ -740,7 +775,7 @@ describe('MealService', () => {
       const meals = await MealService.getRecentMeals(10);
 
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?',
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC, id DESC LIMIT ?',
         10
       );
       expect(meals).toHaveLength(1);
@@ -753,9 +788,27 @@ describe('MealService', () => {
       await MealService.getRecentMeals(20, 40);
 
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ? OFFSET ?',
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC, id DESC LIMIT ? OFFSET ?',
         20,
         40
+      );
+    });
+
+    test('executes direct SQL for getRecentMeals with cursor pagination (beforeMealDatetime, beforeId)', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.getRecentMeals({
+        limit: 50,
+        beforeMealDatetime: 12345678,
+        beforeId: 'cursor-id-1',
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 AND (meal_datetime < ? OR (meal_datetime = ? AND id < ?)) ORDER BY meal_datetime DESC, id DESC LIMIT ?',
+        12345678,
+        12345678,
+        'cursor-id-1',
+        50
       );
     });
 

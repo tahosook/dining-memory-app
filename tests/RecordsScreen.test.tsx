@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, Text } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 
 const focusCallbacks: Array<() => void> = [];
 const mockNavigate = jest.fn();
@@ -64,6 +64,7 @@ describe('RecordsScreen', () => {
   });
 
   afterEach(() => {
+    cleanup();
     jest.restoreAllMocks();
   });
 
@@ -468,16 +469,16 @@ describe('RecordsScreen', () => {
     }).not.toThrow();
   });
 
-  test('loads initial page with limit 50 and offset 0', async () => {
+  test('loads initial page with limit 50', async () => {
     (MealService.getRecentMeals as jest.Mock).mockResolvedValue([]);
 
     render(<RecordsScreen />);
     await triggerLatestFocus();
 
-    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 0);
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50);
   });
 
-  test('loads additional meals when onEndReached is triggered', async () => {
+  test('loads additional meals when onEndReached is triggered using cursor', async () => {
     const page1Meals = Array.from({ length: 50 }, (_, i) => ({
       id: `meal-page1-${i}`,
       uuid: `uuid-page1-${i}`,
@@ -512,7 +513,9 @@ describe('RecordsScreen', () => {
     await triggerLatestFocus();
 
     expect(await findByTestId('meal-card-meal-page1-0')).toBeTruthy();
-    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 0);
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50);
+
+    const lastMealOfPage1 = page1Meals[49];
 
     // SectionList の onEndReached を発火
     const sectionList = getByTestId('records-section-list');
@@ -521,13 +524,138 @@ describe('RecordsScreen', () => {
       await Promise.resolve();
     });
 
-    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 50);
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith({
+      limit: 50,
+      beforeMealDatetime: lastMealOfPage1.meal_datetime,
+      beforeId: lastMealOfPage1.id,
+    });
 
     // タップ時に遷移先へ渡される meals に全51件（2ページ目を含む）が含まれることを検証
     fireEvent.press(await findByTestId('meal-card-meal-page1-0'));
     expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
       meal: page1Meals[0],
       meals: [...page1Meals, ...page2Meals],
+      initialIndex: 0,
+    });
+  });
+
+  test('does not drop meals when new meals are added before loading next page', async () => {
+    // 50件の初期データを取得
+    const page1Meals = Array.from({ length: 50 }, (_, i) => ({
+      id: `meal-initial-${50 - i}`,
+      uuid: `uuid-initial-${50 - i}`,
+      meal_name: `初期料理 ${50 - i}`,
+      meal_datetime: 1000000 - i * 1000,
+      is_homemade: false,
+      photo_path: `file:///init-${50 - i}.jpg`,
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    }));
+
+    // 初回取得後に新しい食事（最新タイムスタンプ）が追加された想定
+    // OFFSET 方式だと 50件目（meal-initial-1）が再取得されて重複したり、境界ズレが起きるが、
+    // カーソル方式では page1Meals の末尾（meal-initial-1）より古いレコードが確実に取得される
+    const expectedNextMeals = [
+      {
+        id: 'meal-past-51',
+        uuid: 'uuid-past-51',
+        meal_name: '過去の重要料理51',
+        meal_datetime: page1Meals[49].meal_datetime - 1000,
+        is_homemade: true,
+        photo_path: 'file:///past-51.jpg',
+        is_deleted: false,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+
+    (MealService.getRecentMeals as jest.Mock)
+      .mockResolvedValueOnce(page1Meals)
+      .mockResolvedValueOnce(expectedNextMeals);
+
+    const { getByTestId, findByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    const lastMealOfPage1 = page1Meals[49];
+
+    // onEndReached 発火
+    const sectionList = getByTestId('records-section-list');
+    await act(async () => {
+      sectionList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    // カーソル（lastMeal の meal_datetime と id）が渡され、過去データが欠落せず取得される
+    expect(MealService.getRecentMeals).toHaveBeenLastCalledWith({
+      limit: 50,
+      beforeMealDatetime: lastMealOfPage1.meal_datetime,
+      beforeId: lastMealOfPage1.id,
+    });
+
+    fireEvent.press(await findByTestId('meal-card-meal-initial-50'));
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
+      meal: page1Meals[0],
+      meals: [...page1Meals, ...expectedNextMeals],
+      initialIndex: 0,
+    });
+  });
+
+  test('does not drop meals when existing meals are deleted before loading next page', async () => {
+    // 50件の初期データを取得
+    const page1Meals = Array.from({ length: 50 }, (_, i) => ({
+      id: `meal-del-test-${50 - i}`,
+      uuid: `uuid-del-test-${50 - i}`,
+      meal_name: `料理 ${50 - i}`,
+      meal_datetime: 1000000 - i * 1000,
+      is_homemade: false,
+      photo_path: `file:///del-${50 - i}.jpg`,
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    }));
+
+    // もし OFFSET 方式であれば、取得済みデータから1件削除されると
+    // DB 内の 51件目（meal-next-boundary）が 50件目に繰り上がるため、OFFSET 50 でフェッチするとスキップされて欠落する。
+    // カーソル方式であれば、DB 内で削除が発生しても手持ちの最古レコードの過去から取得するため欠落しない。
+    const boundaryMeal = {
+      id: 'meal-next-boundary',
+      uuid: 'uuid-next-boundary',
+      meal_name: '境界の料理（欠落してはいけない）',
+      meal_datetime: page1Meals[49].meal_datetime - 1000,
+      is_homemade: true,
+      photo_path: 'file:///boundary.jpg',
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    };
+
+    (MealService.getRecentMeals as jest.Mock)
+      .mockResolvedValueOnce(page1Meals)
+      .mockResolvedValueOnce([boundaryMeal]);
+
+    const { getByTestId, findByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    const lastMealOfPage1 = page1Meals[49];
+
+    // onEndReached 発火
+    const sectionList = getByTestId('records-section-list');
+    await act(async () => {
+      sectionList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    expect(MealService.getRecentMeals).toHaveBeenLastCalledWith({
+      limit: 50,
+      beforeMealDatetime: lastMealOfPage1.meal_datetime,
+      beforeId: lastMealOfPage1.id,
+    });
+
+    fireEvent.press(await findByTestId('meal-card-meal-del-test-50'));
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
+      meal: page1Meals[0],
+      meals: [...page1Meals, boundaryMeal],
       initialIndex: 0,
     });
   });
@@ -628,14 +756,14 @@ describe('RecordsScreen', () => {
     const { getByTestId } = render(<RecordsScreen />);
     await triggerLatestFocus();
 
-    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 0);
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50);
 
     const sectionList = getByTestId('records-section-list');
     await act(async () => {
       fireEvent(sectionList, 'refresh');
     });
 
-    // リフレッシュ時も offset 0 で再フェッチされる
-    expect(MealService.getRecentMeals).toHaveBeenLastCalledWith(50, 0);
+    // リフレッシュ時も先頭から再フェッチされる
+    expect(MealService.getRecentMeals).toHaveBeenLastCalledWith(50);
   });
 });
