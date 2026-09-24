@@ -41,6 +41,7 @@
 
 ## Records Screen
 - Shows meal records grouped by date.
+- 大量データ時の描画負荷・メモリ消費を抑えつつ過去記録を遡れるよう、50件単位の段階的読み込み（`onEndReached` による infinite scroll）を提供し、スクロール末尾到達で次ページを自動フェッチして日付グループにシームレスに結合する。読み込み中はリストフッターにインジケーターを表示する。
 - Card layout should keep the meal name, time, location, cuisine tag, homemade/eating-out tag, and homemade style tag visible when available.
 - If a thumbnail is missing, fall back to the saved photo path instead of showing an empty placeholder.
 - Tapping a record card should move directly to a dedicated detail screen instead of opening an alert.

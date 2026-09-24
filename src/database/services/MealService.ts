@@ -296,16 +296,19 @@ export class MealService {
     return this.searchMeals({ dateFrom: startDate, dateTo: endDate });
   }
 
-  static async getRecentMeals(limit = 20): Promise<Meal[]> {
+  static async getRecentMeals(limit = 20, offset = 0): Promise<Meal[]> {
     await initializeDatabase();
 
     if (isUsingNativeDatabase()) {
       const db = getDatabase();
       if (db) {
-        const rows = await db.getAllAsync<PersistedMealRow>(
-          'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?',
-          limit
-        );
+        let query = 'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?';
+        const params: number[] = [limit];
+        if (offset > 0) {
+          query += ' OFFSET ?';
+          params.push(offset);
+        }
+        const rows = await db.getAllAsync<PersistedMealRow>(query, ...params);
         return rows.map(mapRowToMeal);
       }
     }
@@ -314,7 +317,7 @@ export class MealService {
     return rows
       .filter(row => !row.is_deleted)
       .sort((a, b) => b.meal_datetime - a.meal_datetime)
-      .slice(0, limit)
+      .slice(offset, offset + limit)
       .map(mapRowToMeal);
   }
 

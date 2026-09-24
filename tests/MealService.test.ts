@@ -71,6 +71,32 @@ describe('MealService', () => {
     expect(meals[0].is_homemade).toBe(true);
   });
 
+  test('applies limit and offset pagination in InMemory mode for getRecentMeals', async () => {
+    for (let i = 1; i <= 5; i++) {
+      await MealService.createMeal({
+        meal_name: `料理 ${i}`,
+        is_homemade: true,
+        photo_path: `file:///meal-${i}.jpg`,
+        meal_datetime: new Date(2026, 3, 10, i, 0, 0),
+      });
+    }
+
+    // 降順ソートされるので 料理 5, 4, 3, 2, 1 の順
+    const page1 = await MealService.getRecentMeals(2, 0);
+    expect(page1).toHaveLength(2);
+    expect(page1[0].meal_name).toBe('料理 5');
+    expect(page1[1].meal_name).toBe('料理 4');
+
+    const page2 = await MealService.getRecentMeals(2, 2);
+    expect(page2).toHaveLength(2);
+    expect(page2[0].meal_name).toBe('料理 3');
+    expect(page2[1].meal_name).toBe('料理 2');
+
+    const page3 = await MealService.getRecentMeals(2, 4);
+    expect(page3).toHaveLength(1);
+    expect(page3[0].meal_name).toBe('料理 1');
+  });
+
   test('generates meal id and uuid with timestamp and full UUID', async () => {
     const before = Date.now();
     const created = await MealService.createMeal({
@@ -719,6 +745,18 @@ describe('MealService', () => {
       );
       expect(meals).toHaveLength(1);
       expect(meals[0].meal_name).toBe('ステーキ');
+    });
+
+    test('executes direct SQL for getRecentMeals with LIMIT, OFFSET and WHERE is_deleted = 0', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.getRecentMeals(20, 40);
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ? OFFSET ?',
+        20,
+        40
+      );
     });
 
     test('executes direct UPDATE for softDeleteMeal', async () => {

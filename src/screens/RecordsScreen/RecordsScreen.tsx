@@ -157,15 +157,23 @@ function groupMealsByDate(records: Meal[]): MealSection[] {
     .sort((a, b) => (b.data[0]?.meal_datetime ?? 0) - (a.data[0]?.meal_datetime ?? 0));
 }
 
+const RECORDS_PAGE_SIZE = 50;
+
 export const RecordsScreen: React.FC = () => {
   const navigation = useNavigation<RecordsNavigationProp>();
   const [mealSections, setMealSections] = useState<MealSection[]>([]);
   const [flatMeals, setFlatMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const isMountedRef = useRef(true);
   // Store flatMeals in a ref to keep handleMealPress reference stable and prevent O(N^2) list re-renders
   const flatMealsRef = useRef<Meal[]>(flatMeals);
+  const loadingRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const activeLoadIdRef = useRef(0);
 
   useEffect(() => {
     flatMealsRef.current = flatMeals;
@@ -178,39 +186,103 @@ export const RecordsScreen: React.FC = () => {
     };
   }, []);
 
+  const attachThumbnailRequests = useCallback((mealsToFetch: Meal[]) => {
+    requestMealThumbnails(mealsToFetch, {
+      onGenerated: (mealId, thumbUri) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+        setFlatMeals(current =>
+          current.map(item =>
+            item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
+          )
+        );
+        setMealSections(current =>
+          current.map(section => ({
+            ...section,
+            data: section.data.map(item =>
+              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
+            ),
+          }))
+        );
+      },
+    });
+  }, []);
+
   const loadMeals = useCallback(async () => {
+    const loadId = ++activeLoadIdRef.current;
+    loadingRef.current = true;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+
     try {
-      const meals = await MealService.getRecentMeals(100);
+      const meals = await MealService.getRecentMeals(RECORDS_PAGE_SIZE, 0);
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
+      const hasNext = meals.length === RECORDS_PAGE_SIZE;
+      hasMoreRef.current = hasNext;
+
       setFlatMeals(meals);
       setMealSections(groupMealsByDate(meals));
-      requestMealThumbnails(meals, {
-        onGenerated: (mealId, thumbUri) => {
-          if (!isMountedRef.current) {
-            return;
-          }
-          setFlatMeals(current =>
-            current.map(item =>
-              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
-            )
-          );
-          setMealSections(current =>
-            current.map(section => ({
-              ...section,
-              data: section.data.map(item =>
-                item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
-              ),
-            }))
-          );
-        },
-      });
+      attachThumbnailRequests(meals);
     } catch (error) {
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
       console.error('Failed to load meals:', error);
       Alert.alert('エラー', '食事記録の読み込みに失敗しました。');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (loadId === activeLoadIdRef.current && isMountedRef.current) {
+        loadingRef.current = false;
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, []);
+  }, [attachThumbnailRequests]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (loadingRef.current || loadingMoreRef.current || !hasMoreRef.current || refreshing) {
+      return;
+    }
+
+    const loadId = activeLoadIdRef.current;
+    const currentOffset = flatMealsRef.current.length;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      const nextMeals = await MealService.getRecentMeals(RECORDS_PAGE_SIZE, currentOffset);
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
+
+      const hasNext = nextMeals.length === RECORDS_PAGE_SIZE;
+      hasMoreRef.current = hasNext;
+
+      if (nextMeals.length > 0) {
+        const existingIds = new Set(flatMealsRef.current.map(m => m.id));
+        const uniqueNextMeals = nextMeals.filter(m => !existingIds.has(m.id));
+
+        if (uniqueNextMeals.length > 0) {
+          const mergedMeals = [...flatMealsRef.current, ...uniqueNextMeals];
+          setFlatMeals(mergedMeals);
+          setMealSections(groupMealsByDate(mergedMeals));
+          attachThumbnailRequests(uniqueNextMeals);
+        }
+      }
+    } catch (error) {
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
+      console.error('Failed to load more meals:', error);
+    } finally {
+      if (loadId === activeLoadIdRef.current && isMountedRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [attachThumbnailRequests, refreshing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -277,6 +349,7 @@ export const RecordsScreen: React.FC = () => {
           </View>
         ) : (
           <SectionList
+            testID="records-section-list"
             sections={mealSections}
             keyExtractor={meal => meal.id}
             renderItem={renderItem}
@@ -285,6 +358,15 @@ export const RecordsScreen: React.FC = () => {
             ItemSeparatorComponent={Separator}
             refreshing={refreshing}
             onRefresh={handleRefresh}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.loadingMoreContainer} testID="records-loading-more">
+                  <ActivityIndicator size="small" color="#007AFF" />
+                </View>
+              ) : null
+            }
             showsVerticalScrollIndicator={false}
           />
         )}
@@ -460,5 +542,10 @@ const styles = StyleSheet.create({
   groupSeparator: {
     height: 12,
     backgroundColor: '#f8f9fa',
+  },
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

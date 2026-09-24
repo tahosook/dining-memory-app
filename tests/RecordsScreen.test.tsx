@@ -467,4 +467,175 @@ describe('RecordsScreen', () => {
       capturedOnGenerated?.('1', 'file:///thumb.jpg');
     }).not.toThrow();
   });
+
+  test('loads initial page with limit 50 and offset 0', async () => {
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue([]);
+
+    render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 0);
+  });
+
+  test('loads additional meals when onEndReached is triggered', async () => {
+    const page1Meals = Array.from({ length: 50 }, (_, i) => ({
+      id: `meal-page1-${i}`,
+      uuid: `uuid-page1-${i}`,
+      meal_name: `料理 Page1-${i}`,
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime() - i * 1000,
+      is_homemade: false,
+      photo_path: `file:///page1-${i}.jpg`,
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    }));
+
+    const page2Meals = [
+      {
+        id: 'meal-page2-0',
+        uuid: 'uuid-page2-0',
+        meal_name: '過去のカレー',
+        meal_datetime: new Date('2026-04-11T12:00:00+09:00').getTime(),
+        is_homemade: true,
+        photo_path: 'file:///curry.jpg',
+        is_deleted: false,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+
+    (MealService.getRecentMeals as jest.Mock)
+      .mockResolvedValueOnce(page1Meals)
+      .mockResolvedValueOnce(page2Meals);
+
+    const { getByTestId, findByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByTestId('meal-card-meal-page1-0')).toBeTruthy();
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 0);
+
+    // SectionList の onEndReached を発火
+    const sectionList = getByTestId('records-section-list');
+    await act(async () => {
+      sectionList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 50);
+
+    // タップ時に遷移先へ渡される meals に全51件（2ページ目を含む）が含まれることを検証
+    fireEvent.press(await findByTestId('meal-card-meal-page1-0'));
+    expect(mockNavigate).toHaveBeenCalledWith('MealDetail', {
+      meal: page1Meals[0],
+      meals: [...page1Meals, ...page2Meals],
+      initialIndex: 0,
+    });
+  });
+
+  test('shows loading-more indicator while fetching additional meals', async () => {
+    const page1Meals = Array.from({ length: 50 }, (_, i) => ({
+      id: `meal-page1-${i}`,
+      uuid: `uuid-page1-${i}`,
+      meal_name: `料理 Page1-${i}`,
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime() - i * 1000,
+      is_homemade: false,
+      photo_path: `file:///page1-${i}.jpg`,
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    }));
+
+    let resolvePage2!: (value: unknown) => void;
+    const page2Promise = new Promise(resolve => {
+      resolvePage2 = resolve;
+    });
+
+    (MealService.getRecentMeals as jest.Mock)
+      .mockResolvedValueOnce(page1Meals)
+      .mockReturnValueOnce(page2Promise);
+
+    const { getByTestId, findByTestId, queryByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByTestId('meal-card-meal-page1-0')).toBeTruthy();
+    expect(queryByTestId('records-loading-more')).toBeNull();
+
+    const sectionList = getByTestId('records-section-list');
+    act(() => {
+      sectionList.props.onEndReached?.();
+    });
+
+    // フェッチ中はインジケーターが表示される
+    expect(queryByTestId('records-loading-more')).toBeTruthy();
+
+    await act(async () => {
+      resolvePage2([]);
+      await Promise.resolve();
+    });
+
+    // 完了後はインジケーターが非表示になる
+    expect(queryByTestId('records-loading-more')).toBeNull();
+  });
+
+  test('does not trigger handleLoadMore when hasMore is false (fewer than 50 items returned)', async () => {
+    const fewMeals = [
+      {
+        id: 'single-meal',
+        uuid: 'single-uuid',
+        meal_name: 'うどん',
+        meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime(),
+        is_homemade: false,
+        photo_path: 'file:///udon.jpg',
+        is_deleted: false,
+        created_at: 1,
+        updated_at: 1,
+      },
+    ];
+
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValueOnce(fewMeals);
+
+    const { getByTestId, findByText } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('うどん')).toBeTruthy();
+    expect(MealService.getRecentMeals).toHaveBeenCalledTimes(1);
+
+    const sectionList = getByTestId('records-section-list');
+    await act(async () => {
+      sectionList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    // 件数が 50 未満のため hasMore が false となり追加フェッチは呼ばれない
+    expect(MealService.getRecentMeals).toHaveBeenCalledTimes(1);
+  });
+
+  test('refreshes from offset 0 when pull-to-refresh is executed', async () => {
+    const initialMeals = Array.from({ length: 50 }, (_, i) => ({
+      id: `initial-${i}`,
+      uuid: `uuid-${i}`,
+      meal_name: `初期料理 ${i}`,
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime() - i * 1000,
+      is_homemade: false,
+      photo_path: `file:///init-${i}.jpg`,
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    }));
+
+    (MealService.getRecentMeals as jest.Mock).mockResolvedValue(initialMeals);
+
+    const { getByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(MealService.getRecentMeals).toHaveBeenCalledWith(50, 0);
+
+    const sectionList = getByTestId('records-section-list');
+    await act(async () => {
+      fireEvent(sectionList, 'refresh');
+    });
+
+    // リフレッシュ時も offset 0 で再フェッチされる
+    expect(MealService.getRecentMeals).toHaveBeenLastCalledWith(50, 0);
+  });
 });
