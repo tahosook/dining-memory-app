@@ -50,6 +50,12 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
    - Tasks awaiting future trigger conditions (e.g., Issue #80 Keyset pagination or Issue #81 composite index awaiting 10,000 records) remain classified as `Later / Future-triggered`.
    - On GitHub, tag these issues with `later` or `future-triggered` to keep the active backlog clean.
 
+6. **ID Distinction Rule (Internal Doc ID vs. GitHub Issue Number)**:
+   - The sequence number in `docs/issues/issue-XX-*.md` (`XX`) is an internal repository document ID, **not** the GitHub Issue number.
+   - For example, `issue-01` maps to GitHub Issue #73, and `issue-12` is an internal document ID where the corresponding GitHub Issue is not yet filed (unrelated to GitHub PR/Issue #12).
+   - In all `docs/issues/` headers, explicitly specify both `- **内部ドキュメントID**: issue-XX` and `- **対応 GitHub Issue**: GitHub Issue #YY` (or `未起票`).
+   - Always refer to GitHub Issues with the full prefix `GitHub Issue #YY` to prevent AI agents and contributors from conflating internal doc numbers with GitHub issue numbers.
+
 ## Before Editing
 - Identify the canonical doc and the implementation files that are the source of truth.
 - Prefer `src/` and current canonical docs over deprecated docs and historical notes.

@@ -1,5 +1,7 @@
-# [Chore/Test] Jest テスト環境設定健全化（Issue #73）
+# [Chore/Test] Jest テスト環境設定健全化
 
+- **内部ドキュメントID**: issue-01
+- **対応 GitHub Issue**: GitHub Issue #73
 - **ステータス**: 完了 (Closed)
 - **完了 PR**: PR #84
 

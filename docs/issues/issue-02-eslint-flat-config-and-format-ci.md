@@ -1,5 +1,7 @@
-# [Chore/CI] ESLint flat config スクリプトの整理および CI フォーマットチェックの追加（Issue #74）
+# [Chore/CI] ESLint flat config スクリプトの整理および CI フォーマットチェックの追加
 
+- **内部ドキュメントID**: issue-02
+- **対応 GitHub Issue**: GitHub Issue #74
 - **ステータス**: 完了 (Closed)
 - **完了 PR**: PR #84
 

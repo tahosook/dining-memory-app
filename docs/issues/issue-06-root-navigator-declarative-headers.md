@@ -1,5 +1,7 @@
-# [Refactor] RootNavigator のタブヘッダー制御を画面ごとの宣言的設定に移行（Issue #78）
+# [Refactor] RootNavigator のタブヘッダー制御を画面ごとの宣言的設定に移行
 
+- **内部ドキュメントID**: issue-06
+- **対応 GitHub Issue**: GitHub Issue #78
 - **ステータス**: 完了 (Closed)
 - **完了 PR**: PR #85（Phase 2）
 

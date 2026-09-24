@@ -1,8 +1,11 @@
-# [Investigation] 撮影写真の保存時圧縮・リサイズ機構の検討（Issue #75）
+# [Investigation] 撮影写真の保存時圧縮・リサイズ機構の検討
 
-- **ステータス**: 完了 (Closed)
+- **内部ドキュメントID**: issue-03
+- **対応 GitHub Issue**: GitHub Issue #75
+- **GitHub Issue 状態**: OPEN（GitHub 側未クローズ）
+- **ドキュメント内進捗ステータス**: 調査・評価完了（実装 Issue #86, #87, #88 へ切り出し・マージ済み）
 - **実測評価レポート**: [docs/notes/photo-compression-evaluation-issue-75.md](../notes/photo-compression-evaluation-issue-75.md)
-- **後続実装**: PR #86（ネイティブリサイズ・JPEG圧縮）、PR #87（写真世代サムネイル分離）、PR #88（孤立写真回収とライフサイクル保護）
+- **後続実装 PR**: PR #102（GitHub Issue #86, #87: ネイティブリサイズ・サムネイル世代分離）、PR #105（GitHub Issue #88: 孤立写真回収とライフサイクル保護）
 
 ## 目的
 撮影写真の保存容量を削減しつつ、食事記録として十分な画質を維持できる保存仕様を検討・決定する。

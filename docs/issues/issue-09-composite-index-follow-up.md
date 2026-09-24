@@ -1,5 +1,8 @@
-# [Investigation] 大量データ規模における複合インデックス導入の再評価（Issue #81）
+# [Investigation] 大量データ規模における複合インデックス導入の再評価
 
+- **内部ドキュメントID**: issue-09
+- **対応 GitHub Issue**: GitHub Issue #81
+- **GitHub Issue 状態**: OPEN（Later / 将来トリガー待ち）
 - **ステータス**: 将来トリガー待ち評価 (Later / Future-triggered)
 - **根拠ドキュメント**: [docs/notes/composite-index-evaluation-issue-59.md](../notes/composite-index-evaluation-issue-59.md)（現時点見送り確認済み）
 - **対象トリガー**: 保存件数10,000件超、または実機体感遅延の報告時

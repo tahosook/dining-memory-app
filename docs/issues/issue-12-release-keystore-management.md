@@ -1,5 +1,7 @@
-# [Ops/Security] リリースビルド署名鍵（Keystore）の生成・保管・注入方針の策定（Issue #12）
+# [Ops/Security] リリースビルド署名鍵（Keystore）の生成・保管・注入方針の策定
 
+- **内部ドキュメントID**: issue-12
+- **対応 GitHub Issue**: 未起票（※GitHub の PR/Issue #12 とは無関係の内部文書ID）
 - **ステータス**: 未着手 (Open)
 - **関連ファイル**: `android/app/build.gradle`, `README.md`, `eas.json`, `.gitignore`
 - **関連ドキュメント**: [docs/engineering/github-security-settings.md](../engineering/github-security-settings.md)

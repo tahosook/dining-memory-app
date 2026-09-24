@@ -1,7 +1,9 @@
-# [Cleanup] src/ai/search/ ディレクトリの確認とクリーンアップ（Issue #82）
+# [Cleanup] src/ai/search/ ディレクトリの確認とクリーンアップ
 
+- **内部ドキュメントID**: issue-10
+- **対応 GitHub Issue**: GitHub Issue #82
 - **ステータス**: 完了 (Closed)
-- **結果**: Git リポジトリ上で未追跡（存在しない）ことを確認し Close 済み
+- **結果**: Git リポジトリ上で未追跡（存在しない）ことを確認し Issue コメントにて Close 済み（対応 PR なし / no-op）
 
 ## 概要
 `src/ai/search/` ディレクトリのクリーンアップを検討する Issue です。

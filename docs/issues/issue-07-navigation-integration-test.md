@@ -1,5 +1,7 @@
-# [Test] RootNavigator / App.tsx のナビゲーション結合テストの追加（Issue #79）
+# [Test] RootNavigator / App.tsx のナビゲーション結合テストの追加
 
+- **内部ドキュメントID**: issue-07
+- **対応 GitHub Issue**: GitHub Issue #79
 - **ステータス**: 完了 (Closed)
 - **完了 PR**: PR #85（Phase 2）
 

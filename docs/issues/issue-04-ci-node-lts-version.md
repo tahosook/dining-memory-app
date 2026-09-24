@@ -1,5 +1,7 @@
-# [CI] CI Node.js バージョンの LTS 固定（Issue #76）
+# [CI] CI Node.js バージョンの LTS 固定
 
+- **内部ドキュメントID**: issue-04
+- **対応 GitHub Issue**: GitHub Issue #76
 - **ステータス**: 完了 (Closed)
 - **完了 PR**: PR #84
 

@@ -1,5 +1,7 @@
-# [Chore/Config] knip.json のスキーマ定義バージョン更新 (v5 → v6)（Issue #83）
+# [Chore/Config] knip.json のスキーマ定義バージョン更新 (v5 → v6)
 
+- **内部ドキュメントID**: issue-11
+- **対応 GitHub Issue**: GitHub Issue #83
 - **ステータス**: 完了 (Closed)
 - **完了 PR**: PR #84
 

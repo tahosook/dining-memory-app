@@ -1,5 +1,7 @@
-# [Bug/Refactor] RecordsScreen の日付グルーピングにおけるタイムゾーン依存・日付再パースの改善（Issue #77）
+# [Bug/Refactor] RecordsScreen の日付グルーピングにおけるタイムゾーン依存・日付再パースの改善
 
+- **内部ドキュメントID**: issue-05
+- **対応 GitHub Issue**: GitHub Issue #77
 - **ステータス**: 完了 (Closed)
 - **完了 PR**: PR #85（Phase 2）
 

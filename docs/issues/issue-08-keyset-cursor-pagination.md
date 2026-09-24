@@ -1,5 +1,8 @@
-# [Investigation] Keyset (Cursor) ページネーション移行条件の検討（Issue #80）
+# [Investigation] Keyset (Cursor) ページネーション移行条件の検討
 
+- **内部ドキュメントID**: issue-08
+- **対応 GitHub Issue**: GitHub Issue #80
+- **GitHub Issue 状態**: OPEN（Later / 将来トリガー待ち）
 - **ステータス**: 将来トリガー待ち評価 (Later / Future-triggered)
 - **対象トリガー**: データ規模の拡大（保存件数10,000件超）または実機性能課題の顕在化
 
