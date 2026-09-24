@@ -37,9 +37,9 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
    - When opening a GitHub Issue, keep the issue body thin: state the high-level objective and link directly to the corresponding `docs/issues/issue-XX-xxx.md` file.
    - Do not copy-paste detailed acceptance checklists into GitHub Issues to avoid synchronization drift.
 
-3. **PR Automation & Auto-Close**:
-   - Every PR addressing an issue should include `Closes #<issue-number>` (or `Fixes #<issue-number>`) in its description.
-   - Merging the PR automatically closes the corresponding GitHub Issue.
+3. **PR Linkage & Auto-Close (`Closes` vs. `Refs`)**:
+   - **Full Resolution PRs**: When a PR completely resolves an issue, declare `Closes #<issue-number>` (or `Fixes #<issue-number>`) so merging automatically closes the GitHub Issue.
+   - **Investigation & Multi-Phase PRs**: When a PR covers an investigation spike, a partial milestone, or a parent issue that spawns child implementation issues (e.g., investigation Issue #75 spawning implementation Issues #86, #87, #88), use `Refs #<issue-number>` or `Relates to #<issue-number>` instead. Do **not** use `Closes` unless the issue is explicitly intended to close upon merge.
 
 4. **Synchronous Ledger Updates**:
    - In the same PR that implements or completes the task, update:

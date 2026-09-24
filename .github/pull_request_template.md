@@ -2,8 +2,12 @@
 <!-- Brief summary of what this PR changes and why -->
 
 ## Related Issues
-<!-- Declare 'Closes #XX' or 'Fixes #XX' so GitHub automatically closes the issue on merge -->
+<!--
+  - Use 'Closes #XX' or 'Fixes #XX' when this PR fully resolves the target issue (auto-closes on merge).
+  - Use 'Refs #XX' or 'Relates to #XX' for investigation spikes, partial milestones, or parent issues spawning sub-issues.
+-->
 - Closes #
+- Refs #
 - Spec / Checklist: `docs/issues/`
 
 ## Ledger & Documentation Updates
