@@ -50,6 +50,12 @@ export interface CreateMealData {
   tags?: string;
 }
 
+/**
+ * getRecentMeals の取得オプション。
+ *
+ * NOTE: beforeMealDatetime (cursor) が指定されている場合は、offset は無視され、
+ * カーソル走査 (Keyset pagination) が優先されます。
+ */
 export interface GetRecentMealsOptions {
   limit?: number;
   offset?: number;
@@ -303,6 +309,13 @@ export class MealService {
     return this.searchMeals({ dateFrom: startDate, dateTo: endDate });
   }
 
+  /**
+   * 最近の食事記録を取得します。
+   *
+   * @param limitOrOptions 取得件数、またはページネーションオプション
+   * @param offsetParam オフセット（limitOrOptions が数値の場合に使用）
+   * NOTE: beforeMealDatetime (cursor) 指定時は offset は無視され、カーソル走査 (Keyset pagination) が優先されます。
+   */
   static async getRecentMeals(
     limitOrOptions: number | GetRecentMealsOptions = 20,
     offsetParam = 0
@@ -315,8 +328,8 @@ export class MealService {
         : limitOrOptions;
 
     const limit = options.limit ?? 20;
-    const offset = options.offset ?? 0;
     const { beforeMealDatetime, beforeId } = options;
+    const offset = typeof beforeMealDatetime === 'number' ? 0 : (options.offset ?? 0);
 
     if (isUsingNativeDatabase()) {
       const db = getDatabase();

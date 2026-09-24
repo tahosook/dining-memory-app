@@ -171,6 +171,7 @@ export const RecordsScreen: React.FC = () => {
   // Store flatMeals in a ref to keep handleMealPress reference stable and prevent O(N^2) list re-renders
   const flatMealsRef = useRef<Meal[]>(flatMeals);
   const loadingRef = useRef(false);
+  const refreshingRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const hasMoreRef = useRef(true);
   const activeLoadIdRef = useRef(0);
@@ -235,6 +236,7 @@ export const RecordsScreen: React.FC = () => {
     } finally {
       if (loadId === activeLoadIdRef.current && isMountedRef.current) {
         loadingRef.current = false;
+        refreshingRef.current = false;
         setLoading(false);
         setRefreshing(false);
       }
@@ -242,7 +244,12 @@ export const RecordsScreen: React.FC = () => {
   }, [attachThumbnailRequests]);
 
   const handleLoadMore = useCallback(async () => {
-    if (loadingRef.current || loadingMoreRef.current || !hasMoreRef.current || refreshing) {
+    if (
+      loadingRef.current ||
+      loadingMoreRef.current ||
+      !hasMoreRef.current ||
+      refreshingRef.current
+    ) {
       return;
     }
 
@@ -291,7 +298,7 @@ export const RecordsScreen: React.FC = () => {
         setLoadingMore(false);
       }
     }
-  }, [attachThumbnailRequests, refreshing]);
+  }, [attachThumbnailRequests]);
 
   useFocusEffect(
     useCallback(() => {
@@ -300,6 +307,7 @@ export const RecordsScreen: React.FC = () => {
   );
 
   const handleRefresh = useCallback(async () => {
+    refreshingRef.current = true;
     setRefreshing(true);
     await loadMeals();
   }, [loadMeals]);
