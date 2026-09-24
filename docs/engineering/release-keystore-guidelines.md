@@ -43,6 +43,9 @@ keytool -genkeypair \
   -storetype PKCS12
 ```
 
+> [!NOTE]
+> コマンド実行時に対話形式で Distinguished Name（氏名、組織名、都市名、国コード等）の入力を求められます。任意ですが一貫した値を入力してください。
+
 > [!CAUTION]
 > - 生成した `.keystore` ファイルは絶対にリポジトリのワーキングツリー内に直接配置しないでください。
 > - ルートの `.gitignore` により `*.keystore`, `*.jks`, `*.key` 等は除外されていますが、誤コミットの根絶のため、作業はリポジトリ外のセキュアな一時ディレクトリで実施します。
@@ -85,6 +88,9 @@ def storePass     = findProperty('RELEASE_STORE_PASSWORD') ?: System.getenv('REL
 def alias         = findProperty('RELEASE_KEY_ALIAS') ?: System.getenv('RELEASE_KEY_ALIAS')
 def keyPass       = findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEASE_KEY_PASSWORD')
 ```
+
+> [!NOTE]
+> 上記はプロパティ読み込み部分の抜粋です。実際の `android/app/build.gradle` では、キーストアファイルの存在確認や各認証情報の必須バリデーション（`GradleException` によるフェイルファスト）を含む安全設計になっています。
 
 ### 3.1 ローカル手動ビルド (`npm run build:android:release`)
 
@@ -131,7 +137,7 @@ npm run build:android:release
 
 | Secret 名 | 内容 |
 | :--- | :--- |
-| `ANDROID_RELEASE_KEYSTORE_BASE64` | `base64 -i dining-memory-release.keystore` の出力文字列 |
+| `ANDROID_RELEASE_KEYSTORE_BASE64` | キーストアの Base64 文字列（macOS: `base64 -i dining-memory-release.keystore` / Linux: `base64 -w0 dining-memory-release.keystore`） |
 | `RELEASE_STORE_PASSWORD` | キーストアのパスワード（PKCS12 のため RELEASE_KEY_PASSWORD と共通） |
 | `RELEASE_KEY_ALIAS` | `dining-memory-release` |
 | `RELEASE_KEY_PASSWORD` | 鍵のパスワード（`RELEASE_STORE_PASSWORD` と同一値を設定） |
@@ -176,7 +182,7 @@ Expo のクラウドビルド（EAS Build）を利用する場合の構成です
 配布形態によって、署名鍵の紛失耐性と運用責任が大きく異なります。
 
 ### 4.1 Google Play 公開時: Play App Signing (推奨)
-将来的に Google Play ストアへ公開する場合は、**Google Play App Signing (PEP: Play Encrypts and Protects)** を利用することを原則とします。
+将来的に Google Play ストアへ公開する場合は、**Google Play App Signing（Play アプリ署名）** を利用することを原則とします。
 
 - **App Signing Key（アプリ署名鍵）**:
   - Google Play のインフラ内で安全に生成・保管されます。エンドユーザー端末へ配信される APK はこの鍵で署名されます。
