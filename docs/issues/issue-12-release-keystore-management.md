@@ -2,7 +2,8 @@
 
 - **内部ドキュメントID**: issue-12
 - **対応 GitHub Issue**: GitHub Issue #109（※GitHub の PR/Issue #12 とは無関係の内部文書ID）
-- **ステータス**: 未着手 (Open)
+- **ステータス**: 完了 (Closed)
+- **策定ガイドライン**: [docs/engineering/release-keystore-guidelines.md](../engineering/release-keystore-guidelines.md)
 - **関連ファイル**: `android/app/build.gradle`, `README.md`, `eas.json`, `.gitignore`
 - **関連ドキュメント**: [docs/engineering/github-security-settings.md](../engineering/github-security-settings.md)
 
@@ -23,7 +24,7 @@
 
 ## 検討・実施内容
 ### 1. キーストアの生成規格と手順の策定
-- Android 公式推奨に準拠したキーストア生成コマンド（例: RSA 4096bit または 2048bit、有効期限 25 年以上）を明文化する。
+- Android の標準的な署名要件および本プロジェクトの運用規格に沿ったキーストア生成コマンド（RSA 4096bit、有効期限 25 年以上等）を明文化する。
 - 鍵エイリアス名およびパスワード管理基準を定義する。
 
 ### 2. 保管・バックアップ運用の確立
@@ -49,7 +50,7 @@
 - アプリのコード変更（`android/app/build.gradle` の署名ロジック改修は必要と判断された場合のみ）。
 
 ## 受入基準
-- [ ] リリース署名用キーストアの生成手順および暗号化保管・バックアップ運用方針が策定されている。
-- [ ] ローカル / CI / EAS の各ビルド経路における署名鍵の注入フローが決定されている。
-- [ ] Google Play（Play App Signing）および直接配布に対する署名方針が整理されている。
-- [ ] 策定された運用手順が `docs/engineering/` 等のドキュメントとして記録されている。
+- [x] リリース署名用キーストアの生成手順および暗号化保管・バックアップ運用方針が策定されている。
+- [x] ローカル / CI / EAS の各ビルド経路における署名鍵の注入フローが決定されている。
+- [x] Google Play（Play App Signing）および直接配布に対する署名方針が整理されている。
+- [x] 策定された運用手順が `docs/engineering/` 等のドキュメント（[docs/engineering/release-keystore-guidelines.md](../engineering/release-keystore-guidelines.md)）として記録されている。
