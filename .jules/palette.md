@@ -7,3 +7,6 @@
 ## 2024-05-24 - Accessibility Labels for AI Details Toggle Button
 **Learning:** Found a toggle button in `SettingsScreen.tsx` that changed state visually to show or hide "AI Details" but lacked any accessibility attributes. Screen reader users would have no context about the button's action or current expanded state.
 **Action:** Always ensure toggle buttons that reveal or hide content have proper `accessibilityRole="button"`, descriptive `accessibilityLabel` and `accessibilityHint`, and most importantly, `accessibilityState={{ expanded: isVisible }}` to accurately announce the current state.
+## 2024-09-24 - Enhance Modal Accessibility
+**Learning:** Adding comprehensive accessibility props (`accessibilityRole`, `accessibilityLabel`, and `accessibilityState`) to interactive elements within complex forms (like `MealEditModal`) ensures that screen readers can accurately interpret the form's structure and state, making the app significantly more usable for visually impaired users.
+**Action:** Always verify that interactive components have the necessary accessibility attributes, especially in heavily-used forms and modals.
