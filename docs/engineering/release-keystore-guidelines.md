@@ -14,7 +14,7 @@ Android 本番リリースビルドにおいて、アプリの同一性とセキ
 
 ## 1. 署名鍵（Keystore）生成規格
 
-Android 公式セキュリティガイドラインに準拠し、長期署名に耐えうる以下の規格でキーストアを生成します。
+本プロジェクトのリリース署名運用規格として、長期署名に耐えうる以下の規格を採用します。
 
 ### 1.1 仕様規格
 - **鍵アルゴリズム (Key Algorithm)**: `RSA`
@@ -24,8 +24,10 @@ Android 公式セキュリティガイドラインに準拠し、長期署名に
 - **エイリアス名 (Key Alias)**: `dining-memory-release`
 - **ファイル名**: `dining-memory-release.keystore`
 - **パスワード要件**:
-  - キーストアパスワード（Store Password）および鍵パスワード（Key Password）は、英大文字・小文字・数字・記号を含む **16文字以上の高エントロピー文字列** とする。
-  - パスワードマネージャーで生成・管理し、開発者個人による平文メモやチャットでの送受信を禁止する。
+  - キーストア形式として PKCS12 を採用するため、Store Password（キーストアパスワード）と Key Password（鍵パスワード）は**同一の単一パスワード**として管理します（PKCS12 仕様上、個別のパスワード設定は非推奨・未サポートであり、生成コマンドでも `-keypass` は指定しません）。
+  - 英大文字・小文字・数字・記号を含む **16文字以上の高エントロピー文字列** とします。
+  - パスワードマネージャーで生成・管理し、開発者個人による平文メモやチャットでの送受信を禁止します。
+  - 各ビルド環境へのシークレット注入時（Gradle / CI / EAS）は、`RELEASE_STORE_PASSWORD` と `RELEASE_KEY_PASSWORD` の両方に**同一のパスワード値**を設定します。
 
 ### 1.2 生成コマンド例
 キーストア生成時は、JDK に付属する `keytool` コマンドを使用します。
@@ -65,8 +67,7 @@ Android アプリケーションでは、**署名鍵を紛失すると同じパ�
    - `dining-memory-release.keystore` ファイル自体を添付。
    - 以下のメタデータをカスタムフィールドに記録：
      - `Key Alias`: `dining-memory-release`
-     - `Store Password`: （生成したパスワード）
-     - `Key Password`: （生成したパスワード）
+     - `Password (Store & Key)`: （生成した共通パスワード。`RELEASE_STORE_PASSWORD` および `RELEASE_KEY_PASSWORD` に同一値を設定）
      - `Creation Date`: 生成年月日
      - `SHA-256 Fingerprint`: 証明書のフィンガープリント（`keytool -list -v -keystore ...` で確認）
 2. **セカンダリ保管（オフライン Cold Storage）**:
@@ -97,7 +98,8 @@ def keyPass       = findProperty('RELEASE_KEY_PASSWORD') ?: System.getenv('RELEA
 RELEASE_STORE_FILE=/Users/username/secure-keys/dining-memory-release.keystore
 RELEASE_STORE_PASSWORD=your_keystore_password
 RELEASE_KEY_ALIAS=dining-memory-release
-RELEASE_KEY_PASSWORD=your_key_password
+RELEASE_KEY_PASSWORD=your_keystore_password
+# ※PKCS12 形式のため、RELEASE_STORE_PASSWORD と RELEASE_KEY_PASSWORD には同一パスワードを設定します
 ```
 
 - **利点**:
@@ -109,7 +111,7 @@ RELEASE_KEY_PASSWORD=your_key_password
 export RELEASE_STORE_FILE="/path/to/dining-memory-release.keystore"
 export RELEASE_STORE_PASSWORD="your_keystore_password"
 export RELEASE_KEY_ALIAS="dining-memory-release"
-export RELEASE_KEY_PASSWORD="your_key_password"
+export RELEASE_KEY_PASSWORD="your_keystore_password" # STORE_PASSWORD と同一値を設定
 
 npm run build:android:release
 ```
@@ -130,9 +132,9 @@ npm run build:android:release
 | Secret 名 | 内容 |
 | :--- | :--- |
 | `ANDROID_RELEASE_KEYSTORE_BASE64` | `base64 -i dining-memory-release.keystore` の出力文字列 |
-| `RELEASE_STORE_PASSWORD` | キーストアのパスワード |
+| `RELEASE_STORE_PASSWORD` | キーストアのパスワード（PKCS12 のため RELEASE_KEY_PASSWORD と共通） |
 | `RELEASE_KEY_ALIAS` | `dining-memory-release` |
-| `RELEASE_KEY_PASSWORD` | 鍵のパスワード |
+| `RELEASE_KEY_PASSWORD` | 鍵のパスワード（`RELEASE_STORE_PASSWORD` と同一値を設定） |
 
 #### 2. CI ワークフローでの復元とクリーンアップ
 ワークフロー内では、一時ファイルとしてデコードし、ビルド完了後は成否に関わらず確実に削除します。
