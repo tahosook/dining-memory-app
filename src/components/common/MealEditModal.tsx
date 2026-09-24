@@ -244,7 +244,7 @@ export function MealEditModal({
               onPress={onSave}
               disabled={saving}
               accessibilityRole="button"
-              accessibilityLabel="保存"
+              accessibilityLabel={saving ? '保存中' : '保存'}
               accessibilityState={{ disabled: saving }}
               testID={`${testIDPrefix}-save-button`}
             >
