@@ -1,5 +1,6 @@
 import datetime
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -71,12 +72,14 @@ class GenerateGitHubStatusTests(unittest.TestCase):
             ),
         }
 
-        # Issue 80 は Later
+        # Issue 80 は doc_map にて "将来トリガー待ち" のため Later
         self.assertTrue(is_later_issue(80, "Keyset pagination", [], doc_map))
         # later ラベル付きは Later
         self.assertTrue(is_later_issue(999, "Some task", ["later"], {}))
         # future-triggered ラベル付きは Later
         self.assertTrue(is_later_issue(998, "Another task", ["future-triggered"], {}))
+        # タイトルに "Later" が含まれていてもラベル/docsステータスがなければ Active (誤検知防止)
+        self.assertFalse(is_later_issue(997, "Fix bug in Later queue", [], {}))
         # 通常の Issue は Active (False)
         self.assertFalse(is_later_issue(73, "Jest config", ["test"], doc_map))
         self.assertFalse(is_later_issue(100, "Normal feature", ["enhancement"], {}))
@@ -161,6 +164,59 @@ class GenerateGitHubStatusTests(unittest.TestCase):
 
         self.assertIn("オープン中の PR はありません。", md)
         self.assertIn("現在アクティブなオープン Issue はありません。", md)
+
+    def test_parse_docs_issues_safe_doc_id_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            issues_dir = tmp_root / "docs" / "issues"
+            issues_dir.mkdir(parents=True)
+
+            # ハイフンが1つしかないファイル名（内部ドキュメントIDヘッダーなし）
+            single_dash_file = issues_dir / "issue-single.md"
+            single_dash_file.write_text("# [Test] Single dash\n", encoding="utf-8")
+
+            # 通常の2ハイフンファイル名
+            normal_file = issues_dir / "issue-99-feature.md"
+            normal_file.write_text("# [Test] Normal\n", encoding="utf-8")
+
+            parsed = parse_docs_issues(tmp_root)
+            self.assertEqual(len(parsed), 2)
+
+            by_stem = {p.title: p.doc_id for p in parsed}
+            self.assertEqual(by_stem["[Test] Single dash"], "issue-single")
+            self.assertEqual(by_stem["[Test] Normal"], "issue-99")
+
+    def test_parse_docs_issues_checkboxes_limited_to_acceptance_criteria(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_root = Path(tmp_dir)
+            issues_dir = tmp_root / "docs" / "issues"
+            issues_dir.mkdir(parents=True)
+
+            sample_issue = issues_dir / "issue-98-sample.md"
+            sample_content = """# [Test] Scoped Checkboxes
+- **内部ドキュメントID**: issue-98
+- **対応 GitHub Issue**: GitHub Issue #98
+- **ステータス**: 進行中
+
+## 検討メモ（受入基準外）
+- [ ] 検討事項A（カウントされないべき）
+- [x] 検討事項B（カウントされないべき）
+
+## 受入基準
+- [x] 正式な受入基準1
+- [ ] 正式な受入基準2
+
+## その他のメモ
+- [ ] 追加メモ（カウントされないべき）
+"""
+            sample_issue.write_text(sample_content, encoding="utf-8")
+
+            parsed = parse_docs_issues(tmp_root)
+            self.assertEqual(len(parsed), 1)
+            doc = parsed[0]
+            # 受入基準内の2件のみがカウントされるべき（完了1, 総数2）
+            self.assertEqual(doc.total_criteria, 2)
+            self.assertEqual(doc.completed_criteria, 1)
 
 
 if __name__ == "__main__":

@@ -96,7 +96,12 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
 
         # 内部ドキュメントID
         doc_id_match = re.search(r"-\s+\*\*内部ドキュメントID\*\*:\s*([^\n]+)", content)
-        doc_id = doc_id_match.group(1).strip() if doc_id_match else path.stem.split("-", 2)[0] + "-" + path.stem.split("-", 2)[1]
+        parts = path.stem.split("-")
+        doc_id = (
+            doc_id_match.group(1).strip()
+            if doc_id_match
+            else (f"{parts[0]}-{parts[1]}" if len(parts) >= 2 else path.stem)
+        )
 
         # 対応 GitHub Issue
         gh_match = re.search(r"-\s+\*\*対応 GitHub Issue\*\*:\s*([^\n]+)", content)
@@ -115,9 +120,11 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
         title_match = re.search(r"^#\s+(.+)$", content, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else path.stem
 
-        # 受入基準チェックボックスの集計
-        completed = len(re.findall(r"-\s+\[x\]", content, re.IGNORECASE))
-        uncompleted = len(re.findall(r"-\s+\[\s\]", content))
+        # 受入基準チェックボックスの集計（受入基準セクションに限定）
+        criteria_match = re.search(r"## (?:受入基準|Acceptance Criteria)\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
+        criteria_text = criteria_match.group(1) if criteria_match else content
+        completed = len(re.findall(r"-\s+\[x\]", criteria_text, re.IGNORECASE))
+        uncompleted = len(re.findall(r"-\s+\[\s\]", criteria_text))
         total = completed + uncompleted
 
         # 概要または目的
@@ -209,14 +216,6 @@ def is_later_issue(issue_num: int, title: str, labels: list[str], doc_map: dict[
     # 2. 内部仕様ドキュメントのステータスが Later / 将来トリガー待ち か
     doc = doc_map.get(issue_num)
     if doc and ("将来トリガー待ち" in doc.status or "Later" in doc.status):
-        return True
-
-    # 3. タイトルに Later / 将来トリガー があるか
-    if "将来トリガー" in title or "Later" in title:
-        return True
-
-    # 4. Issue #80, #81 は既知の Later イシュー
-    if issue_num in (80, 81):
         return True
 
     return False
@@ -323,8 +322,9 @@ def generate_status_markdown(
             labels = [l.get("name", "") for l in issue.get("labels", [])]
             label_str = " ".join([f"`[{lbl}]`" for lbl in labels]) if labels else "`[no label]`"
             doc = doc_map.get(num) or issue.get("_doc")
+            issue_tag = f"Issue #{num}" if num > 0 else (f"Issue ({doc.doc_id})" if doc else "Issue (未起票)")
 
-            lines.append(f"#### [Issue #{num}] {title}")
+            lines.append(f"#### [{issue_tag}] {title}")
             lines.append(f"- ラベル: {label_str}")
             if doc:
                 progress = format_criteria_progress(doc)
@@ -349,8 +349,9 @@ def generate_status_markdown(
             labels = [l.get("name", "") for l in issue.get("labels", [])]
             label_str = " ".join([f"`[{lbl}]`" for lbl in labels]) if labels else "`[later]`"
             doc = doc_map.get(num) or issue.get("_doc")
+            issue_tag = f"Issue #{num}" if num > 0 else (f"Issue ({doc.doc_id})" if doc else "Issue (未起票)")
 
-            lines.append(f"#### [Issue #{num}] {title}")
+            lines.append(f"#### [{issue_tag}] {title}")
             lines.append(f"- ラベル: {label_str}")
             if doc:
                 lines.append(f"- 内部仕様書: [`{doc.doc_id}`]({doc.rel_path}) (ステータス: {doc.status})")
