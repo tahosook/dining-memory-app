@@ -4,7 +4,7 @@
 - Purpose: GitHub 側で有効化する security / quality settings と repo 側設定の運用方針をまとめる。
 - Audience: repo owner, maintainers, AI agents.
 - Update trigger: GitHub security feature、CI required checks、Dependabot 方針、branch protection 方針を変えるとき。
-- Related docs: [README.md](../../README.md), [docs/index.md](../index.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/dependency-policy.md](dependency-policy.md), [GitHub security and code quality docs](https://docs.github.com/en/code-security)
+- Related docs: [README.md](../../README.md), [docs/index.md](../index.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/dependency-policy.md](dependency-policy.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md), [GitHub security and code quality docs](https://docs.github.com/en/code-security)
 
 ## Policy
 - GitHub UI でしか有効化できない項目は、この repo では「手順」として管理する。repo 側変更だけで設定済みとは扱わない。

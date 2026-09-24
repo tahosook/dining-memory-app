@@ -27,6 +27,7 @@
 - [docs/engineering/coding-standards.md](./engineering/coding-standards.md): coding rules
 - [docs/engineering/development-workflow.md](./engineering/development-workflow.md): verification and workflow
 - [docs/engineering/github-security-settings.md](./engineering/github-security-settings.md): GitHub security / quality settings and manual setup checklist
+- [docs/engineering/release-keystore-guidelines.md](./engineering/release-keystore-guidelines.md): Android release signing key generation, secure storage, and CI/EAS secret injection procedures
 - [docs/engineering/dependency-policy.md](./engineering/dependency-policy.md): dependency classification, Expo SDK upgrade playbook, and native compatibility gates
 - [docs/engineering/food-labeling-guidelines.md](./engineering/food-labeling-guidelines.md): 食事画像ラベリング用スクリプトの責務、優先度、打ち止めライン
 - [docs/engineering/mediapipe-labeling-workflow.md](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の目的、guardrail、停止条件
@@ -58,6 +59,7 @@
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Development Workflow](./engineering/development-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
 - [GitHub Security Settings](./engineering/github-security-settings.md): CodeQL, Dependabot, Secret scanning, branch protection, and Actions permission setup.
+- [Release Keystore Guidelines](./engineering/release-keystore-guidelines.md): Android 本番リリース署名鍵（Keystore）の生成規格、多重保管・バックアップ運用、および各ビルド環境へのシークレット注入方針.
 - [Dependency Policy](./engineering/dependency-policy.md): 依存関係の4層分類、Expo SDK アップグレード手順、Dependabot 運用方針、ネイティブ互換性ゲート.
 - [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
 - [MediaPipe Labeling Workflow](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の自動化方針、guardrail、停止条件.

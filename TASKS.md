@@ -19,7 +19,6 @@
 - MediaPipe分類モデル同梱: 要確認。現在 `.task` model は repo commit せず manual local drop-in 前提。配布方法、license、size、build impact の判断が必要。
 - ローカルLLM / Ollama を使ったラベリング支援: 候補。既存 workflow は bounded loop と local executor 前提。生成 state の扱いに注意する。
 - Android / Expo ビルド運用: 候補。CI はあり、実機 smoke と model asset / native build 前提の確認手順は必要に応じて整理する。
-- リリースビルド署名鍵（Keystore）の管理・注入方針の策定: 調査・方針策定候補（GitHub Issue #109、内部ドキュメント issue-12）。本番リリース時の Keystore 生成規格、多重保管・バックアップ運用、および各ビルド環境（ローカル / CI / EAS）へのシークレット注入方法の確立 ([docs/issues/issue-12-release-keystore-management.md](docs/issues/issue-12-release-keystore-management.md))。
 
 ## Later
 ### Future-triggered evaluation（将来トリガー待ち評価）
@@ -32,6 +31,7 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
+- リリースビルド署名鍵（Keystore）の管理・注入方針の策定 (GitHub Issue #109, 内部ドキュメント issue-12): 本番リリース時の Keystore 生成規格（RSA 4096bit / PKCS12）、多重保管・バックアップ運用、および各ビルド環境（ローカル / CI / EAS）へのシークレット注入方法の確立、Play App Signing 運用方針の策定（[docs/engineering/release-keystore-guidelines.md](docs/engineering/release-keystore-guidelines.md)、完了 / Closed）。
 - 写真保存時圧縮・リサイズおよびライフサイクル管理 (GitHub Issue #75, #86, #87, #88): 撮影写真の保存時圧縮・リサイズ実測評価（GitHub Issue #75、`docs/notes/photo-compression-evaluation-issue-75.md`、完了 / Closed）、メイン写真保存時ネイティブリサイズ（最大長辺1600px / JPEG 80%）およびフォールバック（GitHub Issue #86、PR #102 にてマージ済み）、写真世代ベースのサムネイル非同期生成と写真回転競合耐性（GitHub Issue #87、PR #102 にてマージ済み）、孤立写真ファイル回収とファイルライフサイクル保護（GitHub Issue #88、PR #105 にてマージ済み）。
 - Phase 2 (GitHub Issue #77, #78, #79): RecordsScreen の日付グルーピング改善（YYYY-MM-DD 化 & タイムスタンプ直接ソート、GitHub Issue #77）、RootNavigator のタブヘッダー宣言的設定移行（GitHub Issue #78）、RootNavigator / App.tsx ナビゲーション結合テスト追加（GitHub Issue #79）（PR #85 にて完了）。
 - Phase 1 (GitHub Issue #73, #74, #76, #83): Jest テスト環境設定健全化（GitHub Issue #73）、ESLint flat config / Prettier CI フォーマットチェック（GitHub Issue #74）、CI Node.js 24 LTS 固定（GitHub Issue #76）、Knip スキーマ v6 更新（GitHub Issue #83）（PR #84 にて完了）。
