@@ -21,7 +21,7 @@
   - 保存ワークフロー所要時間（平均 1,283.8 ms）の大部分は、**Android MediaStore へのアルバム保存（`MediaLibrary.Asset.create` / 370〜909 ms）** および **ネイティブリサイズ（`ImageResizer` / 194〜347 ms）** が占めており、JavaScript / Base64 レイヤーには起因しない。
 - **Issue #61 への判断**:
   - **Native EXIF (Kotlin) への移行は「不要（現状維持・改善見送り）」と判断する**。
-  - 理由: 移行による短縮余地は最大でも 30ms 程度（※机上推定値 ~10ms との実測差分）と微小であり、Kotlin ネイティブモジュール保守コストや iOS とのプラットフォーム二重管理のデメリットに見合わないため（第 6 節参照）。
+  - 理由: 移行による短縮余地は未実測の机上試算（~10ms）に基づいても最大約 30ms 程度の推計にとどまり、Kotlin ネイティブモジュール保守コストや iOS とのプラットフォーム二重管理のデメリットに見合わないため（第 6 節参照）。
 
 ---
 
@@ -141,7 +141,7 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
    - **施行 1 の検証**:
      - 直列 Step 合計 = 346.7 + 17.9 + 33.0 + 4.0 + 909.1 + 56.2 = **1,366.9 ms**
      - Total 実測値 = **1,805.4 ms**
-     - **差分 = 438.5 ms**。施行 1 では初回起動直後だったため、`getLocationSnapshot()` による初回 GPS 測位遅延およびファイルコピー・ディレクトリ解決のオーバーヘッドが乗ったものと確認されました。
+     - **差分 = 438.5 ms**。Total 計測区間内には位置情報取得、ファイルコピー、一時ファイル削除、ディレクトリ解決等の未計測区間が含まれており、個別の寄与は特定していません。
 
 ---
 
@@ -190,7 +190,7 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
   - 99th percentile: **44 ms**
 - **Slow bitmap uploads**: **0 回**
 - **評価**:
-  - 90% 以上のフレームが 10ms 以内で描画を終えており、写真保存中であっても UI は滑らかに 60fps を維持していました。
+  - 90% 以上のフレームが 10ms 以内で描画を終えており、今回の測定では顕著なUI停止は観測されませんでした。
 
 ---
 
@@ -202,12 +202,12 @@ adb shell dumpsys gfxinfo com.tahosook.diningmemory
 
 | 評価軸 | Native EXIF 移行案 (Kotlin) | 現行方式 (JS / piexifjs) | 評価・判断 |
 |---|---|---|---|
-| **1. 処理速度・メモリ改善幅** | **~10ms（※机上推定値）** ※2 | **42.4 ms（※実測値: 2回平均）** (Step 3〜5 合計) | **改善余地は最大約 30ms 程度で体感不能**。保存全体の律速は MediaLibrary（640ms）であり、EXIF 短縮による全体寄与は 2% 未満。 |
+| **1. 処理速度・メモリ改善幅** | **~10ms（※未実測の机上推定値）** ※2 | **42.4 ms（※実測値: 2回平均）** (Step 3〜5 合計) | **短縮余地は未実測の机上試算でも最大約 30ms 程度にとどまる**。保存全体の主要要因は MediaLibrary（640ms）や Native リサイズ（270ms）であり、EXIF 短縮による全体寄与は限定的と推計される。 |
 | **2. 実装工数・保守コスト** | Kotlin Native Module（40〜60行）の追加、メンテ負荷増 | **ゼロ**（既存コードをそのまま利用） | ネイティブコード追加による Expo SDK アップデート時の破壊リスクを回避できる。 |
 | **3. クロスプラットフォーム整合性** | Android: Native、iOS: JS の二重管理が発生 | **両 OS 共通の統一実装** | 実装の一貫性とテストの容易性が保たれる。 |
 | **4. EXIF 互換性** | Android OS の ExifInterface 依存 | `piexifjs` による厳密なタグ制御 | 実機写真で `Make`, `Model`, `Software`, `DateTimeOriginal` が正常保持されていることを確認済み。 |
 
-※2 `~10ms` は、Kotlin Native Module 未実装のため、一般的な Android `ExifInterface.saveAttributes()` 直接呼出のオーバーヘッドに基づく机上推定値です。
+※2 `~10ms` は、Kotlin Native Module 未実装のため、一般的な Android `ExifInterface.saveAttributes()` 直接呼出のオーバーヘッドに基づく机上試算（未実測の推定値）です。これに基づく「最大約 30ms の短縮余地」も推計上の試算値です。
 
 ### 結論
 > **判断: 現状維持（見送り / Won't Fix）**
