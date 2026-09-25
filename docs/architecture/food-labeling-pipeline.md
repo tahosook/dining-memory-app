@@ -72,7 +72,8 @@ flowchart LR
 
 ## 3. Code Alignment: Current State vs Required Changes
 
-本セクションは、既存コードの実態を照合し、変更が必要な箇所とそのリスクを特定します。
+本セクションは、既存コードの実態を照合し、変更が必要な箇所とそのリスクを特定します。  
+*※記載の行番号は仕様策定時点の目安です。実装時は関数名・シンボル名でコードを照合してください。*
 
 ### 3.1 TS Download Layer
 
@@ -116,6 +117,10 @@ flowchart LR
 | `MediaPipeMealInputAssistModule.kt` L155-166 | `hasBundledModelAsset()` が `assets.open()` でモデルの存在を確認する。 | ローカルファイル（`documentDirectory/ai-models/meal-input-assist.task`）の存在確認に置き換え。 | 中。 |
 | `MediaPipeMealInputAssistModule.kt` L33-40 | `invalidate()` で `classifier?.close()` を呼んでいる。 | 現状のコードは正しくリソースを解放している。MappedByteBuffer 導入後も維持する。 | 低。既存コードが適切。 |
 | `MediaPipeMealInputAssistSupport.kt` L9 | `MEDIAPIPE_MEAL_INPUT_ASSIST_MODEL_ASSET_PATH` が assets/ パスとして定義されている。 | ローカルファイル用の定数・解決関数を追加する。 | 低。 |
+
+> [!NOTE]
+> **Expo documentDirectory と Native context.filesDir のパス整合性**:
+> TS 側で解決する `documentDirectory + 'ai-models/meal-input-assist.task'`（URI: `file:///data/user/0/.../files/ai-models/meal-input-assist.task`）と、Native 側で解決する `File(context.filesDir, "ai-models/meal-input-assist.task")`（絶対パス: `/data/user/0/.../files/ai-models/meal-input-assist.task`）は同一のファイル実体を指します。Native 側でパスを扱う際は、既存の `MediaPipeMealInputAssistSupport.resolveLocalPhotoPath` と同様に `file://` スキームを正規化して確実に照合します。
 
 #### Kotlin 実装コードスニペット
 ローカルファイルから `MappedByteBuffer` を生成し、MediaPipe にセットする実装：
@@ -240,7 +245,7 @@ TS 側の `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` L19-56 の 
 
 1. **SHA256 Hash Verification（メモリ安全なストリーミング検証）**:
    - `expo-crypto` の `digestStringAsync` は文字列を対象とする API であり、ファイルを全量 Base64 等で JS ヒープに読み込むとメモリ圧迫や GC 負荷を引き起こす。
-   - そのため、ファイルハッシュの検証は **Android Native 側（Kotlin の `MessageDigest` + `FileInputStream` ストリーミング処理）** またはメモリ安全なストリーミング方式に委譲する。`ModelConfig` に記載された期待値と照合し、不一致の場合はファイルを削除して初期化・推論を中断する。
+   - **検証シーケンスと責務境界**: 一時ファイルへのダウンロード完了直後、`replaceFile()` による正式配置の直前に、Native 側のストリーミング検証メソッド（Kotlin の `MessageDigest` + `FileInputStream`）を呼び出し、`ModelConfig` に固定埋め込みされた期待値と照合する。一致が確認された場合のみ `replaceFile()` を実行し、不一致の場合は一時ファイルを削除して即座にエラー状態（`error`）へ遷移する。これにより、壊れたモデルが正式配置されるのを未然に防ぐ。
 2. **Temporary Download + Verified Replacement（一時ダウンロードと検証後の置換）**:
    - ダウンロードは一時ファイル（`.download-<timestamp>-<uuid>`）に行い、ハッシュ検証完了後に `replaceFile()` で最終配置パスへ移動する。
    - 注意点として、現在の `replaceFile()` は「既存ファイルの削除（`deleteAsync`）→ 移動（`moveAsync`）」の 2 ステップ実装であり、厳密な OS レベルの Atomic Swap ではない。万が一削除直後にクラッシュした場合、ファイルが欠落するウィンドウが存在するが、次回起動時に `getInstalledFileState()` がファイル欠落を検知して `not_installed` / `error` と判定し、安全に再ダウンロードを促す自己修復（Self-healing）設計とする。

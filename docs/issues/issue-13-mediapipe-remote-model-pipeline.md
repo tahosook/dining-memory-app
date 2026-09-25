@@ -75,7 +75,7 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
   - `getMediaPipeModelStatus()` — ローカルファイルの存在確認と設定キーの読み取り。
   - `deleteMediaPipeModel()` — ファイル削除と状態リセット。
 - [ ] **既存の `installModelFiles()` / `installMealInputAssistModel()` / `redownloadMealInputAssistModel()` / `deleteMealInputAssistModel()` は変更しない。**
-- [ ] SHA256 検証は、全量メモリ読み込みを避けるため Native 側（Kotlin の `MessageDigest` ストリーミング処理、またはロード時検証）と連携したメモリ安全な方式を採用する（`expo-crypto.digestStringAsync` による全量 Base64 読み込みは行わない）。
+- [ ] SHA256 検証は、全量メモリ読み込みを避けるため Native 側（Kotlin の `MessageDigest` ストリーミング処理）と連携した方式を採用する。一時ファイルへのダウンロード完了直後、`replaceFile` の直前に Native の検証メソッドを呼び出して一致を確認する（`ModelConfig` に期待ハッシュを固定埋め込み）。
 
 ### 受入基準
 - GGUF のダウンロード・削除フローが引き続き正常に動作すること。
@@ -91,14 +91,15 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 
 ## Phase 3: Android Native の MappedByteBuffer 対応
 
-`MediaPipeMealInputAssistModule.kt` の `ensureClassifier()` を変更し、APK assets/ ではなくローカルストレージのモデルファイルを `MappedByteBuffer` 経由で読み込めるようにする。
+`MediaPipeMealInputAssistModule.kt` の `ensureClassifier()` を変更し、APK assets/ ではなくローカルストレージのモデルファイルを `MappedByteBuffer` 経由で読み込めるようにする。また、Phase 2 と連携するハッシュストリーミング検証メソッドを追加する。
 
 ### 変更対象ファイル
-- `android/.../MediaPipeMealInputAssistModule.kt` — `ensureClassifier()` の読み込みロジック変更
+- `android/.../MediaPipeMealInputAssistModule.kt` — `ensureClassifier()` の読み込みロジック変更、およびファイルハッシュ検証メソッド追加
 - `android/.../MediaPipeMealInputAssistSupport.kt` — パス定数および解決関数 `resolveDefaultModelFile` の追加
 
 ### タスク
 - [ ] `MediaPipeMealInputAssistSupport.kt` に、既定ローカルモデルファイル（`context.filesDir/ai-models/meal-input-assist.task`）を取得する `resolveDefaultModelFile(context: Context): File` を新設する。
+- [ ] `MediaPipeMealInputAssistModule.kt` に、ダウンロード後の一時ファイルハッシュを検証するストリーミングメソッド（`MessageDigest` 使用）を追加する。
 - [ ] `ensureClassifier()` (現在 L131-153) を以下のように変更する:
   1. `resolveDefaultModelFile(reactApplicationContext)` から `File` オブジェクトを取得（ReactMethod のシグネチャは維持）。
   2. `FileInputStream(file).use { fis -> fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length()) }` で `MappedByteBuffer` を取得。
@@ -108,6 +109,7 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 - [ ] モデルファイルが存在しない場合の `FileNotFoundException` ハンドリングおよびエラーコード体系（`E_MODEL_MISSING`, `E_MODEL_LOAD_FAILED`, `E_CLASSIFIER_INIT_FAILED` 等）を `food-labeling-pipeline.md` §3.3 に準拠して整備する。
 
 ### 受入基準
+- TS 側の `resolveMediaPipeModelPath()` の実パスと Native の `resolveDefaultModelFile()` が指す絶対パスが同一実体を指していること（実機/エミュレータログで確認）。
 - `documentDirectory/ai-models/meal-input-assist.task` にモデルファイルを配置した状態で `classifyStaticImage` を呼び、`categories[]` が返ること（実機 or エミュレータ）。
 - モデルファイルが存在しない場合、`getClassifierStatus` が `{ kind: 'unavailable' }` を返し、クラッシュしないこと。
 - `invalidate()` 呼び出し後、`classifier` が null になりリソース（Direct Buffer）が適切に解放されること。
@@ -130,13 +132,14 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 - [ ] SettingsScreen に MediaPipe モデルの状態表示・ダウンロード・削除の UI を追加する。
   - **表示条件**: `__DEV__` フラグ、または feature flag によって表示を制限する。一般ユーザーには見せない。
 - [ ] ダウンロード → 設定画面のステータスが `ready` に切り替わることを確認する。
-- [ ] 写真撮影 → `classifyStaticImage` → 推論結果が Review UI に表示されることを E2E で確認する。
+- [ ] 写真撮影 → `classifyStaticImage` → 推論結果（Raw categories）が正常に返り、Review UI に安全に受け渡されることを E2E で確認する。
+  - ※現行 `LABEL_MAPPING` に合致しない coarse クラスについては UI 上でクラッシュせず安全にスキップされることを確認（coarse クラス全対応は別 Issue スコープ）。
 - [ ] モデル未導入時および推論失敗時のフォールバックガイダンス文言（`food-labeling-pipeline.md` §3.5）が正しく表示され、手動入力・保存がブロックされないことを確認する。
 
 ### 受入基準
 - Development ビルドで SettingsScreen に MediaPipe セクションが表示されること。
 - Production ビルド（または feature flag オフ時）に MediaPipe セクションが表示されないこと。
-- ダウンロード → 推論 → 結果表示の一連のフローが実機で動作すること。
+- ダウンロード → Native 推論（Raw categories 返却）の一連のフローが実機で動作すること。
 - モデル未導入時・エラー時でも手動入力・保存が一切妨げられないこと。
 - GGUF モデルの既存のダウンロード・推論フローに影響がないこと。
 
