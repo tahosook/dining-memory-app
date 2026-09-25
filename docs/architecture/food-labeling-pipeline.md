@@ -64,8 +64,8 @@ flowchart LR
 
 - **リリースタグ規則**: `mediapipe-model-vX.Y.Z`（例: `mediapipe-model-v0.1.0`）
 - **アセット構成**:
-  - `meal-classifier.task`: MediaPipe Image Classifier モデルバイナリ
-  - `meal-classifier.task.sha256`: SHA256 ハッシュテキスト（`echo "<hash>  meal-classifier.task" > meal-classifier.task.sha256`）
+  - `meal-input-assist.task`: MediaPipe Image Classifier モデルバイナリ（既存の `meal-input-assist.*` 命名規則に準拠）
+  - `meal-input-assist.task.sha256`: SHA256 ハッシュテキスト（`echo "<hash>  meal-input-assist.task" > meal-input-assist.task.sha256`）
 - **リリースノート記載要件**: 学習データセット件数、混同行列（Confusion Matrix）のサマリー、クラス一覧（9クラス）を明記。
 
 ---
@@ -113,7 +113,7 @@ flowchart LR
 | ファイル | 現在の実態 | 必要な変更 | リスク |
 |---|---|---|---|
 | `MediaPipeMealInputAssistModule.kt` L131-153 | `ensureClassifier()` が `setModelAssetPath(MEDIAPIPE_MEAL_INPUT_ASSIST_MODEL_ASSET_PATH)` を呼び、APK 内 `assets/` のモデルだけを読む。 | `setModelAssetPath` を `setModelAssetBuffer(MappedByteBuffer)` に置き換え、ローカルファイルを読めるようにする。 | **高**。本 Issue の核心。 |
-| `MediaPipeMealInputAssistModule.kt` L155-166 | `hasBundledModelAsset()` が `assets.open()` でモデルの存在を確認する。 | ローカルファイル（`documentDirectory/ai-models/meal-classifier.task`）の存在確認に置き換え。 | 中。 |
+| `MediaPipeMealInputAssistModule.kt` L155-166 | `hasBundledModelAsset()` が `assets.open()` でモデルの存在を確認する。 | ローカルファイル（`documentDirectory/ai-models/meal-input-assist.task`）の存在確認に置き換え。 | 中。 |
 | `MediaPipeMealInputAssistModule.kt` L33-40 | `invalidate()` で `classifier?.close()` を呼んでいる。 | 現状のコードは正しくリソースを解放している。MappedByteBuffer 導入後も維持する。 | 低。既存コードが適切。 |
 | `MediaPipeMealInputAssistSupport.kt` L9 | `MEDIAPIPE_MEAL_INPUT_ASSIST_MODEL_ASSET_PATH` が assets/ パスとして定義されている。 | ローカルファイル用の定数・解決関数を追加する。 | 低。 |
 
@@ -121,9 +121,10 @@ flowchart LR
 ローカルファイルから `MappedByteBuffer` を生成し、MediaPipe にセットする実装：
 
 ```kotlin
-val modelFile = File(modelPath)
+// Native 側で既定ローカルパス（context.filesDir/ai-models/meal-input-assist.task）を解決
+val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
 if (!modelFile.exists()) {
-  throw FileNotFoundException(MediaPipeMealInputAssistSupport.buildPhotoMissingReason(modelPath))
+  throw FileNotFoundException(MediaPipeMealInputAssistSupport.buildModelMissingReason(modelFile.absolutePath))
 }
 
 val mappedByteBuffer: MappedByteBuffer = FileInputStream(modelFile).use { fis ->
@@ -145,9 +146,14 @@ val createdClassifier = ImageClassifier.createFromOptions(reactApplicationContex
 
 #### エラーコード体系とクライアント側ハンドリング
 
+> [!NOTE]
+> **ReactMethod 別の返却仕様**:
+> - `getClassifierStatus`: モデル不在時や初期化不可時は **Promise を Resolve** し、`{ kind: "unavailable", reason: "..." }` を返す（クラッシュや不要な try-catch を防止）。
+> - `classifyStaticImage`: 推論実行時の異常系は **Promise を Reject** し、以下のエラーコードを投げる。
+
 | エラーコード | 発生契機 | クライアント（TS / UI）側のハンドリング |
 |:---|:---|:---|
-| `E_MODEL_MISSING` | 指定された `modelPath` にファイルが存在しない | `model_unavailable`（未インストール状態として再ダウンロード誘導） |
+| `E_MODEL_MISSING` | 指定された `modelFile` が端末に存在しない | `model_unavailable`（未インストール状態として再ダウンロード誘導） |
 | `E_MODEL_LOAD_FAILED` | `FileChannel.map` の I/O エラー、またはモデルファイル破損 | モデル破損通知、再ダウンロード誘導 |
 | `E_INVALID_PHOTO_URI` | `photoUri` が `file://` または絶対パスでない | 入力バリデーションエラー通知 |
 | `E_PHOTO_MISSING` | 撮影した写真ファイルがストレージに見つからない | 写真再撮影誘導 |

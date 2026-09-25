@@ -67,7 +67,7 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 ### タスク
 - [ ] `modelConfig.ts` に MediaPipe モデルの設定を追加する:
   - GitHub Releases の URL
-  - ファイル名（例: `meal-classifier.task`）
+  - ファイル名: `meal-input-assist.task`（既存命名規則に準拠）
   - SHA256 ハッシュ
   - バージョン文字列
 - [ ] `modelInstaller.ts` に以下を追加する:
@@ -79,7 +79,7 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 
 ### 受入基準
 - GGUF のダウンロード・削除フローが引き続き正常に動作すること。
-- MediaPipe モデルのダウンロード後、`documentDirectory/ai-models/meal-classifier.task` にファイルが配置され、`getMediaPipeModelStatus()` が `{ kind: 'ready' }` を返すこと。
+- MediaPipe モデルのダウンロード後、`documentDirectory/ai-models/meal-input-assist.task` にファイルが配置され、`getMediaPipeModelStatus()` が `{ kind: 'ready' }` を返すこと。
 - SHA256 が不一致の場合、ファイルが削除され `{ kind: 'error' }` が返ること。
 - ダウンロード中に異常終了した場合、一時ファイルがクリーンアップされること。
 
@@ -94,20 +94,20 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 
 ### 変更対象ファイル
 - `android/.../MediaPipeMealInputAssistModule.kt` — `ensureClassifier()` の読み込みロジック変更
-- `android/.../MediaPipeMealInputAssistSupport.kt` — パス定数の追加
+- `android/.../MediaPipeMealInputAssistSupport.kt` — パス定数および解決関数 `resolveDefaultModelFile` の追加
 
 ### タスク
+- [ ] `MediaPipeMealInputAssistSupport.kt` に、既定ローカルモデルファイル（`context.filesDir/ai-models/meal-input-assist.task`）を取得する `resolveDefaultModelFile(context: Context): File` を新設する。
 - [ ] `ensureClassifier()` (現在 L131-153) を以下のように変更する:
-  1. React Native 側から渡されたモデルファイルパス、またはNative 側で既知のパスから `File` オブジェクトを生成。
-  2. `FileInputStream(file).channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length())` で `MappedByteBuffer` を取得。
+  1. `resolveDefaultModelFile(reactApplicationContext)` から `File` オブジェクトを取得（ReactMethod のシグネチャは維持）。
+  2. `FileInputStream(file).use { fis -> fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length()) }` で `MappedByteBuffer` を取得。
   3. `BaseOptions.builder().setModelAssetBuffer(mappedBuffer)` でオプションを構築。
-  4. `FileChannel` と `FileInputStream` を `use` ブロックで確実に close する。
-- [ ] `hasBundledModelAsset()` (現在 L155-166) をローカルファイルの存在確認に置き換える。
+- [ ] `hasBundledModelAsset()` (現在 L155-166) をローカルファイルの存在確認（`resolveDefaultModelFile(context).exists()`）に置き換える。
 - [ ] 既存の `invalidate()` (L33-40) の `classifier?.close()` パスはそのまま維持する。
 - [ ] モデルファイルが存在しない場合の `FileNotFoundException` ハンドリングおよびエラーコード体系（`E_MODEL_MISSING`, `E_MODEL_LOAD_FAILED`, `E_CLASSIFIER_INIT_FAILED` 等）を `food-labeling-pipeline.md` §3.3 に準拠して整備する。
 
 ### 受入基準
-- `documentDirectory/ai-models/meal-classifier.task` にモデルファイルを配置した状態で `classifyStaticImage` を呼び、`categories[]` が返ること（実機 or エミュレータ）。
+- `documentDirectory/ai-models/meal-input-assist.task` にモデルファイルを配置した状態で `classifyStaticImage` を呼び、`categories[]` が返ること（実機 or エミュレータ）。
 - モデルファイルが存在しない場合、`getClassifierStatus` が `{ kind: 'unavailable' }` を返し、クラッシュしないこと。
 - `invalidate()` 呼び出し後、`classifier` が null になりリソース（Direct Buffer）が適切に解放されること。
 - 破損したファイルを配置した場合、`E_MODEL_LOAD_FAILED` または `E_CLASSIFIER_INIT_FAILED` エラーが React Native 側に伝播すること。
