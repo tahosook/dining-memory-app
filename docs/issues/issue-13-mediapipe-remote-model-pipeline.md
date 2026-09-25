@@ -98,16 +98,16 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 - `src/ai/mealInputAssist/index.ts` — barrel export 更新
 
 ### タスク
-- [ ] `modelConfig.ts` に MediaPipe モデルの設定を追加する:
+- [x] `modelConfig.ts` に MediaPipe モデルの設定を追加する:
   - GitHub Releases の URL
   - ファイル名: `meal-input-assist.task`（既存命名規則に準拠）
   - SHA256 ハッシュ（※実モデル未公開期間のユニットテスト時はモック URL / テスト用ダミーハッシュで検証可能とする）
   - バージョン文字列
-- [ ] `modelInstaller.ts` に以下を追加する:
+- [x] `modelInstaller.ts` に以下を追加する:
   - `installMediaPipeModel(options?)` — 一時ファイルへのダウンロード → Phase 2 の Native ハッシュ検証呼び出し → `replaceFile`（Temporary Download + Verified Replacement）で配置 → Phase 1 のキーに状態を永続化。
   - `getMediaPipeModelStatus()` — ローカルファイルの存在確認と設定キーの読み取り。
   - `deleteMediaPipeModel()` — ファイル削除と状態リセット。
-- [ ] **既存の `installModelFiles()` / `installMealInputAssistModel()` / `redownloadMealInputAssistModel()` / `deleteMealInputAssistModel()` は変更しない。**
+- [x] **既存の `installModelFiles()` / `installMealInputAssistModel()` / `redownloadMealInputAssistModel()` / `deleteMealInputAssistModel()` は変更しない。**
 
 ### 受入基準
 - GGUF のダウンロード・削除フローが引き続き正常に動作すること。
