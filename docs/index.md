@@ -20,7 +20,8 @@
 
 ### For Implementation
 - [docs/engineering/context-map.md](./engineering/context-map.md): task ごとに読むべき最小 context の索引
-- [docs/architecture/tech-spec.md](./architecture/tech-spec.md): current implementation and runtime assumptions
+- [docs/architecture/tech-spec.md](./architecture/tech-spec.md): current stack, runtime assumptions, and app-level architecture.
+- [docs/architecture/food-labeling-pipeline.md](./architecture/food-labeling-pipeline.md): MediaPipe 食事分類モデルのリモートオンデマンド配布・端末内ローカル読み込みパイプライン仕様
 - [docs/ux/screen-designs.md](./ux/screen-designs.md): current screen behavior
 - [docs/ux/user-flows.md](./ux/user-flows.md): current implemented flows
 - [docs/domain/database-design.md](./domain/database-design.md): current storage rules
@@ -46,6 +47,7 @@
 
 ### Architecture
 - [Tech Spec](./architecture/tech-spec.md): current stack, runtime assumptions, and app-level architecture.
+- [Food Labeling Pipeline](./architecture/food-labeling-pipeline.md): end-to-end architecture for remote on-demand MediaPipe model distribution and local inference pipeline.
 
 ### Domain
 - [Database Design](./domain/database-design.md): current schema, table responsibilities, and storage rules.
