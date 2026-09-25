@@ -238,8 +238,12 @@ TS 側の `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` L19-56 の 
 
 ## 6. Security, Integrity & Memory Lifecycle
 
-1. **SHA256 Hash Verification**: ダウンロード完了後、`expo-crypto` の `digestStringAsync` でファイルの SHA256 を計算し、`ModelConfig` に記載された期待値と照合する。不一致の場合はファイルを削除しエラーとする。
-2. **Atomic Swap**: ダウンロードは一時ファイル（`.download-<timestamp>-<uuid>`）に行い、ハッシュ検証後に `replaceFile()` で最終パスへ移動する。既存の `downloadToTemporaryFile` + `replaceFile` パターンをそのまま踏襲。
+1. **SHA256 Hash Verification（メモリ安全なストリーミング検証）**:
+   - `expo-crypto` の `digestStringAsync` は文字列を対象とする API であり、ファイルを全量 Base64 等で JS ヒープに読み込むとメモリ圧迫や GC 負荷を引き起こす。
+   - そのため、ファイルハッシュの検証は **Android Native 側（Kotlin の `MessageDigest` + `FileInputStream` ストリーミング処理）** またはメモリ安全なストリーミング方式に委譲する。`ModelConfig` に記載された期待値と照合し、不一致の場合はファイルを削除して初期化・推論を中断する。
+2. **Temporary Download + Verified Replacement（一時ダウンロードと検証後の置換）**:
+   - ダウンロードは一時ファイル（`.download-<timestamp>-<uuid>`）に行い、ハッシュ検証完了後に `replaceFile()` で最終配置パスへ移動する。
+   - 注意点として、現在の `replaceFile()` は「既存ファイルの削除（`deleteAsync`）→ 移動（`moveAsync`）」の 2 ステップ実装であり、厳密な OS レベルの Atomic Swap ではない。万が一削除直後にクラッシュした場合、ファイルが欠落するウィンドウが存在するが、次回起動時に `getInstalledFileState()` がファイル欠落を検知して `not_installed` / `error` と判定し、安全に再ダウンロードを促す自己修復（Self-healing）設計とする。
 3. **MappedByteBuffer のメモリライフサイクル管理**:
    - `MappedByteBuffer`（Direct Buffer）は Java Heap 外の OS ページキャッシュを使用するため、不要になっても即座に GC されにくい。
    - `invalidate()` などのライフサイクル終了時、または新しいモデルへの差し替え時には `classifier?.close()` を確実に呼び出し、関連するバッファ参照を破棄してメモリリークを防ぐ。

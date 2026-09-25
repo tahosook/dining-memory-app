@@ -71,17 +71,18 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
   - SHA256 ハッシュ
   - バージョン文字列
 - [ ] `modelInstaller.ts` に以下を追加する:
-  - `installMediaPipeModel(options?)` — ダウンロード → SHA256 検証 → `replaceFile` で配置 → Phase 1 のキーに状態を永続化。
+  - `installMediaPipeModel(options?)` — 一時ファイルへのダウンロード → SHA256 検証 → `replaceFile`（Temporary Download + Verified Replacement）で配置 → Phase 1 のキーに状態を永続化。
   - `getMediaPipeModelStatus()` — ローカルファイルの存在確認と設定キーの読み取り。
   - `deleteMediaPipeModel()` — ファイル削除と状態リセット。
 - [ ] **既存の `installModelFiles()` / `installMealInputAssistModel()` / `redownloadMealInputAssistModel()` / `deleteMealInputAssistModel()` は変更しない。**
-- [ ] SHA256 検証には `expo-crypto` の `digestStringAsync` を使用する（既存で `expo-crypto` は import 済み）。
+- [ ] SHA256 検証は、全量メモリ読み込みを避けるため Native 側（Kotlin の `MessageDigest` ストリーミング処理、またはロード時検証）と連携したメモリ安全な方式を採用する（`expo-crypto.digestStringAsync` による全量 Base64 読み込みは行わない）。
 
 ### 受入基準
 - GGUF のダウンロード・削除フローが引き続き正常に動作すること。
 - MediaPipe モデルのダウンロード後、`documentDirectory/ai-models/meal-input-assist.task` にファイルが配置され、`getMediaPipeModelStatus()` が `{ kind: 'ready' }` を返すこと。
 - SHA256 が不一致の場合、ファイルが削除され `{ kind: 'error' }` が返ること。
 - ダウンロード中に異常終了した場合、一時ファイルがクリーンアップされること。
+- 万一 `replaceFile` の削除直後にプロセスが中断した場合でも、次回起動時に `getInstalledFileState()` が欠落を検知して安全に再ダウンロード可能であること。
 
 ### ロールバック
 追加した関数・型・設定を削除すれば完全に元に戻る。既存コードを変更しないため、revert は安全。
