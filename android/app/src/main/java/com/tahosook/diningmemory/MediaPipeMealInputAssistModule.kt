@@ -227,6 +227,14 @@ class MediaPipeMealInputAssistModule(
       )
     }
 
+    if (!modelFile.isFile || modelFile.length() <= 0L) {
+      throw IOException(
+        MediaPipeMealInputAssistSupport.buildModelLoadFailedReason(
+          "Model file is not a regular file or is empty: ${modelFile.absolutePath}",
+        ),
+      )
+    }
+
     val mappedByteBuffer = try {
       FileInputStream(modelFile).use { fis ->
         fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, modelFile.length())
@@ -256,7 +264,8 @@ class MediaPipeMealInputAssistModule(
   }
 
   private fun hasDefaultModelFile(): Boolean {
-    return MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext).exists()
+    val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
+    return modelFile.exists() && modelFile.isFile && modelFile.length() > 0L
   }
 
   private fun buildClassificationResultMap(

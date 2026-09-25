@@ -23,6 +23,17 @@ class MediaPipeMealInputAssistSupportTest {
   }
 
   @Test
+  fun `builds model load failed reason for empty or invalid model file`() {
+    val reason = MediaPipeMealInputAssistSupport.buildModelLoadFailedReason(
+      "Model file is not a regular file or is empty: /path/to/meal-input-assist.task"
+    )
+    assertEquals(
+      "MediaPipe meal input assist model file を読み込めませんでした: Model file is not a regular file or is empty: /path/to/meal-input-assist.task",
+      reason,
+    )
+  }
+
+  @Test
   fun `resolves default model file location`() {
     val baseDir = File("/data/user/0/com.tahosook.diningmemory/files")
     val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(baseDir)
