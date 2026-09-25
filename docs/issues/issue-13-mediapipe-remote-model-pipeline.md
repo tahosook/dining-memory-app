@@ -22,12 +22,13 @@
 
 ```mermaid
 flowchart LR
-  P1["Phase 1\nAppSettings 分離"] --> P2["Phase 2\nMediaPipe Downloader"]
-  P2 --> P3["Phase 3\nAndroid Native\nMappedByteBuffer"]
+  P1["Phase 1\nAppSettings 分離"] --> P2["Phase 2\nAndroid Native\nMappedByteBuffer & 検証"]
+  P2 --> P3["Phase 3\nMediaPipe Downloader"]
   P3 --> P4["Phase 4\nUI 統合・E2E 検証"]
 ```
 
-Phase 1 → 2 → 3 → 4 の順序で実装する。各 Phase は前の Phase の完了に依存する。
+Phase 1 → 2 → 3 → 4 の順序で実装する。各 Phase は前の Phase の完了に依存する。  
+*(※Phase 3 の TS ダウンローダーが Native 側のハッシュ検証メソッドを呼び出すため、Native 側の実装を Phase 2 として先行させます。)*
 
 ---
 
@@ -54,44 +55,9 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 
 ---
 
-## Phase 2: MediaPipe モデル用ダウンローダー追加
+## Phase 2: Android Native の MappedByteBuffer 対応 & ハッシュ検証メソッド新設
 
-既存の `modelInstaller.ts` 内の低レベル関数（`downloadToTemporaryFile`, `replaceFile`, `cleanupFile`）を再利用し、MediaPipe 専用のインストール関数を追加する。
-
-### 変更対象ファイル
-- `src/ai/mealInputAssist/modelConfig.ts` — MediaPipe 用の設定追加
-- `src/ai/mealInputAssist/modelInstaller.ts` — MediaPipe 用インストール関数追加
-- `src/ai/mealInputAssist/types.ts` — 必要に応じて MediaPipe ステータス型追加
-- `src/ai/mealInputAssist/index.ts` — barrel export 更新
-
-### タスク
-- [ ] `modelConfig.ts` に MediaPipe モデルの設定を追加する:
-  - GitHub Releases の URL
-  - ファイル名: `meal-input-assist.task`（既存命名規則に準拠）
-  - SHA256 ハッシュ
-  - バージョン文字列
-- [ ] `modelInstaller.ts` に以下を追加する:
-  - `installMediaPipeModel(options?)` — 一時ファイルへのダウンロード → SHA256 検証 → `replaceFile`（Temporary Download + Verified Replacement）で配置 → Phase 1 のキーに状態を永続化。
-  - `getMediaPipeModelStatus()` — ローカルファイルの存在確認と設定キーの読み取り。
-  - `deleteMediaPipeModel()` — ファイル削除と状態リセット。
-- [ ] **既存の `installModelFiles()` / `installMealInputAssistModel()` / `redownloadMealInputAssistModel()` / `deleteMealInputAssistModel()` は変更しない。**
-- [ ] SHA256 検証は、全量メモリ読み込みを避けるため Native 側（Kotlin の `MessageDigest` ストリーミング処理）と連携した方式を採用する。一時ファイルへのダウンロード完了直後、`replaceFile` の直前に Native の検証メソッドを呼び出して一致を確認する（`ModelConfig` に期待ハッシュを固定埋め込み）。
-
-### 受入基準
-- GGUF のダウンロード・削除フローが引き続き正常に動作すること。
-- MediaPipe モデルのダウンロード後、`documentDirectory/ai-models/meal-input-assist.task` にファイルが配置され、`getMediaPipeModelStatus()` が `{ kind: 'ready' }` を返すこと。
-- SHA256 が不一致の場合、ファイルが削除され `{ kind: 'error' }` が返ること。
-- ダウンロード中に異常終了した場合、一時ファイルがクリーンアップされること。
-- 万一 `replaceFile` の削除直後にプロセスが中断した場合でも、次回起動時に `getInstalledFileState()` が欠落を検知して安全に再ダウンロード可能であること。
-
-### ロールバック
-追加した関数・型・設定を削除すれば完全に元に戻る。既存コードを変更しないため、revert は安全。
-
----
-
-## Phase 3: Android Native の MappedByteBuffer 対応
-
-`MediaPipeMealInputAssistModule.kt` の `ensureClassifier()` を変更し、APK assets/ ではなくローカルストレージのモデルファイルを `MappedByteBuffer` 経由で読み込めるようにする。また、Phase 2 と連携するハッシュストリーミング検証メソッドを追加する。
+`MediaPipeMealInputAssistModule.kt` の `ensureClassifier()` を変更し、APK assets/ ではなくローカルストレージのモデルファイルを `MappedByteBuffer` 経由で読み込めるようにする。また、Phase 3 のダウンロード処理と連携するファイルハッシュ検証メソッドを先行して新設する。
 
 ### 変更対象ファイル
 - `android/.../MediaPipeMealInputAssistModule.kt` — `ensureClassifier()` の読み込みロジック変更、およびファイルハッシュ検証メソッド追加
@@ -99,7 +65,8 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 
 ### タスク
 - [ ] `MediaPipeMealInputAssistSupport.kt` に、既定ローカルモデルファイル（`context.filesDir/ai-models/meal-input-assist.task`）を取得する `resolveDefaultModelFile(context: Context): File` を新設する。
-- [ ] `MediaPipeMealInputAssistModule.kt` に、ダウンロード後の一時ファイルハッシュを検証するストリーミングメソッド（`MessageDigest` 使用）を追加する。
+- [ ] `MediaPipeMealInputAssistModule.kt` に、ダウンロード一時ファイルのハッシュを検証するストリーミングメソッド（Kotlin の `MessageDigest` + `FileInputStream` 使用）を追加する。
+  - **スキーム正規化**: TS 側から渡される一時ファイルパスに `file://` スキームが付いていても安全にローカル絶対パスとして解釈できるよう、既存の `resolveLocalPhotoPath` と同等の正規化を行う。
 - [ ] `ensureClassifier()` (現在 L131-153) を以下のように変更する:
   1. `resolveDefaultModelFile(reactApplicationContext)` から `File` オブジェクトを取得（ReactMethod のシグネチャは維持）。
   2. `FileInputStream(file).use { fis -> fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length()) }` で `MappedByteBuffer` を取得。
@@ -117,6 +84,40 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 
 ### ロールバック
 `ensureClassifier()` を `setModelAssetPath` に戻せば完全に元に戻る。
+
+---
+
+## Phase 3: MediaPipe モデル用ダウンローダー追加
+
+既存の `modelInstaller.ts` 内の低レベル関数（`downloadToTemporaryFile`, `replaceFile`, `cleanupFile`）を再利用し、MediaPipe 専用のインストール関数を追加する。Phase 2 で新設した Native ハッシュ検証メソッドと連携する。
+
+### 変更対象ファイル
+- `src/ai/mealInputAssist/modelConfig.ts` — MediaPipe 用の設定追加
+- `src/ai/mealInputAssist/modelInstaller.ts` — MediaPipe 用インストール関数追加
+- `src/ai/mealInputAssist/types.ts` — 必要に応じて MediaPipe ステータス型追加
+- `src/ai/mealInputAssist/index.ts` — barrel export 更新
+
+### タスク
+- [ ] `modelConfig.ts` に MediaPipe モデルの設定を追加する:
+  - GitHub Releases の URL
+  - ファイル名: `meal-input-assist.task`（既存命名規則に準拠）
+  - SHA256 ハッシュ（※実モデル未公開期間のユニットテスト時はモック URL / テスト用ダミーハッシュで検証可能とする）
+  - バージョン文字列
+- [ ] `modelInstaller.ts` に以下を追加する:
+  - `installMediaPipeModel(options?)` — 一時ファイルへのダウンロード → Phase 2 の Native ハッシュ検証呼び出し → `replaceFile`（Temporary Download + Verified Replacement）で配置 → Phase 1 のキーに状態を永続化。
+  - `getMediaPipeModelStatus()` — ローカルファイルの存在確認と設定キーの読み取り。
+  - `deleteMediaPipeModel()` — ファイル削除と状態リセット。
+- [ ] **既存の `installModelFiles()` / `installMealInputAssistModel()` / `redownloadMealInputAssistModel()` / `deleteMealInputAssistModel()` は変更しない。**
+
+### 受入基準
+- GGUF のダウンロード・削除フローが引き続き正常に動作すること。
+- MediaPipe モデルのダウンロード後、`documentDirectory/ai-models/meal-input-assist.task` にファイルが配置され、`getMediaPipeModelStatus()` が `{ kind: 'ready' }` を返すこと。
+- SHA256 が不一致の場合、ファイルが削除され `{ kind: 'error' }` が返ること。
+- ダウンロード中に異常終了した場合、一時ファイルがクリーンアップされること。
+- 万一 `replaceFile` の削除直後にプロセスが中断した場合でも、次回起動時に `getInstalledFileState()` が欠落を検知して安全に再ダウンロード可能であること。
+
+### ロールバック
+追加した関数・型・設定を削除すれば完全に元に戻る。既存コードを変更しないため、revert は安全。
 
 ---
 
