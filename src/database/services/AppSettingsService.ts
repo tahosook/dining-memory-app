@@ -91,9 +91,7 @@ export class AppSettingsService {
     return value === 'ready' || value === 'error' ? value : 'not_installed';
   }
 
-  static async setMediaPipeModelStatus(
-    status: MediaPipeModelStatusSetting
-  ): Promise<void> {
+  static async setMediaPipeModelStatus(status: MediaPipeModelStatusSetting): Promise<void> {
     await this.setString(MEDIAPIPE_MODEL_STATUS_KEY, status);
   }
 
