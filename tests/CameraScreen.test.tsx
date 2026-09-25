@@ -95,6 +95,7 @@ jest.mock('react-native', () => ({
   TextInput: 'TextInput',
   Switch: 'Switch',
   ScrollView: 'ScrollView',
+  ActivityIndicator: 'ActivityIndicator',
   InteractionManager: {
     runAfterInteractions: jest.fn((callback: () => void) => {
       callback();
