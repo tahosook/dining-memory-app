@@ -64,16 +64,16 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 - `android/.../MediaPipeMealInputAssistSupport.kt` — パス定数および解決関数 `resolveDefaultModelFile` の追加
 
 ### タスク
-- [ ] `MediaPipeMealInputAssistSupport.kt` に、既定ローカルモデルファイル（`context.filesDir/ai-models/meal-input-assist.task`）を取得する `resolveDefaultModelFile(context: Context): File` を新設する。
-- [ ] `MediaPipeMealInputAssistModule.kt` に、ダウンロード一時ファイルのハッシュを検証するストリーミングメソッド（Kotlin の `MessageDigest` + `FileInputStream` 使用）を追加する。
+- [x] `MediaPipeMealInputAssistSupport.kt` に、既定ローカルモデルファイル（`context.filesDir/ai-models/meal-input-assist.task`）を取得する `resolveDefaultModelFile(context: Context): File` を新設する。
+- [x] `MediaPipeMealInputAssistModule.kt` に、ダウンロード一時ファイルのハッシュを検証するストリーミングメソッド（Kotlin の `MessageDigest` + `FileInputStream` 使用）を追加する。
   - **スキーム正規化**: TS 側から渡される一時ファイルパスに `file://` スキームが付いていても安全にローカル絶対パスとして解釈できるよう、既存の `resolveLocalPhotoPath` と同等の正規化を行う。
-- [ ] `ensureClassifier()` (現在 L131-153) を以下のように変更する:
+- [x] `ensureClassifier()` (現在 L131-153) を以下のように変更する:
   1. `resolveDefaultModelFile(reactApplicationContext)` から `File` オブジェクトを取得（ReactMethod のシグネチャは維持）。
   2. `FileInputStream(file).use { fis -> fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, file.length()) }` で `MappedByteBuffer` を取得。
   3. `BaseOptions.builder().setModelAssetBuffer(mappedBuffer)` でオプションを構築。
-- [ ] `hasBundledModelAsset()` (現在 L155-166) をローカルファイルの存在確認（`resolveDefaultModelFile(context).exists()`）に置き換える。
-- [ ] 既存の `invalidate()` (L33-40) の `classifier?.close()` パスはそのまま維持する。
-- [ ] モデルファイルが存在しない場合の `FileNotFoundException` ハンドリングおよびエラーコード体系（`E_MODEL_MISSING`, `E_MODEL_LOAD_FAILED`, `E_CLASSIFIER_INIT_FAILED` 等）を `food-labeling-pipeline.md` §3.3 に準拠して整備する。
+- [x] `hasBundledModelAsset()` (現在 L155-166) をローカルファイルの存在確認（`resolveDefaultModelFile(context).exists()`）に置き換える。
+- [x] 既存の `invalidate()` (L33-40) の `classifier?.close()` パスはそのまま維持する。
+- [x] モデルファイルが存在しない場合の `FileNotFoundException` ハンドリングおよびエラーコード体系（`E_MODEL_MISSING`, `E_MODEL_LOAD_FAILED`, `E_CLASSIFIER_INIT_FAILED` 等）を `food-labeling-pipeline.md` §3.3 に準拠して整備する。
 
 ### 受入基準
 - TS 側の `resolveMediaPipeModelPath()` の実パスと Native の `resolveDefaultModelFile()` が指す絶対パスが同一実体を指していること（実機/エミュレータログで確認）。
