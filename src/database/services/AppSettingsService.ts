@@ -18,7 +18,7 @@ const MEDIAPIPE_MODEL_VERSION_KEY = 'mediapipe_model_version';
 const MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY = 'mediapipe_model_downloaded_at';
 const MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY = 'mediapipe_model_error_message';
 
-type MealInputAssistModelStatusSetting = 'not_installed' | 'ready' | 'error';
+export type MealInputAssistModelStatusSetting = 'not_installed' | 'ready' | 'error';
 export type MediaPipeModelStatusSetting = 'not_installed' | 'ready' | 'error';
 
 function parseBooleanSetting(value: string | null | undefined, defaultValue: boolean) {
@@ -95,30 +95,27 @@ export class AppSettingsService {
     await this.setString(MEDIAPIPE_MODEL_STATUS_KEY, status);
   }
 
-  static async getMediaPipeModelVersion(): Promise<string> {
-    const value = await this.getString(MEDIAPIPE_MODEL_VERSION_KEY, '');
-    return value ?? '';
+  static async getMediaPipeModelVersion(): Promise<string | null> {
+    return this.getString(MEDIAPIPE_MODEL_VERSION_KEY, null);
   }
 
-  static async setMediaPipeModelVersion(version: string): Promise<void> {
+  static async setMediaPipeModelVersion(version: string | null): Promise<void> {
     await this.setString(MEDIAPIPE_MODEL_VERSION_KEY, version);
   }
 
-  static async getMediaPipeModelDownloadedAt(): Promise<string> {
-    const value = await this.getString(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, '');
-    return value ?? '';
+  static async getMediaPipeModelDownloadedAt(): Promise<number | null> {
+    return this.getNumber(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, null);
   }
 
-  static async setMediaPipeModelDownloadedAt(downloadedAt: string): Promise<void> {
-    await this.setString(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, downloadedAt);
+  static async setMediaPipeModelDownloadedAt(downloadedAt: number | null): Promise<void> {
+    await this.setNumber(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, downloadedAt);
   }
 
-  static async getMediaPipeModelErrorMessage(): Promise<string> {
-    const value = await this.getString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, '');
-    return value ?? '';
+  static async getMediaPipeModelErrorMessage(): Promise<string | null> {
+    return this.getString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, null);
   }
 
-  static async setMediaPipeModelErrorMessage(errorMessage: string): Promise<void> {
+  static async setMediaPipeModelErrorMessage(errorMessage: string | null): Promise<void> {
     await this.setString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, errorMessage);
   }
 

@@ -42,10 +42,10 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 ### タスク
 - [x] 以下のキー定数を追加する:
   - `mediapipe_model_status` (`'not_installed' | 'ready' | 'error'`)
-  - `mediapipe_model_version`
-  - `mediapipe_model_downloaded_at`
-  - `mediapipe_model_error_message`
-- [x] 対応する getter/setter メソッドを追加する（`getMediaPipeModelStatus()`, `setMediaPipeModelStatus()` 等）。
+  - `mediapipe_model_version` (`string | null`)
+  - `mediapipe_model_downloaded_at` (`number | null`)
+  - `mediapipe_model_error_message` (`string | null`)
+- [x] 対応する getter/setter メソッドを追加する（`getMediaPipeModelStatus()`, `setMediaPipeModelStatus()` 等、GGUF と同様に nullable / number 型に対応）。
 - [x] 既存の `meal_input_assist_model_*` キーおよびメソッドは一切変更しない。
 
 ### 受入基準

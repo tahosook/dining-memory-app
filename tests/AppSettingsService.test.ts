@@ -64,23 +64,35 @@ describe('AppSettingsService', () => {
 
   test('defaults MediaPipe model settings to initial state', async () => {
     await expect(AppSettingsService.getMediaPipeModelStatus()).resolves.toBe('not_installed');
-    await expect(AppSettingsService.getMediaPipeModelVersion()).resolves.toBe('');
-    await expect(AppSettingsService.getMediaPipeModelDownloadedAt()).resolves.toBe('');
-    await expect(AppSettingsService.getMediaPipeModelErrorMessage()).resolves.toBe('');
+    await expect(AppSettingsService.getMediaPipeModelVersion()).resolves.toBeNull();
+    await expect(AppSettingsService.getMediaPipeModelDownloadedAt()).resolves.toBeNull();
+    await expect(AppSettingsService.getMediaPipeModelErrorMessage()).resolves.toBeNull();
   });
 
   test('persists MediaPipe model settings in the in-memory fallback', async () => {
     await AppSettingsService.setMediaPipeModelStatus('ready');
     await AppSettingsService.setMediaPipeModelVersion('mediapipe-v0.1.0');
-    await AppSettingsService.setMediaPipeModelDownloadedAt('2026-09-25T12:00:00Z');
+    await AppSettingsService.setMediaPipeModelDownloadedAt(12345);
     await AppSettingsService.setMediaPipeModelErrorMessage('none');
 
     await expect(AppSettingsService.getMediaPipeModelStatus()).resolves.toBe('ready');
     await expect(AppSettingsService.getMediaPipeModelVersion()).resolves.toBe('mediapipe-v0.1.0');
-    await expect(AppSettingsService.getMediaPipeModelDownloadedAt()).resolves.toBe(
-      '2026-09-25T12:00:00Z'
-    );
+    await expect(AppSettingsService.getMediaPipeModelDownloadedAt()).resolves.toBe(12345);
     await expect(AppSettingsService.getMediaPipeModelErrorMessage()).resolves.toBe('none');
+  });
+
+  test('clears nullable MediaPipe model settings', async () => {
+    await AppSettingsService.setMediaPipeModelVersion('mediapipe-v0.1.0');
+    await AppSettingsService.setMediaPipeModelDownloadedAt(12345);
+    await AppSettingsService.setMediaPipeModelErrorMessage('failed');
+
+    await AppSettingsService.setMediaPipeModelVersion(null);
+    await AppSettingsService.setMediaPipeModelDownloadedAt(null);
+    await AppSettingsService.setMediaPipeModelErrorMessage(null);
+
+    await expect(AppSettingsService.getMediaPipeModelVersion()).resolves.toBeNull();
+    await expect(AppSettingsService.getMediaPipeModelDownloadedAt()).resolves.toBeNull();
+    await expect(AppSettingsService.getMediaPipeModelErrorMessage()).resolves.toBeNull();
   });
 
   test('updates MediaPipe model status and error message', async () => {
