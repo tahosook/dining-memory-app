@@ -263,11 +263,6 @@ class MediaPipeMealInputAssistModule(
     }
   }
 
-  private fun hasDefaultModelFile(): Boolean {
-    val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
-    return modelFile.exists() && modelFile.isFile && modelFile.length() > 0L
-  }
-
   private fun buildClassificationResultMap(
     photoUri: String,
     classifierResult: ImageClassifierResult,
