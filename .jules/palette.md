@@ -10,3 +10,6 @@
 ## 2024-09-24 - Enhance Modal Accessibility
 **Learning:** Adding comprehensive accessibility props (`accessibilityRole`, `accessibilityLabel`, and `accessibilityState`) to interactive elements within complex forms (like `MealEditModal`) ensures that screen readers can accurately interpret the form's structure and state, making the app significantly more usable for visually impaired users.
 **Action:** Always verify that interactive components have the necessary accessibility attributes, especially in heavily-used forms and modals.
+## 2024-03-24 - Redundant Accessibility Labels in React Native
+**Learning:** Adding an `accessibilityLabel` that exactly matches the button's only `<Text>` child is redundant in React Native, as screen readers natively read the child text of a `TouchableOpacity`.
+**Action:** Only add `accessibilityLabel` to buttons when the child text is not descriptive enough, when it's an icon-only button, or when providing a more descriptive label for screen reader users than the visible text.
