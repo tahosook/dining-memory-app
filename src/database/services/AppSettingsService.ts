@@ -13,7 +13,13 @@ const MEAL_INPUT_ASSIST_MODEL_STATUS_KEY = 'meal_input_assist_model_status';
 const MEAL_INPUT_ASSIST_MODEL_DOWNLOADED_AT_KEY = 'meal_input_assist_model_downloaded_at';
 const MEAL_INPUT_ASSIST_MODEL_ERROR_MESSAGE_KEY = 'meal_input_assist_model_error_message';
 
+const MEDIAPIPE_MODEL_STATUS_KEY = 'mediapipe_model_status';
+const MEDIAPIPE_MODEL_VERSION_KEY = 'mediapipe_model_version';
+const MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY = 'mediapipe_model_downloaded_at';
+const MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY = 'mediapipe_model_error_message';
+
 type MealInputAssistModelStatusSetting = 'not_installed' | 'ready' | 'error';
+export type MediaPipeModelStatusSetting = 'not_installed' | 'ready' | 'error';
 
 function parseBooleanSetting(value: string | null | undefined, defaultValue: boolean) {
   if (typeof value !== 'string') {
@@ -78,6 +84,44 @@ export class AppSettingsService {
 
   static async setMealInputAssistModelErrorMessage(message: string | null): Promise<void> {
     await this.setString(MEAL_INPUT_ASSIST_MODEL_ERROR_MESSAGE_KEY, message);
+  }
+
+  static async getMediaPipeModelStatus(): Promise<MediaPipeModelStatusSetting> {
+    const value = await this.getString(MEDIAPIPE_MODEL_STATUS_KEY, 'not_installed');
+    return value === 'ready' || value === 'error' ? value : 'not_installed';
+  }
+
+  static async setMediaPipeModelStatus(
+    status: MediaPipeModelStatusSetting
+  ): Promise<void> {
+    await this.setString(MEDIAPIPE_MODEL_STATUS_KEY, status);
+  }
+
+  static async getMediaPipeModelVersion(): Promise<string> {
+    const value = await this.getString(MEDIAPIPE_MODEL_VERSION_KEY, '');
+    return value ?? '';
+  }
+
+  static async setMediaPipeModelVersion(version: string): Promise<void> {
+    await this.setString(MEDIAPIPE_MODEL_VERSION_KEY, version);
+  }
+
+  static async getMediaPipeModelDownloadedAt(): Promise<string> {
+    const value = await this.getString(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, '');
+    return value ?? '';
+  }
+
+  static async setMediaPipeModelDownloadedAt(downloadedAt: string): Promise<void> {
+    await this.setString(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, downloadedAt);
+  }
+
+  static async getMediaPipeModelErrorMessage(): Promise<string> {
+    const value = await this.getString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, '');
+    return value ?? '';
+  }
+
+  static async setMediaPipeModelErrorMessage(errorMessage: string): Promise<void> {
+    await this.setString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, errorMessage);
   }
 
   static async getBoolean(key: string, defaultValue: boolean): Promise<boolean> {

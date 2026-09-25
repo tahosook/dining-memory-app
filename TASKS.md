@@ -16,7 +16,7 @@
 ### Investigation / evaluation candidates（調査・評価候補）
 - 統計画面の改善: 候補。period tabs / reflection / balance bar / Top 3 ranking は実装済み。次は calendar、曜日 / 時間帯 trend、photo highlights など深い insight を検討する。
 - 食事ラベルレビューHTMLの改善: 候補。`build-review-gallery.py` は教師データ化支援が主責務で、アプリ本体 UX の再現は対象外。
-- MediaPipe 食事分類モデルのリモートオンデマンド配布・端末内ローカル読み込みパイプライン（内部ドキュメント issue-13）: 次期実装候補。バイナリ同梱を廃止し、GitHub Releases 等からオンデマンド配布して MappedByteBuffer 経由でローカル推論するアーキテクチャおよびタスク仕様を策定済み（[docs/architecture/food-labeling-pipeline.md](docs/architecture/food-labeling-pipeline.md)、[docs/issues/issue-13-mediapipe-remote-model-pipeline.md](docs/issues/issue-13-mediapipe-remote-model-pipeline.md)）。
+- MediaPipe 食事分類モデルのリモートオンデマンド配布・端末内ローカル読み込みパイプライン（GitHub Issue #120、内部ドキュメント issue-13）: 次期実装候補。バイナリ同梱を廃止し、GitHub Releases 等からオンデマンド配布して MappedByteBuffer 経由でローカル推論するアーキテクチャおよびタスク仕様を策定済み（[docs/architecture/food-labeling-pipeline.md](docs/architecture/food-labeling-pipeline.md)、[docs/issues/issue-13-mediapipe-remote-model-pipeline.md](docs/issues/issue-13-mediapipe-remote-model-pipeline.md)）。
 - ローカルLLM / Ollama を使ったラベリング支援: 候補。既存 workflow は bounded loop と local executor 前提。生成 state の扱いに注意する。
 - Android / Expo ビルド運用: 候補。CI はあり、実機 smoke と model asset / native build 前提の確認手順は必要に応じて整理する。
 
