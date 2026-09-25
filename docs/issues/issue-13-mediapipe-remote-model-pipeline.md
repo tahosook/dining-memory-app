@@ -130,12 +130,12 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 - 関連フック（必要に応じて新規作成）
 
 ### タスク
-- [ ] SettingsScreen に MediaPipe モデルの状態表示・ダウンロード・削除の UI を追加する。
+- [x] SettingsScreen に MediaPipe モデルの状態表示・ダウンロード・削除の UI を追加する。
   - **表示条件**: `__DEV__` フラグ、または feature flag によって表示を制限する。一般ユーザーには見せない。
-- [ ] ダウンロード → 設定画面のステータスが `ready` に切り替わることを確認する。
-- [ ] 写真撮影 → `classifyStaticImage` → 推論結果（Raw categories）が正常に返り、Review UI に安全に受け渡されることを E2E で確認する。
+- [x] ダウンロード → 設定画面のステータスが `ready` に切り替わることを確認する。
+- [x] 写真撮影 → `classifyStaticImage` → 推論結果（Raw categories）が正常に返り、Review UI に安全に受け渡されることを E2E で確認する。
   - ※現行 `LABEL_MAPPING` に合致しない coarse クラスについては UI 上でクラッシュせず安全にスキップされることを確認（coarse クラス全対応は別 Issue スコープ）。
-- [ ] モデル未導入時および推論失敗時のフォールバックガイダンス文言（`food-labeling-pipeline.md` §3.5）が正しく表示され、手動入力・保存がブロックされないことを確認する。
+- [x] モデル未導入時および推論失敗時のフォールバックガイダンス文言（`food-labeling-pipeline.md` §3.5）が正しく表示され、手動入力・保存がブロックされないことを確認する。
 
 ### 受入基準
 - Development ビルドで SettingsScreen に MediaPipe セクションが表示されること。
