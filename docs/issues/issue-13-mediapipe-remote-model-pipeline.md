@@ -3,7 +3,7 @@
 ## Meta
 - Purpose: MediaPipe 食事分類モデルのリモート配布パイプラインを実装するためのタスク仕様。
 - 内部ドキュメントID: issue-13
-- 対応 GitHub Issue: 未起票
+- 対応 GitHub Issue: GitHub Issue #120
 - Audience: 実装担当者および PR レビューア。
 - Update trigger: 各 Phase の受入基準やスコープが変わったとき。
 - Related docs: [docs/architecture/food-labeling-pipeline.md](../architecture/food-labeling-pipeline.md), [docs/notes/ai-input-assist-mediapipe-static-image-groundwork.md](../notes/ai-input-assist-mediapipe-static-image-groundwork.md)
@@ -40,13 +40,13 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
 - `src/database/services/AppSettingsService.ts`
 
 ### タスク
-- [ ] 以下のキー定数を追加する:
+- [x] 以下のキー定数を追加する:
   - `mediapipe_model_status` (`'not_installed' | 'ready' | 'error'`)
-  - `mediapipe_model_version`
-  - `mediapipe_model_downloaded_at`
-  - `mediapipe_model_error_message`
-- [ ] 対応する getter/setter メソッドを追加する（`getMediaPipeModelStatus()`, `setMediaPipeModelStatus()` 等）。
-- [ ] 既存の `meal_input_assist_model_*` キーおよびメソッドは一切変更しない。
+  - `mediapipe_model_version` (`string | null`)
+  - `mediapipe_model_downloaded_at` (`number | null`)
+  - `mediapipe_model_error_message` (`string | null`)
+- [x] 対応する getter/setter メソッドを追加する（`getMediaPipeModelStatus()`, `setMediaPipeModelStatus()` 等、GGUF と同様に nullable / number 型に対応）。
+- [x] 既存の `meal_input_assist_model_*` キーおよびメソッドは一切変更しない。
 
 ### 受入基準
 - 既存テスト（`tests/` 配下の AppSettingsService 関連）がすべて通過すること。
