@@ -104,13 +104,13 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
   4. `FileChannel` と `FileInputStream` を `use` ブロックで確実に close する。
 - [ ] `hasBundledModelAsset()` (現在 L155-166) をローカルファイルの存在確認に置き換える。
 - [ ] 既存の `invalidate()` (L33-40) の `classifier?.close()` パスはそのまま維持する。
-- [ ] モデルファイルが存在しない場合の `FileNotFoundException` ハンドリングは既存のエラーコード体系（`E_CLASSIFIER_INIT_FAILED`）を踏襲する。
+- [ ] モデルファイルが存在しない場合の `FileNotFoundException` ハンドリングおよびエラーコード体系（`E_MODEL_MISSING`, `E_MODEL_LOAD_FAILED`, `E_CLASSIFIER_INIT_FAILED` 等）を `food-labeling-pipeline.md` §3.3 に準拠して整備する。
 
 ### 受入基準
 - `documentDirectory/ai-models/meal-classifier.task` にモデルファイルを配置した状態で `classifyStaticImage` を呼び、`categories[]` が返ること（実機 or エミュレータ）。
 - モデルファイルが存在しない場合、`getClassifierStatus` が `{ kind: 'unavailable' }` を返し、クラッシュしないこと。
-- `invalidate()` 呼び出し後、`classifier` が null になりリソースが解放されること。
-- 破損したファイルを配置した場合、`E_CLASSIFIER_INIT_FAILED` エラーが React Native 側に伝播すること。
+- `invalidate()` 呼び出し後、`classifier` が null になりリソース（Direct Buffer）が適切に解放されること。
+- 破損したファイルを配置した場合、`E_MODEL_LOAD_FAILED` または `E_CLASSIFIER_INIT_FAILED` エラーが React Native 側に伝播すること。
 
 ### ロールバック
 `ensureClassifier()` を `setModelAssetPath` に戻せば完全に元に戻る。
@@ -130,11 +130,13 @@ GGUF の状態管理と衝突しない MediaPipe 専用のキーを `AppSettings
   - **表示条件**: `__DEV__` フラグ、または feature flag によって表示を制限する。一般ユーザーには見せない。
 - [ ] ダウンロード → 設定画面のステータスが `ready` に切り替わることを確認する。
 - [ ] 写真撮影 → `classifyStaticImage` → 推論結果が Review UI に表示されることを E2E で確認する。
+- [ ] モデル未導入時および推論失敗時のフォールバックガイダンス文言（`food-labeling-pipeline.md` §3.5）が正しく表示され、手動入力・保存がブロックされないことを確認する。
 
 ### 受入基準
 - Development ビルドで SettingsScreen に MediaPipe セクションが表示されること。
 - Production ビルド（または feature flag オフ時）に MediaPipe セクションが表示されないこと。
 - ダウンロード → 推論 → 結果表示の一連のフローが実機で動作すること。
+- モデル未導入時・エラー時でも手動入力・保存が一切妨げられないこと。
 - GGUF モデルの既存のダウンロード・推論フローに影響がないこと。
 
 ### ロールバック
