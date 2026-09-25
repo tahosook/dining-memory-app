@@ -128,6 +128,29 @@ async function replaceFile(from: string, to: string) {
   });
 }
 
+async function safelyReplaceMediaPipeModelFile(from: string, to: string) {
+  const existing = await getInfoAsync(to);
+  if (!existing.exists) {
+    await moveAsync({ from, to });
+    return;
+  }
+
+  const backupPath = `${to}.backup-${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
+  await moveAsync({ from: to, to: backupPath });
+
+  try {
+    await moveAsync({ from, to });
+    await cleanupFile(backupPath);
+  } catch (moveError) {
+    try {
+      await moveAsync({ from: backupPath, to });
+    } catch {
+      // 復元失敗時は何もしない
+    }
+    throw moveError;
+  }
+}
+
 function getCurrentFileProgress(bytesWritten: number, bytesExpected: number | null) {
   if (!bytesExpected || bytesExpected <= 0) {
     return null;
@@ -477,7 +500,7 @@ export async function installMediaPipeModel(
       progress: 1,
     });
 
-    await replaceFile(temporaryPath, targetPath);
+    await safelyReplaceMediaPipeModelFile(temporaryPath, targetPath);
     downloadedTemporaryPath = null;
 
     await persistMediaPipeReadyState(version);

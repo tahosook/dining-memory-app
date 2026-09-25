@@ -45,6 +45,7 @@ jest.mock('expo-file-system/legacy', () => {
     })),
     readDirectoryAsync: jest.fn(async (directoryPath: string) => listEntries(directoryPath)),
     moveAsync: jest.fn(async ({ from, to }: { from: string; to: string }) => {
+      existingFiles.delete(from);
       downloads.delete(from);
       existingFiles.add(to);
     }),
@@ -97,12 +98,20 @@ const fileSystemMock = jest.requireMock('expo-file-system/legacy') as {
     reset: () => void;
   };
   createDownloadResumable: jest.Mock;
+  moveAsync: jest.Mock;
+};
+
+const defaultMoveAsync = async ({ from, to }: { from: string; to: string }) => {
+  fileSystemMock.__mock.existingFiles.delete(from);
+  fileSystemMock.__mock.downloads.delete(from);
+  fileSystemMock.__mock.existingFiles.add(to);
 };
 
 describe('meal input assist model installer', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     fileSystemMock.__mock.reset();
+    fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
     await AppSettingsService.setMealInputAssistModelStatus('not_installed');
     await AppSettingsService.setMealInputAssistModelVersion(null);
     await AppSettingsService.setMealInputAssistModelDownloadedAt(null);
@@ -227,6 +236,7 @@ describe('MediaPipe model installer', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     fileSystemMock.__mock.reset();
+    fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
     NativeModules.MediaPipeMealInputAssist = {
       verifyFileSha256: jest.fn().mockResolvedValue(true),
     };
@@ -397,6 +407,54 @@ describe('MediaPipe model installer', () => {
     await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
       kind: 'ready',
       version: 'custom-version-2.0',
+      modelExists: true,
+    });
+  });
+
+  test('restores existing model file when new file placement fails during redownload', async () => {
+    const targetPath = resolveMediaPipeModelPath()!;
+    fileSystemMock.__mock.existingFiles.add(targetPath);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+    await AppSettingsService.setMediaPipeModelVersion('v1');
+
+    fileSystemMock.moveAsync.mockImplementation(async ({ from, to }: { from: string; to: string }) => {
+      if (to === targetPath && !from.includes('.backup-')) {
+        throw new Error('disk full during model placement');
+      }
+      return defaultMoveAsync({ from, to });
+    });
+
+    try {
+      await expect(redownloadMediaPipeModel()).rejects.toThrow('disk full during model placement');
+
+      expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(true);
+      expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(false);
+      expect(fileSystemMock.__mock.downloads.size).toBe(0);
+
+      await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+        kind: 'ready',
+        modelExists: true,
+      });
+    } finally {
+      fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
+    }
+  });
+
+  test('cleans up temporary backup file after successful replacement during redownload', async () => {
+    const targetPath = resolveMediaPipeModelPath()!;
+    fileSystemMock.__mock.existingFiles.add(targetPath);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+    await AppSettingsService.setMediaPipeModelVersion('v1');
+
+    await redownloadMediaPipeModel({
+      version: 'v2',
+    });
+
+    expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(true);
+    expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(false);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'ready',
+      version: 'v2',
       modelExists: true,
     });
   });
