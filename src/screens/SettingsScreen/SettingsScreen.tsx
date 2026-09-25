@@ -629,15 +629,7 @@ export default function SettingsScreen() {
                     : styles.runtimeStatusBadgeUnavailable,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.runtimeStatusBadgeText,
-                    mediaPipeModelStatus?.kind === 'ready'
-                      ? styles.runtimeStatusBadgeTextReady
-                      : styles.runtimeStatusBadgeTextUnavailable,
-                  ]}
-                  testID="mediapipe-model-status-badge"
-                >
+                <Text style={styles.runtimeStatusBadgeText} testID="mediapipe-model-status-badge">
                   {mediaPipeModelStatusLoading
                     ? '確認中'
                     : formatModelStatusLabel(mediaPipeModelStatus?.kind ?? 'not_installed')}
@@ -649,7 +641,7 @@ export default function SettingsScreen() {
               <Text style={styles.runtimeStatusMode}>Version: {mediaPipeModelStatus.version}</Text>
             ) : null}
             {mediaPipeModelStatus?.errorMessage ? (
-              <Text style={styles.runtimeStatusError}>{mediaPipeModelStatus.errorMessage}</Text>
+              <Text style={styles.runtimeStatusReason}>{mediaPipeModelStatus.errorMessage}</Text>
             ) : null}
           </View>
 
