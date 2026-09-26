@@ -104,35 +104,29 @@ export class BackupService {
 
       // Copy all referenced original photos to staging photos/ directory.
       // Must-fix 1 & 2: Fail-fast on any missing photo, read error, or copy failure.
-      const copiedSet = new Set<string>();
+      await Promise.all(
+        Array.from(requiredPhotoMap.entries()).map(async ([fileName, photoPath]) => {
+          let fileInfo;
+          try {
+            fileInfo = await getInfoAsync(photoPath);
+          } catch {
+            throw new Error('バックアップ対象の写真ファイルの読み取りに失敗しました。');
+          }
 
-      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
-        let fileInfo;
-        try {
-          fileInfo = await getInfoAsync(photoPath);
-        } catch {
-          throw new Error('バックアップ対象の写真ファイルの読み取りに失敗しました。');
-        }
+          if (!fileInfo || !fileInfo.exists) {
+            throw new Error('バックアップ対象の写真ファイルが端末内に見つかりません。');
+          }
 
-        if (!fileInfo || !fileInfo.exists) {
-          throw new Error('バックアップ対象の写真ファイルが端末内に見つかりません。');
-        }
-
-        try {
-          await copyAsync({
-            from: photoPath,
-            to: `${photosDir}${fileName}`,
-          });
-        } catch {
-          throw new Error('写真ファイルのバックアップ一時領域へのコピーに失敗しました。');
-        }
-
-        copiedSet.add(fileName);
-      }
-
-      if (copiedSet.size !== requiredPhotoMap.size) {
-        throw new Error('バックアップ対象の写真コピー数と要求数が一致しません。');
-      }
+          try {
+            await copyAsync({
+              from: photoPath,
+              to: `${photosDir}${fileName}`,
+            });
+          } catch {
+            throw new Error('写真ファイルのバックアップ一時領域へのコピーに失敗しました。');
+          }
+        })
+      );
 
       const manifest: BackupManifest = createBackupManifest({
         appVersion: getAppVersion() ?? '1.0.0',
