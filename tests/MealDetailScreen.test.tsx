@@ -479,6 +479,25 @@ describe('MealDetailScreen', () => {
     });
   });
 
+  test('shows an alert and keeps the edit modal open when meal update fails', async () => {
+    const error = new Error('update failed');
+    (MealService.updateMeal as jest.Mock).mockRejectedValue(error);
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '更新に失敗しました。');
+    });
+
+    expect(console.error).toHaveBeenCalledWith('Failed to update meal:', error);
+
+    // The modal should still be visible because setEditingMeal(null) wasn't called
+    expect(getByTestId('detail-edit-save-button')).toBeTruthy();
+  });
+
   test('shows AI input assist in the edit modal and requests suggestions', () => {
     const requestSuggestions = jest.fn().mockResolvedValue(undefined);
     (useMealInputAssist as jest.Mock).mockReturnValue(
