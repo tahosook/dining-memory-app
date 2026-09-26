@@ -114,6 +114,118 @@ export async function inspectSharePhoto(
   return debugInfo;
 }
 
+async function shareIOS(options: MealShareOptions): Promise<MealShareResult> {
+  if (options.photoUri) {
+    const shareResult = await Share.share({
+      title: options.title,
+      message: options.text,
+      url: options.photoUri,
+    });
+
+    console.info('[MealShare] iOS share completed:', shareResult);
+    return {
+      completed: true,
+      platform: 'ios',
+      method: 'reactNativeShare',
+      details: shareResult,
+    };
+  }
+  return shareDefault(options);
+}
+
+async function shareAndroid(options: MealShareOptions, mimeType: string): Promise<MealShareResult> {
+  const dialogTitle = options.dialogTitle ?? '共有';
+  const mealShareModule = NativeModules.MealShare;
+
+  if (mealShareModule?.shareMeal) {
+    try {
+      const result = await mealShareModule.shareMeal({
+        title: dialogTitle,
+        text: options.text,
+        photoUri: options.photoUri,
+        mimeType,
+      });
+
+      console.info('[MealShare] Android native share completed:', result);
+      return {
+        completed: true,
+        platform: 'android',
+        method: 'mealShareNative',
+        details: result,
+      };
+    } catch (nativeError) {
+      console.warn(
+        '[MealShare] Android native share threw, falling back to next available method:',
+        nativeError
+      );
+    }
+  }
+
+  // Fallback if native module is not linked or failed
+  if (options.photoUri && options.photoUri.trim() !== '') {
+    try {
+      const sharingAvailable = await Sharing.isAvailableAsync();
+
+      if (sharingAvailable) {
+        await Sharing.shareAsync(options.photoUri, {
+          dialogTitle,
+          mimeType,
+        });
+
+        console.info('[MealShare] Fallback Android expo-sharing completed');
+        return {
+          completed: true,
+          platform: 'android',
+          method: 'expoSharing',
+        };
+      }
+    } catch (expoSharingError) {
+      console.warn(
+        '[MealShare] Fallback expo-sharing failed, attempting standard Share:',
+        expoSharingError
+      );
+    }
+  }
+
+  const fallbackResult = await Share.share(
+    {
+      title: options.title,
+      message: options.text,
+    },
+    {
+      dialogTitle,
+    }
+  );
+
+  console.info('[MealShare] Fallback Android standard share completed:', fallbackResult);
+  return {
+    completed: true,
+    platform: 'android',
+    method: 'reactNativeShare',
+    details: fallbackResult,
+  };
+}
+
+async function shareDefault(options: MealShareOptions): Promise<MealShareResult> {
+  const defaultResult = await Share.share(
+    {
+      title: options.title,
+      message: options.text,
+    },
+    {
+      dialogTitle: options.title,
+    }
+  );
+
+  console.info('[MealShare] Default share completed:', defaultResult);
+  return {
+    completed: true,
+    platform: Platform.OS,
+    method: 'reactNativeShare',
+    details: defaultResult,
+  };
+}
+
 export async function shareMealContent(options: MealShareOptions): Promise<MealShareResult> {
   const mimeType = options.mimeType ?? 'image/jpeg';
   const debugInfo = await inspectSharePhoto(options.photoUri, mimeType);
@@ -130,113 +242,16 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
   });
 
   try {
-    if (Platform.OS === 'ios' && options.photoUri) {
-      const shareResult = await Share.share({
-        title: options.title,
-        message: options.text,
-        url: options.photoUri,
-      });
-
-      console.info('[MealShare] iOS share completed:', shareResult);
-      return {
-        completed: true,
-        platform: 'ios',
-        method: 'reactNativeShare',
-        details: shareResult,
-      };
+    if (Platform.OS === 'ios') {
+      return await shareIOS(options);
     }
 
     if (Platform.OS === 'android') {
-      const dialogTitle = options.dialogTitle ?? '共有';
-      const mealShareModule = NativeModules.MealShare;
-
-      if (mealShareModule?.shareMeal) {
-        try {
-          const result = await mealShareModule.shareMeal({
-            title: dialogTitle,
-            text: options.text,
-            photoUri: options.photoUri,
-            mimeType,
-          });
-
-          console.info('[MealShare] Android native share completed:', result);
-          return {
-            completed: true,
-            platform: 'android',
-            method: 'mealShareNative',
-            details: result,
-          };
-        } catch (nativeError) {
-          console.warn(
-            '[MealShare] Android native share threw, falling back to next available method:',
-            nativeError
-          );
-        }
-      }
-
-      // Fallback if native module is not linked or failed
-      if (options.photoUri && options.photoUri.trim() !== '') {
-        try {
-          const sharingAvailable = await Sharing.isAvailableAsync();
-
-          if (sharingAvailable) {
-            await Sharing.shareAsync(options.photoUri, {
-              dialogTitle,
-              mimeType,
-            });
-
-            console.info('[MealShare] Fallback Android expo-sharing completed');
-            return {
-              completed: true,
-              platform: 'android',
-              method: 'expoSharing',
-            };
-          }
-        } catch (expoSharingError) {
-          console.warn(
-            '[MealShare] Fallback expo-sharing failed, attempting standard Share:',
-            expoSharingError
-          );
-        }
-      }
-
-      const fallbackResult = await Share.share(
-        {
-          title: options.title,
-          message: options.text,
-        },
-        {
-          dialogTitle,
-        }
-      );
-
-      console.info('[MealShare] Fallback Android standard share completed:', fallbackResult);
-      return {
-        completed: true,
-        platform: 'android',
-        method: 'reactNativeShare',
-        details: fallbackResult,
-      };
+      return await shareAndroid(options, mimeType);
     }
 
     // Default / Web / Other platforms
-    const defaultResult = await Share.share(
-      {
-        title: options.title,
-        message: options.text,
-      },
-      {
-        dialogTitle: options.title,
-      }
-    );
-
-    console.info('[MealShare] Default share completed:', defaultResult);
-    return {
-      completed: true,
-      platform: Platform.OS,
-      method: 'reactNativeShare',
-      details: defaultResult,
-    };
+    return await shareDefault(options);
   } catch (error) {
     console.error('[MealShare] Failed to share meal:', {
       error: error instanceof Error ? error.message : String(error),
