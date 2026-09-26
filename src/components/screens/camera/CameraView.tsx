@@ -14,7 +14,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   CameraView as ExpoCameraView,
-  PermissionResponse,
   CameraView as CameraViewType,
 } from 'expo-camera';
 import { Colors } from '../../../constants/Colors';
@@ -23,7 +22,7 @@ import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraCon
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 import { CuisineTypeSelector } from '../../../components/common/CuisineTypeSelector';
 import { MealInputAssistSection } from '../../common/MealInputAssistSection';
-import type { CameraPermissionUiState } from '../../../hooks/cameraCapture';
+import type { CameraPermissionState } from '../../../hooks/cameraCapture';
 import type {
   CaptureReviewEditableField,
   CaptureReviewState,
@@ -56,11 +55,6 @@ type CameraOperations = {
   onClose: () => void;
   onRequestPermission: () => Promise<void>;
   onOpenSettings: () => Promise<void>;
-};
-
-type CameraPermissionState = {
-  cameraPermission: PermissionResponse | null;
-  permissionUiState: CameraPermissionUiState;
 };
 
 type CameraReviewState = {
@@ -99,8 +93,10 @@ export type CameraViewProps = Pick<
     | 'onClose'
     | 'onRequestPermission'
     | 'onOpenSettings'
-  > &
-  Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
+  > & {
+    cameraPermission: CameraPermissionState['permission'];
+    permissionUiState: CameraPermissionState['uiState'];
+  } &
   Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
   Pick<
     CameraReviewOperations,
