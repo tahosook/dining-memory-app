@@ -314,46 +314,107 @@ export async function replaceDatabaseWithBackup(
 
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM meals');
-    for (const meal of meals) {
-      await db.runAsync(
-        `INSERT INTO meals (
-          id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source,
-          notes, cooking_level, is_homemade, photo_path, photo_thumbnail_path,
-          location_name, latitude, longitude, meal_datetime, search_text,
-          tags, is_deleted, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        meal.id,
-        meal.uuid,
-        meal.meal_name,
-        meal.meal_type ?? null,
-        meal.cuisine_type ?? null,
-        meal.ai_confidence ?? null,
-        meal.ai_source ?? null,
-        meal.notes ?? null,
-        meal.cooking_level ?? null,
-        meal.is_homemade,
-        meal.photo_path,
-        meal.photo_thumbnail_path ?? null,
-        meal.location_name ?? null,
-        meal.latitude ?? null,
-        meal.longitude ?? null,
-        meal.meal_datetime,
-        meal.search_text ?? null,
-        meal.tags ?? null,
-        meal.is_deleted,
-        meal.created_at,
-        meal.updated_at
-      );
+    if (meals.length > 0) {
+      if (typeof db.prepareAsync === 'function') {
+        const insertMealStatement = await db.prepareAsync(
+          `INSERT INTO meals (
+            id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source,
+            notes, cooking_level, is_homemade, photo_path, photo_thumbnail_path,
+            location_name, latitude, longitude, meal_datetime, search_text,
+            tags, is_deleted, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        );
+        try {
+          for (const meal of meals) {
+            await insertMealStatement.executeAsync(
+              meal.id,
+              meal.uuid,
+              meal.meal_name,
+              meal.meal_type ?? null,
+              meal.cuisine_type ?? null,
+              meal.ai_confidence ?? null,
+              meal.ai_source ?? null,
+              meal.notes ?? null,
+              meal.cooking_level ?? null,
+              meal.is_homemade,
+              meal.photo_path,
+              meal.photo_thumbnail_path ?? null,
+              meal.location_name ?? null,
+              meal.latitude ?? null,
+              meal.longitude ?? null,
+              meal.meal_datetime,
+              meal.search_text ?? null,
+              meal.tags ?? null,
+              meal.is_deleted,
+              meal.created_at,
+              meal.updated_at
+            );
+          }
+        } finally {
+          await insertMealStatement.finalizeAsync();
+        }
+      } else {
+        for (const meal of meals) {
+          await db.runAsync(
+            `INSERT INTO meals (
+              id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source,
+              notes, cooking_level, is_homemade, photo_path, photo_thumbnail_path,
+              location_name, latitude, longitude, meal_datetime, search_text,
+              tags, is_deleted, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            meal.id,
+            meal.uuid,
+            meal.meal_name,
+            meal.meal_type ?? null,
+            meal.cuisine_type ?? null,
+            meal.ai_confidence ?? null,
+            meal.ai_source ?? null,
+            meal.notes ?? null,
+            meal.cooking_level ?? null,
+            meal.is_homemade,
+            meal.photo_path,
+            meal.photo_thumbnail_path ?? null,
+            meal.location_name ?? null,
+            meal.latitude ?? null,
+            meal.longitude ?? null,
+            meal.meal_datetime,
+            meal.search_text ?? null,
+            meal.tags ?? null,
+            meal.is_deleted,
+            meal.created_at,
+            meal.updated_at
+          );
+        }
+      }
     }
 
     await db.runAsync('DELETE FROM app_settings');
-    for (const setting of appSettings) {
-      await db.runAsync(
-        'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
-        setting.key,
-        setting.value ?? null,
-        setting.updated_at
-      );
+    if (appSettings.length > 0) {
+      if (typeof db.prepareAsync === 'function') {
+        const insertSettingStatement = await db.prepareAsync(
+          'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)'
+        );
+        try {
+          for (const setting of appSettings) {
+            await insertSettingStatement.executeAsync(
+              setting.key,
+              setting.value ?? null,
+              setting.updated_at
+            );
+          }
+        } finally {
+          await insertSettingStatement.finalizeAsync();
+        }
+      } else {
+        for (const setting of appSettings) {
+          await db.runAsync(
+            'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
+            setting.key,
+            setting.value ?? null,
+            setting.updated_at
+          );
+        }
+      }
     }
 
     await db.runAsync('DELETE FROM search_vectors');
