@@ -26,8 +26,6 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('CameraScreen Error:', error);
     console.error('Error Info:', errorInfo);
-
-    // TODO: Send error to monitoring service (e.g., Sentry)
   }
 
   handleRetry = () => {
