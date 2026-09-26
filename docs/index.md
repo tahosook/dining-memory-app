@@ -20,13 +20,15 @@
 
 ### For Implementation
 - [docs/engineering/context-map.md](./engineering/context-map.md): task ごとに読むべき最小 context の索引
-- [docs/architecture/tech-spec.md](./architecture/tech-spec.md): current implementation and runtime assumptions
+- [docs/architecture/tech-spec.md](./architecture/tech-spec.md): current stack, runtime assumptions, and app-level architecture.
+- [docs/architecture/food-labeling-pipeline.md](./architecture/food-labeling-pipeline.md): MediaPipe 食事分類モデルのリモートオンデマンド配布・端末内ローカル読み込みパイプライン仕様
 - [docs/ux/screen-designs.md](./ux/screen-designs.md): current screen behavior
 - [docs/ux/user-flows.md](./ux/user-flows.md): current implemented flows
 - [docs/domain/database-design.md](./domain/database-design.md): current storage rules
 - [docs/engineering/coding-standards.md](./engineering/coding-standards.md): coding rules
 - [docs/engineering/development-workflow.md](./engineering/development-workflow.md): verification and workflow
 - [docs/engineering/github-security-settings.md](./engineering/github-security-settings.md): GitHub security / quality settings and manual setup checklist
+- [docs/engineering/release-keystore-guidelines.md](./engineering/release-keystore-guidelines.md): Android release signing key generation, secure storage, and CI/EAS secret injection procedures
 - [docs/engineering/dependency-policy.md](./engineering/dependency-policy.md): dependency classification, Expo SDK upgrade playbook, and native compatibility gates
 - [docs/engineering/food-labeling-guidelines.md](./engineering/food-labeling-guidelines.md): 食事画像ラベリング用スクリプトの責務、優先度、打ち止めライン
 - [docs/engineering/mediapipe-labeling-workflow.md](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の目的、guardrail、停止条件
@@ -45,6 +47,7 @@
 
 ### Architecture
 - [Tech Spec](./architecture/tech-spec.md): current stack, runtime assumptions, and app-level architecture.
+- [Food Labeling Pipeline](./architecture/food-labeling-pipeline.md): end-to-end architecture for remote on-demand MediaPipe model distribution and local inference pipeline.
 
 ### Domain
 - [Database Design](./domain/database-design.md): current schema, table responsibilities, and storage rules.
@@ -58,6 +61,7 @@
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Development Workflow](./engineering/development-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
 - [GitHub Security Settings](./engineering/github-security-settings.md): CodeQL, Dependabot, Secret scanning, branch protection, and Actions permission setup.
+- [Release Keystore Guidelines](./engineering/release-keystore-guidelines.md): Android 本番リリース署名鍵（Keystore）の生成規格、多重保管・バックアップ運用、および各ビルド環境へのシークレット注入方針.
 - [Dependency Policy](./engineering/dependency-policy.md): 依存関係の4層分類、Expo SDK アップグレード手順、Dependabot 運用方針、ネイティブ互換性ゲート.
 - [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
 - [MediaPipe Labeling Workflow](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の自動化方針、guardrail、停止条件.

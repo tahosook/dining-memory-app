@@ -50,6 +50,19 @@ export interface CreateMealData {
   tags?: string;
 }
 
+/**
+ * getRecentMeals の取得オプション。
+ *
+ * NOTE: beforeMealDatetime (cursor) が指定されている場合は、offset は無視され、
+ * カーソル走査 (Keyset pagination) が優先されます。
+ */
+export interface GetRecentMealsOptions {
+  limit?: number;
+  offset?: number;
+  beforeMealDatetime?: number;
+  beforeId?: string;
+}
+
 export type { SearchFilters } from '../../domain/meals/search';
 export type { StatisticsOptions, StatisticsSummary } from '../../domain/meals/statistics';
 
@@ -296,25 +309,73 @@ export class MealService {
     return this.searchMeals({ dateFrom: startDate, dateTo: endDate });
   }
 
-  static async getRecentMeals(limit = 20): Promise<Meal[]> {
+  /**
+   * 最近の食事記録を取得します。
+   *
+   * @param limitOrOptions 取得件数、またはページネーションオプション
+   * @param offsetParam オフセット（limitOrOptions が数値の場合に使用）
+   * NOTE: beforeMealDatetime (cursor) 指定時は offset は無視され、カーソル走査 (Keyset pagination) が優先されます。
+   */
+  static async getRecentMeals(
+    limitOrOptions: number | GetRecentMealsOptions = 20,
+    offsetParam = 0
+  ): Promise<Meal[]> {
     await initializeDatabase();
+
+    const options: GetRecentMealsOptions =
+      typeof limitOrOptions === 'number'
+        ? { limit: limitOrOptions, offset: offsetParam }
+        : limitOrOptions;
+
+    const limit = options.limit ?? 20;
+    const { beforeMealDatetime, beforeId } = options;
+    const offset = typeof beforeMealDatetime === 'number' ? 0 : (options.offset ?? 0);
 
     if (isUsingNativeDatabase()) {
       const db = getDatabase();
       if (db) {
-        const rows = await db.getAllAsync<PersistedMealRow>(
-          'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?',
-          limit
-        );
+        const conditions = ['is_deleted = 0'];
+        const params: (string | number)[] = [];
+
+        if (typeof beforeMealDatetime === 'number') {
+          if (beforeId) {
+            conditions.push('(meal_datetime < ? OR (meal_datetime = ? AND id < ?))');
+            params.push(beforeMealDatetime, beforeMealDatetime, beforeId);
+          } else {
+            conditions.push('meal_datetime < ?');
+            params.push(beforeMealDatetime);
+          }
+        }
+
+        let query = `SELECT * FROM meals WHERE ${conditions.join(' AND ')} ORDER BY meal_datetime DESC, id DESC LIMIT ?`;
+        params.push(limit);
+
+        if (offset > 0) {
+          query += ' OFFSET ?';
+          params.push(offset);
+        }
+
+        const rows = await db.getAllAsync<PersistedMealRow>(query, ...params);
         return rows.map(mapRowToMeal);
       }
     }
 
     const rows = await getAllRows();
-    return rows
-      .filter(row => !row.is_deleted)
-      .sort((a, b) => b.meal_datetime - a.meal_datetime)
-      .slice(0, limit)
+    let filtered = rows.filter(row => !row.is_deleted);
+
+    if (typeof beforeMealDatetime === 'number') {
+      filtered = filtered.filter(row => {
+        if (row.meal_datetime < beforeMealDatetime) return true;
+        if (row.meal_datetime === beforeMealDatetime && beforeId) {
+          return row.id < beforeId;
+        }
+        return false;
+      });
+    }
+
+    return filtered
+      .sort((a, b) => b.meal_datetime - a.meal_datetime || (b.id < a.id ? -1 : b.id > a.id ? 1 : 0))
+      .slice(offset, offset + limit)
       .map(mapRowToMeal);
   }
 

@@ -1,5 +1,10 @@
 # [Chore/CI] ESLint flat config スクリプトの整理および CI フォーマットチェックの追加
 
+- **内部ドキュメントID**: issue-02
+- **対応 GitHub Issue**: GitHub Issue #74
+- **ステータス**: 完了 (Closed)
+- **完了 PR**: PR #84
+
 ## 概要
 ESLint v9（Flat Config）を採用しているにもかかわらず、`package.json` のスクリプトで v8 以前の `--ext` オプションが残存しています。また、プロジェクトに Prettier の設定が存在するものの、CI（`.github/workflows/ci.yml`）でコードフォーマットのチェックが実行されていません。
 
@@ -16,6 +21,6 @@ ESLint v9（Flat Config）を採用しているにもかかわらず、`package.
 3. `.github/workflows/ci.yml` の `lint` ジョブにフォーマット検証ステップを追加する。
 
 ## 受入基準
-- [ ] `npm run lint` が警告なく実行できること。
-- [ ] `npm run format:check` でフォーマット不整合を検知できること。
-- [ ] CI 上で lint と format 検証が実行されること。
+- [x] `npm run lint` が警告なく実行できること。
+- [x] `npm run format:check` でフォーマット不整合を検知できること。
+- [x] CI 上で lint と format 検証が実行されること。

@@ -580,6 +580,33 @@ describe('meal input assist runtime availability', () => {
     expect(NativeModules.MediaPipeMealInputAssist.classifyStaticImage).not.toHaveBeenCalled();
   });
 
+  test('returns model_unavailable for mediapipe static-image mode when the local model file is missing', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    NativeModules.MediaPipeMealInputAssist = {
+      getClassifierStatus: jest.fn().mockResolvedValue({
+        kind: 'unavailable',
+        reason:
+          'MediaPipe meal input assist model file が見つかりません: /data/user/0/app/files/ai-models/meal-input-assist.task',
+      }),
+      classifyStaticImage: jest.fn(),
+    };
+
+    await expect(loadMealInputAssistRuntimeAvailability('mediapipe-static-image')).resolves.toEqual(
+      {
+        kind: 'unavailable',
+        mode: 'mediapipe-static-image',
+        code: 'model_unavailable',
+        reason:
+          'MediaPipe meal input assist model file が見つかりません: /data/user/0/app/files/ai-models/meal-input-assist.task',
+      }
+    );
+    expect(NativeModules.MediaPipeMealInputAssist.getClassifierStatus).toHaveBeenCalledTimes(1);
+    expect(NativeModules.MediaPipeMealInputAssist.classifyStaticImage).not.toHaveBeenCalled();
+  });
+
   test('normalizes MediaPipe static-image raw results through the existing provider contract without leaking raw metadata', async () => {
     Object.defineProperty(Platform, 'OS', {
       configurable: true,
