@@ -46,6 +46,93 @@ function createCaptureReviewSaveKey(captureReview: CaptureReviewState) {
   return `${captureReview.photoUri}::${captureReview.capturedAtMs}`;
 }
 
+async function verifyPermissions(
+  isWebWithoutPermissions: boolean,
+  ensurePhotoSavePermission: () => Promise<boolean>
+): Promise<boolean> {
+  if (isWebWithoutPermissions) return true;
+  return await ensurePhotoSavePermission();
+}
+
+async function persistPhoto(
+  isWebWithoutPermissions: boolean,
+  captureReview: CaptureReviewState,
+  locationSnapshot: LocationSnapshot,
+  persistPhotoLocally: (
+    photoUri: string,
+    options: PersistPhotoOptions
+  ) => Promise<PersistedCapturePhoto>
+): Promise<PersistedCapturePhoto> {
+  if (isWebWithoutPermissions) {
+    return {
+      stablePhotoUri: captureReview.photoUri,
+      stableThumbnailUri: undefined,
+      resizedPhotoUri: undefined,
+      savedToMediaLibrary: false,
+    };
+  }
+
+  return await persistPhotoLocally(captureReview.photoUri, {
+    capturedAt: new Date(captureReview.capturedAtMs),
+    location: locationSnapshot,
+    softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
+  });
+}
+
+async function saveMealToDatabase(
+  captureReview: CaptureReviewState,
+  locationSnapshot: LocationSnapshot,
+  stablePhotoUri: string,
+  stableThumbnailUri: string | undefined,
+  aiMetadata?: AppliedMealInputAssistMetadata | null
+) {
+  return await MealService.createMeal({
+    meal_name: captureReview.mealName.trim(),
+    cuisine_type: captureReview.cuisineType || undefined,
+    ai_confidence: aiMetadata?.aiConfidence,
+    ai_source: aiMetadata?.aiSource,
+    notes: captureReview.notes.trim() || undefined,
+    location_name: captureReview.locationName.trim() || undefined,
+    latitude: locationSnapshot.latitude,
+    longitude: locationSnapshot.longitude,
+    is_homemade: captureReview.isHomemade,
+    photo_path: stablePhotoUri,
+    photo_thumbnail_path: stableThumbnailUri,
+    meal_datetime: new Date(),
+  });
+}
+
+async function handlePostSaveTasks(
+  isWebWithoutPermissions: boolean,
+  mealId: string,
+  stablePhotoUri: string,
+  originalPhotoUri: string,
+  alreadySavedToMediaLibrary: boolean,
+  savePhotoToMediaLibrary: (photoUri: string) => Promise<boolean>,
+  cleanupTempFile: (photoUri: string) => Promise<void>,
+  triggerThumbnailGeneration?: (mealId: string) => void
+): Promise<boolean> {
+  if (isWebWithoutPermissions) return false;
+
+  const triggerThumbnail = triggerThumbnailGeneration ?? requestMealThumbnail;
+  triggerThumbnail(mealId);
+
+  let savedToMediaLibrary = alreadySavedToMediaLibrary;
+  if (!alreadySavedToMediaLibrary) {
+    const saveSuccess = await savePhotoToMediaLibrary(stablePhotoUri);
+    savedToMediaLibrary = saveSuccess;
+    if (!saveSuccess) {
+      console.warn('Media library save skipped, but local record is preserved.');
+    }
+  }
+
+  if (stablePhotoUri !== originalPhotoUri) {
+    await cleanupTempFile(originalPhotoUri);
+  }
+
+  return savedToMediaLibrary;
+}
+
 export async function saveCaptureReviewWorkflow({
   captureReview,
   cameraPermission,
@@ -69,63 +156,43 @@ export async function saveCaptureReviewWorkflow({
   inFlightCaptureReviewSaves.add(saveKey);
 
   try {
-    if (!isWebWithoutPermissions) {
-      const hasPhotoSavePermission = await ensurePhotoSavePermission();
-      if (!hasPhotoSavePermission) {
-        return { kind: 'skipped', reason: 'photo_permission_denied' };
-      }
+    const hasPermission = await verifyPermissions(
+      isWebWithoutPermissions,
+      ensurePhotoSavePermission
+    );
+    if (!hasPermission) {
+      return { kind: 'skipped', reason: 'photo_permission_denied' };
     }
 
     const locationSnapshot = await getLocationSnapshot();
-    const persistedPhoto = isWebWithoutPermissions
-      ? {
-          stablePhotoUri: captureReview.photoUri,
-          stableThumbnailUri: undefined,
-          resizedPhotoUri: null,
-          savedToMediaLibrary: false,
-        }
-      : await persistPhotoLocally(captureReview.photoUri, {
-          capturedAt: new Date(captureReview.capturedAtMs),
-          location: locationSnapshot,
-          softwareName: process.env.EXPO_PUBLIC_APP_NAME ?? 'Dining Memory',
-        });
+    const persistedPhoto = await persistPhoto(
+      isWebWithoutPermissions,
+      captureReview,
+      locationSnapshot,
+      persistPhotoLocally
+    );
+
     stablePhotoUri = persistedPhoto.stablePhotoUri;
     stableThumbnailUri = persistedPhoto.stableThumbnailUri;
-    let savedToMediaLibrary = persistedPhoto.savedToMediaLibrary;
 
-    const meal = await MealService.createMeal({
-      meal_name: captureReview.mealName.trim(),
-      cuisine_type: captureReview.cuisineType || undefined,
-      ai_confidence: aiMetadata?.aiConfidence,
-      ai_source: aiMetadata?.aiSource,
-      notes: captureReview.notes.trim() || undefined,
-      location_name: captureReview.locationName.trim() || undefined,
-      latitude: locationSnapshot.latitude,
-      longitude: locationSnapshot.longitude,
-      is_homemade: captureReview.isHomemade,
-      photo_path: stablePhotoUri,
-      photo_thumbnail_path: stableThumbnailUri,
-      meal_datetime: new Date(),
-    });
+    const meal = await saveMealToDatabase(
+      captureReview,
+      locationSnapshot,
+      stablePhotoUri,
+      stableThumbnailUri,
+      aiMetadata
+    );
 
-    // Web ではアプリ固有の安定パス + ファイルシステム操作が制限されるため、
-    // 現状はサムネイル生成をスキップする（将来 File System Access API 等で対応する可能性あり）
-    if (!isWebWithoutPermissions) {
-      const triggerThumbnail = triggerThumbnailGeneration ?? requestMealThumbnail;
-      triggerThumbnail(meal.id);
-    }
-
-    if (!isWebWithoutPermissions && !persistedPhoto.savedToMediaLibrary) {
-      const saveSuccess = await savePhotoToMediaLibrary(stablePhotoUri);
-      savedToMediaLibrary = saveSuccess;
-      if (!saveSuccess) {
-        console.warn('Media library save skipped, but local record is preserved.');
-      }
-    }
-
-    if (!isWebWithoutPermissions && stablePhotoUri !== captureReview.photoUri) {
-      await cleanupTempFile(captureReview.photoUri);
-    }
+    const savedToMediaLibrary = await handlePostSaveTasks(
+      isWebWithoutPermissions,
+      meal.id,
+      stablePhotoUri,
+      captureReview.photoUri,
+      persistedPhoto.savedToMediaLibrary,
+      savePhotoToMediaLibrary,
+      cleanupTempFile,
+      triggerThumbnailGeneration
+    );
 
     return {
       kind: 'saved',
