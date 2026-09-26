@@ -27,7 +27,8 @@
     "lint:fix": "eslint App.tsx index.ts src tests --fix --cache --cache-location .eslintcache",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "verify:pr-gates": "bash ./scripts/verify-pr-gates.sh"
   },
   "dependencies": {
     "@bam.tech/react-native-image-resizer": "^3.0.11",
