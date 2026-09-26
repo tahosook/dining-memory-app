@@ -1,6 +1,7 @@
 import { NativeModules, Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { getInfoAsync } from 'expo-file-system/legacy';
+import { sanitizeUriForLog } from '../utils/logSanitizer';
 
 export interface MealShareOptions {
   title: string;
@@ -11,7 +12,12 @@ export interface MealShareOptions {
 }
 
 export type StorageLocationType =
-  'cache' | 'document' | 'mediaStore' | 'external' | 'unknown' | 'none';
+  | 'cache'
+  | 'document'
+  | 'mediaStore'
+  | 'external'
+  | 'unknown'
+  | 'none';
 
 export interface MealShareDebugInfo {
   platform: string;
@@ -28,27 +34,6 @@ export interface MealShareResult {
   platform: string;
   method: 'mealShareNative' | 'expoSharing' | 'reactNativeShare';
   details?: unknown;
-}
-
-export function sanitizeUriForLog(uri?: string): string | undefined {
-  if (!uri || uri.trim() === '') {
-    return undefined;
-  }
-
-  const trimmed = uri.trim();
-  if (trimmed.startsWith('content://')) {
-    // Content URIs like content://media/external/images/media/1234 don't contain personal paths
-    return trimmed;
-  }
-
-  // For file:// or absolute paths, mask the user/app container structure and keep only filename
-  const slashIndex = trimmed.lastIndexOf('/');
-  if (slashIndex >= 0 && slashIndex < trimmed.length - 1) {
-    const filename = trimmed.slice(slashIndex + 1);
-    return `file://.../${filename}`;
-  }
-
-  return 'file://...';
 }
 
 export function detectStorageLocation(uri?: string): StorageLocationType {

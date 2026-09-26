@@ -25,6 +25,7 @@ import { cleanupTempFile } from '../../media/tempFiles';
 import { persistCapturePhotoLocally } from './capturePhotoPersistence';
 import { savePhotoToMediaLibrary } from './mediaLibrarySave';
 import { saveCaptureReviewWorkflow } from './captureSaveWorkflow';
+import { sanitizeError, sanitizeUriForLog } from '../../utils/logSanitizer';
 
 export type { CaptureReviewEditableField, CaptureReviewState } from './captureReviewState';
 
@@ -180,13 +181,16 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       if (shouldLogCaptureDiagnostics()) {
         console.info('Camera capture attempt completed.', {
           captureAttemptId,
-          photoUri: photo.uri,
+          photoUri: sanitizeUriForLog(photo.uri),
         });
       }
       beginReview(photo, 'camera');
-    } catch {
+    } catch (error) {
       if (shouldLogCaptureDiagnostics()) {
-        console.info('Camera capture attempt failed.', { captureAttemptId });
+        console.info('Camera capture attempt failed.', {
+          captureAttemptId,
+          error: sanitizeError(error),
+        });
       }
       console.error('Photo capture failed.');
       Alert.alert('エラー', '写真の撮影に失敗しました。再度お試しください。');
@@ -297,7 +301,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         if (shouldLogCaptureDiagnostics()) {
           console.info('Capture review save attempt started.', {
             saveAttemptId,
-            sourcePhotoUri: review.photoUri,
+            sourcePhotoUri: sanitizeUriForLog(review.photoUri),
           });
         }
         const result = await saveCaptureReviewWorkflow({
@@ -315,7 +319,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
           if (shouldLogCaptureDiagnostics()) {
             console.info('Capture review save attempt skipped.', {
               saveAttemptId,
-              sourcePhotoUri: review.photoUri,
+              sourcePhotoUri: sanitizeUriForLog(review.photoUri),
               reason: result.reason,
             });
           }
@@ -325,21 +329,22 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         if (shouldLogCaptureDiagnostics()) {
           console.info('Capture review save attempt completed.', {
             saveAttemptId,
-            sourcePhotoUri: review.photoUri,
-            resizedPhotoUri: result.resizedPhotoUri,
-            stablePhotoUri: result.stablePhotoUri,
-            stableThumbnailUri: result.stableThumbnailUri,
+            sourcePhotoUri: sanitizeUriForLog(review.photoUri),
+            resizedPhotoUri: sanitizeUriForLog(result.resizedPhotoUri ?? undefined),
+            stablePhotoUri: sanitizeUriForLog(result.stablePhotoUri ?? undefined),
+            stableThumbnailUri: sanitizeUriForLog(result.stableThumbnailUri ?? undefined),
             savedToMediaLibrary: result.savedToMediaLibrary,
             mealId: result.mealId,
           });
         }
         setCaptureReview(null);
         navigateToRecords();
-      } catch {
+      } catch (error) {
         if (shouldLogCaptureDiagnostics()) {
           console.info('Capture review save attempt failed.', {
             saveAttemptId,
-            sourcePhotoUri: review.photoUri,
+            sourcePhotoUri: sanitizeUriForLog(review.photoUri),
+            error: sanitizeError(error),
           });
         }
         console.error('Meal save failed.');

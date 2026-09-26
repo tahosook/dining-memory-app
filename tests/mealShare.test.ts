@@ -4,7 +4,6 @@ import { getInfoAsync } from 'expo-file-system/legacy';
 import {
   detectStorageLocation,
   inspectSharePhoto,
-  sanitizeUriForLog,
   shareMealContent,
 } from '../src/media/mealShare';
 
@@ -32,29 +31,6 @@ describe('mealShare', () => {
 
   afterEach(() => {
     Platform.OS = originalPlatform;
-  });
-
-  describe('sanitizeUriForLog', () => {
-    test('returns undefined for empty or whitespace uris', () => {
-      expect(sanitizeUriForLog(undefined)).toBeUndefined();
-      expect(sanitizeUriForLog('')).toBeUndefined();
-      expect(sanitizeUriForLog('   ')).toBeUndefined();
-    });
-
-    test('preserves content URIs without leaking local paths', () => {
-      expect(sanitizeUriForLog('content://media/external/images/media/123')).toBe(
-        'content://media/external/images/media/123'
-      );
-    });
-
-    test('masks file paths and keeps only the file basename', () => {
-      expect(sanitizeUriForLog('file:///data/user/0/com.app/files/meal-123.jpg')).toBe(
-        'file://.../meal-123.jpg'
-      );
-      expect(sanitizeUriForLog('/private/var/mobile/Containers/photo.jpg')).toBe(
-        'file://.../photo.jpg'
-      );
-    });
   });
 
   describe('detectStorageLocation', () => {

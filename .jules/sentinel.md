@@ -1,8 +1,4 @@
-## 2026-09-20 - Insecure Randomness usage in IDs and Suffixes
-**Vulnerability:** The application used `Math.random()` to generate IDs, temporary file suffixes, and fallback suffixes.
-**Learning:** `Math.random()` is not a cryptographically secure random number generator (CSPRNG). Using it for unique identifiers or tokens can lead to predictable values and potential collisions or token guessing attacks.
-**Prevention:** Always use a CSPRNG such as `expo-crypto`'s `randomUUID` or `getRandomValues` for generating unique identifiers, tokens, and file suffixes.
-## 2026-09-24 - Error Stack Trace Leaks
-**Vulnerability:** Leaking internal application stack traces in production error logs (`src/media/mealShare.ts`).
-**Learning:** Returning `error.stack` from caught errors explicitly exposes sensitive internal execution paths or system structures, violating the principle of failing securely.
-**Prevention:** Avoid passing or returning `error.stack` in logs or API responses, only log standardized error messages instead.
+## 2024-09-26 - Prevent PII Leakage in Camera/Sharing Logs
+**Vulnerability:** Absolute local file paths (exposing app container structure) and raw `Error` objects (exposing stack traces or request contexts) were being logged in plaintext via `console.info` and `console.error` during camera capture and sharing operations.
+**Learning:** Even diagnostic logs intended for development can leak sensitive Personally Identifiable Information (PII) to log aggregators or crash reporting tools if structured objects are logged without filtering. The risk increases when these logs are outputted globally without checking environment constraints.
+**Prevention:** Always implement and enforce a central log sanitization utility (`logSanitizer.ts`). Apply sanitization to file URIs (stripping directory prefixes), `Error` objects (extracting only `.message`), and structured context objects before passing them to console logging functions.
