@@ -104,9 +104,9 @@ export class BackupService {
 
       // Copy all referenced original photos to staging photos/ directory.
       // Must-fix 1 & 2: Fail-fast on any missing photo, read error, or copy failure.
-      const copiedSet = new Set<string>();
 
-      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
+      // Step 1: Fail-fast validation of all photos (Sequential to prevent EMFILE)
+      for (const [, photoPath] of requiredPhotoMap.entries()) {
         let fileInfo;
         try {
           fileInfo = await getInfoAsync(photoPath);
@@ -117,7 +117,11 @@ export class BackupService {
         if (!fileInfo || !fileInfo.exists) {
           throw new Error('バックアップ対象の写真ファイルが端末内に見つかりません。');
         }
+      }
 
+      // Step 2: Sequential copy after all photos are verified to exist
+      const copiedSet = new Set<string>();
+      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
         try {
           await copyAsync({
             from: photoPath,
