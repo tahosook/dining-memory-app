@@ -131,28 +131,15 @@ async function saveRows(rows: PersistedMealRow[]) {
   setInMemoryMeals(rows);
 }
 
-async function upsertRow(row: PersistedMealRow) {
-  await initializeDatabase();
+function upsertInMemory(row: PersistedMealRow) {
+  const rows = getInMemoryMeals();
+  const nextRows = rows.filter(item => item.id !== row.id);
+  nextRows.push(row);
+  setInMemoryMeals(nextRows);
+}
 
-  if (!isUsingNativeDatabase()) {
-    const rows = getInMemoryMeals();
-    const nextRows = rows.filter(item => item.id !== row.id);
-    nextRows.push(row);
-    setInMemoryMeals(nextRows);
-    return;
-  }
-
-  const db = getDatabase();
-  if (!db) {
-    return;
-  }
-
-  await db.runAsync(
-    `INSERT OR REPLACE INTO meals (
-      id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source, notes, cooking_level,
-      is_homemade, photo_path, photo_thumbnail_path, location_name, latitude, longitude, meal_datetime,
-      search_text, tags, is_deleted, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+function extractSqlParams(row: PersistedMealRow): any[] {
+  return [
     row.id,
     row.uuid,
     row.meal_name,
@@ -173,8 +160,36 @@ async function upsertRow(row: PersistedMealRow) {
     row.tags ?? null,
     row.is_deleted,
     row.created_at,
-    row.updated_at
+    row.updated_at,
+  ];
+}
+
+async function upsertNative(db: any, row: PersistedMealRow) {
+  const params = extractSqlParams(row);
+  await db.runAsync(
+    `INSERT OR REPLACE INTO meals (
+      id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source, notes, cooking_level,
+      is_homemade, photo_path, photo_thumbnail_path, location_name, latitude, longitude, meal_datetime,
+      search_text, tags, is_deleted, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ...params
   );
+}
+
+async function upsertRow(row: PersistedMealRow) {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    upsertInMemory(row);
+    return;
+  }
+
+  const db = getDatabase();
+  if (!db) {
+    return;
+  }
+
+  await upsertNative(db, row);
 }
 
 export class MealService {
