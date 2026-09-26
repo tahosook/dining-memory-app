@@ -40,6 +40,14 @@ export function isOriginalPhotoFileName(fileName: string): boolean {
   return !fileName.toLowerCase().includes('-thumb.');
 }
 
+export function stripFileScheme(uri: string): string {
+  return uri.replace(/^file:\/\//, '');
+}
+
+export function ensureTrailingSlash(path: string): string {
+  return path.endsWith('/') ? path : `${path}/`;
+}
+
 export function resolveRestoredPhotoUri(
   photoFileName: string,
   documentsDirectoryUri: string

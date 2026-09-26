@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { shareMealContent } from '../../media/mealShare';
+import { DetailRow } from '../../components/common/DetailRow';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
 import {
   MealPhotoViewer,
@@ -133,15 +134,6 @@ export function getMealDetailViewerPhotoIndex(
 ): number {
   const viewerIndex = photos.findIndex(photo => photo.mealIndex === currentIndex);
   return viewerIndex >= 0 ? viewerIndex : 0;
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
 }
 
 export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navigation }) => {
@@ -730,19 +722,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     gap: 14,
-  },
-  detailRow: {
-    gap: 6,
-  },
-  detailLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.gray,
-  },
-  detailValue: {
-    fontSize: 16,
-    color: Colors.text,
-    lineHeight: 22,
   },
   modalBackdrop: {
     flex: 1,
