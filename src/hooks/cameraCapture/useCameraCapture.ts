@@ -179,10 +179,13 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       }
       const photo = await takePhotoForReview(cameraRef, cameraPermission);
       if (shouldLogCaptureDiagnostics()) {
-        console.info('Camera capture attempt completed.', sanitizeLogObject({
-          captureAttemptId,
-          photoUri: photo.uri,
-        }));
+        console.info(
+          'Camera capture attempt completed.',
+          sanitizeLogObject({
+            captureAttemptId,
+            photoUri: photo.uri,
+          })
+        );
       }
       beginReview(photo, 'camera');
     } catch {
@@ -296,10 +299,13 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       try {
         setSavingCapture(true);
         if (shouldLogCaptureDiagnostics()) {
-          console.info('Capture review save attempt started.', sanitizeLogObject({
-            saveAttemptId,
-            sourcePhotoUri: review.photoUri,
-          }));
+          console.info(
+            'Capture review save attempt started.',
+            sanitizeLogObject({
+              saveAttemptId,
+              sourcePhotoUri: review.photoUri,
+            })
+          );
         }
         const result = await saveCaptureReviewWorkflow({
           captureReview: review,
@@ -314,34 +320,43 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
 
         if (result.kind === 'skipped') {
           if (shouldLogCaptureDiagnostics()) {
-            console.info('Capture review save attempt skipped.', sanitizeLogObject({
-              saveAttemptId,
-              sourcePhotoUri: review.photoUri,
-              reason: result.reason,
-            }));
+            console.info(
+              'Capture review save attempt skipped.',
+              sanitizeLogObject({
+                saveAttemptId,
+                sourcePhotoUri: review.photoUri,
+                reason: result.reason,
+              })
+            );
           }
           return;
         }
 
         if (shouldLogCaptureDiagnostics()) {
-          console.info('Capture review save attempt completed.', sanitizeLogObject({
-            saveAttemptId,
-            sourcePhotoUri: review.photoUri,
-            resizedPhotoUri: result.resizedPhotoUri,
-            stablePhotoUri: result.stablePhotoUri,
-            stableThumbnailUri: result.stableThumbnailUri,
-            savedToMediaLibrary: result.savedToMediaLibrary,
-            mealId: result.mealId,
-          }));
+          console.info(
+            'Capture review save attempt completed.',
+            sanitizeLogObject({
+              saveAttemptId,
+              sourcePhotoUri: review.photoUri,
+              resizedPhotoUri: result.resizedPhotoUri,
+              stablePhotoUri: result.stablePhotoUri,
+              stableThumbnailUri: result.stableThumbnailUri,
+              savedToMediaLibrary: result.savedToMediaLibrary,
+              mealId: result.mealId,
+            })
+          );
         }
         setCaptureReview(null);
         navigateToRecords();
       } catch {
         if (shouldLogCaptureDiagnostics()) {
-          console.info('Capture review save attempt failed.', sanitizeLogObject({
-            saveAttemptId,
-            sourcePhotoUri: review.photoUri,
-          }));
+          console.info(
+            'Capture review save attempt failed.',
+            sanitizeLogObject({
+              saveAttemptId,
+              sourcePhotoUri: review.photoUri,
+            })
+          );
         }
         console.error('Meal save failed.');
         Alert.alert('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');

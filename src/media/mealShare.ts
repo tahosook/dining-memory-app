@@ -239,10 +239,13 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
       details: defaultResult,
     };
   } catch (error) {
-    console.error('[MealShare] Failed to share meal:', sanitizeLogObject({
-      error: error instanceof Error ? error.message : String(error),
-      ...debugInfo,
-    }));
+    console.error(
+      '[MealShare] Failed to share meal:',
+      sanitizeLogObject({
+        error: error instanceof Error ? error.message : String(error),
+        ...debugInfo,
+      })
+    );
     throw error;
   }
 }

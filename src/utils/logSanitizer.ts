@@ -27,11 +27,7 @@ export function sanitizeUriForLog(uri?: string): string | undefined {
  */
 function isUriKey(key: string): boolean {
   const lowerKey = key.toLowerCase();
-  return (
-    lowerKey.includes('uri') ||
-    lowerKey.includes('path') ||
-    lowerKey.includes('url')
-  );
+  return lowerKey.includes('uri') || lowerKey.includes('path') || lowerKey.includes('url');
 }
 
 /**
@@ -60,7 +56,11 @@ export function sanitizeLogObject<T>(obj: T): T {
     const sanitizedError = new Error(obj.message) as any;
     sanitizedError.name = obj.name;
     // Keep stack trace only in dev, or at least preserve it if not __DEV__ conditionally
-    const isDev = typeof globalThis !== 'undefined' && (globalThis as any).process && (globalThis as any).process.env && (globalThis as any).process.env.NODE_ENV !== 'production';
+    const isDev =
+      typeof globalThis !== 'undefined' &&
+      (globalThis as any).process &&
+      (globalThis as any).process.env &&
+      (globalThis as any).process.env.NODE_ENV !== 'production';
     if (isDev) {
       sanitizedError.stack = obj.stack;
     } else {

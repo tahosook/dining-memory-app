@@ -56,7 +56,7 @@ describe('logSanitizer', () => {
         },
         items: [
           { path: '/absolute/path/file1.txt' },
-          { nonUriValue: 'file:///should/not/be/sanitized/unless/matched.jpg' }
+          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' }
         ]
       };
 
@@ -75,7 +75,7 @@ describe('logSanitizer', () => {
         },
         items: [
           { path: '[MASKED_PATH]/file1.txt' },
-          { nonUriValue: 'file:///should/not/be/sanitized/unless/matched.jpg' }
+          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' }
         ]
       });
     });
