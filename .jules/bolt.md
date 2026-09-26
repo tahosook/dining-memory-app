@@ -10,3 +10,6 @@
 ## 2026-09-26 - Safe Concurrency with Promise.allSettled
 **Learning:** Naively optimizing loops with `Promise.all` can introduce critical race conditions in transactional contexts (like backup restores). If one promise fails and triggers a rollback, other pending promises will continue running in the background and corrupt the rollback state. Unbounded concurrency can also cause EMFILE or OOM errors.
 **Action:** When parallelizing I/O loops that mutate state or require safe rollbacks, process items in bounded chunks (e.g., limits of 25) and use `Promise.allSettled`. This ensures all operations in a chunk finish before throwing an error, preventing background dangling operations. Leave loops sequential if they require strict "fail-fast: no best effort" behavior.
+## 2026-09-26 - React.memo for Pure Components in StatsScreen
+**Learning:** Pure components rendered as list items (like `SummaryCard` and `TopRankingCard` in `StatsScreen`) can unnecessarily re-render when the parent's state changes, even if their props are stable, slightly degrading main thread performance.
+**Action:** Use `React.memo` to wrap pure presentation components to avoid unnecessary re-renders when parent state updates.
