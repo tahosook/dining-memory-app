@@ -28,3 +28,4 @@ PR を起票する前に、以下の全項目を満たしていることを確�
 2. 新規 `any` 型注釈および型アサーション (`: any`, `as any`)
 3. エスケープハッチの追加 (`@ts-ignore`, `@ts-nocheck`, `eslint-disable`)
 4. `tests/` 配下のテストファイル削除
+5. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence（Feature/Spec PR は仕様・Issue 参照で可）

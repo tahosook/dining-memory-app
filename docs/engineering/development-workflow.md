@@ -70,7 +70,7 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 
 ## Core Governance Principles
 - **自然言語の禁止リスト全廃**: 言い訳で容易にすり抜けられる細かな禁止構文の列挙をやめ、機械判定と客観的証拠にオフロードする（詳細は [.jules/rules.md](../../.jules/rules.md) 参照）。
-- **機械的判定への完全オフロード (No machine gate, no trust)**: 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除などは `scripts/verify-pr-gates.sh` および CI で物理的に遮断する。
+- **機械的判定への完全オフロード (No machine gate, no trust)**: 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除、PR本文の Evidence 欠落などは `scripts/verify-pr-gates.sh` および CI で物理的に遮断する。
 - **客観的証拠の義務化 (No evidence, no PR)**: 具体的課題と客観的証拠（失敗テスト、実測値、EXPLAIN 結果等）が示されない PR は起票しない。
 - **「変更しないこと」の成功定義 (No actionable finding, stop)**: 調査の結果、対処すべき問題がなければ無理にコード変更を捏造せず、レポートを残して「変更なし」で終了することを成功とする。
 

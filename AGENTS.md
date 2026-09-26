@@ -8,7 +8,7 @@ AI エージェントがこの repo で自律的に活動しつつ品質とガ�
 1. **自然言語の禁止リスト全廃**:
    - 言い訳（「保守性向上」「テスト容易性」等の再フレーミング）によるすり抜けを防ぐため、細かな禁止構文の列挙を行いません。
 2. **機械的判定への完全オフロード (No machine gate, no trust)**:
-   - 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除などは CI / スクリプト (`scripts/verify-pr-gates.sh`) で物理的にブロックします。
+   - 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除、PR本文の Evidence 欠落などは CI / スクリプト (`scripts/verify-pr-gates.sh`) で物理的にブロックします。
 3. **客観的証拠の義務化 (No evidence, no PR)**:
    - 具体的な課題と客観的証拠（失敗テストログ、実測ベンチマーク、EXPLAIN QUERY PLAN 等）が示されない PR は作成しません。
 4. **「変更しないこと」の成功定義 (No actionable finding, stop)**:
