@@ -494,22 +494,38 @@ export class BackupService {
         }
       }
 
+      const CONCURRENCY_LIMIT = 25;
+      const photoArray = Array.from(uniquePhotosToRestore);
+
       // 1. Prepare rollback state: backup existing files that would be overwritten
-      for (const fileName of uniquePhotosToRestore) {
-        const destPath = `${targetDocDir}${fileName}`;
-        const destInfo = await getInfoAsync(destPath);
-        if (destInfo.exists) {
-          await copyAsync({
-            from: destPath,
-            to: `${rollbackDir}${fileName}`,
-          });
-          backedUpFiles.push(fileName);
-        } else {
-          newlyCreatedFiles.push(fileName);
+      for (let i = 0; i < photoArray.length; i += CONCURRENCY_LIMIT) {
+        const chunk = photoArray.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          chunk.map(async fileName => {
+            const destPath = `${targetDocDir}${fileName}`;
+            const destInfo = await getInfoAsync(destPath);
+            if (destInfo.exists) {
+              await copyAsync({
+                from: destPath,
+                to: `${rollbackDir}${fileName}`,
+              });
+              backedUpFiles.push(fileName);
+            } else {
+              newlyCreatedFiles.push(fileName);
+            }
+          })
+        );
+
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length > 0) {
+          // Re-throw the first error encountered in the chunk,
+          // ensuring all promises in this chunk have finished executing
+          throw (failures[0] as PromiseRejectedResult).reason;
         }
       }
 
       // 2. Copy all verified photos to documentDirectory (Fail-fast: no best-effort)
+      // Must remain sequential to guarantee fail-fast behavior without lingering background writes
       for (const fileName of uniquePhotosToRestore) {
         const sourcePath = `${stagingDir}photos/${fileName}`;
         const destPath = `${targetDocDir}${fileName}`;
