@@ -178,11 +178,25 @@ describe('BackupService', () => {
       expect(deleteAsync).toHaveBeenCalled();
     });
 
-    test('rejects exportBackup when getInfoAsync throws error', async () => {
-      (getInfoAsync as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+    test('rejects exportBackup and fails fast when getInfoAsync throws error', async () => {
+      // Create two meals with different photos
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
+        mockMealRows[0],
+        { ...mockMealRows[0], id: 'meal-2', photo_path: 'file:///mock-documents/meal-20260423-02.jpg' },
+      ]);
+
+      // Succeed for the first photo, fail for the second
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.includes('meal-20260422-01.jpg')) {
+          return Promise.resolve({ exists: true });
+        }
+        return Promise.reject(new Error('Permission denied'));
+      });
 
       await expect(BackupService.exportBackup()).rejects.toThrow('バックアップ対象の写真ファイルの読み取りに失敗しました。');
 
+      // Fails fast: copyAsync should only be called once (for the first photo) before throwing
+      expect(copyAsync).toHaveBeenCalledTimes(1);
       expect(zip).not.toHaveBeenCalled();
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
       expect(deleteAsync).toHaveBeenCalled();
