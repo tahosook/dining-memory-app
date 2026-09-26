@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Alert, BackHandler } from 'react-native';
-import { useFocusEffect, useNavigation, type NavigationProp } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { CameraView, PermissionResponse } from 'expo-camera';
 import { ROUTE_NAMES } from '../../constants/CameraConstants';
 import { MealService } from '../../database/services/MealService';
@@ -41,7 +42,7 @@ function shouldLogCaptureDiagnostics() {
  * Application層のビジネスロジックをカプセル化
  */
 export const useCameraCapture = (cameraPermission: PermissionResponse | null) => {
-  const navigation = useNavigation<NavigationProp<RootTabParamList>>();
+  const navigation = useNavigation<BottomTabNavigationProp<RootTabParamList>>();
   const cameraRef = useRef<CameraView>(null);
   const takingPhotoRef = useRef(false);
   const pickingPhotoFromLibraryRef = useRef(false);
