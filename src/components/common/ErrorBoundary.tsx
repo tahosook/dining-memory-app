@@ -23,7 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  componentDidCatch(error: Error, _errorInfo: ErrorInfo) {
     // SECURITY: Sanitize error logging to prevent leaking sensitive PII or tokens
     // that might be present in the raw error object or stack traces.
     // We only log safe fields (name, message).
