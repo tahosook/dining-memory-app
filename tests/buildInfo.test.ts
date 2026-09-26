@@ -46,29 +46,26 @@ jest.mock('expo-constants', () => {
   };
 });
 
-jest.mock('react-native', () => ({
-  Platform: {
-    OS: 'ios',
-  },
-}));
-
 describe('buildInfo utilities', () => {
   let originalExpoConfig: any;
   let originalPlatform: any;
   let originalSupportedExpoSdks: any;
   let originalExecutionEnvironment: any;
+  let originalOS: any;
 
   beforeEach(() => {
     originalExpoConfig = JSON.parse(JSON.stringify(mockExpoConfig));
     originalPlatform = JSON.parse(JSON.stringify(Constants.platform));
     originalSupportedExpoSdks = [...Constants.supportedExpoSdks!];
     originalExecutionEnvironment = Constants.executionEnvironment;
+    originalOS = Platform.OS;
+    Platform.OS = 'ios';
   });
 
   afterEach(() => {
     jest.clearAllMocks();
     Constants.executionEnvironment = originalExecutionEnvironment;
-    Platform.OS = 'ios';
+    Platform.OS = originalOS;
     Constants.platform = originalPlatform;
     Constants.supportedExpoSdks = originalSupportedExpoSdks;
 
