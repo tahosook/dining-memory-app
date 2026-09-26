@@ -19,10 +19,18 @@ import { getLocalAiRuntimeStatusSnapshot } from '../src/ai/runtime';
 import {
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
+  deleteMediaPipeModel,
   getMealInputAssistModelStatus,
+  getMediaPipeModelStatus,
   installMealInputAssistModel,
+  installMediaPipeModel,
   redownloadMealInputAssistModel,
+  redownloadMediaPipeModel,
 } from '../src/ai/mealInputAssist/modelInstaller';
+import {
+  MEDIAPIPE_MODEL_DISPLAY_NAME,
+  resolveMediaPipeModelPath,
+} from '../src/ai/mealInputAssist/modelConfig';
 
 let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
 
@@ -59,6 +67,10 @@ jest.mock('../src/ai/mealInputAssist/modelInstaller', () => ({
   installMealInputAssistModel: jest.fn(),
   redownloadMealInputAssistModel: jest.fn(),
   deleteMealInputAssistModel: jest.fn(),
+  getMediaPipeModelStatus: jest.fn(),
+  installMediaPipeModel: jest.fn(),
+  redownloadMediaPipeModel: jest.fn(),
+  deleteMediaPipeModel: jest.fn(),
 }));
 
 jest.mock('../src/utils/buildInfo', () => ({
@@ -102,6 +114,18 @@ function createModelStatus(kind: 'not_installed' | 'ready' | 'error') {
       modelExists: kind === 'ready',
       projectorExists: kind === 'ready',
     },
+  };
+}
+
+function createMediaPipeModelStatus(kind: 'not_installed' | 'ready' | 'error') {
+  return {
+    kind,
+    version: kind === 'not_installed' ? null : 'mediapipe-food-classifier-v1',
+    downloadedAt: kind === 'ready' ? 1713590400000 : null,
+    errorMessage: kind === 'error' ? 'MediaPipe model のダウンロードに失敗しました。' : null,
+    expectedPath:
+      resolveMediaPipeModelPath() ?? 'file:///documents/ai-models/meal-input-assist.task',
+    modelExists: kind === 'ready',
   };
 }
 
@@ -342,6 +366,10 @@ describe('SettingsScreen', () => {
     (redownloadMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (deleteMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (deleteAllDownloadedLocalAiModels as jest.Mock).mockResolvedValue(undefined);
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('not_installed'));
+    (installMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
+    (redownloadMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
+    (deleteMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
     (BackupService.exportBackup as jest.Mock).mockResolvedValue({
       zipFileName: 'backup.zip',
       mealCount: 5,
@@ -620,6 +648,160 @@ describe('SettingsScreen', () => {
     });
 
     expect(BackupService.restoreVerifiedBackup).not.toHaveBeenCalled();
+
+    alertSpy.mockRestore();
+  });
+
+  test('renders MediaPipe DEV section when __DEV__ is true', async () => {
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('not_installed'));
+
+    const { findByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByTestId('mediapipe-model-status-card')).toBeTruthy();
+    expect(await findByText('MediaPipe Meal Classifier')).toBeTruthy();
+    expect(await findByTestId('mediapipe-model-download-button')).toBeTruthy();
+  });
+
+  test('hides MediaPipe DEV section when __DEV__ is false', async () => {
+    const originalDev = (global as unknown as { __DEV__: boolean }).__DEV__;
+    (global as unknown as { __DEV__: boolean }).__DEV__ = false;
+
+    try {
+      const { queryByTestId, queryByText } = render(<SettingsScreen />);
+      await triggerLatestFocus();
+
+      expect(queryByTestId('mediapipe-model-status-card')).toBeNull();
+      expect(queryByText('MediaPipe Meal Classifier')).toBeNull();
+      expect(queryByTestId('mediapipe-model-download-button')).toBeNull();
+    } finally {
+      (global as unknown as { __DEV__: boolean }).__DEV__ = originalDev;
+    }
+  });
+
+  test('installs MediaPipe model when download button is pressed', async () => {
+    (getMediaPipeModelStatus as jest.Mock)
+      .mockResolvedValueOnce(createMediaPipeModelStatus('not_installed'))
+      .mockResolvedValueOnce(createMediaPipeModelStatus('ready'));
+
+    const { findByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    const downloadButton = await findByTestId('mediapipe-model-download-button');
+    fireEvent.press(downloadButton);
+
+    await waitFor(() => {
+      expect(installMediaPipeModel).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(getMediaPipeModelStatus).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  test('redownloads MediaPipe model when redownload button is pressed', async () => {
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('ready'));
+
+    const { findByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    const redownloadButton = await findByTestId('mediapipe-model-redownload-button');
+    fireEvent.press(redownloadButton);
+
+    await waitFor(() => {
+      expect(redownloadMediaPipeModel).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  test('deletes MediaPipe model when delete button is confirmed', async () => {
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('ready'));
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
+      if (title.includes(`${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除`)) {
+        const deleteButton = buttons?.find((b) => b.text === '削除する');
+        deleteButton?.onPress?.();
+      }
+    });
+
+    const { findByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    const deleteButton = await findByTestId('mediapipe-model-delete-button');
+    fireEvent.press(deleteButton);
+
+    await waitFor(() => {
+      expect(deleteMediaPipeModel).toHaveBeenCalledTimes(1);
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  test('displays error message and download button when MediaPipe model status is error', async () => {
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('error'));
+
+    const { findByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('MediaPipe model のダウンロードに失敗しました。')).toBeTruthy();
+    expect(await findByText('エラー')).toBeTruthy();
+    expect(await findByTestId('mediapipe-model-download-button')).toBeTruthy();
+  });
+
+  test('shows progress card during MediaPipe model download', async () => {
+    const deferred = createDeferred<void>();
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(
+      createMediaPipeModelStatus('not_installed')
+    );
+    (installMediaPipeModel as jest.Mock).mockImplementation(async (options) => {
+      options?.onProgress?.({
+        phase: 'verifying',
+        bytesWritten: 500,
+        bytesExpected: 1000,
+        progress: 0.5,
+      });
+      await deferred.promise;
+    });
+
+    const { findByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    const downloadButton = await findByTestId('mediapipe-model-download-button');
+    fireEvent.press(downloadButton);
+
+    expect(await findByTestId('mediapipe-download-progress')).toBeTruthy();
+    expect(await findByText('SHA256 ハッシュを検証しています...')).toBeTruthy();
+
+    await act(async () => {
+      deferred.resolve();
+      await Promise.resolve();
+    });
+  });
+
+  test('reloads MediaPipe model status when delete-all-downloaded-ai-models is confirmed', async () => {
+    (getMediaPipeModelStatus as jest.Mock)
+      .mockResolvedValueOnce(createMediaPipeModelStatus('ready'))
+      .mockResolvedValueOnce(createMediaPipeModelStatus('not_installed'));
+    (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(createModelStatus('ready'));
+    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue(createRuntimeStatus('ready'));
+
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
+      if (title === 'ダウンロード済みモデルを削除') {
+        const confirmButton = buttons?.find((b) => b.text === '削除する');
+        confirmButton?.onPress?.();
+      }
+    });
+
+    const { getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(getByTestId('delete-all-downloaded-ai-models-button'));
+
+    await waitFor(() => {
+      expect(deleteAllDownloadedLocalAiModels).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(getMediaPipeModelStatus).toHaveBeenCalledTimes(2);
+    });
 
     alertSpy.mockRestore();
   });
