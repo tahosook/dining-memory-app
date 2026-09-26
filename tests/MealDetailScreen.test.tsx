@@ -89,9 +89,14 @@ jest.mock('../src/utils/mealPhotoRotation', () => ({
   rotateMealPhotoClockwise: jest.fn(),
 }));
 
-jest.mock('../src/media/mealShare', () => ({
-  shareMealContent: jest.fn(),
-}));
+// Mock mealShare module globally to spy on it, but use actual implementation by default
+jest.mock('../src/media/mealShare', () => {
+  const actual = jest.requireActual('../src/media/mealShare');
+  return {
+    ...actual,
+    shareMealContent: jest.fn(actual.shareMealContent),
+  };
+});
 
 type MealDetailProps = NativeStackScreenProps<RootStackParamList, 'MealDetail'>;
 
@@ -173,6 +178,8 @@ function createProps(overrides: Partial<MealDetailProps> = {}): MealDetailProps 
   };
 }
 
+import { shareMealContent } from '../src/media/mealShare';
+
 describe('MealDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -187,6 +194,10 @@ describe('MealDetailScreen', () => {
     (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState());
     NativeModules.MealShare = undefined;
     Platform.OS = 'ios';
+
+    // Reset the mock implementation for shareMealContent to the actual one
+    const actualShareMealContent = jest.requireActual('../src/media/mealShare').shareMealContent;
+    (shareMealContent as jest.Mock).mockImplementation(actualShareMealContent);
   });
 
   afterEach(() => {
@@ -647,8 +658,8 @@ describe('MealDetailScreen', () => {
   });
 
   test('shows an alert when shareMealContent fails', async () => {
-    const { shareMealContent } = require('../src/media/mealShare');
-    (shareMealContent as jest.Mock).mockRejectedValueOnce(new Error('Share failed'));
+    const { shareMealContent: mockedShareMealContent } = require('../src/media/mealShare');
+    (mockedShareMealContent as jest.Mock).mockRejectedValueOnce(new Error('Share failed'));
 
     const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
 
