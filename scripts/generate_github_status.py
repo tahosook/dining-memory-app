@@ -189,20 +189,20 @@ def run_gh_command(args: list[str], repo_root: Path) -> list[dict[str, Any]]:
     return data
 
 
-def fetch_prs(repo_root: Path, local_only: bool) -> list[dict[str, Any]]:
+def fetch_prs(repo_root: Path, local_only: bool, limit: int = 100) -> list[dict[str, Any]]:
     if local_only:
         return []
     return run_gh_command(
-        ["pr", "list", "--state", "open", "--limit", "20", "--json", "number,title,author,headRefName,updatedAt"],
+        ["pr", "list", "--state", "open", "--limit", str(limit), "--json", "number,title,author,headRefName,updatedAt"],
         repo_root,
     )
 
 
-def fetch_issues(repo_root: Path, local_only: bool) -> list[dict[str, Any]]:
+def fetch_issues(repo_root: Path, local_only: bool, limit: int = 100) -> list[dict[str, Any]]:
     if local_only:
         return []
     return run_gh_command(
-        ["issue", "list", "--state", "open", "--limit", "30", "--json", "number,title,labels,body"],
+        ["issue", "list", "--state", "open", "--limit", str(limit), "--json", "number,title,labels,body"],
         repo_root,
     )
 
@@ -232,6 +232,8 @@ def generate_status_markdown(
     repo_root: Path,
     local_only: bool = False,
     now: datetime.datetime | None = None,
+    pr_limit: int = 100,
+    issue_limit: int = 100,
 ) -> str:
     if now is None:
         # JST (UTC+9)
@@ -245,8 +247,8 @@ def generate_status_markdown(
         d.github_issue_num: d for d in doc_issues if d.github_issue_num is not None
     }
 
-    prs = fetch_prs(repo_root, local_only)
-    gh_issues = fetch_issues(repo_root, local_only)
+    prs = fetch_prs(repo_root, local_only, limit=pr_limit)
+    gh_issues = fetch_issues(repo_root, local_only, limit=issue_limit)
 
     lines: list[str] = []
     lines.append("# Dining Memory App - Project & GitHub Status")
@@ -400,10 +402,27 @@ def main() -> int:
         default=None,
         help="Output file path (prints to stdout if not specified)",
     )
+    parser.add_argument(
+        "--pr-limit",
+        type=int,
+        default=100,
+        help="Maximum number of open PRs to fetch (default: 100)",
+    )
+    parser.add_argument(
+        "--issue-limit",
+        type=int,
+        default=100,
+        help="Maximum number of open Issues to fetch (default: 100)",
+    )
 
     args = parser.parse_args()
     try:
-        md_content = generate_status_markdown(args.repo_root, local_only=args.local_only)
+        md_content = generate_status_markdown(
+            args.repo_root,
+            local_only=args.local_only,
+            pr_limit=args.pr_limit,
+            issue_limit=args.issue_limit,
+        )
     except GitHubCliError as err:
         print(f"[ERROR] Failed to generate status from GitHub CLI:\n{err}", file=sys.stderr)
         return 1
