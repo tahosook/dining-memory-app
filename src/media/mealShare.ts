@@ -12,12 +12,7 @@ export interface MealShareOptions {
 }
 
 export type StorageLocationType =
-  | 'cache'
-  | 'document'
-  | 'mediaStore'
-  | 'external'
-  | 'unknown'
-  | 'none';
+  'cache' | 'document' | 'mediaStore' | 'external' | 'unknown' | 'none';
 
 export interface MealShareDebugInfo {
   platform: string;

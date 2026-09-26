@@ -8,8 +8,7 @@ declare module 'expo-image-picker' {
   };
 
   export type ImagePickerResult =
-    | { canceled: true; assets: [] }
-    | { canceled: false; assets: ImagePickerAsset[] };
+    { canceled: true; assets: [] } | { canceled: false; assets: ImagePickerAsset[] };
 
   export function launchImageLibraryAsync(options: {
     mediaTypes: string[];

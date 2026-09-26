@@ -7,8 +7,7 @@ export type MealInputAssistPrewarmStatus = 'idle' | 'running' | 'success' | 'err
 export type MealInputAssistField = 'mealName' | 'cuisineType' | 'notes';
 
 export type MealInputAssistAvailability =
-  | { kind: 'enabled' }
-  | { kind: 'disabled'; reason: string };
+  { kind: 'enabled' } | { kind: 'disabled'; reason: string };
 
 export interface MealInputAssistRequest {
   photoUri: string;
@@ -147,10 +146,7 @@ export interface MediaPipeModelInstallerOptions {
 }
 
 export type MealInputAssistProviderMode =
-  | 'mock'
-  | 'local-runtime-prototype'
-  | 'mediapipe-static-image'
-  | 'override';
+  'mock' | 'local-runtime-prototype' | 'mediapipe-static-image' | 'override';
 
 export type MealInputAssistRuntimeUnavailableCode = AiRuntimeUnavailableCode;
 
