@@ -40,11 +40,11 @@ import {
 } from '../../ai/mealInputAssist/modelInstaller';
 import {
   getLocalAiRuntimeStatusSnapshot,
-  type LocalAiRuntimeStatusEntry,
   type LocalAiRuntimeStatusSnapshot,
 } from '../../ai/runtime';
 import { Colors } from '../../constants/Colors';
 import { MealService } from '../../database/services/MealService';
+import { RuntimeStatusCard } from '../../components/screens/SettingsScreen/RuntimeStatusCard';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
 import { BackupService } from '../../database/services/BackupService';
 
@@ -1043,44 +1043,6 @@ function ModelStatusCard({
   );
 }
 
-function RuntimeStatusCard({
-  title,
-  entry,
-  testID,
-}: {
-  title: string;
-  entry: LocalAiRuntimeStatusEntry;
-  testID: string;
-}) {
-  return (
-    <View style={styles.runtimeStatusCard} testID={testID}>
-      <View style={styles.runtimeStatusHeader}>
-        <Text style={styles.disabledLabel}>{title}</Text>
-        <View
-          style={[
-            styles.runtimeStatusBadge,
-            entry.kind === 'ready'
-              ? styles.runtimeStatusBadgeReady
-              : styles.runtimeStatusBadgeUnavailable,
-          ]}
-        >
-          <Text style={styles.runtimeStatusBadgeText}>
-            {entry.kind === 'ready' ? 'Ready' : 'Unavailable'}
-          </Text>
-        </View>
-      </View>
-      <Text style={styles.runtimeStatusReason}>{entry.reason}</Text>
-      <Text style={styles.runtimeStatusMode}>Mode: {entry.mode}</Text>
-      <Text style={styles.runtimeStatusPathsLabel}>Expected paths</Text>
-      {entry.expectedPaths.map(path => (
-        <Text key={path} style={styles.runtimeStatusPath}>
-          {path}
-        </Text>
-      ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -1146,8 +1108,8 @@ const styles = StyleSheet.create({
   },
   disabledLabel: {
     fontSize: 15,
-    color: Colors.text,
     fontWeight: '600',
+    color: Colors.text,
   },
   runtimeStatusCard: {
     borderWidth: StyleSheet.hairlineWidth,
