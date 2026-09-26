@@ -5,10 +5,10 @@ AI エージェントがこの repo で自律的に活動しつつ品質とガ�
 詳細な意思決定ポリシーは [.jules/rules.md](.jules/rules.md) および [docs/engineering/context-map.md](docs/engineering/context-map.md) を参照してください。
 
 ## Core Principles (Non-negotiable)
-1. **自然言語の禁止リスト全廃**:
-   - 言い訳（「保守性向上」「テスト容易性」等の再フレーミング）によるすり抜けを防ぐため、細かな禁止構文の列挙を行いません。
+1. **自然言語の禁止リスト依存からの脱却 (Prompt Firewall からの脱却)**:
+   - 言い訳（「保守性向上」「テスト容易性」等の再フレーミング）によるすり抜けを防ぐため、細かな禁止構文の列挙でエージェントを縛るアプローチを廃止し、機械的判定（Machine Gate）と客観的証拠（Evidence）の2軸で強制します。
 2. **機械的判定への完全オフロード (No machine gate, no trust)**:
-   - 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除、PR本文の Evidence 欠落などは CI / スクリプト (`scripts/verify-pr-gates.sh`) で物理的にブロックします。
+   - 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除・弱体化、PR本文の Evidence 欠落などは CI / スクリプト (`scripts/verify-pr-gates.sh`) で物理的にブロックします。
 3. **客観的証拠の義務化 (No evidence, no PR)**:
    - 具体的な課題と客観的証拠（失敗テストログ、実測ベンチマーク、EXPLAIN QUERY PLAN 等）が示されない PR は作成しません。
 4. **「変更しないこと」の成功定義 (No actionable finding, stop)**:

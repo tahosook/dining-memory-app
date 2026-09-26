@@ -80,5 +80,59 @@ echo -n "Test 8: Valid PR body via PR_BODY env -> "
 output=$(PR_BODY="$full_valid_body" bash "$GATE_SCRIPT" "HEAD~1...HEAD" 2>&1) || { echo "FAILED"; echo "$output"; exit 1; }
 echo "PASS"
 
-echo "=== All 8 gate tests PASSED successfully ==="
+# 9. 見出し柔軟性 (## 見出し、ナンバリング付き、英語単体) -> PASS
+echo -n "Test 9: Heading flexibility (##, numbered, English) -> "
+h2_body=$(printf "## 具体的な問題 (Problem)\nIssue\n\n## 客観的証拠 (Evidence)\nBenchmark ok\n\n## 期待される効果 (Expected Impact)\nFaster\n\n## 意図して変更しなかったこと (Out of Scope)\nNone")
+output=$(bash "$GATE_SCRIPT" "HEAD~1...HEAD" --pr-body "$h2_body" 2>&1) || { echo "FAILED (H2)"; echo "$output"; exit 1; }
+
+numbered_body=$(printf "### 1. 具体的な問題 (Problem)\nIssue\n\n### 2. 客観的証拠 (Evidence)\nBenchmark ok\n\n### 3. 期待される効果 (Expected Impact)\nFaster\n\n### 4. 意図して変更しなかったこと (Out of Scope)\nNone")
+output=$(bash "$GATE_SCRIPT" "HEAD~1...HEAD" --pr-body "$numbered_body" 2>&1) || { echo "FAILED (numbered)"; echo "$output"; exit 1; }
+
+english_body=$(printf "### Problem\nIssue\n\n### Evidence\nBenchmark ok\n\n### Expected Impact\nFaster\n\n### Out of Scope\nNone")
+output=$(bash "$GATE_SCRIPT" "HEAD~1...HEAD" --pr-body "$english_body" 2>&1) || { echo "FAILED (English)"; echo "$output"; exit 1; }
+echo "PASS"
+
+# 10. any 拡張検知 (any[], Array<any>, Promise<any>, Record<..., any>, <any>)
+echo -n "Test 10: Extended 'any' patterns detection -> "
+TEST_TMP_DIR="$ROOT_DIR/node_modules/.cache/test-verify-pr-gates-sh-repo"
+rm -rf "$TEST_TMP_DIR"
+mkdir -p "$TEST_TMP_DIR"
+git -C "$TEST_TMP_DIR" init -b main >/dev/null 2>&1
+git -C "$TEST_TMP_DIR" config user.name "Tester"
+git -C "$TEST_TMP_DIR" config user.email "tester@example.com"
+echo "export const x = 1;" > "$TEST_TMP_DIR/a.ts"
+git -C "$TEST_TMP_DIR" add .
+git -C "$TEST_TMP_DIR" commit -m "init" >/dev/null 2>&1
+
+for any_code in "export const b: any[] = [];" "export const c: Array<any> = [];" "export async function d(): Promise<any> {}" "export const e: Record<string, any> = {};" "export const f = <any>1;"; do
+  echo "$any_code" >> "$TEST_TMP_DIR/a.ts"
+  git -C "$TEST_TMP_DIR" add .
+  git -C "$TEST_TMP_DIR" commit -m "add any" >/dev/null 2>&1
+  if (cd "$TEST_TMP_DIR" && bash "$GATE_SCRIPT" "HEAD~1...HEAD" --pr-body "$full_valid_body" >/dev/null 2>&1); then
+    echo "FAILED to block: $any_code"; exit 1
+  fi
+  git -C "$TEST_TMP_DIR" reset --hard HEAD~1 >/dev/null 2>&1
+done
+echo "PASS"
+
+# 11. テスト弱体化検知 (it.skip, test.skip, describe.skip, xit, xdescribe)
+echo -n "Test 11: Test weakening detection (skip / xit) -> "
+mkdir -p "$TEST_TMP_DIR/tests"
+echo "test('initial', () => {});" > "$TEST_TMP_DIR/tests/sample.test.ts"
+git -C "$TEST_TMP_DIR" add .
+git -C "$TEST_TMP_DIR" commit -m "add test" >/dev/null 2>&1
+
+for skip_code in "it.skip('t', () => {});" "test.skip('t', () => {});" "describe.skip('s', () => {});" "xit('t', () => {});" "xdescribe('s', () => {});"; do
+  echo "$skip_code" >> "$TEST_TMP_DIR/tests/sample.test.ts"
+  git -C "$TEST_TMP_DIR" add .
+  git -C "$TEST_TMP_DIR" commit -m "add skip" >/dev/null 2>&1
+  if (cd "$TEST_TMP_DIR" && bash "$GATE_SCRIPT" "HEAD~1...HEAD" --pr-body "$full_valid_body" >/dev/null 2>&1); then
+    echo "FAILED to block test weakening: $skip_code"; exit 1
+  fi
+  git -C "$TEST_TMP_DIR" reset --hard HEAD~1 >/dev/null 2>&1
+done
+rm -rf "$TEST_TMP_DIR"
+echo "PASS"
+
+echo "=== All 11 gate tests PASSED successfully ==="
 exit 0

@@ -6,9 +6,9 @@ set -euo pipefail
 #
 # Machine-enforced PR quality and governance gates:
 # 1. Zero diff check: Blocks empty PRs (No actionable finding, stop without PR).
-# 2. New 'any' check: Blocks additions of ': any' or 'as any' in code files.
+# 2. New 'any' check: Blocks additions of ': any', 'as any', 'any[]', 'Array<any>', etc.
 # 3. Escape hatches check: Blocks additions of '@ts-ignore', '@ts-nocheck', 'eslint-disable'.
-# 4. Test deletion check: Blocks deletion of test files under tests/.
+# 4. Test protection check: Blocks deletion of test files and introduction of skipped tests.
 # 5. PR body Evidence Gate: Validates mandatory sections and non-empty Evidence in PR body.
 # -----------------------------------------------------------------------------
 
@@ -59,14 +59,15 @@ echo "  ✓ Non-zero diff verified."
 
 # 2. New 'any' / type assertion check
 # Restrict to code files (*.ts, *.tsx, *.js, *.jsx) to allow documentation references.
+# Blocks: ': any', 'as any', 'any[]', 'Array<any>', 'Promise<any>', 'Record<..., any>', '<any>'
 NEW_ANY_MATCHES=$(git diff -U0 "$TARGET_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null \
   | grep '^\+[^+]' \
-  | grep -E '(\bas\s+any\b|:\s*any\b)' || true)
+  | grep -E '(\bas\s+any\b|:\s*any\b|\bany\[\]|\bArray<any>|\bPromise<any>|\bRecord<[^>]*,\s*any>|<any>|<[^>]*[,\s]any[,\s>])' || true)
 
 if [ -n "$NEW_ANY_MATCHES" ]; then
-  echo "❌ [GATE FAIL] New 'any' type annotation or cast detected:"
+  echo "❌ [GATE FAIL] New 'any' type annotation, generic, array, or cast detected:"
   echo "$NEW_ANY_MATCHES"
-  echo "   Core Principle: Machine-enforced typing. Adding ': any' or 'as any' is blocked."
+  echo "   Core Principle: Machine-enforced typing. Introducing 'any' types is blocked."
   exit 1
 fi
 echo "  ✓ No new 'any' types introduced."
@@ -84,7 +85,8 @@ if [ -n "$ESCAPE_HATCH_MATCHES" ]; then
 fi
 echo "  ✓ No escape hatches introduced."
 
-# 4. Test deletion check
+# 4. Test protection check
+# 4a. Deletion check
 DELETED_TESTS=$(git diff --name-only --diff-filter=D "$TARGET_REF" -- 'tests/*' 2>/dev/null || true)
 
 if [ -n "$DELETED_TESTS" ]; then
@@ -94,6 +96,19 @@ if [ -n "$DELETED_TESTS" ]; then
   exit 1
 fi
 echo "  ✓ No test files deleted."
+
+# 4b. Test weakening check (blocks it.skip, test.skip, describe.skip, xit, xdescribe)
+TEST_WEAKENING_MATCHES=$(git diff -U0 "$TARGET_REF" -- 'tests/*' 2>/dev/null \
+  | grep '^\+[^+]' \
+  | grep -E '(\b(it|test|describe)\.skip\b|\b(xit|xdescribe)\s*\()' || true)
+
+if [ -n "$TEST_WEAKENING_MATCHES" ]; then
+  echo "❌ [GATE FAIL] Test skipping / weakening detected in tests/:"
+  echo "$TEST_WEAKENING_MATCHES"
+  echo "   Core Principle: Machine-enforced test integrity. Adding it.skip, test.skip, describe.skip, xit, or xdescribe is blocked."
+  exit 1
+fi
+echo "  ✓ No skipped or weakened tests introduced."
 
 # 5. PR body Evidence Gate
 # Resolve PR body from stdin, file, environment, or GitHub Actions event file if not explicitly passed
@@ -117,11 +132,12 @@ if [ -n "$PR_BODY_INPUT" ]; then
   node -e '
     const body = process.argv[1] || "";
 
+    // Flexible section matching (level 2 or 3 headings, optional numbering, Japanese and English labels)
     const requiredSections = [
-      { id: "problem", label: "### 具体的な問題 (Problem)", pattern: /###\s*(?:具体的な問題\s*\(Problem\)|Problem\b)/i },
-      { id: "evidence", label: "### 客観的証拠 (Evidence)", pattern: /###\s*(?:客観的証拠\s*\(Evidence\)|Evidence\b)/i },
-      { id: "expected_impact", label: "### 期待される効果 (Expected Impact)", pattern: /###\s*(?:期待される効果\s*\(Expected Impact\)|Expected Impact\b)/i },
-      { id: "out_of_scope", label: "### 意図して変更しなかったこと (Out of Scope)", pattern: /###\s*(?:意図して変更しなかったこと\s*\(Out of Scope\)|Out of Scope\b)/i },
+      { id: "problem", label: "### 具体的な問題 (Problem)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?具体的な問題\s*\(Problem\)|Problem\b)/i },
+      { id: "evidence", label: "### 客観的証拠 (Evidence)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?客観的証拠\s*\(Evidence\)|Evidence\b)/i },
+      { id: "expected_impact", label: "### 期待される効果 (Expected Impact)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?期待される効果\s*\(Expected Impact\)|Expected Impact\b)/i },
+      { id: "out_of_scope", label: "### 意図して変更しなかったこと (Out of Scope)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?意図して変更しなかったこと\s*\(Out of Scope\)|Out of Scope\b)/i },
     ];
 
     const missing = [];
@@ -139,7 +155,7 @@ if [ -n "$PR_BODY_INPUT" ]; then
     }
 
     // Extract Evidence section content up to the next heading or horizontal rule
-    const evidenceMatch = body.match(/(?:^|\n)###\s*(?:客観的証拠\s*\(Evidence\)|Evidence\b)[^\n]*\n([\s\S]*?)(?=(?:\n###?\s+|\n---|$(?![\s\S])))/i);
+    const evidenceMatch = body.match(/(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?客観的証拠\s*\(Evidence\)|Evidence\b)[^\n]*\n([\s\S]*?)(?=(?:\n#{2,3}\s+|\n---|$(?![\s\S])))/i);
     const rawEvidence = evidenceMatch ? evidenceMatch[1] : "";
 
     // Strip HTML comments <!-- ... -->

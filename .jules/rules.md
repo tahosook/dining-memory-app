@@ -25,7 +25,7 @@ PR を起票する前に、以下の全項目を満たしていることを確�
 ## Machine Gates
 本リポジトリでは以下の違反を CI および `scripts/verify-pr-gates.sh` により機械的・物理的に遮断する:
 1. 差分ゼロの PR
-2. 新規 `any` 型注釈および型アサーション (`: any`, `as any`)
+2. 新規 `any` 型注釈・複合型・型アサーション (`: any`, `as any`, `any[]`, `Array<any>`, `Promise<any>`, `Record<..., any>`, `<any>`)
 3. エスケープハッチの追加 (`@ts-ignore`, `@ts-nocheck`, `eslint-disable`)
-4. `tests/` 配下のテストファイル削除
+4. `tests/` 配下のテストファイル削除およびテスト弱体化 (`it.skip`, `test.skip`, `describe.skip`, `xit`, `xdescribe`)
 5. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence（Feature/Spec PR は仕様・Issue 参照で可）
