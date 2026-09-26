@@ -1011,6 +1011,86 @@ describe('BackupService', () => {
         '写真のロールバック復元にも一部失敗しました'
       );
     });
+
+    test('increments rollbackFailedCount for both new file deletion and backed-up file copy failures', async () => {
+      const validationResult = {
+        valid: true,
+        stagingDirectory: 'file:///mock-cache/dm-import-123/',
+        meals: [
+          {
+            id: 'meal-1',
+            uuid: 'uuid-1',
+            meal_name: '既存上書き写真の食事',
+            photo_file_name: 'existing-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713800000000,
+            created_at: 1713800000000,
+            updated_at: 1713800000000,
+          },
+          {
+            id: 'meal-2',
+            uuid: 'uuid-2',
+            meal_name: '新規写真の食事',
+            photo_file_name: 'new-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713900000000,
+            created_at: 1713900000000,
+            updated_at: 1713900000000,
+          },
+        ],
+      };
+
+      let newPhotoCopied = false;
+      (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
+        // Forward copy: copy new-photo.jpg to document directory
+        if (options.to === 'file:///mock-documents/new-photo.jpg') {
+          newPhotoCopied = true;
+          return Promise.resolve(undefined);
+        }
+
+        // Forward copy: copy existing-photo.jpg to document directory
+        if (options.to === 'file:///mock-documents/existing-photo.jpg') {
+          return Promise.resolve(undefined);
+        }
+
+        // Rollback copy: restoring existing-photo.jpg from rollback directory to mock-documents
+        if (options.from.includes('/dm-restore-rollback-')) {
+          return Promise.reject(new Error('Rollback copy failed'));
+        }
+
+        // Initial copy to rollback dir
+        if (options.to.includes('/dm-restore-rollback-')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.resolve(undefined);
+      });
+
+      (deleteAsync as jest.Mock).mockImplementation((path: string, _options: any) => {
+        // Rollback delete: deleting new-photo.jpg from document directory
+        if (path === 'file:///mock-documents/new-photo.jpg') {
+          return Promise.reject(new Error('Rollback delete failed'));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path === 'file:///mock-documents/existing-photo.jpg') {
+          return Promise.resolve({ exists: true });
+        }
+        if (path === 'file:///mock-documents/new-photo.jpg') {
+          return Promise.resolve({ exists: newPhotoCopied });
+        }
+        return Promise.resolve({ exists: true });
+      });
+
+      (replaceDatabaseWithBackup as jest.Mock).mockRejectedValue(new Error('Trigger rollback'));
+
+      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow(
+        'Trigger rollback（写真のロールバック復元にも一部失敗しました）'
+      );
+    });
   });
 
   describe('cleanupStaging', () => {
