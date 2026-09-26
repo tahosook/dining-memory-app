@@ -1,8 +1,4 @@
-## 2026-09-20 - Insecure Randomness usage in IDs and Suffixes
-**Vulnerability:** The application used `Math.random()` to generate IDs, temporary file suffixes, and fallback suffixes.
-**Learning:** `Math.random()` is not a cryptographically secure random number generator (CSPRNG). Using it for unique identifiers or tokens can lead to predictable values and potential collisions or token guessing attacks.
-**Prevention:** Always use a CSPRNG such as `expo-crypto`'s `randomUUID` or `getRandomValues` for generating unique identifiers, tokens, and file suffixes.
-## 2026-09-24 - Error Stack Trace Leaks
-**Vulnerability:** Leaking internal application stack traces in production error logs (`src/media/mealShare.ts`).
-**Learning:** Returning `error.stack` from caught errors explicitly exposes sensitive internal execution paths or system structures, violating the principle of failing securely.
-**Prevention:** Avoid passing or returning `error.stack` in logs or API responses, only log standardized error messages instead.
+## 2025-02-26 - Eliminate SQL Injection vulnerability in dynamic WHERE clauses
+**Vulnerability:** Dynamic string concatenation of `WHERE` clauses (e.g. `query + ' WHERE ' + conditions.join(' AND ')`) allowed potentially uncontrolled inputs to manipulate query structure, increasing the risk of SQL injection despite values mostly being parameterized.
+**Learning:** Even when developers intend to parameterize variables, constructing query strings by joining dynamic arrays using `conditions.join()` leaves an opening for injection or SAST (Static Application Security Testing) tool flagging.
+**Prevention:** Construct fully static SQL strings with strict parameterization. Handle optional parameters natively in SQLite utilizing short-circuit conditional evaluation like `(? IS NULL OR column = ?)`, keeping the query completely immutable in the code.

@@ -212,76 +212,74 @@ export class MealService {
     if (isUsingNativeDatabase()) {
       const db = getDatabase();
       if (db) {
-        const conditions: string[] = ['is_deleted = 0'];
-        const params: (string | number)[] = [];
 
-        if (filters.dateFrom) {
-          conditions.push('meal_datetime >= ?');
-          params.push(filters.dateFrom.getTime());
-        }
-        if (filters.dateTo) {
-          conditions.push('meal_datetime <= ?');
-          params.push(filters.dateTo.getTime());
-        }
-        if (filters.cuisine_type) {
-          conditions.push('cuisine_type = ?');
-          params.push(filters.cuisine_type);
-        }
-        if (typeof filters.is_homemade === 'boolean') {
-          conditions.push('is_homemade = ?');
-          params.push(filters.is_homemade ? 1 : 0);
-        }
+        const params: (string | number | null)[] = [];
 
-        let targetCookingLevel: CookingLevel | undefined;
+        // dateFrom
+        params.push(filters.dateFrom ? 1 : null, filters.dateFrom ? filters.dateFrom.getTime() : null);
+
+        // dateTo
+        params.push(filters.dateTo ? 1 : null, filters.dateTo ? filters.dateTo.getTime() : null);
+
+        // cuisine_type
+        params.push(filters.cuisine_type || null, filters.cuisine_type || null);
+
+        // is_homemade
+        const hasHomemade = typeof filters.is_homemade === 'boolean';
+        params.push(hasHomemade ? 1 : null, hasHomemade ? (filters.is_homemade ? 1 : 0) : null);
+
+        // cooking_level
+        let hasCookingLevel = 0;
+        let v1 = '', v2 = '';
         if (filters.cooking_level) {
-          targetCookingLevel = normalizeCookingLevel(filters.cooking_level);
+          const targetCookingLevel = normalizeCookingLevel(filters.cooking_level);
           if (targetCookingLevel) {
+            hasCookingLevel = 1;
             const variants = COOKING_LEVEL_VARIANTS[targetCookingLevel];
-            conditions.push(`cooking_level IN (${variants.map(() => '?').join(', ')})`);
-            params.push(...variants);
+            v1 = variants[0];
+            v2 = variants[1] || variants[0];
           } else {
-            conditions.push('1 = 0');
+            hasCookingLevel = -1;
           }
         }
+        params.push(hasCookingLevel === 1 ? 1 : null, v1, v2, hasCookingLevel === -1 ? 1 : null);
 
+        // location_name
         const locationQuery = filters.location_name?.trim();
-        if (locationQuery) {
-          conditions.push("location_name LIKE ? ESCAPE '\\'");
-          params.push(`%${escapeSqliteLike(locationQuery)}%`);
-        }
+        params.push(locationQuery ? 1 : null, locationQuery ? `%${escapeSqliteLike(locationQuery)}%` : null);
 
+        // text
         const textQuery = filters.text?.trim();
-        if (textQuery) {
-          const escapedTextPattern = `%${escapeSqliteLike(textQuery)}%`;
-          conditions.push(
-            "(search_text LIKE ? ESCAPE '\\' OR meal_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\')"
-          );
-          params.push(
-            escapedTextPattern,
-            escapedTextPattern,
-            escapedTextPattern,
-            escapedTextPattern
-          );
-        }
+        const escapedTextPattern = textQuery ? `%${escapeSqliteLike(textQuery)}%` : null;
+        params.push(
+          textQuery ? 1 : null,
+          escapedTextPattern,
+          escapedTextPattern,
+          escapedTextPattern,
+          escapedTextPattern
+        );
 
-        const whereClause = conditions.join(' AND ');
-        let query = `SELECT * FROM meals WHERE ${whereClause} ORDER BY meal_datetime DESC`;
-        // NOTE: 目前はシングルユーザー・ローカルDB前提のためシンプルな LIMIT / OFFSET 方式を採用しています。
-        // 将来的にバックグラウンド同期や大量データ下での高速カーソル走査が必要になった場合は、
-        // (meal_datetime, id) を用いた keyset pagination への移行を検討してください。
-        if (typeof filters.limit === 'number') {
-          query += ' LIMIT ?';
-          params.push(filters.limit);
-          if (typeof filters.offset === 'number' && filters.offset > 0) {
-            query += ' OFFSET ?';
-            params.push(filters.offset);
-          }
-        } else if (typeof filters.offset === 'number' && filters.offset > 0) {
-          query += ' LIMIT -1 OFFSET ?';
-          params.push(filters.offset);
-        }
+        // limit & offset
+        const limit = typeof filters.limit === 'number' ? filters.limit : -1;
+        const offset = typeof filters.offset === 'number' && filters.offset > 0 ? filters.offset : 0;
+        params.push(limit, offset);
 
-        const rows = await db.getAllAsync<PersistedMealRow>(query, ...params);
+        const query = `
+          SELECT * FROM meals
+          WHERE is_deleted = 0
+            AND (? IS NULL OR meal_datetime >= ?)
+            AND (? IS NULL OR meal_datetime <= ?)
+            AND (? IS NULL OR cuisine_type = ?)
+            AND (? IS NULL OR is_homemade = ?)
+            AND (? IS NULL OR cooking_level IN (?, ?))
+            AND (? IS NULL OR 1 = 0)
+            AND (? IS NULL OR location_name LIKE ? ESCAPE '\\')
+            AND (? IS NULL OR (search_text LIKE ? ESCAPE '\\' OR meal_name LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\'))
+          ORDER BY meal_datetime DESC
+          LIMIT ? OFFSET ?
+        `;
+
+        const rows = await db.getAllAsync<PersistedMealRow>(query, ...(params as any));
         return rows.map(mapRowToMeal);
       }
     }
@@ -334,28 +332,36 @@ export class MealService {
     if (isUsingNativeDatabase()) {
       const db = getDatabase();
       if (db) {
-        const conditions = ['is_deleted = 0'];
-        const params: (string | number)[] = [];
 
-        if (typeof beforeMealDatetime === 'number') {
-          if (beforeId) {
-            conditions.push('(meal_datetime < ? OR (meal_datetime = ? AND id < ?))');
-            params.push(beforeMealDatetime, beforeMealDatetime, beforeId);
-          } else {
-            conditions.push('meal_datetime < ?');
-            params.push(beforeMealDatetime);
-          }
-        }
+        const params: (string | number | null)[] = [];
+        const hasDatetime = typeof beforeMealDatetime === 'number';
+        const hasId = !!beforeId;
 
-        let query = `SELECT * FROM meals WHERE ${conditions.join(' AND ')} ORDER BY meal_datetime DESC, id DESC LIMIT ?`;
-        params.push(limit);
+        params.push(
+          hasDatetime ? 1 : null,
+          hasDatetime && hasId ? 1 : null,
+          hasDatetime ? beforeMealDatetime : null,
+          hasDatetime ? beforeMealDatetime : null,
+          hasId ? beforeId : null,
+          hasDatetime && !hasId ? 1 : null,
+          hasDatetime ? beforeMealDatetime : null
+        );
 
-        if (offset > 0) {
-          query += ' OFFSET ?';
-          params.push(offset);
-        }
+        params.push(limit, offset > 0 ? offset : 0);
 
-        const rows = await db.getAllAsync<PersistedMealRow>(query, ...params);
+        const query = `
+          SELECT * FROM meals
+          WHERE is_deleted = 0
+            AND (? IS NULL OR (
+              (? IS NOT NULL AND (meal_datetime < ? OR (meal_datetime = ? AND id < ?)))
+              OR
+              (? IS NOT NULL AND meal_datetime < ?)
+            ))
+          ORDER BY meal_datetime DESC, id DESC
+          LIMIT ? OFFSET ?
+        `;
+
+        const rows = await db.getAllAsync<PersistedMealRow>(query, ...(params as any));
         return rows.map(mapRowToMeal);
       }
     }
@@ -479,33 +485,27 @@ export class MealService {
     if (isUsingNativeDatabase()) {
       const db = getDatabase();
       if (db) {
-        const conditions: string[] = ['is_deleted = 0'];
-        const params: number[] = [];
 
-        if (options.dateFrom) {
-          conditions.push('meal_datetime >= ?');
-          params.push(options.dateFrom.getTime());
-        }
-        if (options.dateTo) {
-          conditions.push('meal_datetime <= ?');
-          params.push(options.dateTo.getTime());
-        }
+        const params: (string | number | null)[] = [];
 
-        const whereClause = conditions.join(' AND ');
+        params.push(
+          options.dateFrom ? 1 : null, options.dateFrom ? options.dateFrom.getTime() : null,
+          options.dateTo ? 1 : null, options.dateTo ? options.dateTo.getTime() : null
+        );
 
         const summaryRow = await db.getFirstAsync<{ total: number; homemade: number | null }>(
-          `SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE ${whereClause}`,
-          ...params
+          `SELECT COUNT(*) AS total, SUM(CASE WHEN is_homemade = 1 THEN 1 ELSE 0 END) AS homemade FROM meals WHERE is_deleted = 0 AND (? IS NULL OR meal_datetime >= ?) AND (? IS NULL OR meal_datetime <= ?)`,
+          ...(params as any)
         );
 
         const cuisineRows = await db.getAllAsync<{ label: string; count: number }>(
-          `SELECT TRIM(cuisine_type) AS label, COUNT(*) AS count FROM meals WHERE ${whereClause} AND cuisine_type IS NOT NULL AND TRIM(cuisine_type) != '' GROUP BY TRIM(cuisine_type) ORDER BY count DESC`,
-          ...params
+          `SELECT TRIM(cuisine_type) AS label, COUNT(*) AS count FROM meals WHERE is_deleted = 0 AND (? IS NULL OR meal_datetime >= ?) AND (? IS NULL OR meal_datetime <= ?) AND cuisine_type IS NOT NULL AND TRIM(cuisine_type) != '' GROUP BY TRIM(cuisine_type) ORDER BY count DESC`,
+          ...(params as any)
         );
 
         const locationRows = await db.getAllAsync<{ label: string; count: number }>(
-          `SELECT TRIM(location_name) AS label, COUNT(*) AS count FROM meals WHERE ${whereClause} AND location_name IS NOT NULL AND TRIM(location_name) != '' GROUP BY TRIM(location_name) ORDER BY count DESC`,
-          ...params
+          `SELECT TRIM(location_name) AS label, COUNT(*) AS count FROM meals WHERE is_deleted = 0 AND (? IS NULL OR meal_datetime >= ?) AND (? IS NULL OR meal_datetime <= ?) AND location_name IS NOT NULL AND TRIM(location_name) != '' GROUP BY TRIM(location_name) ORDER BY count DESC`,
+          ...(params as any)
         );
 
         const totalMeals = Number(summaryRow?.total ?? 0);
