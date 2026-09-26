@@ -134,27 +134,47 @@ function formatDateLabel(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+/**
+ * Groups records into date sections using a single O(N) pass.
+ * @param records Pre-sorted array of meals by meal_datetime DESC (guaranteed by MealService).
+ */
 function groupMealsByDate(records: Meal[]): MealSection[] {
-  const groups: Record<string, Meal[]> = {};
+  // Optimization: Leverage the fact that records are already sorted by meal_datetime DESC from the database.
+  // This allows us to group items in a single O(N) pass without any O(N log N) sorting.
+  const sections: MealSection[] = [];
 
-  records.forEach(meal => {
+  if (records.length === 0) {
+    return sections;
+  }
+
+  let currentDateKey = getLocalDateKey(new Date(records[0].meal_datetime));
+  let currentGroup: Meal[] = [records[0]];
+
+  for (let i = 1; i < records.length; i++) {
+    const meal = records[i];
     const dateKey = getLocalDateKey(new Date(meal.meal_datetime));
-    if (!groups[dateKey]) {
-      groups[dateKey] = [];
+
+    if (dateKey !== currentDateKey) {
+      sections.push({
+        date: currentDateKey,
+        dateLabel: formatDateLabel(new Date(currentGroup[0].meal_datetime)),
+        data: currentGroup,
+      });
+      currentDateKey = dateKey;
+      currentGroup = [meal];
+    } else {
+      currentGroup.push(meal);
     }
-    groups[dateKey].push(meal);
+  }
+
+  // Push the final group
+  sections.push({
+    date: currentDateKey,
+    dateLabel: formatDateLabel(new Date(currentGroup[0].meal_datetime)),
+    data: currentGroup,
   });
 
-  return Object.entries(groups)
-    .map(([dateKey, groupMeals]) => {
-      const sortedMeals = [...groupMeals].sort((a, b) => b.meal_datetime - a.meal_datetime);
-      return {
-        date: dateKey,
-        dateLabel: formatDateLabel(new Date(sortedMeals[0].meal_datetime)),
-        data: sortedMeals,
-      };
-    })
-    .sort((a, b) => (b.data[0]?.meal_datetime ?? 0) - (a.data[0]?.meal_datetime ?? 0));
+  return sections;
 }
 
 const RECORDS_PAGE_SIZE = 50;

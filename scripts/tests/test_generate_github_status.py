@@ -163,6 +163,70 @@ class GenerateGitHubStatusTests(unittest.TestCase):
         self.assertIn("オープン中の PR はありません。", md)
         self.assertIn("現在アクティブなオープン Issue はありません。", md)
 
+    @patch("scripts.generate_github_status.run_gh_command")
+    def test_fetch_prs_default_and_custom_limit(self, mock_run_gh: MagicMock) -> None:
+        mock_run_gh.return_value = []
+        # default limit: 100
+        fetch_prs(self.repo_root, local_only=False)
+        mock_run_gh.assert_called_once()
+        args = mock_run_gh.call_args[0][0]
+        self.assertIn("--limit", args)
+        self.assertEqual(args[args.index("--limit") + 1], "100")
+
+        # custom limit: 50
+        mock_run_gh.reset_mock()
+        fetch_prs(self.repo_root, local_only=False, limit=50)
+        mock_run_gh.assert_called_once()
+        args = mock_run_gh.call_args[0][0]
+        self.assertIn("--limit", args)
+        self.assertEqual(args[args.index("--limit") + 1], "50")
+
+        # local_only: True
+        mock_run_gh.reset_mock()
+        res = fetch_prs(self.repo_root, local_only=True)
+        self.assertEqual(res, [])
+        mock_run_gh.assert_not_called()
+
+    @patch("scripts.generate_github_status.run_gh_command")
+    def test_fetch_issues_default_and_custom_limit(self, mock_run_gh: MagicMock) -> None:
+        mock_run_gh.return_value = []
+        # default limit: 100
+        fetch_issues(self.repo_root, local_only=False)
+        mock_run_gh.assert_called_once()
+        args = mock_run_gh.call_args[0][0]
+        self.assertIn("--limit", args)
+        self.assertEqual(args[args.index("--limit") + 1], "100")
+
+        # custom limit: 30
+        mock_run_gh.reset_mock()
+        fetch_issues(self.repo_root, local_only=False, limit=30)
+        mock_run_gh.assert_called_once()
+        args = mock_run_gh.call_args[0][0]
+        self.assertIn("--limit", args)
+        self.assertEqual(args[args.index("--limit") + 1], "30")
+
+        # local_only: True
+        mock_run_gh.reset_mock()
+        res = fetch_issues(self.repo_root, local_only=True)
+        self.assertEqual(res, [])
+        mock_run_gh.assert_not_called()
+
+    @patch("scripts.generate_github_status.fetch_issues")
+    @patch("scripts.generate_github_status.fetch_prs")
+    def test_generate_status_markdown_passes_custom_limits(
+        self, mock_fetch_prs: MagicMock, mock_fetch_issues: MagicMock
+    ) -> None:
+        mock_fetch_prs.return_value = []
+        mock_fetch_issues.return_value = []
+        generate_status_markdown(
+            self.repo_root,
+            local_only=False,
+            pr_limit=42,
+            issue_limit=84,
+        )
+        mock_fetch_prs.assert_called_once_with(self.repo_root, False, limit=42)
+        mock_fetch_issues.assert_called_once_with(self.repo_root, False, limit=84)
+
     def test_parse_docs_issues_safe_doc_id_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_root = Path(tmp_dir)
