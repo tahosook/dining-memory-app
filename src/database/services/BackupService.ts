@@ -301,14 +301,11 @@ export class BackupService {
 
     let rawSettings: unknown;
     try {
-      rawSettings = JSON.parse(
-        await readAsStringAsync(`${stagingDir}database/app_settings.json`)
-      );
+      rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
     } catch {
       return {
         valid: false,
-        error:
-          'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
+        error: 'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
       };
     }
 
