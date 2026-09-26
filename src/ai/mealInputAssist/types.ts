@@ -120,6 +120,31 @@ export interface MealInputAssistModelInstallerOptions {
   onProgress?: (progress: MealInputAssistModelDownloadProgress) => void;
 }
 
+export type MediaPipeModelStatusKind = 'not_installed' | 'ready' | 'error';
+
+export interface MediaPipeModelStatus {
+  kind: MediaPipeModelStatusKind;
+  version: string | null;
+  downloadedAt: number | null;
+  errorMessage: string | null;
+  expectedPath: string | null;
+  modelExists: boolean;
+}
+
+export interface MediaPipeModelDownloadProgress {
+  phase: 'preparing' | 'downloading' | 'verifying' | 'installing';
+  bytesWritten: number;
+  bytesExpected: number | null;
+  progress: number | null;
+}
+
+export interface MediaPipeModelInstallerOptions {
+  onProgress?: (progress: MediaPipeModelDownloadProgress) => void;
+  url?: string;
+  expectedSha256?: string;
+  version?: string;
+}
+
 export type MealInputAssistProviderMode =
   'mock' | 'local-runtime-prototype' | 'mediapipe-static-image' | 'override';
 

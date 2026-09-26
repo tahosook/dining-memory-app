@@ -14,15 +14,19 @@ import type {
 } from './types';
 
 const MEDIAPIPE_STATIC_IMAGE_MODE = 'mediapipe-static-image' as const;
-const MEDIAPIPE_MODEL_MISSING_REASON_PREFIX =
+const MEDIAPIPE_MODEL_MISSING_ASSET_REASON_PREFIX =
   'MediaPipe meal input assist model asset が見つかりません:';
+const MEDIAPIPE_MODEL_MISSING_FILE_REASON_PREFIX =
+  'MediaPipe meal input assist model file が見つかりません:';
 
-type MediaPipeMealInputAssistNativeModule = {
+export type MediaPipeMealInputAssistNativeModule = {
   getClassifierStatus?: () => Promise<MediaPipeStaticImageClassifierStatus>;
   classifyStaticImage?: (photoUri: string) => Promise<MediaPipeStaticImageRawResult>;
+  verifyFileSha256?: (filePathOrUri: string, expectedSha256: string) => Promise<boolean>;
+  computeFileSha256?: (filePathOrUri: string) => Promise<string>;
 };
 
-function getMediaPipeMealInputAssistNativeModule() {
+export function getMediaPipeMealInputAssistNativeModule() {
   return NativeModules.MediaPipeMealInputAssist as MediaPipeMealInputAssistNativeModule | undefined;
 }
 
@@ -47,7 +51,10 @@ function getMissingBridgeReason() {
 }
 
 function getUnavailableCode(status: MediaPipeStaticImageClassifierStatus) {
-  if (status.reason?.startsWith(MEDIAPIPE_MODEL_MISSING_REASON_PREFIX)) {
+  if (
+    status.reason?.startsWith(MEDIAPIPE_MODEL_MISSING_ASSET_REASON_PREFIX) ||
+    status.reason?.startsWith(MEDIAPIPE_MODEL_MISSING_FILE_REASON_PREFIX)
+  ) {
     return 'model_unavailable' as const;
   }
 

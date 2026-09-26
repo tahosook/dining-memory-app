@@ -25,6 +25,37 @@
 - Avoid mixing unrelated changes in one pass.
 - Separate behavior changes from cleanup-only changes unless combining them clearly reduces risk.
 
+## Issue and Task Tracking Policy
+To prevent double-maintenance overhead and synchronization drift between GitHub Issues and the codebase, follow the three-tier tracking model:
+
+1. **Three-Tier Tracking Model**:
+   - **Candidate Index ([TASKS.md](../../TASKS.md))**: lightweight index of immediate (`Now`), planned (`Next`), and triggered (`Later`) tasks. Used to prioritize work without reading the entire repository.
+   - **Specification & Acceptance Criteria ([docs/issues/](../issues/) and [docs/notes/](../notes/))**: single source of truth for technical specifications, investigation benchmarks, and acceptance criteria. Version-controlled directly alongside source code.
+   - **Ticket Lifecycle & Automation (GitHub Issues)**: tracks open/closed lifecycle, assignees, milestones, and pull request linkages.
+
+2. **Thin GitHub Issues**:
+   - When opening a GitHub Issue, keep the issue body thin: state the high-level objective and link directly to the corresponding `docs/issues/issue-XX-xxx.md` file.
+   - Do not copy-paste detailed acceptance checklists into GitHub Issues to avoid synchronization drift.
+
+3. **PR Linkage & Auto-Close (`Closes` vs. `Refs`)**:
+   - **Full Resolution PRs**: When a PR completely resolves an issue, declare `Closes #<issue-number>` (or `Fixes #<issue-number>`) so merging automatically closes the GitHub Issue.
+   - **Investigation & Multi-Phase PRs**: When a PR covers an investigation spike, a partial milestone, or a parent issue that spawns child implementation issues (e.g., investigation Issue #75 spawning implementation Issues #86, #87, #88), use `Refs #<issue-number>` or `Relates to #<issue-number>` instead. Do **not** use `Closes` unless the issue is explicitly intended to close upon merge.
+
+4. **Synchronous Ledger Updates**:
+   - In the same PR that implements or completes the task, update:
+     - [TASKS.md](../../TASKS.md): move the task from `Now` to `Done / Historical Notes`.
+     - `docs/issues/issue-XX.md`: update status to closed, mark acceptance checkboxes `[x]`, and record the PR number.
+
+5. **Future-Triggered Tasks (`Later`)**:
+   - Tasks awaiting future trigger conditions (e.g., Issue #80 Keyset pagination or Issue #81 composite index awaiting 10,000 records) remain classified as `Later / Future-triggered`.
+   - On GitHub, tag these issues with `later` or `future-triggered` to keep the active backlog clean.
+
+6. **ID Distinction Rule (Internal Doc ID vs. GitHub Issue Number)**:
+   - The sequence number in `docs/issues/issue-XX-*.md` (`XX`) is an internal repository document ID, **not** the GitHub Issue number.
+   - For example, `issue-01` maps to GitHub Issue #73, and `issue-12` is an internal document ID where the corresponding GitHub Issue is not yet filed (unrelated to GitHub PR/Issue #12).
+   - In all `docs/issues/` headers, explicitly specify both `- **内部ドキュメントID**: issue-XX` and `- **対応 GitHub Issue**: GitHub Issue #YY` (or `未起票`).
+   - Always refer to GitHub Issues with the full prefix `GitHub Issue #YY` to prevent AI agents and contributors from conflating internal doc numbers with GitHub issue numbers.
+
 ## Before Editing
 - Identify the canonical doc and the implementation files that are the source of truth.
 - Prefer `src/` and current canonical docs over deprecated docs and historical notes.

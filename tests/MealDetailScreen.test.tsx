@@ -15,6 +15,7 @@ import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
 import { requestMealThumbnail } from '../src/media/mealThumbnail';
+import * as MealShareModule from '../src/media/mealShare';
 
 jest.mock('../src/media/mealThumbnail', () => ({
   requestMealThumbnail: jest.fn(),
@@ -479,6 +480,25 @@ describe('MealDetailScreen', () => {
     });
   });
 
+  test('shows an alert and keeps the edit modal open when meal update fails', async () => {
+    const error = new Error('update failed');
+    (MealService.updateMeal as jest.Mock).mockRejectedValue(error);
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '更新に失敗しました。');
+    });
+
+    expect(console.error).toHaveBeenCalledWith('Failed to update meal:', error);
+
+    // The modal should still be visible because setEditingMeal(null) wasn't called
+    expect(getByTestId('detail-edit-save-button')).toBeTruthy();
+  });
+
   test('shows AI input assist in the edit modal and requests suggestions', () => {
     const requestSuggestions = jest.fn().mockResolvedValue(undefined);
     (useMealInputAssist as jest.Mock).mockReturnValue(
@@ -769,6 +789,22 @@ describe('MealDetailScreen', () => {
         message: '食事記録: 焼き魚定食\n料理ジャンル: 和食',
         url: 'file:///full-photo.jpg',
       });
+    });
+  });
+
+  test('shows an alert when shareMealContent fails', async () => {
+    jest.spyOn(MealShareModule, 'shareMealContent').mockRejectedValueOnce(new Error('share failed'));
+
+    const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(getByText('共有する前に確認')).toBeTruthy();
+
+    fireEvent.press(getByTestId('share-submit-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '共有シートを開けませんでした。');
     });
   });
 

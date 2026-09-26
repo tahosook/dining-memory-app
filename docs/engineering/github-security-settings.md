@@ -4,7 +4,7 @@
 - Purpose: GitHub 側で有効化する security / quality settings と repo 側設定の運用方針をまとめる。
 - Audience: repo owner, maintainers, AI agents.
 - Update trigger: GitHub security feature、CI required checks、Dependabot 方針、branch protection 方針を変えるとき。
-- Related docs: [README.md](../../README.md), [docs/index.md](../index.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/dependency-policy.md](dependency-policy.md), [GitHub security and code quality docs](https://docs.github.com/en/code-security)
+- Related docs: [README.md](../../README.md), [docs/index.md](../index.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/dependency-policy.md](dependency-policy.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md), [GitHub security and code quality docs](https://docs.github.com/en/code-security)
 
 ## Policy
 - GitHub UI でしか有効化できない項目は、この repo では「手順」として管理する。repo 側変更だけで設定済みとは扱わない。
@@ -20,6 +20,7 @@
 - Dependabot version updates は `.github/dependabot.yml` で管理する。詳細な 4 層分類方針と運用プロトコルは [docs/engineering/dependency-policy.md](dependency-policy.md) を参照する。
 - npm updates は週1回、月曜 09:00 JST、open PR 上限 3、Tier 1（Expo/RN コア・ネイティブ境界）は除外し Tier 3 の純粋 JS / TS ツールを中心にグループ化。
 - GitHub Actions updates は週1回、月曜 09:30 JST、open PR 上限 3。
+- GitHub / プロジェクトステータスの Google Drive 同期は `.github/workflows/sync-github-status.yml` で管理し、権限は `contents: read`, `issues: read`, `pull-requests: read` に制限する。ステータス生成には `scripts/generate_github_status.py` を使用し、Three-Tier Tracking Model（`TASKS.md` の優先度インデックス、`docs/issues/` の仕様・受入基準進捗、GitHub PR/Issue の Active vs Later 分類）を統合して同期する。
 
 ## GitHub UI Checklist
 GitHub の repository 画面で以下を確認する。画面名は GitHub UI の変更で揺れることがあるため、見つからない場合は同名の Code security / Actions / Rulesets 設定を探す。

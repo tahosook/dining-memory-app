@@ -19,6 +19,7 @@ AI エージェントがこの repo で毎回同じ前提を使い、必要以�
 - 既存の設計方針や user changes を勝手に置き換えない。
 - 実装変更では、近い既存パターンと関連テストを確認してから編集する。
 - product / UX / data / engineering convention が変わる場合は、対応する canonical doc も同じタスクで更新する。
+- タスク完了時は、対応する `TASKS.md` や `docs/issues/` のステータス・受入基準を同じ PR/コミットで更新する（[docs/engineering/development-workflow.md](docs/engineering/development-workflow.md) 参照）。
 
 ## AI & Privacy Rules
 - 実験的・プロトタイプ機能（MediaPipe 等）は、指示なく default runtime や永続化契約へ昇格しない。

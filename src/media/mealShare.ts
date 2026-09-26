@@ -241,7 +241,6 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
   } catch (error) {
     console.error('[MealShare] Failed to share meal:', sanitizeLogObject({
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
       ...debugInfo,
     }));
     throw error;

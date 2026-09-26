@@ -18,6 +18,15 @@ export const MEAL_INPUT_ASSIST_MODEL_CONFIG = {
   },
 } as const;
 
+export const MEDIAPIPE_MODEL_DISPLAY_NAME = 'MediaPipe Meal Classifier';
+
+export const MEDIAPIPE_MODEL_CONFIG = {
+  version: 'mediapipe-food-classifier-v1',
+  fileName: 'meal-input-assist.task',
+  url: 'https://github.com/tahosook/dining-memory-app/releases/download/v0.1.0-models/meal-input-assist.task',
+  sha256: 'placeholder-sha256-hash-for-mediapipe-task-model',
+} as const;
+
 const LOCAL_MODEL_DIRECTORY = 'ai-models';
 const MANAGED_FILE_ORDER = ['model', 'projector'] as const;
 const MANAGED_FILE_LABELS = {
@@ -58,6 +67,10 @@ export function resolveMealInputAssistModelPath() {
 
 export function resolveMealInputAssistProjectorPath() {
   return resolveMealInputAssistFilePath(MEAL_INPUT_ASSIST_MODEL_CONFIG.files.projector.fileName);
+}
+
+export function resolveMediaPipeModelPath() {
+  return resolveMealInputAssistFilePath(MEDIAPIPE_MODEL_CONFIG.fileName);
 }
 
 export function getMealInputAssistExpectedPaths() {
