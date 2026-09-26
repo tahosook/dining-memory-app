@@ -1,3 +1,12 @@
+# Bolt - Performance & Optimization Learnings
+
+## Core Policy
+- **No evidence, no PR**: Never optimize without an established benchmark, profile, or query plan demonstrating a measurable bottleneck.
+- **No actionable finding, stop**: If measurement shows the current code performs well within budget, do not manufacture changes (e.g. gratuitous `React.memo`, unnecessary memoization). Report the measurement and exit without changes.
+- Machine-enforced gates (`scripts/verify-pr-gates.sh`) will reject PRs with zero diff, escape hatches, or weakened tests.
+
+---
+
 ## 2024-09-20 - Preventing O(N^2) Re-renders in Lists
 
 **Learning:** In React Native, if a list item's `onPress` callback depends on the entire list data (e.g., to pass the full list to a detail screen for swiping), updating a single item (like lazily loading a thumbnail) changes the list data reference. This invalidates the `onPress` callback for ALL items, causing the entire list to re-render for every single thumbnail loaded, completely bypassing `React.memo`.

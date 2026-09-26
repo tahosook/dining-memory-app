@@ -10,7 +10,6 @@
 ### Investigation / evaluation candidates（調査・評価候補）
 - AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
 - AIメモ下書きの面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、下書きの実用性と表現を改善する。
-- AIコード品質・セキュリティガードレール: 候補。raw AI output、photo path、location、notes の保存・ログ出力を増やさない方針を維持する。
 
 ## Next
 ### Investigation / evaluation candidates（調査・評価候補）
@@ -31,6 +30,7 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
+- エージェント規約と機械的 PR ゲートの整合性確立 (Core Machine-Enforced & Evidence Principles): 破綻した自然言語禁止リスト（Prompt Firewall）を全廃し、4つのコア原則（自然言語禁止リスト全廃、機械判定へのオフロード、客観的証拠の義務化、変更なしの成功定義）に基づく規約（`AGENTS.md`、`.jules/`）へ刷新。差分ゼロ・新規 `any`・エスケープハッチ・テスト削除を遮断する機械的ゲートスクリプト（`scripts/verify-pr-gates.sh`）および CI 連携を導入し、PR テンプレート（`.github/pull_request_template.md`）で客観的証拠提示を必須化。
 - Android 実機環境における写真保存パイプラインの実測プロファイリング (GitHub Issue #60) & Native EXIF 移行要否判断 (GitHub Issue #61): Google Pixel 9a (Android 17, 8GB RAM) 実機での写真保存パイプライン全8ステップの所要時間、メモリ推移（PSS/RSS）、GC 挙動、および UI フレーム描画（Jank）を実測（2回施行）。今回の測定条件では EXIF 処理時間は平均 42.4ms、Java Heap PSS は 11〜22MB、GC ポーズは 3ms 未満、Jank 率は 3.9〜5.4% で推移し、顕著な UI 停止やメモリ圧迫は観測されず。この実機データに基づき、Issue #61（Kotlin Native EXIF 化）は未実測の机上試算（~10ms）と比較しても得られる短縮幅が限定的であることから現状維持と判断（[docs/notes/photo-save-benchmark-issue-60.md](docs/notes/photo-save-benchmark-issue-60.md)、完了）。
 - RecordsScreen におけるページネーション・無限スクロールの導入 (GitHub Issue #89): 100件固定取得を廃止し、`MealService.getRecentMeals` のカーソル（Keyset: `beforeMealDatetime` / `beforeId`）対応および `SectionList` の `onEndReached`（50件単位の無限スクロール）による、データ追加・削除時にも欠落しない過去記録の段階的追加読み込み機構を導入。
 - リリースビルド署名鍵（Keystore）の管理・注入方針の策定 (GitHub Issue #109, 内部ドキュメント issue-12): 本番リリース時の Keystore 生成規格（RSA 4096bit / PKCS12）、多重保管・バックアップ運用、および各ビルド環境（ローカル / CI / EAS）へのシークレット注入方法の確立、Play App Signing 運用方針の策定（[docs/engineering/release-keystore-guidelines.md](docs/engineering/release-keystore-guidelines.md)、完了 / Closed）。

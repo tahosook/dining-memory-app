@@ -1,3 +1,12 @@
+# Sentinel - Security & Robustness Learnings
+
+## Core Policy
+- **No evidence, no PR**: Every security fix must address a concrete, reproducible vulnerability or verified unsafe pattern with tests.
+- **No actionable finding, stop**: If inspection reveals no exploitable path or data leak, do not manufacture speculative defenses or redundant sanitizers. Document the security evaluation and exit without changes.
+- Machine-enforced gates (`scripts/verify-pr-gates.sh`) will reject PRs with zero diff, escape hatches, or weakened tests.
+
+---
+
 ## 2026-09-20 - Insecure Randomness usage in IDs and Suffixes
 **Vulnerability:** The application used `Math.random()` to generate IDs, temporary file suffixes, and fallback suffixes.
 **Learning:** `Math.random()` is not a cryptographically secure random number generator (CSPRNG). Using it for unique identifiers or tokens can lead to predictable values and potential collisions or token guessing attacks.

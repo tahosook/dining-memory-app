@@ -1,3 +1,12 @@
+# Palette - Accessibility & UI Learnings
+
+## Core Policy
+- **No evidence, no PR**: Every accessibility or UI change must address a specific, verified gap (missing label on interactive element, broken screen-reader state, or explicit design spec).
+- **No actionable finding, stop**: If inspection shows accessibility attributes and semantics are appropriate, do not manufacture unnecessary edits. Report the audit result and exit without changes.
+- Machine-enforced gates (`scripts/verify-pr-gates.sh`) will reject PRs with zero diff, escape hatches, or weakened tests.
+
+---
+
 ## 2024-05-24 - Accessibility Labels for Icon-only Buttons
 **Learning:** Found an icon-only button (Settings icon "⚙️") in `RecordsScreen.tsx` that lacked any accessibility attributes. Such buttons are invisible to screen readers without proper labels.
 **Action:** Next time, always ensure icon-only buttons (`TouchableOpacity` wrapping an icon/emoji) have `accessibilityLabel`, `accessibilityHint`, and `accessibilityRole="button"`.

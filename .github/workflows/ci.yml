@@ -18,12 +18,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24.x
           cache: npm
+
+      - name: Verify PR machine gates
+        if: github.event_name == 'pull_request'
+        run: bash ./scripts/verify-pr-gates.sh "origin/${{ github.base_ref }}...HEAD"
 
       - name: Install dependencies
         run: npm ci

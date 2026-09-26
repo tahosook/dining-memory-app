@@ -68,11 +68,16 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 - Keep diffs local to the behavior being changed.
 - If a doc is now stale, update the canonical doc instead of adding a second copy elsewhere.
 
-## Prohibited Shortcuts
-- Do not delete, skip, or weaken failing tests just to make the task pass.
-- Do not mix unrelated refactors into a targeted feature or bug fix.
-- Do not add a new dependency if the existing stack already solves the problem well enough.
-- Do not leave broad debug logging in production-like application code.
+## Core Governance Principles
+- **自然言語の禁止リスト全廃**: 言い訳で容易にすり抜けられる細かな禁止構文の列挙をやめ、機械判定と客観的証拠にオフロードする。
+- **機械的判定への完全オフロード (No machine gate, no trust)**: 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除などは `scripts/verify-pr-gates.sh` および CI で物理的に遮断する。
+- **客観的証拠の義務化 (No evidence, no PR)**: 具体的課題と客観的証拠（失敗テスト、実測値、EXPLAIN 結果等）が示されない PR は起票しない。
+- **「変更しないこと」の成功定義 (No actionable finding, stop)**: 調査の結果、対処すべき問題がなければ無理にコード変更を捏造せず、レポートを残して「変更なし」で終了することを成功とする。
+
+## PR Eligibility Criteria
+- **Problem**: 現行コードベースにおける具体的な事実（破損、脆弱性、測定されたボトルネック、明示された要件）。
+- **Evidence**: 客観的証拠（失敗テストログ、実測ベンチマーク、EXPLAIN 結果等）。
+- **Scope**: 課題解決に直結する最小限の変更（スコープ外の周辺コードを触らない）。
 
 ## Verification Rules
 - Run the most relevant checks for the change.
@@ -82,6 +87,7 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 
 ## Review Gate
 - Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
+- Machine gate for PRs: `npm run verify:pr-gates` (`bash scripts/verify-pr-gates.sh`). Automatically enforced in CI for pull requests.
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
 - Add `npm run check:deps` and `npm run check:react-versions` when dependencies are added, removed, or reorganized. Follow [docs/engineering/dependency-policy.md](dependency-policy.md).
 - If native dependencies (Tier 1) or Expo SDK change, run `npm run build:android:debug` locally (Jest tests pass via mocks and do not guarantee native compatibility). In CI, the `native-build` job automatically runs `build:android:debug` when native-sensitive files change.
