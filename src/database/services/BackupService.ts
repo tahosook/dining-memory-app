@@ -14,22 +14,23 @@ import {
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { unzip, zip } from 'react-native-zip-archive';
+import { unzip, zip, listContents } from 'react-native-zip-archive';
 import {
   createBackupManifest,
   deserializeAppSettings,
   deserializeMeals,
+  ensureTrailingSlash,
   extractPhotoFileName,
   generateBackupFileName,
   serializeAppSettings,
   serializeMeals,
+  stripFileScheme,
   validateBackupManifest,
   validatePortableAppSettings,
   validatePortableMeals,
   validateSafeFileName,
   type BackupManifest,
   type BackupValidationResult,
-  type PortableAppSettingRecord,
 } from '../../domain/backup';
 import { getAppVersion } from '../../utils/buildInfo';
 import {
@@ -39,14 +40,6 @@ import {
   replaceDatabaseWithBackup,
 } from './localDatabase';
 import { cleanupOrphanedPhotoFiles } from '../../media/photoLifecycle';
-
-function stripFileScheme(uri: string): string {
-  return uri.replace(/^file:\/\//, '');
-}
-
-function ensureTrailingSlash(path: string): string {
-  return path.endsWith('/') ? path : `${path}/`;
-}
 
 export interface ExportBackupResult {
   zipFileName: string;
@@ -104,9 +97,9 @@ export class BackupService {
 
       // Copy all referenced original photos to staging photos/ directory.
       // Must-fix 1 & 2: Fail-fast on any missing photo, read error, or copy failure.
-      const copiedSet = new Set<string>();
 
-      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
+      // Step 1: Fail-fast validation of all photos (Sequential to prevent EMFILE)
+      for (const [, photoPath] of requiredPhotoMap.entries()) {
         let fileInfo;
         try {
           fileInfo = await getInfoAsync(photoPath);
@@ -117,7 +110,11 @@ export class BackupService {
         if (!fileInfo || !fileInfo.exists) {
           throw new Error('バックアップ対象の写真ファイルが端末内に見つかりません。');
         }
+      }
 
+      // Step 2: Sequential copy after all photos are verified to exist
+      const copiedSet = new Set<string>();
+      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
         try {
           await copyAsync({
             from: photoPath,
@@ -205,182 +202,86 @@ export class BackupService {
     try {
       await makeDirectoryAsync(stagingDir, { intermediates: true });
 
-      // Native unzip to staging directory
-      await unzip(stripFileScheme(pickedAsset.uri), stripFileScheme(stagingDir));
+      // Defense in depth: Check zip contents before extracting
+      const zipPath = stripFileScheme(pickedAsset.uri);
 
-      // 1. Validate manifest.json
-      const manifestInfo = await getInfoAsync(`${stagingDir}manifest.json`);
-      if (!manifestInfo.exists) {
-        await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error:
-            'バックアップファイルに manifest.json が見つかりません。対応外のアーカイブ形式です。',
-        };
-      }
-
-      const rawManifest = JSON.parse(await readAsStringAsync(`${stagingDir}manifest.json`));
-      const manifestValidation = validateBackupManifest(rawManifest, DATABASE_SCHEMA_VERSION);
-      if (!manifestValidation.valid || !manifestValidation.manifest) {
-        await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: manifestValidation.error ?? 'マニフェストファイルが無効です。',
-        };
-      }
-
-      // 2. Validate database/meals.json
-      const mealsInfo = await getInfoAsync(`${stagingDir}database/meals.json`);
-      if (!mealsInfo.exists) {
-        await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: '食事データ（database/meals.json）が見つかりません。',
-        };
-      }
-
-      const rawMeals = JSON.parse(await readAsStringAsync(`${stagingDir}database/meals.json`));
-      const mealsValidation = validatePortableMeals(rawMeals);
-      if (!mealsValidation.valid || !mealsValidation.meals) {
-        await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: mealsValidation.error ?? '食事データの形式が不正です。',
-        };
-      }
-
-      // 3. Validate database/app_settings.json (mandatory file in backup specification)
-      const settingsInfo = await getInfoAsync(`${stagingDir}database/app_settings.json`);
-      if (!settingsInfo.exists) {
-        await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: 'アプリ設定データ（database/app_settings.json）が見つかりません。',
-        };
-      }
-
-      let rawSettings: unknown;
+      let entries;
       try {
-        rawSettings = JSON.parse(
-          await readAsStringAsync(`${stagingDir}database/app_settings.json`)
-        );
+        entries = await listContents(zipPath);
       } catch {
         await this.cleanupStaging(stagingDir);
         return {
           valid: false,
           error:
-            'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
+            'バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。',
         };
       }
 
-      const settingsValidation = validatePortableAppSettings(rawSettings);
-      if (!settingsValidation.valid || !settingsValidation.appSettings) {
-        await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: settingsValidation.error ?? 'アプリ設定データの形式が不正です。',
-        };
-      }
-      const appSettings: PortableAppSettingRecord[] = settingsValidation.appSettings;
+      for (const entry of entries) {
+        const path = entry.path;
 
-      // Check meals count matches manifest
-      if (mealsValidation.meals.length !== manifestValidation.manifest.mealCount) {
-        await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: `バックアップ内の食事記録件数（${mealsValidation.meals.length}件）がマニフェスト（${manifestValidation.manifest.mealCount}件）と一致しません。`,
-        };
-      }
-
-      // 4. Verify photo files exist and match manifest
-      const photosDir = `${stagingDir}photos`;
-      const photosDirInfo = await getInfoAsync(photosDir);
-      const actualPhotoFiles = photosDirInfo.exists
-        ? await readDirectoryAsync(photosDir).catch(() => [])
-        : [];
-
-      // Ensure all filenames in photos/ are safe
-      for (const entry of actualPhotoFiles) {
-        if (!validateSafeFileName(entry)) {
+        // Prevent path traversal and zero byte injection explicitly, even before extraction
+        if (path.includes('../') || path.includes('..\\') || path.includes('\0')) {
           await this.cleanupStaging(stagingDir);
           return {
             valid: false,
-            error: 'バックアップの写真ディレクトリに不正なファイル名が含まれています。',
+            error: 'バックアップファイルに不正なパスが含まれています。',
+          };
+        }
+
+        // Whitelist directories/files.
+        // In our export format, we only expect:
+        // manifest.json, database/meals.json, database/app_settings.json, and photos/*
+        const isManifest = path === 'manifest.json';
+        const isDatabase = path.startsWith('database/');
+        const isPhotos = path.startsWith('photos/');
+
+        if (!isManifest && !isDatabase && !isPhotos) {
+          await this.cleanupStaging(stagingDir);
+          return {
+            valid: false,
+            error: 'バックアップファイルに未許可のファイルが含まれています。',
           };
         }
       }
 
-      // Verify photo count matches manifest
-      if (actualPhotoFiles.length !== manifestValidation.manifest.photoCount) {
+      // Native unzip to staging directory
+      await unzip(zipPath, stripFileScheme(stagingDir));
+
+      const manifestResult = await this.extractManifest(stagingDir);
+      if (!manifestResult.valid) {
         await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: `バックアップ内の写真ファイル数（${actualPhotoFiles.length}枚）がマニフェスト（${manifestValidation.manifest.photoCount}枚）と一致しません。`,
-        };
+        return manifestResult;
       }
 
-      // Collect all required unique photo files from meals
-      const requiredPhotos = new Set<string>();
-      for (const meal of mealsValidation.meals) {
-        if (meal.photo_file_name) {
-          if (!validateSafeFileName(meal.photo_file_name)) {
-            await this.cleanupStaging(stagingDir);
-            return {
-              valid: false,
-              error: '食事データに不正な写真ファイル名が含まれています。',
-            };
-          }
-          requiredPhotos.add(meal.photo_file_name);
-        }
-      }
-
-      // Ensure every single referenced photo exists in actualPhotoFiles
-      const missingPhotos: string[] = [];
-      for (const photoName of requiredPhotos) {
-        if (!actualPhotoFiles.includes(photoName)) {
-          missingPhotos.push(photoName);
-        }
-      }
-
-      if (missingPhotos.length > 0) {
-        console.warn(
-          `[BackupService] Missing photos detected in backup archive (${missingPhotos.length} files):`,
-          missingPhotos
-        );
+      const mealsResult = await this.extractMeals(stagingDir);
+      if (!mealsResult.valid) {
         await this.cleanupStaging(stagingDir);
-        const foundCount = requiredPhotos.size - missingPhotos.length;
-        return {
-          valid: false,
-          error: `バックアップ内の写真が不足しています。必要: ${requiredPhotos.size}枚, 検出: ${foundCount}枚（不足: ${missingPhotos.length}枚）。`,
-        };
+        return mealsResult;
       }
 
-      // Ensure no unreferenced / extraneous photos exist in photos/ directory
-      const unreferencedPhotos: string[] = [];
-      for (const actualFile of actualPhotoFiles) {
-        if (!requiredPhotos.has(actualFile)) {
-          unreferencedPhotos.push(actualFile);
-        }
-      }
-
-      if (unreferencedPhotos.length > 0) {
-        console.warn(
-          `[BackupService] Unreferenced photos detected in backup archive (${unreferencedPhotos.length} files):`,
-          unreferencedPhotos
-        );
+      const settingsResult = await this.extractAppSettings(stagingDir);
+      if (!settingsResult.valid) {
         await this.cleanupStaging(stagingDir);
-        return {
-          valid: false,
-          error: `バックアップの写真ディレクトリに食事記録から参照されていない余分な写真が含まれています（${unreferencedPhotos.length}枚）。`,
-        };
+        return settingsResult;
+      }
+
+      const photosResult = await this.validatePhotos(
+        stagingDir,
+        manifestResult.manifest!,
+        mealsResult.meals!
+      );
+      if (!photosResult.valid) {
+        await this.cleanupStaging(stagingDir);
+        return photosResult;
       }
 
       return {
         valid: true,
-        manifest: manifestValidation.manifest,
-        meals: mealsValidation.meals,
-        appSettings,
-        photoFileNames: Array.from(requiredPhotos),
+        manifest: manifestResult.manifest,
+        meals: mealsResult.meals,
+        appSettings: settingsResult.appSettings,
+        photoFileNames: photosResult.photoFileNames,
         stagingDirectory: stagingDir,
       };
     } catch {
@@ -391,6 +292,168 @@ export class BackupService {
           'バックアップファイルの展開または検証中にエラーが発生しました。ファイルが破損している可能性があります。',
       };
     }
+  }
+
+  private static async extractManifest(stagingDir: string): Promise<BackupValidationResult> {
+    const manifestInfo = await getInfoAsync(`${stagingDir}manifest.json`);
+    if (!manifestInfo.exists) {
+      return {
+        valid: false,
+        error:
+          'バックアップファイルに manifest.json が見つかりません。対応外のアーカイブ形式です。',
+      };
+    }
+
+    const rawManifest = JSON.parse(await readAsStringAsync(`${stagingDir}manifest.json`));
+    const manifestValidation = validateBackupManifest(rawManifest, DATABASE_SCHEMA_VERSION);
+    if (!manifestValidation.valid || !manifestValidation.manifest) {
+      return {
+        valid: false,
+        error: manifestValidation.error ?? 'マニフェストファイルが無効です。',
+      };
+    }
+
+    return { valid: true, manifest: manifestValidation.manifest };
+  }
+
+  private static async extractMeals(stagingDir: string): Promise<BackupValidationResult> {
+    const mealsInfo = await getInfoAsync(`${stagingDir}database/meals.json`);
+    if (!mealsInfo.exists) {
+      return {
+        valid: false,
+        error: '食事データ（database/meals.json）が見つかりません。',
+      };
+    }
+
+    const rawMeals = JSON.parse(await readAsStringAsync(`${stagingDir}database/meals.json`));
+    const mealsValidation = validatePortableMeals(rawMeals);
+    if (!mealsValidation.valid || !mealsValidation.meals) {
+      return {
+        valid: false,
+        error: mealsValidation.error ?? '食事データの形式が不正です。',
+      };
+    }
+
+    return { valid: true, meals: mealsValidation.meals };
+  }
+
+  private static async extractAppSettings(stagingDir: string): Promise<BackupValidationResult> {
+    const settingsInfo = await getInfoAsync(`${stagingDir}database/app_settings.json`);
+    if (!settingsInfo.exists) {
+      return {
+        valid: false,
+        error: 'アプリ設定データ（database/app_settings.json）が見つかりません。',
+      };
+    }
+
+    let rawSettings: unknown;
+    try {
+      rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
+    } catch {
+      return {
+        valid: false,
+        error: 'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
+      };
+    }
+
+    const settingsValidation = validatePortableAppSettings(rawSettings);
+    if (!settingsValidation.valid || !settingsValidation.appSettings) {
+      return {
+        valid: false,
+        error: settingsValidation.error ?? 'アプリ設定データの形式が不正です。',
+      };
+    }
+
+    return { valid: true, appSettings: settingsValidation.appSettings };
+  }
+
+  private static async validatePhotos(
+    stagingDir: string,
+    manifest: BackupManifest,
+    meals: BackupValidationResult['meals']
+  ): Promise<BackupValidationResult> {
+    if (!meals) {
+      return { valid: false, error: '食事データが不正です。' };
+    }
+
+    if (meals.length !== manifest.mealCount) {
+      return {
+        valid: false,
+        error: `バックアップ内の食事記録件数（${meals.length}件）がマニフェスト（${manifest.mealCount}件）と一致しません。`,
+      };
+    }
+
+    const photosDir = `${stagingDir}photos`;
+    const photosDirInfo = await getInfoAsync(photosDir);
+    const actualPhotoFiles = photosDirInfo.exists
+      ? await readDirectoryAsync(photosDir).catch(() => [])
+      : [];
+
+    for (const entry of actualPhotoFiles) {
+      if (!validateSafeFileName(entry)) {
+        return {
+          valid: false,
+          error: 'バックアップの写真ディレクトリに不正なファイル名が含まれています。',
+        };
+      }
+    }
+
+    if (actualPhotoFiles.length !== manifest.photoCount) {
+      return {
+        valid: false,
+        error: `バックアップ内の写真ファイル数（${actualPhotoFiles.length}枚）がマニフェスト（${manifest.photoCount}枚）と一致しません。`,
+      };
+    }
+
+    const requiredPhotos = new Set<string>();
+    for (const meal of meals) {
+      if (meal.photo_file_name) {
+        if (!validateSafeFileName(meal.photo_file_name)) {
+          return {
+            valid: false,
+            error: '食事データに不正な写真ファイル名が含まれています。',
+          };
+        }
+        requiredPhotos.add(meal.photo_file_name);
+      }
+    }
+
+    const missingPhotos: string[] = [];
+    for (const photoName of requiredPhotos) {
+      if (!actualPhotoFiles.includes(photoName)) {
+        missingPhotos.push(photoName);
+      }
+    }
+
+    if (missingPhotos.length > 0) {
+      console.warn(
+        `[BackupService] Missing photos detected in backup archive (${missingPhotos.length} files).`
+      );
+      const foundCount = requiredPhotos.size - missingPhotos.length;
+      return {
+        valid: false,
+        error: `バックアップ内の写真が不足しています。必要: ${requiredPhotos.size}枚, 検出: ${foundCount}枚（不足: ${missingPhotos.length}枚）。`,
+      };
+    }
+
+    const unreferencedPhotos: string[] = [];
+    for (const actualFile of actualPhotoFiles) {
+      if (!requiredPhotos.has(actualFile)) {
+        unreferencedPhotos.push(actualFile);
+      }
+    }
+
+    if (unreferencedPhotos.length > 0) {
+      console.warn(
+        `[BackupService] Unreferenced photos detected in backup archive (${unreferencedPhotos.length} files).`
+      );
+      return {
+        valid: false,
+        error: `バックアップの写真ディレクトリに食事記録から参照されていない余分な写真が含まれています（${unreferencedPhotos.length}枚）。`,
+      };
+    }
+
+    return { valid: true, photoFileNames: Array.from(requiredPhotos) };
   }
 
   /**
