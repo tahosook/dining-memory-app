@@ -15,6 +15,7 @@ import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
 import { requestMealThumbnail } from '../src/media/mealThumbnail';
+import * as MealShareModule from '../src/media/mealShare';
 
 jest.mock('../src/media/mealThumbnail', () => ({
   requestMealThumbnail: jest.fn(),
@@ -769,6 +770,22 @@ describe('MealDetailScreen', () => {
         message: '食事記録: 焼き魚定食\n料理ジャンル: 和食',
         url: 'file:///full-photo.jpg',
       });
+    });
+  });
+
+  test('shows an alert when shareMealContent fails', async () => {
+    jest.spyOn(MealShareModule, 'shareMealContent').mockRejectedValueOnce(new Error('share failed'));
+
+    const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(getByText('共有する前に確認')).toBeTruthy();
+
+    fireEvent.press(getByTestId('share-submit-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '共有シートを開けませんでした。');
     });
   });
 
