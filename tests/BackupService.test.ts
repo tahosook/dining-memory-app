@@ -9,7 +9,7 @@ import {
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { unzip, zip } from 'react-native-zip-archive';
+import { unzip, zip, listContents } from 'react-native-zip-archive';
 import { BackupService } from '../src/database/services/BackupService';
 import {
   getAllAppSettingsRows,
@@ -31,6 +31,7 @@ jest.mock('expo-sharing', () => ({
 jest.mock('react-native-zip-archive', () => ({
   zip: jest.fn(),
   unzip: jest.fn(),
+  listContents: jest.fn(),
 }));
 
 jest.mock('expo-file-system/legacy', () => ({
@@ -98,6 +99,12 @@ describe('BackupService', () => {
     (getAllAppSettingsRows as jest.Mock).mockResolvedValue(mockAppSettings);
     (zip as jest.Mock).mockResolvedValue('file:///mock-cache/backup.zip');
     (unzip as jest.Mock).mockResolvedValue('file:///mock-cache/staging/');
+    (listContents as jest.Mock).mockResolvedValue([
+      { path: 'manifest.json' },
+      { path: 'database/meals.json' },
+      { path: 'database/app_settings.json' },
+      { path: 'photos/meal-20260422-01.jpg' },
+    ]);
     (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-20260422-01.jpg']);
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
@@ -178,11 +185,30 @@ describe('BackupService', () => {
       expect(deleteAsync).toHaveBeenCalled();
     });
 
-    test('rejects exportBackup when getInfoAsync throws error', async () => {
-      (getInfoAsync as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+    test('rejects exportBackup and fails fast when getInfoAsync throws error', async () => {
+      // Create three meals with different photos
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
+        mockMealRows[0],
+        { ...mockMealRows[0], id: 'meal-2', photo_path: 'file:///mock-documents/meal-20260423-02.jpg' },
+        { ...mockMealRows[0], id: 'meal-3', photo_path: 'file:///mock-documents/meal-20260424-03.jpg' },
+      ]);
+
+      // Succeed for the first photo, fail for the second; third should not be checked
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.includes('meal-20260422-01.jpg')) {
+          return Promise.resolve({ exists: true });
+        }
+        if (path.includes('meal-20260423-02.jpg')) {
+          return Promise.reject(new Error('Permission denied'));
+        }
+        return Promise.resolve({ exists: true });
+      });
 
       await expect(BackupService.exportBackup()).rejects.toThrow('バックアップ対象の写真ファイルの読み取りに失敗しました。');
 
+      // Fails fast: validation halts at the failing photo, getInfoAsync called only twice, copyAsync never called
+      expect(getInfoAsync).toHaveBeenCalledTimes(2);
+      expect(copyAsync).not.toHaveBeenCalled();
       expect(zip).not.toHaveBeenCalled();
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
       expect(deleteAsync).toHaveBeenCalled();
@@ -484,12 +510,48 @@ describe('BackupService', () => {
       expect(result.error).toContain('写真ファイル数（1枚）がマニフェスト（5枚）と一致しません');
     });
 
+    test('rejects backup if listContents fails', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockRejectedValue(new Error('Zip format invalid'));
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup if listContents contains unallowed file paths', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'unknown.txt' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに未許可のファイルが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
     // Test G: Zip Slip / malicious paths test
     test('rejects backup containing malicious path traversal in photos directory or meals', async () => {
       (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
         canceled: false,
         assets: [{ uri: 'file:///mock-picker/backup.zip' }],
       });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: '../evil.sh' },
+      ]);
 
       const manifestContent = JSON.stringify({
         formatVersion: 1,
@@ -1009,6 +1071,86 @@ describe('BackupService', () => {
 
       await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow(
         '写真のロールバック復元にも一部失敗しました'
+      );
+    });
+
+    test('increments rollbackFailedCount for both new file deletion and backed-up file copy failures', async () => {
+      const validationResult = {
+        valid: true,
+        stagingDirectory: 'file:///mock-cache/dm-import-123/',
+        meals: [
+          {
+            id: 'meal-1',
+            uuid: 'uuid-1',
+            meal_name: '既存上書き写真の食事',
+            photo_file_name: 'existing-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713800000000,
+            created_at: 1713800000000,
+            updated_at: 1713800000000,
+          },
+          {
+            id: 'meal-2',
+            uuid: 'uuid-2',
+            meal_name: '新規写真の食事',
+            photo_file_name: 'new-photo.jpg',
+            is_homemade: 0,
+            is_deleted: 0,
+            meal_datetime: 1713900000000,
+            created_at: 1713900000000,
+            updated_at: 1713900000000,
+          },
+        ],
+      };
+
+      let newPhotoCopied = false;
+      (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
+        // Forward copy: copy new-photo.jpg to document directory
+        if (options.to === 'file:///mock-documents/new-photo.jpg') {
+          newPhotoCopied = true;
+          return Promise.resolve(undefined);
+        }
+
+        // Forward copy: copy existing-photo.jpg to document directory
+        if (options.to === 'file:///mock-documents/existing-photo.jpg') {
+          return Promise.resolve(undefined);
+        }
+
+        // Rollback copy: restoring existing-photo.jpg from rollback directory to mock-documents
+        if (options.from.includes('/dm-restore-rollback-')) {
+          return Promise.reject(new Error('Rollback copy failed'));
+        }
+
+        // Initial copy to rollback dir
+        if (options.to.includes('/dm-restore-rollback-')) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.resolve(undefined);
+      });
+
+      (deleteAsync as jest.Mock).mockImplementation((path: string, _options: any) => {
+        // Rollback delete: deleting new-photo.jpg from document directory
+        if (path === 'file:///mock-documents/new-photo.jpg') {
+          return Promise.reject(new Error('Rollback delete failed'));
+        }
+        return Promise.resolve(undefined);
+      });
+
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path === 'file:///mock-documents/existing-photo.jpg') {
+          return Promise.resolve({ exists: true });
+        }
+        if (path === 'file:///mock-documents/new-photo.jpg') {
+          return Promise.resolve({ exists: newPhotoCopied });
+        }
+        return Promise.resolve({ exists: true });
+      });
+
+      (replaceDatabaseWithBackup as jest.Mock).mockRejectedValue(new Error('Trigger rollback'));
+
+      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow(
+        'Trigger rollback（写真のロールバック復元にも一部失敗しました）'
       );
     });
   });

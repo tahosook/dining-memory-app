@@ -134,28 +134,50 @@ function formatDateLabel(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+/**
+ * Groups records into date sections using a single O(N) pass.
+ * @param records Pre-sorted array of meals by meal_datetime DESC (guaranteed by MealService).
+ */
 function groupMealsByDate(records: Meal[]): MealSection[] {
-  const groups: Record<string, Meal[]> = {};
+  // Optimization: Leverage the fact that records are already sorted by meal_datetime DESC from the database.
+  // This allows us to group items in a single O(N) pass without any O(N log N) sorting.
+  const sections: MealSection[] = [];
 
-  records.forEach(meal => {
+  if (records.length === 0) {
+    return sections;
+  }
+
+  let currentDateKey = getLocalDateKey(new Date(records[0].meal_datetime));
+  let currentGroup: Meal[] = [records[0]];
+
+  for (let i = 1; i < records.length; i++) {
+    const meal = records[i];
     const dateKey = getLocalDateKey(new Date(meal.meal_datetime));
-    if (!groups[dateKey]) {
-      groups[dateKey] = [];
+
+    if (dateKey !== currentDateKey) {
+      sections.push({
+        date: currentDateKey,
+        dateLabel: formatDateLabel(new Date(currentGroup[0].meal_datetime)),
+        data: currentGroup,
+      });
+      currentDateKey = dateKey;
+      currentGroup = [meal];
+    } else {
+      currentGroup.push(meal);
     }
-    groups[dateKey].push(meal);
+  }
+
+  // Push the final group
+  sections.push({
+    date: currentDateKey,
+    dateLabel: formatDateLabel(new Date(currentGroup[0].meal_datetime)),
+    data: currentGroup,
   });
 
-  return Object.entries(groups)
-    .map(([dateKey, groupMeals]) => {
-      const sortedMeals = [...groupMeals].sort((a, b) => b.meal_datetime - a.meal_datetime);
-      return {
-        date: dateKey,
-        dateLabel: formatDateLabel(new Date(sortedMeals[0].meal_datetime)),
-        data: sortedMeals,
-      };
-    })
-    .sort((a, b) => (b.data[0]?.meal_datetime ?? 0) - (a.data[0]?.meal_datetime ?? 0));
+  return sections;
 }
+
+const RECORDS_PAGE_SIZE = 50;
 
 export const RecordsScreen: React.FC = () => {
   const navigation = useNavigation<RecordsNavigationProp>();
@@ -163,9 +185,16 @@ export const RecordsScreen: React.FC = () => {
   const [flatMeals, setFlatMeals] = useState<Meal[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const isMountedRef = useRef(true);
   // Store flatMeals in a ref to keep handleMealPress reference stable and prevent O(N^2) list re-renders
   const flatMealsRef = useRef<Meal[]>(flatMeals);
+  const loadingRef = useRef(false);
+  const refreshingRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const activeLoadIdRef = useRef(0);
 
   useEffect(() => {
     flatMealsRef.current = flatMeals;
@@ -178,39 +207,118 @@ export const RecordsScreen: React.FC = () => {
     };
   }, []);
 
+  const attachThumbnailRequests = useCallback((mealsToFetch: Meal[]) => {
+    requestMealThumbnails(mealsToFetch, {
+      onGenerated: (mealId, thumbUri) => {
+        if (!isMountedRef.current) {
+          return;
+        }
+        setFlatMeals(current =>
+          current.map(item =>
+            item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
+          )
+        );
+        setMealSections(current =>
+          current.map(section => ({
+            ...section,
+            data: section.data.map(item =>
+              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
+            ),
+          }))
+        );
+      },
+    });
+  }, []);
+
   const loadMeals = useCallback(async () => {
+    const loadId = ++activeLoadIdRef.current;
+    loadingRef.current = true;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+
     try {
-      const meals = await MealService.getRecentMeals(100);
+      const meals = await MealService.getRecentMeals(RECORDS_PAGE_SIZE);
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
+      const hasNext = meals.length === RECORDS_PAGE_SIZE;
+      hasMoreRef.current = hasNext;
+
       setFlatMeals(meals);
       setMealSections(groupMealsByDate(meals));
-      requestMealThumbnails(meals, {
-        onGenerated: (mealId, thumbUri) => {
-          if (!isMountedRef.current) {
-            return;
-          }
-          setFlatMeals(current =>
-            current.map(item =>
-              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
-            )
-          );
-          setMealSections(current =>
-            current.map(section => ({
-              ...section,
-              data: section.data.map(item =>
-                item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
-              ),
-            }))
-          );
-        },
-      });
+      attachThumbnailRequests(meals);
     } catch (error) {
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
       console.error('Failed to load meals:', error);
       Alert.alert('エラー', '食事記録の読み込みに失敗しました。');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (loadId === activeLoadIdRef.current && isMountedRef.current) {
+        loadingRef.current = false;
+        refreshingRef.current = false;
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, []);
+  }, [attachThumbnailRequests]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (
+      loadingRef.current ||
+      loadingMoreRef.current ||
+      !hasMoreRef.current ||
+      refreshingRef.current
+    ) {
+      return;
+    }
+
+    const currentMeals = flatMealsRef.current;
+    if (currentMeals.length === 0) {
+      return;
+    }
+    const lastMeal = currentMeals[currentMeals.length - 1];
+
+    const loadId = activeLoadIdRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    try {
+      const nextMeals = await MealService.getRecentMeals({
+        limit: RECORDS_PAGE_SIZE,
+        beforeMealDatetime: lastMeal.meal_datetime,
+        beforeId: lastMeal.id,
+      });
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
+
+      const hasNext = nextMeals.length === RECORDS_PAGE_SIZE;
+      hasMoreRef.current = hasNext;
+
+      if (nextMeals.length > 0) {
+        const existingIds = new Set(flatMealsRef.current.map(m => m.id));
+        const uniqueNextMeals = nextMeals.filter(m => !existingIds.has(m.id));
+
+        if (uniqueNextMeals.length > 0) {
+          const mergedMeals = [...flatMealsRef.current, ...uniqueNextMeals];
+          setFlatMeals(mergedMeals);
+          setMealSections(groupMealsByDate(mergedMeals));
+          attachThumbnailRequests(uniqueNextMeals);
+        }
+      }
+    } catch (error) {
+      if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
+        return;
+      }
+      console.error('Failed to load more meals:', error);
+    } finally {
+      if (loadId === activeLoadIdRef.current && isMountedRef.current) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [attachThumbnailRequests]);
 
   useFocusEffect(
     useCallback(() => {
@@ -219,6 +327,7 @@ export const RecordsScreen: React.FC = () => {
   );
 
   const handleRefresh = useCallback(async () => {
+    refreshingRef.current = true;
     setRefreshing(true);
     await loadMeals();
   }, [loadMeals]);
@@ -277,6 +386,7 @@ export const RecordsScreen: React.FC = () => {
           </View>
         ) : (
           <SectionList
+            testID="records-section-list"
             sections={mealSections}
             keyExtractor={meal => meal.id}
             renderItem={renderItem}
@@ -285,6 +395,15 @@ export const RecordsScreen: React.FC = () => {
             ItemSeparatorComponent={Separator}
             refreshing={refreshing}
             onRefresh={handleRefresh}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.loadingMoreContainer} testID="records-loading-more">
+                  <ActivityIndicator size="small" color="#007AFF" />
+                </View>
+              ) : null
+            }
             showsVerticalScrollIndicator={false}
           />
         )}
@@ -460,5 +579,10 @@ const styles = StyleSheet.create({
   groupSeparator: {
     height: 12,
     backgroundColor: '#f8f9fa',
+  },
+  loadingMoreContainer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

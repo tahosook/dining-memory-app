@@ -9,21 +9,18 @@ import {
   Switch,
   ScrollView,
   Platform,
+  ActivityIndicator,
   type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  CameraView as ExpoCameraView,
-  PermissionResponse,
-  CameraView as CameraViewType,
-} from 'expo-camera';
+import { CameraView as ExpoCameraView, CameraView as CameraViewType } from 'expo-camera';
 import { Colors } from '../../../constants/Colors';
 import { GlobalStyles } from '../../../constants/Styles';
 import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
 import { CuisineTypeSelector } from '../../../components/common/CuisineTypeSelector';
 import { MealInputAssistSection } from '../../common/MealInputAssistSection';
-import type { CameraPermissionUiState } from '../../../hooks/cameraCapture';
+import type { CameraPermissionState } from '../../../hooks/cameraCapture';
 import type {
   CaptureReviewEditableField,
   CaptureReviewState,
@@ -56,11 +53,6 @@ type CameraOperations = {
   onClose: () => void;
   onRequestPermission: () => Promise<void>;
   onOpenSettings: () => Promise<void>;
-};
-
-type CameraPermissionState = {
-  cameraPermission: PermissionResponse | null;
-  permissionUiState: CameraPermissionUiState;
 };
 
 type CameraReviewState = {
@@ -99,9 +91,10 @@ export type CameraViewProps = Pick<
     | 'onClose'
     | 'onRequestPermission'
     | 'onOpenSettings'
-  > &
-  Pick<CameraPermissionState, 'cameraPermission' | 'permissionUiState'> &
-  Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
+  > & {
+    cameraPermission: CameraPermissionState['permission'];
+    permissionUiState: CameraPermissionState['uiState'];
+  } & Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
   Pick<
     CameraReviewOperations,
     'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'
@@ -147,6 +140,7 @@ const PermissionRequestView: React.FC<{ onRequestPermission: () => Promise<void>
         style={styles.permissionButton}
         onPress={onRequestPermission}
         testID="request-camera-permission-button"
+        accessibilityRole="button"
       >
         <Text style={styles.permissionButtonText}>カメラを許可する</Text>
       </TouchableOpacity>
@@ -167,6 +161,7 @@ const PermissionDeniedView: React.FC<{ onOpenSettings: () => Promise<void> }> = 
         style={styles.permissionButton}
         onPress={onOpenSettings}
         testID="open-camera-settings-button"
+        accessibilityRole="button"
       >
         <Text style={styles.permissionButtonText}>設定を開く</Text>
       </TouchableOpacity>
@@ -203,6 +198,7 @@ const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
         style={styles.reviewCompactButton}
         onPress={onPress}
         testID={`${testID}-trigger`}
+        accessibilityRole="button"
       >
         <Text style={styles.reviewCompactButtonText}>{triggerLabel}</Text>
       </TouchableOpacity>
@@ -374,6 +370,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             onPress={onCancel}
             disabled={savingCapture}
             testID="cancel-capture-review-button"
+            accessibilityRole="button"
             accessibilityState={{ disabled: savingCapture }}
           >
             <Text style={styles.reviewCancelText}>キャンセル</Text>
@@ -387,9 +384,18 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             onPress={onSave}
             disabled={savingCapture}
             testID="save-meal-button"
-            accessibilityState={{ disabled: savingCapture }}
+            accessibilityRole="button"
+            accessibilityLabel={savingCapture ? '保存中' : '保存'}
+            accessibilityState={{ disabled: savingCapture, busy: savingCapture }}
           >
-            <Text style={styles.reviewSaveText}>{savingCapture ? '保存中...' : '保存'}</Text>
+            {savingCapture ? (
+              <View style={styles.reviewSavingContent}>
+                <ActivityIndicator size="small" color={Colors.white} />
+                <Text style={styles.reviewSaveText}>保存中...</Text>
+              </View>
+            ) : (
+              <Text style={styles.reviewSaveText}>保存</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -421,6 +427,8 @@ const BottomControls: React.FC<BottomControlsProps> = ({
         onPress={onAddPhotoFromLibrary}
         disabled={pickingPhotoFromLibrary}
         testID="add-photo-from-library-button"
+        accessibilityRole="button"
+        accessibilityLabel={pickingPhotoFromLibrary ? '写真を選択中' : '写真から追加'}
         accessibilityState={{ disabled: pickingPhotoFromLibrary }}
       >
         <Text style={styles.secondaryActionButtonText}>
@@ -711,6 +719,11 @@ const styles = StyleSheet.create({
   },
   reviewSaveButtonDisabled: {
     opacity: 0.55,
+  },
+  reviewSavingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   reviewCancelText: {
     color: Colors.black,
