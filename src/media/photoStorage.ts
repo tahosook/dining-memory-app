@@ -5,6 +5,7 @@ import * as Crypto from 'expo-crypto';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { CAMERA_CONSTANTS } from '../constants/CameraConstants';
 import { cleanupTempFile } from './tempFiles';
+import { sanitizeLogObject } from '../utils/logSanitizer';
 import {
   buildMealPhotoFileName,
   formatPhotoTimestampForFilename,
@@ -126,17 +127,17 @@ export async function persistPhotoToStablePath(
 
       if (existingAlbum) {
         const asset = await MediaLibrary.Asset.create(destination, existingAlbum);
-        console.info('Android photo saved directly to existing Dining Memory album:', {
+        console.info('Android photo saved directly to existing Dining Memory album:', sanitizeLogObject({
           destination,
           albumId: existingAlbum.id,
           assetId: asset.id,
-        });
+        }));
       } else {
         const newAlbum = await MediaLibrary.Album.create(ANDROID_PHOTO_ALBUM_NAME, [destination]);
-        console.info('Android Dining Memory album created with photo:', {
+        console.info('Android Dining Memory album created with photo:', sanitizeLogObject({
           destination,
           albumId: newAlbum.id,
-        });
+        }));
       }
       savedToMediaLibrary = true;
     } catch (albumError: unknown) {

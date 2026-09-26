@@ -25,6 +25,7 @@ import { cleanupTempFile } from '../../media/tempFiles';
 import { persistCapturePhotoLocally } from './capturePhotoPersistence';
 import { savePhotoToMediaLibrary } from './mediaLibrarySave';
 import { saveCaptureReviewWorkflow } from './captureSaveWorkflow';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 export type { CaptureReviewEditableField, CaptureReviewState } from './captureReviewState';
 
@@ -178,10 +179,10 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
       }
       const photo = await takePhotoForReview(cameraRef, cameraPermission);
       if (shouldLogCaptureDiagnostics()) {
-        console.info('Camera capture attempt completed.', {
+        console.info('Camera capture attempt completed.', sanitizeLogObject({
           captureAttemptId,
           photoUri: photo.uri,
-        });
+        }));
       }
       beginReview(photo, 'camera');
     } catch {
@@ -323,7 +324,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         }
 
         if (shouldLogCaptureDiagnostics()) {
-          console.info('Capture review save attempt completed.', {
+          console.info('Capture review save attempt completed.', sanitizeLogObject({
             saveAttemptId,
             sourcePhotoUri: review.photoUri,
             resizedPhotoUri: result.resizedPhotoUri,
@@ -331,7 +332,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
             stableThumbnailUri: result.stableThumbnailUri,
             savedToMediaLibrary: result.savedToMediaLibrary,
             mealId: result.mealId,
-          });
+          }));
         }
         setCaptureReview(null);
         navigateToRecords();

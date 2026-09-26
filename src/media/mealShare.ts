@@ -1,6 +1,7 @@
 import { NativeModules, Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { getInfoAsync } from 'expo-file-system/legacy';
+import { sanitizeLogObject } from '../utils/logSanitizer';
 
 export interface MealShareOptions {
   title: string;
@@ -119,7 +120,7 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
   const debugInfo = await inspectSharePhoto(options.photoUri, mimeType);
   debugInfo.shareTextLength = options.text.length;
 
-  console.info('[MealShare] Preparing meal share:', {
+  console.info('[MealShare] Preparing meal share:', sanitizeLogObject({
     platform: debugInfo.platform,
     photoUri: debugInfo.photoUri,
     mimeType: debugInfo.mimeType,
@@ -127,7 +128,7 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
     storageLocation: debugInfo.storageLocation,
     exists: debugInfo.exists,
     shareTextLength: debugInfo.shareTextLength,
-  });
+  }));
 
   try {
     if (Platform.OS === 'ios' && options.photoUri) {
@@ -238,11 +239,11 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
       details: defaultResult,
     };
   } catch (error) {
-    console.error('[MealShare] Failed to share meal:', {
+    console.error('[MealShare] Failed to share meal:', sanitizeLogObject({
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
       ...debugInfo,
-    });
+    }));
     throw error;
   }
 }

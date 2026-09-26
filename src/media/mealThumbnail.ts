@@ -5,6 +5,7 @@ import { MealService } from '../database/services/MealService';
 import type { Meal } from '../types/MealTypes';
 import { persistThumbnailToStablePath } from './photoStorage';
 import { cleanupTempFile } from './tempFiles';
+import { sanitizeLogObject } from '../utils/logSanitizer';
 
 export const MAX_CONCURRENT_THUMBNAILS = 2;
 
@@ -101,14 +102,14 @@ async function processMealThumbnail(
       if (!originalInfo.exists) {
         console.warn(
           'Original photo does not exist for meal thumbnail generation:',
-          targetPhotoPath
+          sanitizeLogObject(targetPhotoPath)
         );
         return null;
       }
     } catch {
       console.warn(
         'Failed to verify original photo for meal thumbnail generation:',
-        targetPhotoPath
+        sanitizeLogObject(targetPhotoPath)
       );
       return null;
     }
