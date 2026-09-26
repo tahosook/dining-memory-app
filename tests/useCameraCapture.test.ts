@@ -326,7 +326,7 @@ describe('useCameraCapture', () => {
     });
     expect(capturedAtMs).toEqual(expect.any(Number));
     expect(persistPhotoToStablePath).toHaveBeenCalledWith(
-      'file:///tmp/resized-photo.jpg',
+      'file:///tmp/photo.jpg',
       expect.objectContaining({
         capturedAt: new Date(capturedAtMs!),
         location: {
@@ -335,20 +335,6 @@ describe('useCameraCapture', () => {
         },
         softwareName: 'Dining Memory',
       })
-    );
-    expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
-      'file:///tmp/photo.jpg',
-      1600,
-      1200,
-      'JPEG',
-      75,
-      0,
-      undefined,
-      true,
-      {
-        mode: 'contain',
-        onlyScaleDown: true,
-      }
     );
     expect(result.current.captureReview).toBeNull();
     expect(mockNavigate).toHaveBeenCalledWith('Records');
@@ -720,7 +706,7 @@ describe('useCameraCapture', () => {
       })
     );
     expect(persistPhotoToStablePath).toHaveBeenCalledWith(
-      'file:///tmp/resized-photo.jpg',
+      'file:///tmp/photo.jpg',
       expect.objectContaining({
         capturedAt: new Date(capturedAtMs!),
         location: {},

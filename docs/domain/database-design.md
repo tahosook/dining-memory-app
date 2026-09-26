@@ -45,7 +45,8 @@
   - `database/app_settings.json`: `app_settings` のポータブル JSON 配列。
   - `photos/<filename>.jpg`: 参照されているオリジナル写真ファイルのみを格納。サムネイル（`-thumb.jpg`）は同梱しない。
 - 復元（インポート）時は、一時展開ディレクトリでのマニフェスト・データ構造・写真整合性検証およびユーザー確認を経て、写真を `documentDirectory` へ配置し、SQLite トランザクション内で既存データを一括置換する。復元時は `meals` および `app_settings` の置換と同時に `search_vectors` もクリアする（再インデックスは将来対応）。
-- 復元後の `meals.photo_path` は新環境の `${documentDirectory}${photo_file_name}` に書き換えられ、`photo_thumbnail_path` は NULL に設定される（一覧表示は既存の `photo_thumbnail_path ?? photo_path` フォールバックで即時表示される）。
+- 復元後の `meals.photo_path` は新環境の `${documentDirectory}${photo_file_name}` に書き換えられ、`photo_thumbnail_path` は NULL に設定される（一覧表示は既存の `photo_thumbnail_path ?? photo_path` フォールバックで即時表示される）。トランザクション成功後、新DBで参照されなくなった旧バックアップ由来の写真や旧サムネイルは、写真ライフサイクル管理（Issue #88）によって安全に回収される。復元失敗（ロールバック）時は旧ファイルと旧DBが維持され、クリーンアップは実行されない。
+
 
 ## Current Implementation Notes
 - The active schema is intentionally small while capture, save, search, and settings behavior stabilizes.
@@ -62,5 +63,6 @@
 - Favor small records and file paths over BLOB-heavy rows.
 - Preserve data needed for export, backup, and future migration.
 - Keep indexing focused on the read paths users actually use: date, meal identity, location, deletion state, and search support.
-- Treat cleanup and maintenance as additive safety work: remove orphaned, temporary, or low-value generated data without risking primary meal history.
+- Treat cleanup and maintenance as additive safety work: remove orphaned, temporary, or low-value generated data without risking primary meal history. soft delete（`is_deleted = 1`）されたレコードの写真・サムネイル実体は、論理削除セマンティクスおよびバックアップ整合性を保つため DB 参照中として保護し、DB から物理削除された場合にのみ孤児ファイルとして安全に回収する。
 - Keep the schema readable enough that new table changes can be reviewed without reopening the entire app architecture.
+

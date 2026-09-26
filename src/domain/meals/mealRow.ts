@@ -13,7 +13,7 @@ export interface MealRowInput {
   cooking_level?: CookingLevel | string;
   is_homemade: boolean;
   photo_path: string;
-  photo_thumbnail_path?: string;
+  photo_thumbnail_path?: string | null;
   location_name?: string;
   latitude?: number;
   longitude?: number;

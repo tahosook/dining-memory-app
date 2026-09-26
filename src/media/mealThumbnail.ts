@@ -9,16 +9,24 @@ import { cleanupTempFile } from './tempFiles';
 export const MAX_CONCURRENT_THUMBNAILS = 2;
 
 export interface ThumbnailRequestOptions {
+  photoPath?: string;
   onGenerated?: (mealId: string, thumbUri: string) => void;
 }
 
+export function getPhotoGenerationKey(mealId: string, photoPath: string): string {
+  return `${mealId}:${photoPath}`;
+}
+
 type QueueTask = {
+  generationKey: string;
   mealId: string;
+  photoPath: string;
   run: () => Promise<string | null>;
   resolve: (value: string | null) => void;
 };
 
-const inFlightMap = new Map<string, Promise<string | null>>();
+const inFlightGenerationMap = new Map<string, Promise<string | null>>();
+const inFlightMealMap = new Map<string, Promise<string | null>>();
 const taskQueue: QueueTask[] = [];
 let activeTaskCount = 0;
 
@@ -34,31 +42,44 @@ function pumpQueue() {
       .run()
       .then(nextTask.resolve)
       .catch(error => {
-        console.warn(`Unexpected failure in thumbnail queue for meal ${nextTask.mealId}:`, error);
+        console.warn(
+          `Unexpected failure in thumbnail queue for generation ${nextTask.generationKey}:`,
+          error
+        );
         nextTask.resolve(null);
       })
       .finally(() => {
         activeTaskCount -= 1;
-        inFlightMap.delete(nextTask.mealId);
+        inFlightGenerationMap.delete(nextTask.generationKey);
         pumpQueue();
       });
   }
 }
 
 function enqueueThumbnailTask(
+  generationKey: string,
   mealId: string,
+  photoPath: string,
   run: () => Promise<string | null>
 ): Promise<string | null> {
   return new Promise<string | null>(resolve => {
-    taskQueue.push({ mealId, run, resolve });
+    taskQueue.push({ generationKey, mealId, photoPath, run, resolve });
     pumpQueue();
   });
 }
 
-async function processMealThumbnail(mealId: string): Promise<string | null> {
+async function processMealThumbnail(
+  mealId: string,
+  targetPhotoPath: string
+): Promise<string | null> {
   try {
     const meal = await MealService.getMealById(mealId);
     if (!meal || meal.is_deleted || !meal.photo_path) {
+      return null;
+    }
+
+    // 写真世代チェック: DBの現在の photo_path と対象世代が一致しない場合は処理不要 (stale)
+    if (meal.photo_path !== targetPhotoPath) {
       return null;
     }
 
@@ -76,27 +97,25 @@ async function processMealThumbnail(mealId: string): Promise<string | null> {
 
     // オリジナル写真の実在確認
     try {
-      const originalInfo = await getInfoAsync(meal.photo_path);
+      const originalInfo = await getInfoAsync(targetPhotoPath);
       if (!originalInfo.exists) {
         console.warn(
           'Original photo does not exist for meal thumbnail generation:',
-          meal.photo_path
+          targetPhotoPath
         );
         return null;
       }
     } catch {
       console.warn(
         'Failed to verify original photo for meal thumbnail generation:',
-        meal.photo_path
+        targetPhotoPath
       );
       return null;
     }
 
-    const initialPhotoPath = meal.photo_path;
-
     // サムネイル生成
     const resizedThumbnail = await ImageResizer.createResizedImage(
-      initialPhotoPath,
+      targetPhotoPath,
       CAMERA_CONSTANTS.THUMBNAIL_PHOTO_MAX_WIDTH,
       CAMERA_CONSTANTS.THUMBNAIL_PHOTO_MAX_HEIGHT,
       'JPEG',
@@ -114,18 +133,18 @@ async function processMealThumbnail(mealId: string): Promise<string | null> {
     try {
       stableThumbnailUri = await persistThumbnailToStablePath(
         resizedThumbnail.uri,
-        initialPhotoPath
+        targetPhotoPath
       );
     } finally {
-      if (resizedThumbnail.uri !== initialPhotoPath) {
+      if (resizedThumbnail.uri !== targetPhotoPath) {
         await cleanupTempFile(resizedThumbnail.uri);
       }
     }
 
-    // Stale Update 防止: photo_path が生成開始時と一致する場合のみ原子的に DB を更新
+    // Stale Update 防止: photo_path が対象世代と一致する場合のみ原子的に DB を更新
     let updated = false;
     try {
-      updated = await MealService.updateMealThumbnail(mealId, stableThumbnailUri, initialPhotoPath);
+      updated = await MealService.updateMealThumbnail(mealId, stableThumbnailUri, targetPhotoPath);
     } catch (dbError) {
       console.warn('Failed to update meal thumbnail in DB:', dbError);
       await cleanupTempFile(stableThumbnailUri);
@@ -145,19 +164,69 @@ async function processMealThumbnail(mealId: string): Promise<string | null> {
   }
 }
 
-export function ensureMealThumbnail(mealId: string): Promise<string | null> {
-  const inFlight = inFlightMap.get(mealId);
-  if (inFlight) {
-    return inFlight;
+/**
+ * 食事サムネイルの生成タスクをキューイングする。
+ *
+ * @param mealId 食事ID
+ * @param targetPhotoPath 写真世代のパス。指定時は `mealId:targetPhotoPath` で即座に世代キューへ登録する。
+ *                        省略時は DB から最新の photo_path を取得して該当世代へ委譲する（互換用）。
+ */
+export function ensureMealThumbnail(
+  mealId: string,
+  targetPhotoPath?: string
+): Promise<string | null> {
+  if (targetPhotoPath) {
+    const generationKey = getPhotoGenerationKey(mealId, targetPhotoPath);
+    const inFlight = inFlightGenerationMap.get(generationKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const promise = enqueueThumbnailTask(generationKey, mealId, targetPhotoPath, () =>
+      processMealThumbnail(mealId, targetPhotoPath)
+    );
+    inFlightGenerationMap.set(generationKey, promise);
+    return promise;
   }
 
-  const promise = enqueueThumbnailTask(mealId, () => processMealThumbnail(mealId));
-  inFlightMap.set(mealId, promise);
+  // targetPhotoPath が明示されていない場合は mealId 単位で非同期解決
+  const inFlightMeal = inFlightMealMap.get(mealId);
+  if (inFlightMeal) {
+    return inFlightMeal;
+  }
+
+  const promise = (async () => {
+    try {
+      const meal = await MealService.getMealById(mealId);
+      if (!meal || meal.is_deleted || !meal.photo_path) {
+        return null;
+      }
+      return await ensureMealThumbnail(mealId, meal.photo_path);
+    } finally {
+      inFlightMealMap.delete(mealId);
+    }
+  })();
+
+  inFlightMealMap.set(mealId, promise);
   return promise;
 }
 
-export function requestMealThumbnail(mealId: string, options?: ThumbnailRequestOptions): void {
-  void ensureMealThumbnail(mealId)
+export function requestMealThumbnail(mealId: string, options?: ThumbnailRequestOptions): void;
+export function requestMealThumbnail(
+  mealId: string,
+  photoPath: string,
+  options?: ThumbnailRequestOptions
+): void;
+export function requestMealThumbnail(
+  mealId: string,
+  photoPathOrOptions?: string | ThumbnailRequestOptions,
+  maybeOptions?: ThumbnailRequestOptions
+): void {
+  const photoPath =
+    typeof photoPathOrOptions === 'string' ? photoPathOrOptions : photoPathOrOptions?.photoPath;
+  const options = typeof photoPathOrOptions === 'object' ? photoPathOrOptions : maybeOptions;
+
+  void ensureMealThumbnail(mealId, photoPath)
     .then(thumbUri => {
       if (thumbUri && options?.onGenerated) {
         options.onGenerated(mealId, thumbUri);
@@ -173,32 +242,32 @@ export function requestMealThumbnails(
   options?: ThumbnailRequestOptions
 ): void {
   (async () => {
-    const candidateMealIds = await Promise.all(
+    const candidateMeals = await Promise.all(
       meals.map(async meal => {
         if (!meal.photo_path) {
           return null;
         }
 
         if (!meal.photo_thumbnail_path) {
-          return meal.id;
+          return meal;
         }
 
         try {
           const info = await getInfoAsync(meal.photo_thumbnail_path);
           if (!info.exists) {
-            return meal.id;
+            return meal;
           }
         } catch {
-          return meal.id;
+          return meal;
         }
 
         return null;
       })
     );
 
-    for (const mealId of candidateMealIds) {
-      if (mealId) {
-        requestMealThumbnail(mealId, options);
+    for (const meal of candidateMeals) {
+      if (meal) {
+        requestMealThumbnail(meal.id, meal.photo_path, options);
       }
     }
   })().catch(error => {
@@ -206,8 +275,31 @@ export function requestMealThumbnails(
   });
 }
 
+export function getInFlightThumbnailPhotoPaths(): Set<string> {
+  const inFlightPaths = new Set<string>();
+
+  for (const task of taskQueue) {
+    if (task.photoPath) {
+      inFlightPaths.add(task.photoPath);
+    }
+  }
+
+  for (const key of inFlightGenerationMap.keys()) {
+    const colonIndex = key.indexOf(':');
+    if (colonIndex !== -1) {
+      const path = key.slice(colonIndex + 1);
+      if (path) {
+        inFlightPaths.add(path);
+      }
+    }
+  }
+
+  return inFlightPaths;
+}
+
 export function __clearThumbnailQueueForTest(): void {
   taskQueue.length = 0;
-  inFlightMap.clear();
+  inFlightGenerationMap.clear();
+  inFlightMealMap.clear();
   activeTaskCount = 0;
 }

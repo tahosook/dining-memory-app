@@ -12,8 +12,10 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.imageclassifier.ImageClassifier
 import com.google.mediapipe.tasks.vision.imageclassifier.ImageClassifierResult
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.nio.channels.FileChannel
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -49,7 +51,8 @@ class MediaPipeMealInputAssistModule(
         status.putString("kind", "ready")
       } catch (error: FileNotFoundException) {
         status.putString("kind", "unavailable")
-        status.putString("reason", error.message ?: MediaPipeMealInputAssistSupport.buildModelMissingReason())
+        val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
+        status.putString("reason", error.message ?: MediaPipeMealInputAssistSupport.buildModelMissingReason(modelFile.absolutePath))
       } catch (error: Exception) {
         status.putString("kind", "unavailable")
         status.putString(
@@ -61,6 +64,75 @@ class MediaPipeMealInputAssistModule(
       }
 
       promise.resolve(status)
+    }
+  }
+
+  @ReactMethod
+  fun verifyFileSha256(filePathOrUri: String, expectedSha256: String, promise: Promise) {
+    worker.execute {
+      val localPath = MediaPipeMealInputAssistSupport.resolveLocalFilePath(filePathOrUri)
+      if (localPath == null) {
+        promise.reject(
+          "E_INVALID_FILE_PATH",
+          MediaPipeMealInputAssistSupport.buildInvalidFilePathReason(filePathOrUri),
+        )
+        return@execute
+      }
+
+      val file = File(localPath)
+      if (!file.exists()) {
+        promise.reject(
+          "E_FILE_NOT_FOUND",
+          MediaPipeMealInputAssistSupport.buildFileNotFoundReason(localPath),
+        )
+        return@execute
+      }
+
+      try {
+        val computedHash = MediaPipeMealInputAssistSupport.computeSha256(file)
+        val matches = computedHash.equals(expectedSha256.trim(), ignoreCase = true)
+        promise.resolve(matches)
+      } catch (error: Exception) {
+        promise.reject(
+          "E_HASH_COMPUTATION_FAILED",
+          error.message ?: error.javaClass.simpleName,
+          error,
+        )
+      }
+    }
+  }
+
+  @ReactMethod
+  fun computeFileSha256(filePathOrUri: String, promise: Promise) {
+    worker.execute {
+      val localPath = MediaPipeMealInputAssistSupport.resolveLocalFilePath(filePathOrUri)
+      if (localPath == null) {
+        promise.reject(
+          "E_INVALID_FILE_PATH",
+          MediaPipeMealInputAssistSupport.buildInvalidFilePathReason(filePathOrUri),
+        )
+        return@execute
+      }
+
+      val file = File(localPath)
+      if (!file.exists()) {
+        promise.reject(
+          "E_FILE_NOT_FOUND",
+          MediaPipeMealInputAssistSupport.buildFileNotFoundReason(localPath),
+        )
+        return@execute
+      }
+
+      try {
+        val computedHash = MediaPipeMealInputAssistSupport.computeSha256(file)
+        promise.resolve(computedHash)
+      } catch (error: Exception) {
+        promise.reject(
+          "E_HASH_COMPUTATION_FAILED",
+          error.message ?: error.javaClass.simpleName,
+          error,
+        )
+      }
     }
   }
 
@@ -97,6 +169,21 @@ class MediaPipeMealInputAssistModule(
       try {
         val imageClassifier = try {
           ensureClassifier()
+        } catch (error: FileNotFoundException) {
+          val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
+          promise.reject(
+            "E_MODEL_MISSING",
+            error.message ?: MediaPipeMealInputAssistSupport.buildModelMissingReason(modelFile.absolutePath),
+            error,
+          )
+          return@execute
+        } catch (error: IOException) {
+          promise.reject(
+            "E_MODEL_LOAD_FAILED",
+            error.message ?: MediaPipeMealInputAssistSupport.buildModelLoadFailedReason(error.javaClass.simpleName),
+            error,
+          )
+          return@execute
         } catch (error: Exception) {
           promise.reject(
             "E_CLASSIFIER_INIT_FAILED",
@@ -133,14 +220,38 @@ class MediaPipeMealInputAssistModule(
       return existingClassifier
     }
 
-    if (!hasBundledModelAsset()) {
-      throw FileNotFoundException(MediaPipeMealInputAssistSupport.buildModelMissingReason())
+    val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
+    if (!modelFile.exists()) {
+      throw FileNotFoundException(
+        MediaPipeMealInputAssistSupport.buildModelMissingReason(modelFile.absolutePath),
+      )
+    }
+
+    if (!modelFile.isFile || modelFile.length() <= 0L) {
+      throw IOException(
+        MediaPipeMealInputAssistSupport.buildModelLoadFailedReason(
+          "Model file is not a regular file or is empty: ${modelFile.absolutePath}",
+        ),
+      )
+    }
+
+    val mappedByteBuffer = try {
+      FileInputStream(modelFile).use { fis ->
+        fis.channel.map(FileChannel.MapMode.READ_ONLY, 0, modelFile.length())
+      }
+    } catch (error: IOException) {
+      throw IOException(
+        MediaPipeMealInputAssistSupport.buildModelLoadFailedReason(
+          error.message ?: error.javaClass.simpleName,
+        ),
+        error,
+      )
     }
 
     val classifierOptions = ImageClassifier.ImageClassifierOptions.builder()
       .setBaseOptions(
         BaseOptions.builder()
-          .setModelAssetPath(MEDIAPIPE_MEAL_INPUT_ASSIST_MODEL_ASSET_PATH)
+          .setModelAssetBuffer(mappedByteBuffer)
           .build(),
       )
       .setRunningMode(RunningMode.IMAGE)
@@ -149,19 +260,6 @@ class MediaPipeMealInputAssistModule(
 
     return ImageClassifier.createFromOptions(reactApplicationContext, classifierOptions).also { createdClassifier ->
       classifier = createdClassifier
-    }
-  }
-
-  private fun hasBundledModelAsset(): Boolean {
-    return try {
-      reactApplicationContext.assets.open(MEDIAPIPE_MEAL_INPUT_ASSIST_MODEL_ASSET_PATH).use { inputStream ->
-        inputStream.read()
-      }
-      true
-    } catch (_: FileNotFoundException) {
-      false
-    } catch (_: IOException) {
-      false
     }
   }
 

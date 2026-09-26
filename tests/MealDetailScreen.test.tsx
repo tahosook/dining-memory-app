@@ -13,7 +13,13 @@ import {
 import type { RootStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
-import { rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
+import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
+import { requestMealThumbnail } from '../src/media/mealThumbnail';
+import * as MealShareModule from '../src/media/mealShare';
+
+jest.mock('../src/media/mealThumbnail', () => ({
+  requestMealThumbnail: jest.fn(),
+}));
 
 jest.mock('../src/database/services/MealService', () => ({
   MealService: {
@@ -474,6 +480,25 @@ describe('MealDetailScreen', () => {
     });
   });
 
+  test('shows an alert and keeps the edit modal open when meal update fails', async () => {
+    const error = new Error('update failed');
+    (MealService.updateMeal as jest.Mock).mockRejectedValue(error);
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '更新に失敗しました。');
+    });
+
+    expect(console.error).toHaveBeenCalledWith('Failed to update meal:', error);
+
+    // The modal should still be visible because setEditingMeal(null) wasn't called
+    expect(getByTestId('detail-edit-save-button')).toBeTruthy();
+  });
+
   test('shows AI input assist in the edit modal and requests suggestions', () => {
     const requestSuggestions = jest.fn().mockResolvedValue(undefined);
     (useMealInputAssist as jest.Mock).mockReturnValue(
@@ -597,7 +622,7 @@ describe('MealDetailScreen', () => {
     (MealService.updateMeal as jest.Mock).mockResolvedValue({
       ...baseMeal,
       photo_path: 'file:///rotated-photo.jpg',
-      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: null,
     });
 
     const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
@@ -610,13 +635,76 @@ describe('MealDetailScreen', () => {
     });
     expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
       photo_path: 'file:///rotated-photo.jpg',
-      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: null,
     });
+    expect(requestMealThumbnail).toHaveBeenCalledWith(
+      'meal-1',
+      'file:///rotated-photo.jpg',
+      expect.objectContaining({
+        onGenerated: expect.any(Function),
+      })
+    );
+
+    // Old photo and thumbnail files are not deleted immediately during rotation to prevent
+    // race conditions with in-flight thumbnail generation (lifecycle decoupled to #88)
+    expect(deleteMealPhotoFileIfSafe).not.toHaveBeenCalled();
+
+    // Simulate onGenerated callback
+    const thumbnailCallback = (requestMealThumbnail as jest.Mock).mock.calls[0][2].onGenerated;
+    act(() => {
+      thumbnailCallback('meal-1', 'file:///docs/meal-1-rotated-thumb.jpg');
+    });
+
     await waitFor(() => {
       expect(getByTestId('meal-detail-image').props.source).toEqual({
         uri: 'file:///rotated-photo.jpg',
       });
     });
+  });
+
+  test('rotates successfully when meal has no existing thumbnail', async () => {
+    (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-no-thumb.jpg');
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      photo_thumbnail_path: null,
+      photo_path: 'file:///rotated-no-thumb.jpg',
+    });
+
+    const mealWithoutThumb = {
+      ...baseMeal,
+      photo_thumbnail_path: undefined,
+    };
+
+    const { getByTestId } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: mealWithoutThumb,
+              meals: [mealWithoutThumb],
+            },
+          },
+        })}
+      />
+    );
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+
+    await waitFor(() => {
+      expect(rotateMealPhotoClockwise).toHaveBeenCalledWith('file:///full-photo.jpg');
+    });
+    expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
+      photo_path: 'file:///rotated-no-thumb.jpg',
+      photo_thumbnail_path: null,
+    });
+    expect(requestMealThumbnail).toHaveBeenCalledWith(
+      'meal-1',
+      'file:///rotated-no-thumb.jpg',
+      expect.any(Object)
+    );
   });
 
   test('disables the rotate action while rotation is running', async () => {
@@ -625,7 +713,7 @@ describe('MealDetailScreen', () => {
     (MealService.updateMeal as jest.Mock).mockResolvedValue({
       ...baseMeal,
       photo_path: 'file:///rotated-photo.jpg',
-      photo_thumbnail_path: 'file:///rotated-photo.jpg',
+      photo_thumbnail_path: null,
     });
 
     const { findByText, getByTestId } = render(<MealDetailScreen {...createProps()} />);
@@ -664,6 +752,21 @@ describe('MealDetailScreen', () => {
     });
   });
 
+  test('cleans up rotated photo file when MealService.updateMeal fails', async () => {
+    (rotateMealPhotoClockwise as jest.Mock).mockResolvedValue('file:///rotated-fail.jpg');
+    (MealService.updateMeal as jest.Mock).mockResolvedValue(null);
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByTestId('detail-edit-rotate-image-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '写真の回転に失敗しました。');
+    });
+    expect(deleteMealPhotoFileIfSafe).toHaveBeenCalledWith('file:///rotated-fail.jpg');
+  });
+
   test('opens the share composer with photo preview and shares the edited text', async () => {
     const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
 
@@ -686,6 +789,22 @@ describe('MealDetailScreen', () => {
         message: '食事記録: 焼き魚定食\n料理ジャンル: 和食',
         url: 'file:///full-photo.jpg',
       });
+    });
+  });
+
+  test('shows an alert when shareMealContent fails', async () => {
+    jest.spyOn(MealShareModule, 'shareMealContent').mockRejectedValueOnce(new Error('share failed'));
+
+    const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(getByText('共有する前に確認')).toBeTruthy();
+
+    fireEvent.press(getByTestId('share-submit-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '共有シートを開けませんでした。');
     });
   });
 

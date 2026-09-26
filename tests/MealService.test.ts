@@ -71,6 +71,67 @@ describe('MealService', () => {
     expect(meals[0].is_homemade).toBe(true);
   });
 
+  test('applies limit and offset pagination in InMemory mode for getRecentMeals', async () => {
+    for (let i = 1; i <= 5; i++) {
+      await MealService.createMeal({
+        meal_name: `料理 ${i}`,
+        is_homemade: true,
+        photo_path: `file:///meal-${i}.jpg`,
+        meal_datetime: new Date(2026, 3, 10, i, 0, 0),
+      });
+    }
+
+    // 降順ソートされるので 料理 5, 4, 3, 2, 1 の順
+    const page1 = await MealService.getRecentMeals(2, 0);
+    expect(page1).toHaveLength(2);
+    expect(page1[0].meal_name).toBe('料理 5');
+    expect(page1[1].meal_name).toBe('料理 4');
+
+    const page2 = await MealService.getRecentMeals(2, 2);
+    expect(page2).toHaveLength(2);
+    expect(page2[0].meal_name).toBe('料理 3');
+    expect(page2[1].meal_name).toBe('料理 2');
+
+    const page3 = await MealService.getRecentMeals(2, 4);
+    expect(page3).toHaveLength(1);
+    expect(page3[0].meal_name).toBe('料理 1');
+  });
+
+  test('applies cursor pagination (beforeMealDatetime, beforeId) in InMemory mode for getRecentMeals', async () => {
+    for (let i = 1; i <= 5; i++) {
+      await MealService.createMeal({
+        meal_name: `料理 ${i}`,
+        is_homemade: true,
+        photo_path: `file:///meal-${i}.jpg`,
+        meal_datetime: new Date(2026, 3, 10, i, 0, 0),
+      });
+    }
+
+    const page1 = await MealService.getRecentMeals(2);
+    expect(page1).toHaveLength(2);
+    expect(page1[0].meal_name).toBe('料理 5');
+    expect(page1[1].meal_name).toBe('料理 4');
+
+    const lastOfPage1 = page1[page1.length - 1];
+    const page2 = await MealService.getRecentMeals({
+      limit: 2,
+      beforeMealDatetime: lastOfPage1.meal_datetime,
+      beforeId: lastOfPage1.id,
+    });
+    expect(page2).toHaveLength(2);
+    expect(page2[0].meal_name).toBe('料理 3');
+    expect(page2[1].meal_name).toBe('料理 2');
+
+    const lastOfPage2 = page2[page2.length - 1];
+    const page3 = await MealService.getRecentMeals({
+      limit: 2,
+      beforeMealDatetime: lastOfPage2.meal_datetime,
+      beforeId: lastOfPage2.id,
+    });
+    expect(page3).toHaveLength(1);
+    expect(page3[0].meal_name).toBe('料理 1');
+  });
+
   test('generates meal id and uuid with timestamp and full UUID', async () => {
     const before = Date.now();
     const created = await MealService.createMeal({
@@ -152,6 +213,39 @@ describe('MealService', () => {
       'file:///photo-A.jpg'
     );
     expect(notFound).toBe(false);
+  });
+
+  test('updateMeal allows explicitly resetting photo_thumbnail_path to null', async () => {
+    const created = await MealService.createMeal({
+      meal_name: 'うどん',
+      is_homemade: true,
+      photo_path: 'file:///udon.jpg',
+      photo_thumbnail_path: 'file:///udon-thumb.jpg',
+      meal_datetime: new Date('2026-04-12T13:00:00+09:00'),
+    });
+    expect(created.photo_thumbnail_path).toBe('file:///udon-thumb.jpg');
+
+    // 1. Explicitly reset photo_thumbnail_path to null (e.g. during photo rotation)
+    const updated = await MealService.updateMeal(created.id, {
+      photo_path: 'file:///udon-rotated.jpg',
+      photo_thumbnail_path: null,
+    });
+    expect(updated?.photo_path).toBe('file:///udon-rotated.jpg');
+    expect(updated?.photo_thumbnail_path).toBeUndefined();
+
+    const fetched = await MealService.getMealById(created.id);
+    expect(fetched?.photo_thumbnail_path).toBeUndefined();
+
+    // 2. Updating without photo_thumbnail_path preserves existing value
+    await MealService.updateMealThumbnail(
+      created.id,
+      'file:///udon-rotated-thumb.jpg',
+      'file:///udon-rotated.jpg'
+    );
+    const afterThumb = await MealService.updateMeal(created.id, {
+      meal_name: '天ぷらうどん',
+    });
+    expect(afterThumb?.photo_thumbnail_path).toBe('file:///udon-rotated-thumb.jpg');
   });
 
   test('filters search results by text and location', async () => {
@@ -681,11 +775,41 @@ describe('MealService', () => {
       const meals = await MealService.getRecentMeals(10);
 
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC LIMIT ?',
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC, id DESC LIMIT ?',
         10
       );
       expect(meals).toHaveLength(1);
       expect(meals[0].meal_name).toBe('ステーキ');
+    });
+
+    test('executes direct SQL for getRecentMeals with LIMIT, OFFSET and WHERE is_deleted = 0', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.getRecentMeals(20, 40);
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 ORDER BY meal_datetime DESC, id DESC LIMIT ? OFFSET ?',
+        20,
+        40
+      );
+    });
+
+    test('executes direct SQL for getRecentMeals with cursor pagination (beforeMealDatetime, beforeId)', async () => {
+      mockDb.getAllAsync.mockResolvedValue([]);
+
+      await MealService.getRecentMeals({
+        limit: 50,
+        beforeMealDatetime: 12345678,
+        beforeId: 'cursor-id-1',
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        'SELECT * FROM meals WHERE is_deleted = 0 AND (meal_datetime < ? OR (meal_datetime = ? AND id < ?)) ORDER BY meal_datetime DESC, id DESC LIMIT ?',
+        12345678,
+        12345678,
+        'cursor-id-1',
+        50
+      );
     });
 
     test('executes direct UPDATE for softDeleteMeal', async () => {
