@@ -816,7 +816,7 @@ describe('MealService', () => {
           location_name: 'カフェテラス',
           is_homemade: false,
           photo_path: 'file:///photo.jpg',
-          meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+          meal_datetime: new Date(2026, 3, 30, 12, 0, 0),
           latitude: 35.68122,
           longitude: 139.76712,
         });
@@ -844,7 +844,7 @@ describe('MealService', () => {
       mockDb.getAllAsync.mockResolvedValue([
         {
           id: 'nearby-old',
-          meal_datetime: new Date('2026-04-01T12:00:00+09:00').getTime(),
+          meal_datetime: new Date(2026, 3, 1, 12, 0, 0).getTime(),
           location_name: '老舗うどん',
           latitude: 35.6812,
           longitude: 139.7671,
@@ -856,7 +856,7 @@ describe('MealService', () => {
         meal_name: 'きつねうどん',
         is_homemade: false,
         photo_path: 'file:///udon.jpg',
-        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        meal_datetime: new Date(2026, 3, 30, 12, 0, 0),
         latitude: 35.68122,
         longitude: 139.76712,
       });
@@ -875,7 +875,7 @@ describe('MealService', () => {
 
     test('createMeal in Native SQLite uses the same single candidate query for both default meal name and location name resolution', async () => {
       jest.useFakeTimers();
-      jest.setSystemTime(new Date('2026-04-30T12:00:00+09:00'));
+      jest.setSystemTime(new Date(2026, 3, 30, 12, 0, 0));
       try {
         mockDb.getAllAsync.mockResolvedValue([
           {
@@ -892,7 +892,7 @@ describe('MealService', () => {
           meal_name: '',
           is_homemade: false,
           photo_path: 'file:///ramen.jpg',
-          meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+          meal_datetime: new Date(2026, 3, 30, 12, 0, 0),
           latitude: 35.68122,
           longitude: 139.76712,
         });
@@ -2009,7 +2009,7 @@ describe('MealService', () => {
 
     test('Parity: createMeal resolves default meal name within 1-week and location_name from older nearby meals identically in Native and InMemory', async () => {
       jest.useFakeTimers();
-      const fixedNow = new Date('2026-04-30T12:00:00+09:00');
+      const fixedNow = new Date(2026, 3, 30, 12, 0, 0);
       jest.setSystemTime(fixedNow);
 
       try {
@@ -2104,7 +2104,7 @@ describe('MealService', () => {
 
     test('Parity: when nearby meals are older than 1 week, location_name is reused but default meal_name does not use it (past 1 week only)', async () => {
       jest.useFakeTimers();
-      const fixedNow = new Date('2026-04-30T12:00:00+09:00');
+      const fixedNow = new Date(2026, 3, 30, 12, 0, 0);
       jest.setSystemTime(fixedNow);
 
       try {
@@ -2191,7 +2191,7 @@ describe('MealService', () => {
         meal_name: '',
         is_homemade: false,
         photo_path: 'file:///target.jpg',
-        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        meal_datetime: new Date(2026, 3, 30, 12, 0, 0),
         latitude: 35.6812,
         longitude: 139.7671,
       });
@@ -2205,7 +2205,7 @@ describe('MealService', () => {
         meal_name: '',
         is_homemade: false,
         photo_path: 'file:///target.jpg',
-        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        meal_datetime: new Date(2026, 3, 30, 12, 0, 0),
         latitude: 35.6812,
         longitude: 139.7671,
       });
@@ -2286,7 +2286,7 @@ describe('MealService', () => {
         meal_name: '',
         is_homemade: false,
         photo_path: 'file:///target.jpg',
-        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        meal_datetime: new Date(2026, 3, 30, 12, 0, 0),
         latitude: 35.6812,
         longitude: 139.7671,
       });
