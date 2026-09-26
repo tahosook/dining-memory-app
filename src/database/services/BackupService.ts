@@ -215,7 +215,8 @@ export class BackupService {
         await this.cleanupStaging(stagingDir);
         return {
           valid: false,
-          error: 'バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。',
+          error:
+            'バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。',
         };
       }
 
