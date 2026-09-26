@@ -12,6 +12,7 @@ import {
   resolveDefaultMealName,
   resolveNearbyHomemadeDefault,
   resolveNearbyLocationName,
+  type NearbyCandidateRow,
 } from '../../domain/meals/defaults';
 import {
   applyNonTextFilters,
@@ -179,11 +180,45 @@ async function upsertRow(row: PersistedMealRow) {
 
 export class MealService {
   static async createMeal(data: CreateMealData): Promise<Meal> {
-    const rows = await getAllRows();
+    await initializeDatabase();
+
+    const needsDefaultMealName = !data.meal_name?.trim();
+    const needsNearbyLocationName =
+      !data.location_name?.trim() &&
+      typeof data.latitude === 'number' &&
+      typeof data.longitude === 'number';
+
+    let candidateRows: PersistedMealRow[] | NearbyCandidateRow[] = [];
+
+    if (
+      (needsDefaultMealName || needsNearbyLocationName) &&
+      typeof data.latitude === 'number' &&
+      typeof data.longitude === 'number'
+    ) {
+      if (isUsingNativeDatabase()) {
+        const db = getDatabase();
+        if (db) {
+          let sql =
+            "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL";
+          const params: number[] = [];
+
+          if (needsDefaultMealName && !needsNearbyLocationName) {
+            sql += ' AND meal_datetime >= ?';
+            params.push(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          }
+
+          sql += ' ORDER BY meal_datetime DESC';
+          candidateRows = await db.getAllAsync<NearbyCandidateRow>(sql, ...params);
+        }
+      } else {
+        candidateRows = getInMemoryMeals();
+      }
+    }
+
     const row = normalizeRow({
       ...data,
-      meal_name: resolveDefaultMealName(data, rows),
-      location_name: resolveNearbyLocationName(rows, data),
+      meal_name: resolveDefaultMealName(data, candidateRows),
+      location_name: resolveNearbyLocationName(candidateRows, data),
     });
     await upsertRow(row);
     return mapRowToMeal(row);

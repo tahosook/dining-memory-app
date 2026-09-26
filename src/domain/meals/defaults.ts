@@ -57,12 +57,20 @@ export function getMealNameByTime(date: Date): string {
   return '深夜の食事';
 }
 
-export function findMostRecentNearbyRow(
-  rows: PersistedMealRow[],
+export type NearbyCandidateRow = Pick<
+  PersistedMealRow,
+  'meal_datetime' | 'location_name' | 'latitude' | 'longitude' | 'is_deleted'
+> & {
+  id?: string;
+  is_homemade?: number;
+};
+
+export function findMostRecentNearbyRow<T extends NearbyCandidateRow = PersistedMealRow>(
+  rows: readonly T[],
   origin: { latitude: number; longitude: number },
   options: NearbyRowOptions = {}
-): PersistedMealRow | undefined {
-  let candidate: PersistedMealRow | undefined;
+): T | undefined {
+  let candidate: T | undefined;
   const maxDistanceMeters = options.maxDistanceMeters ?? SAME_LOCATION_THRESHOLD_METERS;
   const requireLocationName = options.requireLocationName ?? true;
 
@@ -94,7 +102,10 @@ export function findMostRecentNearbyRow(
   return candidate;
 }
 
-export function resolveDefaultMealName(data: MealLocationInput, rows: PersistedMealRow[]): string {
+export function resolveDefaultMealName(
+  data: MealLocationInput,
+  rows: readonly NearbyCandidateRow[]
+): string {
   if (data.meal_name.trim()) {
     return data.meal_name.trim();
   }
@@ -114,7 +125,10 @@ export function resolveDefaultMealName(data: MealLocationInput, rows: PersistedM
   return timeBasedName;
 }
 
-export function resolveNearbyLocationName(rows: PersistedMealRow[], data: MealLocationInput) {
+export function resolveNearbyLocationName(
+  rows: readonly NearbyCandidateRow[],
+  data: MealLocationInput
+) {
   if (
     data.location_name?.trim() ||
     typeof data.latitude !== 'number' ||
@@ -132,7 +146,7 @@ export function resolveNearbyLocationName(rows: PersistedMealRow[], data: MealLo
 }
 
 export function resolveNearbyHomemadeDefault(
-  rows: PersistedMealRow[],
+  rows: readonly NearbyCandidateRow[],
   origin: { latitude: number; longitude: number },
   options: { minMealDatetime?: number; maxDistanceMeters?: number } = {}
 ): boolean | null {

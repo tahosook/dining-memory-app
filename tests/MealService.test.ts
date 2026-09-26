@@ -763,6 +763,140 @@ describe('MealService', () => {
       (getDatabase as jest.Mock).mockReturnValue(null);
     });
 
+    test('createMeal in Native SQLite does not fetch all rows when both meal_name and location_name are provided', async () => {
+      await MealService.createMeal({
+        meal_name: 'カレーライス',
+        is_homemade: true,
+        photo_path: 'file:///curry.jpg',
+        meal_datetime: new Date('2026-04-12T12:00:00+09:00'),
+        location_name: '自宅',
+        latitude: 35.6812,
+        longitude: 139.7671,
+      });
+
+      // No query needed when both names are already provided
+      expect(mockDb.getAllAsync).not.toHaveBeenCalled();
+      expect(mockDb.runAsync).toHaveBeenCalledTimes(1);
+      expect(mockDb.runAsync.mock.calls[0][0]).toContain('INSERT OR REPLACE INTO meals');
+      expect(mockDb.runAsync.mock.calls[0][3]).toBe('カレーライス');
+      expect(mockDb.runAsync.mock.calls[0][13]).toBe('自宅');
+    });
+
+    test('createMeal in Native SQLite does not fetch all rows when coordinates are not provided', async () => {
+      await MealService.createMeal({
+        meal_name: '',
+        is_homemade: true,
+        photo_path: 'file:///meal.jpg',
+        meal_datetime: new Date('2026-04-12T12:00:00+09:00'),
+      });
+
+      // Without coordinates, nearby candidates cannot be found; no query is executed
+      expect(mockDb.getAllAsync).not.toHaveBeenCalled();
+    });
+
+    test('createMeal in Native SQLite executes targeted candidate query with meal_datetime >= oneWeekAgo when only meal_name needs resolution', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-04-30T12:00:00+09:00'));
+      try {
+        const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        mockDb.getAllAsync.mockResolvedValue([
+          {
+            id: 'nearby-1',
+            meal_datetime: Date.now() - 1000,
+            location_name: 'カフェテラス',
+            latitude: 35.6812,
+            longitude: 139.7671,
+            is_deleted: 0,
+          },
+        ]);
+
+        const meal = await MealService.createMeal({
+          meal_name: '',
+          location_name: 'カフェテラス',
+          is_homemade: false,
+          photo_path: 'file:///photo.jpg',
+          meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+          latitude: 35.68122,
+          longitude: 139.76712,
+        });
+
+        // Verifies targeted SQL query was executed with parameter binding for oneWeekAgo
+        expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+          "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL AND meal_datetime >= ? ORDER BY meal_datetime DESC",
+          oneWeekAgo
+        );
+        // Verifies SELECT * FROM meals was NOT called
+        expect(mockDb.getAllAsync).not.toHaveBeenCalledWith('SELECT * FROM meals');
+        expect(meal.meal_name).toBe('カフェテラス の 昼食');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('createMeal in Native SQLite executes targeted candidate query without 1-week restriction when location_name needs resolution', async () => {
+      mockDb.getAllAsync.mockResolvedValue([
+        {
+          id: 'nearby-old',
+          meal_datetime: new Date('2026-04-01T12:00:00+09:00').getTime(),
+          location_name: '老舗うどん',
+          latitude: 35.6812,
+          longitude: 139.7671,
+          is_deleted: 0,
+        },
+      ]);
+
+      const meal = await MealService.createMeal({
+        meal_name: 'きつねうどん',
+        is_homemade: false,
+        photo_path: 'file:///udon.jpg',
+        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        latitude: 35.68122,
+        longitude: 139.76712,
+      });
+
+      expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+        "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY meal_datetime DESC"
+      );
+      expect(mockDb.getAllAsync).not.toHaveBeenCalledWith('SELECT * FROM meals');
+      expect(meal.location_name).toBe('老舗うどん');
+    });
+
+    test('createMeal in Native SQLite uses the same single candidate query for both default meal name and location name resolution', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-04-30T12:00:00+09:00'));
+      try {
+        mockDb.getAllAsync.mockResolvedValue([
+          {
+            id: 'nearby-recent',
+            meal_datetime: Date.now() - 3600 * 1000,
+            location_name: '人気ラーメン',
+            latitude: 35.6812,
+            longitude: 139.7671,
+            is_deleted: 0,
+          },
+        ]);
+
+        const meal = await MealService.createMeal({
+          meal_name: '',
+          is_homemade: false,
+          photo_path: 'file:///ramen.jpg',
+          meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+          latitude: 35.68122,
+          longitude: 139.76712,
+        });
+
+        // Exactly one query executed (no duplicate query)
+        expect(mockDb.getAllAsync).toHaveBeenCalledTimes(1);
+        expect(mockDb.getAllAsync).toHaveBeenCalledWith(
+          "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY meal_datetime DESC"
+        );
+        expect(meal.location_name).toBe('人気ラーメン');
+        expect(meal.meal_name).toBe('人気ラーメン の 昼食');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     test('executes direct SQL for getRecentMeals with LIMIT and WHERE is_deleted = 0', async () => {
       mockDb.getAllAsync.mockResolvedValue([
         {
@@ -1843,5 +1977,227 @@ describe('MealService', () => {
       await assertParity({ cuisine_type: 'カフェ', location_name: '銀座' }, ['s3']);
       await assertParity({ is_homemade: true }, ['s4']);
     });
+
+    describe('createMeal Native SQLite and InMemory Parity', () => {
+    let parityDbFixture: ReturnType<typeof createRealSqliteDatabase>;
+
+    beforeEach(() => {
+      parityDbFixture = createRealSqliteDatabase();
+    });
+
+    afterEach(() => {
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+      (getDatabase as jest.Mock).mockReturnValue(null);
+    });
+
+    test('Parity: createMeal resolves default meal name within 1-week and location_name from older nearby meals identically in Native and InMemory', async () => {
+      jest.useFakeTimers();
+      const fixedNow = new Date('2026-04-30T12:00:00+09:00');
+      jest.setSystemTime(fixedNow);
+
+      try {
+        const setupRows = [
+          // 1. 削除済みレコード（近傍 10m、3日前） -> 候補にならないこと
+          {
+            id: 'del-1',
+            uuid: 'del-1',
+            meal_name: '削除ランチ',
+            location_name: '削除済み食堂',
+            latitude: 35.68121,
+            longitude: 139.76711,
+            meal_datetime: fixedNow.getTime() - 3 * 24 * 60 * 60 * 1000,
+            is_homemade: 0,
+            is_deleted: 1,
+            created_at: 1000,
+            updated_at: 1000,
+          },
+          // 2. 過去1週間以内の近隣レコード（近傍 30m、2日前）
+          {
+            id: 'recent-1',
+            uuid: 'recent-1',
+            meal_name: '昨日のパスタ',
+            location_name: 'トラットリア東京',
+            latitude: 35.68122,
+            longitude: 139.76712,
+            meal_datetime: fixedNow.getTime() - 2 * 24 * 60 * 60 * 1000,
+            is_homemade: 0,
+            is_deleted: 0,
+            created_at: 2000,
+            updated_at: 2000,
+          },
+          // 3. 遠方のレコード（1km以上離れている、昨日） -> 候補にならないこと
+          {
+            id: 'distant-1',
+            uuid: 'distant-1',
+            meal_name: '遠い店',
+            location_name: '遠方カフェ',
+            latitude: 35.7000,
+            longitude: 139.8000,
+            meal_datetime: fixedNow.getTime() - 1 * 24 * 60 * 60 * 1000,
+            is_homemade: 0,
+            is_deleted: 0,
+            created_at: 3000,
+            updated_at: 3000,
+          },
+        ];
+
+        // 1. InMemory 実行
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+        (getDatabase as jest.Mock).mockReturnValue(null);
+        setInMemoryMeals(setupRows as any);
+
+        const inMemoryMeal = await MealService.createMeal({
+          meal_name: '',
+          is_homemade: false,
+          photo_path: 'file:///target.jpg',
+          meal_datetime: fixedNow,
+          latitude: 35.6812,
+          longitude: 139.7671,
+        });
+
+        // 2. Native SQLite 実行
+        setupRows.forEach(row => parityDbFixture.insertMeal(row));
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+        (getDatabase as jest.Mock).mockReturnValue(parityDbFixture.adapter);
+
+        const nativeGetAllSpy = jest.spyOn(parityDbFixture.adapter, 'getAllAsync');
+
+        const nativeMeal = await MealService.createMeal({
+          meal_name: '',
+          is_homemade: false,
+          photo_path: 'file:///target.jpg',
+          meal_datetime: fixedNow,
+          latitude: 35.6812,
+          longitude: 139.7671,
+        });
+
+        // Parity検証: デフォルト名と店舗名引き継ぎが完全一致
+        expect(nativeMeal.meal_name).toBe(inMemoryMeal.meal_name);
+        expect(nativeMeal.location_name).toBe(inMemoryMeal.location_name);
+        expect(nativeMeal.meal_name).toBe('トラットリア東京 の 昼食');
+        expect(nativeMeal.location_name).toBe('トラットリア東京');
+
+        // Native SQLite で SELECT * FROM meals が一切実行されていないことの検証
+        const queryCalls = nativeGetAllSpy.mock.calls.map(c => c[0]);
+        expect(queryCalls.some(q => q === 'SELECT * FROM meals')).toBe(false);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('Parity: when nearby meals are older than 1 week, location_name is reused but default meal_name does not use it (past 1 week only)', async () => {
+      jest.useFakeTimers();
+      const fixedNow = new Date('2026-04-30T12:00:00+09:00');
+      jest.setSystemTime(fixedNow);
+
+      try {
+        const setupRows = [
+          // 10日前の近隣店舗（1週間より前）
+          {
+            id: 'old-nearby',
+            uuid: 'old-nearby',
+            meal_name: '古いラーメン',
+            location_name: '老舗ラーメン',
+            latitude: 35.68122,
+            longitude: 139.76712,
+            meal_datetime: fixedNow.getTime() - 10 * 24 * 60 * 60 * 1000,
+            is_homemade: 0,
+            is_deleted: 0,
+            created_at: 1000,
+            updated_at: 1000,
+          },
+        ];
+
+        // 1. InMemory
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+        (getDatabase as jest.Mock).mockReturnValue(null);
+        setInMemoryMeals(setupRows as any);
+
+        const inMemoryMeal = await MealService.createMeal({
+          meal_name: '',
+          is_homemade: false,
+          photo_path: 'file:///target.jpg',
+          meal_datetime: fixedNow,
+          latitude: 35.6812,
+          longitude: 139.7671,
+        });
+
+        // 2. Native SQLite
+        setupRows.forEach(row => parityDbFixture.insertMeal(row));
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+        (getDatabase as jest.Mock).mockReturnValue(parityDbFixture.adapter);
+
+        const nativeMeal = await MealService.createMeal({
+          meal_name: '',
+          is_homemade: false,
+          photo_path: 'file:///target.jpg',
+          meal_datetime: fixedNow,
+          latitude: 35.6812,
+          longitude: 139.7671,
+        });
+
+        // Parity検証
+        expect(nativeMeal.meal_name).toBe(inMemoryMeal.meal_name);
+        expect(nativeMeal.location_name).toBe(inMemoryMeal.location_name);
+
+        // 10日前の店舗名は引き継がれるが、デフォルト食事名は過去1週間のみが候補のため「昼食」になる
+        expect(nativeMeal.location_name).toBe('老舗ラーメン');
+        expect(nativeMeal.meal_name).toBe('昼食');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    test('Parity: deleted meal is never used for location_name or default meal_name in either mode', async () => {
+      const setupRows = [
+        {
+          id: 'deleted-only',
+          uuid: 'deleted-only',
+          meal_name: '削除済み天丼',
+          location_name: '削除された天ぷら屋',
+          latitude: 35.68122,
+          longitude: 139.76712,
+          meal_datetime: Date.now() - 1000,
+          is_homemade: 0,
+          is_deleted: 1,
+          created_at: 1000,
+          updated_at: 1000,
+        },
+      ];
+
+      // 1. InMemory
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+      (getDatabase as jest.Mock).mockReturnValue(null);
+      setInMemoryMeals(setupRows as any);
+
+      const inMemoryMeal = await MealService.createMeal({
+        meal_name: '',
+        is_homemade: false,
+        photo_path: 'file:///target.jpg',
+        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        latitude: 35.6812,
+        longitude: 139.7671,
+      });
+
+      // 2. Native SQLite
+      setupRows.forEach(row => parityDbFixture.insertMeal(row));
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+      (getDatabase as jest.Mock).mockReturnValue(parityDbFixture.adapter);
+
+      const nativeMeal = await MealService.createMeal({
+        meal_name: '',
+        is_homemade: false,
+        photo_path: 'file:///target.jpg',
+        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        latitude: 35.6812,
+        longitude: 139.7671,
+      });
+
+      expect(nativeMeal.meal_name).toBe(inMemoryMeal.meal_name);
+      expect(nativeMeal.location_name).toBe(inMemoryMeal.location_name);
+      expect(nativeMeal.location_name).toBeUndefined();
+      expect(nativeMeal.meal_name).toBe('昼食');
+    });
   });
+});
 });
