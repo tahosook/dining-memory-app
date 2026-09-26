@@ -12,10 +12,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import {
-  CameraView as ExpoCameraView,
-  CameraView as CameraViewType,
-} from 'expo-camera';
+import { CameraView as ExpoCameraView, CameraView as CameraViewType } from 'expo-camera';
 import { Colors } from '../../../constants/Colors';
 import { GlobalStyles } from '../../../constants/Styles';
 import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
@@ -96,8 +93,7 @@ export type CameraViewProps = Pick<
   > & {
     cameraPermission: CameraPermissionState['permission'];
     permissionUiState: CameraPermissionState['uiState'];
-  } &
-  Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
+  } & Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
   Pick<
     CameraReviewOperations,
     'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'
