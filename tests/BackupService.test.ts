@@ -559,6 +559,41 @@ describe('BackupService', () => {
       expect(result.error).toContain('JSON構文エラー');
     });
 
+    test('rejects backup when app_settings.json contains invalid JSON due to error path', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 0,
+        photoCount: 0,
+      });
+
+      (getInfoAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('database/app_settings.json')) return Promise.resolve({ exists: true });
+        return Promise.resolve({ exists: true });
+      });
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve('[]');
+        if (path.endsWith('app_settings.json')) return Promise.resolve('{ invalid json string ]');
+        return Promise.resolve('{}');
+      });
+
+      (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('JSON構文エラー');
+    });
+
     test('rejects backup when app_settings.json fails schema validation', async () => {
       (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
         canceled: false,
