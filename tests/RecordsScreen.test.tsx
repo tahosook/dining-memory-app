@@ -263,7 +263,7 @@ describe('RecordsScreen', () => {
         uuid: 'boundary-start',
         meal_name: '深夜食 (00:01)',
         meal_datetime: startOfDay,
-        is_homemade: true,
+        is_homemade: false,
         photo_path: 'file:///midnight.jpg',
         is_deleted: false,
         created_at: startOfDay,

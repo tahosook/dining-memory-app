@@ -134,6 +134,10 @@ function formatDateLabel(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+/**
+ * Groups records into date sections using a single O(N) pass.
+ * @param records Pre-sorted array of meals by meal_datetime DESC (guaranteed by MealService).
+ */
 function groupMealsByDate(records: Meal[]): MealSection[] {
   // Optimization: Leverage the fact that records are already sorted by meal_datetime DESC from the database.
   // This allows us to group items in a single O(N) pass without any O(N log N) sorting.
@@ -144,9 +148,9 @@ function groupMealsByDate(records: Meal[]): MealSection[] {
   }
 
   let currentDateKey = getLocalDateKey(new Date(records[0].meal_datetime));
-  let currentGroup: Meal[] = [];
+  let currentGroup: Meal[] = [records[0]];
 
-  for (let i = 0; i < records.length; i++) {
+  for (let i = 1; i < records.length; i++) {
     const meal = records[i];
     const dateKey = getLocalDateKey(new Date(meal.meal_datetime));
 
@@ -164,13 +168,11 @@ function groupMealsByDate(records: Meal[]): MealSection[] {
   }
 
   // Push the final group
-  if (currentGroup.length > 0) {
-    sections.push({
-      date: currentDateKey,
-      dateLabel: formatDateLabel(new Date(currentGroup[0].meal_datetime)),
-      data: currentGroup,
-    });
-  }
+  sections.push({
+    date: currentDateKey,
+    dateLabel: formatDateLabel(new Date(currentGroup[0].meal_datetime)),
+    data: currentGroup,
+  });
 
   return sections;
 }
