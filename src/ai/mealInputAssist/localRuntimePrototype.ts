@@ -302,12 +302,20 @@ function estimateModelLoadRemainingMs(progressPercentage: number) {
   return Math.round(remainingMs);
 }
 
+function calculateGenerationRemainingMs(normalizedProgress: number) {
+  return Math.round(
+    LOCAL_RUNTIME_GENERATION_INITIAL_ESTIMATED_REMAINING_MS * (1 - normalizedProgress)
+  );
+}
+
+function enforceMinimumRemainingMs(estimatedMs: number) {
+  return Math.max(LOCAL_RUNTIME_GENERATION_MIN_ESTIMATED_REMAINING_MS, estimatedMs);
+}
+
 function estimateGenerationRemainingMs(tokenProgress: number) {
   const normalizedProgress = Math.max(0, Math.min(1, tokenProgress));
-  return Math.max(
-    LOCAL_RUNTIME_GENERATION_MIN_ESTIMATED_REMAINING_MS,
-    Math.round(LOCAL_RUNTIME_GENERATION_INITIAL_ESTIMATED_REMAINING_MS * (1 - normalizedProgress))
-  );
+  const estimatedMs = calculateGenerationRemainingMs(normalizedProgress);
+  return enforceMinimumRemainingMs(estimatedMs);
 }
 
 class LlamaMultimodalContextLoader {
