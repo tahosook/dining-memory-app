@@ -22,14 +22,21 @@ import {
 import {
   getMealInputAssistManagedFiles,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
+  MEDIAPIPE_MODEL_DISPLAY_NAME,
   type MealInputAssistModelDownloadProgress,
   type MealInputAssistModelStatus,
+  type MediaPipeModelDownloadProgress,
+  type MediaPipeModelStatus,
 } from '../../ai/mealInputAssist';
 import {
   deleteAllDownloadedLocalAiModels,
+  deleteMediaPipeModel,
   getMealInputAssistModelStatus,
+  getMediaPipeModelStatus,
   installMealInputAssistModel,
+  installMediaPipeModel,
   redownloadMealInputAssistModel,
+  redownloadMediaPipeModel,
 } from '../../ai/mealInputAssist/modelInstaller';
 import {
   getLocalAiRuntimeStatusSnapshot,
@@ -58,6 +65,15 @@ export default function SettingsScreen() {
     useState<MealInputAssistModelDownloadProgress | null>(null);
   const [backupActionState, setBackupActionState] = useState<BackupActionState>('idle');
   const [showAiDetails, setShowAiDetails] = useState(false);
+
+  const showMediaPipeDevSection = typeof __DEV__ !== 'undefined' && Boolean(__DEV__);
+  const [mediaPipeModelStatus, setMediaPipeModelStatus] = useState<MediaPipeModelStatus | null>(
+    null
+  );
+  const [mediaPipeModelStatusLoading, setMediaPipeModelStatusLoading] = useState(true);
+  const [mediaPipeActionState, setMediaPipeActionState] = useState<ModelActionState>('idle');
+  const [mediaPipeDownloadProgress, setMediaPipeDownloadProgress] =
+    useState<MediaPipeModelDownloadProgress | null>(null);
 
   const loadAiInputAssistSetting = useCallback(async () => {
     setAiInputAssistLoading(true);
@@ -105,11 +121,29 @@ export default function SettingsScreen() {
     await Promise.all([loadMealInputAssistModelStatus(), loadLocalAiRuntimeStatus()]);
   }, [loadLocalAiRuntimeStatus, loadMealInputAssistModelStatus]);
 
+  const loadMediaPipeModelStatus = useCallback(async () => {
+    if (!showMediaPipeDevSection) {
+      return;
+    }
+    setMediaPipeModelStatusLoading(true);
+
+    try {
+      const nextStatus = await getMediaPipeModelStatus();
+      setMediaPipeModelStatus(nextStatus);
+    } catch (error) {
+      console.error('Failed to load MediaPipe model status:', error);
+      setMediaPipeModelStatus(null);
+    } finally {
+      setMediaPipeModelStatusLoading(false);
+    }
+  }, [showMediaPipeDevSection]);
+
   useFocusEffect(
     useCallback(() => {
       loadAiInputAssistSetting().catch(() => undefined);
       reloadLocalAiSection().catch(() => undefined);
-    }, [loadAiInputAssistSetting, reloadLocalAiSection])
+      loadMediaPipeModelStatus().catch(() => undefined);
+    }, [loadAiInputAssistSetting, reloadLocalAiSection, loadMediaPipeModelStatus])
   );
 
   const handleAiInputAssistToggle = useCallback(async (nextValue: boolean) => {
@@ -175,11 +209,14 @@ export default function SettingsScreen() {
 
             try {
               await deleteAllDownloadedLocalAiModels();
-              await reloadLocalAiSection();
+              await Promise.all([reloadLocalAiSection(), loadMediaPipeModelStatus()]);
               Alert.alert('削除完了', 'ダウンロード済みモデルを削除しました。');
             } catch (error) {
               console.error('Failed to delete downloaded AI models:', error);
-              await reloadLocalAiSection().catch(() => undefined);
+              await Promise.all([
+                reloadLocalAiSection().catch(() => undefined),
+                loadMediaPipeModelStatus().catch(() => undefined),
+              ]);
               const message =
                 error instanceof Error && error.message
                   ? error.message
@@ -192,7 +229,74 @@ export default function SettingsScreen() {
         },
       ]
     );
-  }, [reloadLocalAiSection]);
+  }, [loadMediaPipeModelStatus, reloadLocalAiSection]);
+
+  const handleMediaPipeDownload = useCallback(
+    async (mode: 'install' | 'redownload') => {
+      setMediaPipeActionState('downloading');
+      setMediaPipeDownloadProgress(null);
+
+      try {
+        if (mode === 'redownload') {
+          await redownloadMediaPipeModel({
+            onProgress: setMediaPipeDownloadProgress,
+          });
+        } else {
+          await installMediaPipeModel({
+            onProgress: setMediaPipeDownloadProgress,
+          });
+        }
+
+        await loadMediaPipeModelStatus();
+        Alert.alert('ダウンロード完了', `${MEDIAPIPE_MODEL_DISPLAY_NAME} を端末に保存しました。`);
+      } catch (error) {
+        console.error('Failed to download MediaPipe model:', error);
+        await loadMediaPipeModelStatus().catch(() => undefined);
+        const message =
+          error instanceof Error && error.message
+            ? error.message
+            : 'MediaPipe モデルのダウンロードに失敗しました。';
+        Alert.alert('ダウンロードに失敗しました', message);
+      } finally {
+        setMediaPipeDownloadProgress(null);
+        setMediaPipeActionState('idle');
+      }
+    },
+    [loadMediaPipeModelStatus]
+  );
+
+  const handleMediaPipeDelete = useCallback(() => {
+    Alert.alert(
+      `${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除`,
+      '端末に保存した MediaPipe モデルデータを削除します。写真や食事記録は削除されません。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: async () => {
+            setMediaPipeActionState('deleting');
+
+            try {
+              await deleteMediaPipeModel();
+              await loadMediaPipeModelStatus();
+              Alert.alert('削除完了', `${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除しました。`);
+            } catch (error) {
+              console.error('Failed to delete MediaPipe model:', error);
+              await loadMediaPipeModelStatus().catch(() => undefined);
+              const message =
+                error instanceof Error && error.message
+                  ? error.message
+                  : 'MediaPipe モデルを削除できませんでした。';
+              Alert.alert('削除に失敗しました', message);
+            } finally {
+              setMediaPipeActionState('idle');
+            }
+          },
+        },
+      ]
+    );
+  }, [loadMediaPipeModelStatus]);
 
   const handleDeleteAllData = useCallback(() => {
     Alert.alert(
@@ -506,6 +610,120 @@ export default function SettingsScreen() {
           </View>
         ) : null}
       </Section>
+
+      {showMediaPipeDevSection ? (
+        <Section title="MediaPipe (Experimental / DEV)">
+          <Text style={styles.bodyText}>{MEDIAPIPE_MODEL_DISPLAY_NAME}</Text>
+          <Text style={styles.metaText}>
+            端末内画像分類用の MediaPipe モデルです。開発環境（__DEV__）でのみ表示されます。
+          </Text>
+
+          <View style={styles.runtimeStatusCard} testID="mediapipe-model-status-card">
+            <View style={styles.runtimeStatusHeader}>
+              <Text style={styles.disabledLabel}>モデル状態</Text>
+              <View
+                style={[
+                  styles.runtimeStatusBadge,
+                  mediaPipeModelStatus?.kind === 'ready'
+                    ? styles.runtimeStatusBadgeReady
+                    : styles.runtimeStatusBadgeUnavailable,
+                ]}
+              >
+                <Text style={styles.runtimeStatusBadgeText} testID="mediapipe-model-status-badge">
+                  {mediaPipeModelStatusLoading
+                    ? '確認中'
+                    : formatModelStatusLabel(mediaPipeModelStatus?.kind ?? 'not_installed')}
+                </Text>
+              </View>
+            </View>
+
+            {mediaPipeModelStatus?.version ? (
+              <Text style={styles.runtimeStatusMode}>Version: {mediaPipeModelStatus.version}</Text>
+            ) : null}
+            {mediaPipeModelStatus?.errorMessage ? (
+              <Text style={styles.runtimeStatusReason}>{mediaPipeModelStatus.errorMessage}</Text>
+            ) : null}
+          </View>
+
+          {mediaPipeDownloadProgress ? (
+            <View style={styles.downloadProgressCard} testID="mediapipe-download-progress">
+              <Text style={styles.downloadProgressTitle}>
+                {mediaPipeDownloadProgress.phase === 'verifying'
+                  ? 'SHA256 ハッシュを検証しています...'
+                  : mediaPipeDownloadProgress.phase === 'installing'
+                    ? 'モデルファイルを配置しています...'
+                    : mediaPipeDownloadProgress.progress !== null
+                      ? `ダウンロード中: ${Math.round(mediaPipeDownloadProgress.progress * 100)}%`
+                      : 'ダウンロードを準備しています...'}
+              </Text>
+              {typeof mediaPipeDownloadProgress.progress === 'number' ? (
+                <View style={styles.progressTrack}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: `${Math.round(mediaPipeDownloadProgress.progress * 100)}%` },
+                    ]}
+                  />
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <View style={styles.actionRow}>
+            {mediaPipeModelStatus?.kind !== 'ready' ? (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  mediaPipeActionState !== 'idle' ? styles.actionButtonDisabled : null,
+                ]}
+                onPress={() => handleMediaPipeDownload('install')}
+                disabled={mediaPipeActionState !== 'idle'}
+                testID="mediapipe-model-download-button"
+              >
+                {mediaPipeActionState === 'downloading' ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.actionButtonText}>モデルをダウンロード</Text>
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  mediaPipeActionState !== 'idle' ? styles.actionButtonDisabled : null,
+                ]}
+                onPress={() => handleMediaPipeDownload('redownload')}
+                disabled={mediaPipeActionState !== 'idle'}
+                testID="mediapipe-model-redownload-button"
+              >
+                {mediaPipeActionState === 'downloading' ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.actionButtonText}>再ダウンロード</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {mediaPipeModelStatus?.modelExists ? (
+            <TouchableOpacity
+              style={[
+                styles.dangerOutlineButton,
+                mediaPipeActionState !== 'idle' ? styles.actionButtonDisabled : null,
+              ]}
+              onPress={handleMediaPipeDelete}
+              disabled={mediaPipeActionState !== 'idle'}
+              testID="mediapipe-model-delete-button"
+            >
+              {mediaPipeActionState === 'deleting' ? (
+                <ActivityIndicator size="small" color={Colors.error} />
+              ) : (
+                <Text style={styles.dangerOutlineButtonText}>MediaPipe モデルを削除</Text>
+              )}
+            </TouchableOpacity>
+          ) : null}
+        </Section>
+      ) : null}
 
       <Section title="データ管理">
         <TouchableOpacity
