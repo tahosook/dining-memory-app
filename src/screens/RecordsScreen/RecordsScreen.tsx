@@ -30,6 +30,7 @@ type RecordsNavigationProp = NavigationProp<RootStackParamList>;
 
 type MealItemProps = {
   item: Meal;
+  thumbnailUri?: string;
   onPress: (meal: Meal) => void;
 };
 
@@ -43,8 +44,8 @@ const MealGroupHeader: React.FC<{ section: MealSection }> = ({ section }) => (
   </View>
 );
 
-const MealListItem = React.memo<MealItemProps>(({ item, onPress }) => {
-  const imageUri = getMealListImageUri(item);
+const MealListItem = React.memo<MealItemProps>(({ item, thumbnailUri, onPress }) => {
+  const imageUri = thumbnailUri ?? getMealListImageUri(item);
   const cookingLevel = item.is_homemade ? normalizeCookingLevel(item.cooking_level) : undefined;
 
   return (
@@ -183,6 +184,7 @@ export const RecordsScreen: React.FC = () => {
   const navigation = useNavigation<RecordsNavigationProp>();
   const [mealSections, setMealSections] = useState<MealSection[]>([]);
   const [flatMeals, setFlatMeals] = useState<Meal[]>([]);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -213,19 +215,10 @@ export const RecordsScreen: React.FC = () => {
         if (!isMountedRef.current) {
           return;
         }
-        setFlatMeals(current =>
-          current.map(item =>
-            item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
-          )
-        );
-        setMealSections(current =>
-          current.map(section => ({
-            ...section,
-            data: section.data.map(item =>
-              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
-            ),
-          }))
-        );
+        setThumbnails(current => ({
+          ...current,
+          [mealId]: thumbUri,
+        }));
       },
     });
   }, []);
@@ -246,6 +239,15 @@ export const RecordsScreen: React.FC = () => {
 
       setFlatMeals(meals);
       setMealSections(groupMealsByDate(meals));
+
+      const initialThumbnails: Record<string, string> = {};
+      meals.forEach(meal => {
+        if (meal.photo_thumbnail_path) {
+          initialThumbnails[meal.id] = meal.photo_thumbnail_path;
+        }
+      });
+      setThumbnails(initialThumbnails);
+
       attachThumbnailRequests(meals);
     } catch (error) {
       if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
@@ -304,6 +306,15 @@ export const RecordsScreen: React.FC = () => {
           const mergedMeals = [...flatMealsRef.current, ...uniqueNextMeals];
           setFlatMeals(mergedMeals);
           setMealSections(groupMealsByDate(mergedMeals));
+          setThumbnails(current => {
+            const next = { ...current };
+            for (const meal of uniqueNextMeals) {
+              if (meal.photo_thumbnail_path && !next[meal.id]) {
+                next[meal.id] = meal.photo_thumbnail_path;
+              }
+            }
+            return next;
+          });
           attachThumbnailRequests(uniqueNextMeals);
         }
       }
@@ -346,8 +357,10 @@ export const RecordsScreen: React.FC = () => {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: Meal }) => <MealListItem item={item} onPress={handleMealPress} />,
-    [handleMealPress]
+    ({ item }: { item: Meal }) => (
+      <MealListItem item={item} thumbnailUri={thumbnails[item.id]} onPress={handleMealPress} />
+    ),
+    [handleMealPress, thumbnails]
   );
 
   if (loading) {
