@@ -565,6 +565,23 @@ describe('SettingsScreen', () => {
     );
   });
 
+  test('shows error alert when BackupService.exportBackup fails', async () => {
+    const errorMessage = 'Export failed simulated error';
+    (BackupService.exportBackup as jest.Mock).mockRejectedValueOnce(new Error(errorMessage));
+
+    const { getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(getByTestId('settings-export-backup-button'));
+
+    await waitFor(() => {
+      expect(BackupService.exportBackup).toHaveBeenCalledTimes(1);
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to export backup:', expect.any(Error));
+    expect(Alert.alert).toHaveBeenCalledWith('エクスポート失敗', errorMessage);
+  });
+
   test('shows confirmation dialog on valid import and restores when user confirms', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
       if (title === 'バックアップから復元') {

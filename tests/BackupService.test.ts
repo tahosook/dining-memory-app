@@ -9,7 +9,7 @@ import {
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { unzip, zip } from 'react-native-zip-archive';
+import { unzip, zip, listContents } from 'react-native-zip-archive';
 import { BackupService } from '../src/database/services/BackupService';
 import {
   getAllAppSettingsRows,
@@ -31,6 +31,7 @@ jest.mock('expo-sharing', () => ({
 jest.mock('react-native-zip-archive', () => ({
   zip: jest.fn(),
   unzip: jest.fn(),
+  listContents: jest.fn(),
 }));
 
 jest.mock('expo-file-system/legacy', () => ({
@@ -98,6 +99,12 @@ describe('BackupService', () => {
     (getAllAppSettingsRows as jest.Mock).mockResolvedValue(mockAppSettings);
     (zip as jest.Mock).mockResolvedValue('file:///mock-cache/backup.zip');
     (unzip as jest.Mock).mockResolvedValue('file:///mock-cache/staging/');
+    (listContents as jest.Mock).mockResolvedValue([
+      { path: 'manifest.json' },
+      { path: 'database/meals.json' },
+      { path: 'database/app_settings.json' },
+      { path: 'photos/meal-20260422-01.jpg' },
+    ]);
     (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-20260422-01.jpg']);
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
@@ -484,12 +491,48 @@ describe('BackupService', () => {
       expect(result.error).toContain('写真ファイル数（1枚）がマニフェスト（5枚）と一致しません');
     });
 
+    test('rejects backup if listContents fails', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockRejectedValue(new Error('Zip format invalid'));
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup if listContents contains unallowed file paths', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'unknown.txt' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに未許可のファイルが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
     // Test G: Zip Slip / malicious paths test
     test('rejects backup containing malicious path traversal in photos directory or meals', async () => {
       (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
         canceled: false,
         assets: [{ uri: 'file:///mock-picker/backup.zip' }],
       });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: '../evil.sh' },
+      ]);
 
       const manifestContent = JSON.stringify({
         formatVersion: 1,
