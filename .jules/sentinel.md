@@ -6,3 +6,8 @@
 **Vulnerability:** Leaking internal application stack traces in production error logs (`src/media/mealShare.ts`).
 **Learning:** Returning `error.stack` from caught errors explicitly exposes sensitive internal execution paths or system structures, violating the principle of failing securely.
 **Prevention:** Avoid passing or returning `error.stack` in logs or API responses, only log standardized error messages instead.
+
+## 2026-09-26 - Zip Slip / Unsafe Zip Extraction Prevention
+**Vulnerability:** Calling `unzip()` directly on untrusted zip files could expose the staging directory to path traversal (`../`) or unapproved files.
+**Learning:** Even if native libraries implement basic safeguards, extracting an entire archive allows potentially dangerous files to hit the file system before JS validation. `react-native-zip-archive`'s `listContents` is essential for pre-flight verification.
+**Prevention:** Implement Defense-in-Depth. Use `listContents` to strictly whitelist allowed file paths and explicitly reject malicious patterns (e.g. `../`, null bytes) *before* calling `unzip()`.

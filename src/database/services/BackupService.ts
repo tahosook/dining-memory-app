@@ -14,7 +14,7 @@ import {
   writeAsStringAsync,
 } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { unzip, zip } from 'react-native-zip-archive';
+import { unzip, zip, listContents } from 'react-native-zip-archive';
 import {
   createBackupManifest,
   deserializeAppSettings,
@@ -205,8 +205,51 @@ export class BackupService {
     try {
       await makeDirectoryAsync(stagingDir, { intermediates: true });
 
+      // Defense in depth: Check zip contents before extracting
+      const zipPath = stripFileScheme(pickedAsset.uri);
+
+      let entries;
+      try {
+        entries = await listContents(zipPath);
+      } catch {
+        await this.cleanupStaging(stagingDir);
+        return {
+          valid: false,
+          error:
+            'バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。',
+        };
+      }
+
+      for (const entry of entries) {
+        const path = entry.path;
+
+        // Prevent path traversal and zero byte injection explicitly, even before extraction
+        if (path.includes('../') || path.includes('..\\') || path.includes('\0')) {
+          await this.cleanupStaging(stagingDir);
+          return {
+            valid: false,
+            error: 'バックアップファイルに不正なパスが含まれています。',
+          };
+        }
+
+        // Whitelist directories/files.
+        // In our export format, we only expect:
+        // manifest.json, database/meals.json, database/app_settings.json, and photos/*
+        const isManifest = path === 'manifest.json';
+        const isDatabase = path.startsWith('database/');
+        const isPhotos = path.startsWith('photos/');
+
+        if (!isManifest && !isDatabase && !isPhotos) {
+          await this.cleanupStaging(stagingDir);
+          return {
+            valid: false,
+            error: 'バックアップファイルに未許可のファイルが含まれています。',
+          };
+        }
+      }
+
       // Native unzip to staging directory
-      await unzip(stripFileScheme(pickedAsset.uri), stripFileScheme(stagingDir));
+      await unzip(zipPath, stripFileScheme(stagingDir));
 
       // 1. Validate manifest.json
       const manifestInfo = await getInfoAsync(`${stagingDir}manifest.json`);
@@ -344,8 +387,7 @@ export class BackupService {
 
       if (missingPhotos.length > 0) {
         console.warn(
-          `[BackupService] Missing photos detected in backup archive (${missingPhotos.length} files):`,
-          missingPhotos
+          `[BackupService] Missing photos detected in backup archive (${missingPhotos.length} files).`
         );
         await this.cleanupStaging(stagingDir);
         const foundCount = requiredPhotos.size - missingPhotos.length;
@@ -365,8 +407,7 @@ export class BackupService {
 
       if (unreferencedPhotos.length > 0) {
         console.warn(
-          `[BackupService] Unreferenced photos detected in backup archive (${unreferencedPhotos.length} files):`,
-          unreferencedPhotos
+          `[BackupService] Unreferenced photos detected in backup archive (${unreferencedPhotos.length} files).`
         );
         await this.cleanupStaging(stagingDir);
         return {
