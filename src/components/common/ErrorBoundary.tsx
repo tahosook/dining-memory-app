@@ -1,5 +1,6 @@
 import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
 
@@ -27,7 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
     console.error('CameraScreen Error:', error);
     console.error('Error Info:', errorInfo);
 
-    // TODO: Send error to monitoring service (e.g., Sentry)
+    Sentry.captureException(error, {
+      extra: {
+        errorInfo,
+      },
+    });
   }
 
   handleRetry = () => {
