@@ -432,42 +432,46 @@ export class BackupService {
       }
 
       // 1. Prepare rollback state: backup existing files that would be overwritten
-      for (const fileName of uniquePhotosToRestore) {
-        const destPath = `${targetDocDir}${fileName}`;
-        const destInfo = await getInfoAsync(destPath);
-        if (destInfo.exists) {
-          await copyAsync({
-            from: destPath,
-            to: `${rollbackDir}${fileName}`,
-          });
-          backedUpFiles.push(fileName);
-        } else {
-          newlyCreatedFiles.push(fileName);
-        }
-      }
+      await Promise.all(
+        Array.from(uniquePhotosToRestore).map(async fileName => {
+          const destPath = `${targetDocDir}${fileName}`;
+          const destInfo = await getInfoAsync(destPath);
+          if (destInfo.exists) {
+            await copyAsync({
+              from: destPath,
+              to: `${rollbackDir}${fileName}`,
+            });
+            backedUpFiles.push(fileName);
+          } else {
+            newlyCreatedFiles.push(fileName);
+          }
+        })
+      );
 
       // 2. Copy all verified photos to documentDirectory (Fail-fast: no best-effort)
-      for (const fileName of uniquePhotosToRestore) {
-        const sourcePath = `${stagingDir}photos/${fileName}`;
-        const destPath = `${targetDocDir}${fileName}`;
+      await Promise.all(
+        Array.from(uniquePhotosToRestore).map(async fileName => {
+          const sourcePath = `${stagingDir}photos/${fileName}`;
+          const destPath = `${targetDocDir}${fileName}`;
 
-        const sourceInfo = await getInfoAsync(sourcePath);
-        if (!sourceInfo.exists) {
-          throw new Error('写真ファイルが見つかりません。');
-        }
+          const sourceInfo = await getInfoAsync(sourcePath);
+          if (!sourceInfo.exists) {
+            throw new Error('写真ファイルが見つかりません。');
+          }
 
-        await copyAsync({
-          from: sourcePath,
-          to: destPath,
-        });
+          await copyAsync({
+            from: sourcePath,
+            to: destPath,
+          });
 
-        const destInfo = await getInfoAsync(destPath);
-        if (!destInfo.exists) {
-          throw new Error('写真ファイルのコピーに失敗しました。');
-        }
+          const destInfo = await getInfoAsync(destPath);
+          if (!destInfo.exists) {
+            throw new Error('写真ファイルのコピーに失敗しました。');
+          }
 
-        copiedFiles.add(fileName);
-      }
+          copiedFiles.add(fileName);
+        })
+      );
 
       // 3. Deserialize portable meals with rewritten photo_path and null thumbnail_path
       const restoredMeals = deserializeMeals(validationResult.meals, targetDocDir);
