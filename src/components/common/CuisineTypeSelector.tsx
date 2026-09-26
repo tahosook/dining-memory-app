@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { CUISINE_TYPE_OPTIONS, type CuisineTypeOption } from '../../constants/MealOptions';
+import { CUISINE_TYPE_OPTIONS } from '../../constants/MealOptions';
+import type { CuisineTypeOption } from '../../constants/MealOptions';
 import { Colors } from '../../constants/Colors';
 
 type CuisineTypeSelectorProps = {
