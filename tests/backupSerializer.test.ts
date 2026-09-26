@@ -3,6 +3,7 @@ import {
   createBackupManifest,
   deserializeAppSettings,
   deserializeMeals,
+  ensureTrailingSlash,
   extractPhotoFileName,
   formatBackupTimestamp,
   generateBackupFileName,
@@ -10,6 +11,7 @@ import {
   resolveRestoredPhotoUri,
   serializeAppSettings,
   serializeMeals,
+  stripFileScheme,
   validateBackupManifest,
   validatePortableAppSettings,
   validatePortableMeals,
@@ -18,6 +20,16 @@ import {
 import type { PersistedAppSettingRow, PersistedMealRow } from '../src/database/services/localDatabase';
 
 describe('backup pathNormalizer', () => {
+  test('stripFileScheme removes file:// prefix', () => {
+    expect(stripFileScheme('file:///path/to/file.zip')).toBe('/path/to/file.zip');
+    expect(stripFileScheme('/path/to/file.zip')).toBe('/path/to/file.zip');
+  });
+
+  test('ensureTrailingSlash adds trailing slash if not present', () => {
+    expect(ensureTrailingSlash('/path/to/dir')).toBe('/path/to/dir/');
+    expect(ensureTrailingSlash('/path/to/dir/')).toBe('/path/to/dir/');
+  });
+
   test('extractPhotoFileName extracts clean filename from various URI forms', () => {
     expect(
       extractPhotoFileName('file:///data/user/0/com.tahosook.diningmemory/files/meal-20260422-213507-00.jpg')
