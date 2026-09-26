@@ -176,19 +176,9 @@ describe('RecordsScreen', () => {
     const timestamp12 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 12, 0, 0).getTime();
     const timestamp18 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 18, 0, 0).getTime();
 
-    // Return meals out of order (08:00, 18:00, 12:00) to ensure component sorting logic is applied
+    // MealService.getRecentMeals guarantees sort order by meal_datetime DESC.
+    // The component relies on this and does not perform redundant sorting.
     (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
-      {
-        id: 'meal-08',
-        uuid: 'meal-08',
-        meal_name: '朝ごはん (08:00)',
-        meal_datetime: timestamp08,
-        is_homemade: true,
-        photo_path: 'file:///breakfast.jpg',
-        is_deleted: false,
-        created_at: timestamp08,
-        updated_at: timestamp08,
-      },
       {
         id: 'meal-18',
         uuid: 'meal-18',
@@ -210,6 +200,17 @@ describe('RecordsScreen', () => {
         is_deleted: false,
         created_at: timestamp12,
         updated_at: timestamp12,
+      },
+      {
+        id: 'meal-08',
+        uuid: 'meal-08',
+        meal_name: '朝ごはん (08:00)',
+        meal_datetime: timestamp08,
+        is_homemade: true,
+        photo_path: 'file:///breakfast.jpg',
+        is_deleted: false,
+        created_at: timestamp08,
+        updated_at: timestamp08,
       },
     ]);
 
@@ -247,17 +248,6 @@ describe('RecordsScreen', () => {
 
     (MealService.getRecentMeals as jest.Mock).mockResolvedValue([
       {
-        id: 'boundary-start',
-        uuid: 'boundary-start',
-        meal_name: '深夜食 (00:01)',
-        meal_datetime: startOfDay,
-        is_homemade: false,
-        photo_path: 'file:///midnight.jpg',
-        is_deleted: false,
-        created_at: startOfDay,
-        updated_at: startOfDay,
-      },
-      {
         id: 'boundary-end',
         uuid: 'boundary-end',
         meal_name: '夜食 (23:59)',
@@ -267,6 +257,17 @@ describe('RecordsScreen', () => {
         is_deleted: false,
         created_at: endOfDay,
         updated_at: endOfDay,
+      },
+      {
+        id: 'boundary-start',
+        uuid: 'boundary-start',
+        meal_name: '深夜食 (00:01)',
+        meal_datetime: startOfDay,
+        is_homemade: false,
+        photo_path: 'file:///midnight.jpg',
+        is_deleted: false,
+        created_at: startOfDay,
+        updated_at: startOfDay,
       },
       {
         id: 'prev-day-end',

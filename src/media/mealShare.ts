@@ -1,3 +1,4 @@
+import { sanitizeLogObject } from '../utils/logSanitizer';
 import { NativeModules, Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { getInfoAsync } from 'expo-file-system/legacy';
@@ -169,7 +170,7 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
         } catch (nativeError) {
           console.warn(
             '[MealShare] Android native share threw, falling back to next available method:',
-            nativeError
+            sanitizeLogObject(nativeError)
           );
         }
       }
@@ -195,7 +196,7 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
         } catch (expoSharingError) {
           console.warn(
             '[MealShare] Fallback expo-sharing failed, attempting standard Share:',
-            expoSharingError
+            sanitizeLogObject(expoSharingError)
           );
         }
       }
@@ -238,10 +239,13 @@ export async function shareMealContent(options: MealShareOptions): Promise<MealS
       details: defaultResult,
     };
   } catch (error) {
-    console.error('[MealShare] Failed to share meal:', {
-      error: error instanceof Error ? error.message : String(error),
-      ...debugInfo,
-    });
+    console.error(
+      '[MealShare] Failed to share meal:',
+      sanitizeLogObject({
+        error: error instanceof Error ? error.message : String(error),
+        ...debugInfo,
+      })
+    );
     throw error;
   }
 }
