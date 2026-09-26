@@ -89,6 +89,10 @@ jest.mock('../src/utils/mealPhotoRotation', () => ({
   rotateMealPhotoClockwise: jest.fn(),
 }));
 
+jest.mock('../src/media/mealShare', () => ({
+  shareMealContent: jest.fn(),
+}));
+
 type MealDetailProps = NativeStackScreenProps<RootStackParamList, 'MealDetail'>;
 
 function createDeferred<T>() {
@@ -639,6 +643,20 @@ describe('MealDetailScreen', () => {
       expect(getByTestId('meal-detail-image').props.source).toEqual({
         uri: 'file:///rotated-photo.jpg',
       });
+    });
+  });
+
+  test('shows an alert when shareMealContent fails', async () => {
+    const { shareMealContent } = require('../src/media/mealShare');
+    (shareMealContent as jest.Mock).mockRejectedValueOnce(new Error('Share failed'));
+
+    const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+    fireEvent.press(getByTestId('share-submit-button'));
+
+    await waitFor(() => {
+      expect(Alert.alert).toHaveBeenCalledWith('エラー', '共有シートを開けませんでした。');
     });
   });
 
