@@ -83,7 +83,7 @@
 ### Tests / CI / Quality
 - Read first: [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/coding-standards.md](coding-standards.md), [docs/engineering/dependency-policy.md](dependency-policy.md)
 - GitHub security settings: [docs/engineering/github-security-settings.md](github-security-settings.md)
-- Common files: `package.json`, `jest.config.js`, `jest.setup.js`, `eslint.config.js`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `tests/`, `scripts/tests/`
+- Common files: `package.json`, `jest.config.js`, `jest.setup.js`, `eslint.config.js`, `.github/workflows/ci.yml`, `.github/workflows/sync-github-status.yml`, `.github/dependabot.yml`, `scripts/generate_github_status.py`, `tests/`, `scripts/tests/`
 - Use the narrowest useful check first, then broader gates for meaningful code changes.
 
 ### Docs-only Changes
@@ -101,6 +101,6 @@ When source changes, check the smallest matching canonical docs before finishing
 - `src/screens/StatsScreen/`, stats aggregation in `src/database/services/MealService.ts`: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/domain/database-design.md](../domain/database-design.md)
 - `src/database/services/`, `src/domain/meals/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
 - `scripts/*food-labels.py`, `scripts/mediapipe_*`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md)
-- `app.json`, `eas.json`, `.github/workflows/ci.yml`, `.github/dependabot.yml`, `android/app/build.gradle`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/dependency-policy.md](dependency-policy.md), [docs/engineering/github-security-settings.md](github-security-settings.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md)
+- `app.json`, `eas.json`, `.github/workflows/ci.yml`, `.github/workflows/sync-github-status.yml`, `.github/dependabot.yml`, `scripts/generate_github_status.py`, `android/app/build.gradle`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/dependency-policy.md](dependency-policy.md), [docs/engineering/github-security-settings.md](github-security-settings.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md)
 
 Run `npm run check:docs` when a change touches current behavior docs, AI input assist, MediaPipe, storage, runtime, or UX descriptions.

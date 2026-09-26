@@ -45,6 +45,7 @@ jest.mock('expo-file-system/legacy', () => {
     })),
     readDirectoryAsync: jest.fn(async (directoryPath: string) => listEntries(directoryPath)),
     moveAsync: jest.fn(async ({ from, to }: { from: string; to: string }) => {
+      existingFiles.delete(from);
       downloads.delete(from);
       existingFiles.add(to);
     }),
@@ -69,18 +70,25 @@ jest.mock('../src/database/services/localDatabase', () => {
   };
 });
 
+import { NativeModules } from 'react-native';
 import { AppSettingsService } from '../src/database/services/AppSettingsService';
 import {
+  MEDIAPIPE_MODEL_CONFIG,
   resolveMealInputAssistModelDirectoryPath,
   resolveMealInputAssistModelPath,
   resolveMealInputAssistProjectorPath,
+  resolveMediaPipeModelPath,
 } from '../src/ai/mealInputAssist';
 import {
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
+  deleteMediaPipeModel,
   getMealInputAssistModelStatus,
+  getMediaPipeModelStatus,
   installMealInputAssistModel,
+  installMediaPipeModel,
   redownloadMealInputAssistModel,
+  redownloadMediaPipeModel,
 } from '../src/ai/mealInputAssist/modelInstaller';
 
 const fileSystemMock = jest.requireMock('expo-file-system/legacy') as {
@@ -90,12 +98,20 @@ const fileSystemMock = jest.requireMock('expo-file-system/legacy') as {
     reset: () => void;
   };
   createDownloadResumable: jest.Mock;
+  moveAsync: jest.Mock;
+};
+
+const defaultMoveAsync = async ({ from, to }: { from: string; to: string }) => {
+  fileSystemMock.__mock.existingFiles.delete(from);
+  fileSystemMock.__mock.downloads.delete(from);
+  fileSystemMock.__mock.existingFiles.add(to);
 };
 
 describe('meal input assist model installer', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     fileSystemMock.__mock.reset();
+    fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
     await AppSettingsService.setMealInputAssistModelStatus('not_installed');
     await AppSettingsService.setMealInputAssistModelVersion(null);
     await AppSettingsService.setMealInputAssistModelDownloadedAt(null);
@@ -212,6 +228,234 @@ describe('meal input assist model installer', () => {
     expect(fileSystemMock.__mock.existingFiles.has(resolveMealInputAssistProjectorPath()!)).toBe(true);
     await expect(getMealInputAssistModelStatus()).resolves.toMatchObject({
       kind: 'ready',
+    });
+  });
+});
+
+describe('MediaPipe model installer', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    fileSystemMock.__mock.reset();
+    fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
+    NativeModules.MediaPipeMealInputAssist = {
+      verifyFileSha256: jest.fn().mockResolvedValue(true),
+    };
+    await AppSettingsService.setMediaPipeModelStatus('not_installed');
+    await AppSettingsService.setMediaPipeModelVersion(null);
+    await AppSettingsService.setMediaPipeModelDownloadedAt(null);
+    await AppSettingsService.setMediaPipeModelErrorMessage(null);
+  });
+
+  test('reports not_installed when MediaPipe model file does not exist', async () => {
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'not_installed',
+      modelExists: false,
+    });
+  });
+
+  test('installs model file into fixed path after hash verification and becomes ready', async () => {
+    await installMediaPipeModel();
+
+    expect(fileSystemMock.createDownloadResumable).toHaveBeenCalledTimes(1);
+    expect(NativeModules.MediaPipeMealInputAssist.verifyFileSha256).toHaveBeenCalledWith(
+      expect.stringContaining('meal-input-assist.task.download-'),
+      MEDIAPIPE_MODEL_CONFIG.sha256
+    );
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMediaPipeModelPath()!)).toBe(true);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'ready',
+      modelExists: true,
+      version: MEDIAPIPE_MODEL_CONFIG.version,
+    });
+  });
+
+  test('reports progress updates through preparing, downloading, verifying, and installing', async () => {
+    const onProgress = jest.fn();
+
+    await installMediaPipeModel({ onProgress });
+
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'preparing',
+      })
+    );
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'downloading',
+        bytesWritten: 1024,
+      })
+    );
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'verifying',
+      })
+    );
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        phase: 'installing',
+        progress: 1,
+      })
+    );
+  });
+
+  test('fails and cleans up temporary file when hash verification fails', async () => {
+    NativeModules.MediaPipeMealInputAssist.verifyFileSha256 = jest.fn().mockResolvedValue(false);
+
+    await expect(installMediaPipeModel()).rejects.toThrow(
+      'MediaPipe Meal Classifier model のダウンロードに失敗しました: MediaPipe Meal Classifier のハッシュ検証に失敗しました (SHA256 不一致)。'
+    );
+
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMediaPipeModelPath()!)).toBe(false);
+    expect(fileSystemMock.__mock.downloads.size).toBe(0);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'error',
+      modelExists: false,
+      errorMessage: expect.stringContaining('SHA256 不一致'),
+    });
+  });
+
+  test('cleans up temporary file when download fails', async () => {
+    fileSystemMock.createDownloadResumable.mockImplementationOnce(() => ({
+      downloadAsync: jest.fn(async () => {
+        throw new Error('network failed');
+      }),
+    }));
+
+    await expect(installMediaPipeModel()).rejects.toThrow('network failed');
+
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMediaPipeModelPath()!)).toBe(false);
+    expect(fileSystemMock.__mock.downloads.size).toBe(0);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'error',
+      modelExists: false,
+    });
+  });
+
+  test('returns to not_installed after deleting the MediaPipe model file', async () => {
+    fileSystemMock.__mock.existingFiles.add(resolveMediaPipeModelPath()!);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+
+    await deleteMediaPipeModel();
+
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMediaPipeModelPath()!)).toBe(false);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'not_installed',
+      modelExists: false,
+    });
+  });
+
+  test('deleteAllDownloadedLocalAiModels cleans up MediaPipe model and resets state', async () => {
+    fileSystemMock.__mock.existingFiles.add(resolveMediaPipeModelPath()!);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+
+    await deleteAllDownloadedLocalAiModels();
+
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMediaPipeModelPath()!)).toBe(false);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'not_installed',
+      modelExists: false,
+    });
+  });
+
+  test('reports not_installed when persisted status is ready but physical file is missing', async () => {
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+    await AppSettingsService.setMediaPipeModelVersion('v1');
+
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'not_installed',
+      modelExists: false,
+    });
+  });
+
+  test('keeps existing ready file when redownload fails before replacement', async () => {
+    fileSystemMock.__mock.existingFiles.add(resolveMediaPipeModelPath()!);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+    await AppSettingsService.setMediaPipeModelVersion('v1');
+
+    fileSystemMock.createDownloadResumable.mockImplementationOnce(() => ({
+      downloadAsync: jest.fn(async () => {
+        throw new Error('network disconnected');
+      }),
+    }));
+
+    await expect(redownloadMediaPipeModel()).rejects.toThrow('network disconnected');
+
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMediaPipeModelPath()!)).toBe(true);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'ready',
+      modelExists: true,
+    });
+  });
+
+  test('supports options overrides for url, expectedSha256, and version', async () => {
+    await installMediaPipeModel({
+      url: 'https://example.com/custom-model.task',
+      expectedSha256: 'custom-sha256-hash',
+      version: 'custom-version-2.0',
+    });
+
+    expect(fileSystemMock.createDownloadResumable).toHaveBeenCalledWith(
+      'https://example.com/custom-model.task',
+      expect.any(String),
+      expect.any(Object),
+      expect.any(Function)
+    );
+    expect(NativeModules.MediaPipeMealInputAssist.verifyFileSha256).toHaveBeenCalledWith(
+      expect.any(String),
+      'custom-sha256-hash'
+    );
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'ready',
+      version: 'custom-version-2.0',
+      modelExists: true,
+    });
+  });
+
+  test('restores existing model file when new file placement fails during redownload', async () => {
+    const targetPath = resolveMediaPipeModelPath()!;
+    fileSystemMock.__mock.existingFiles.add(targetPath);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+    await AppSettingsService.setMediaPipeModelVersion('v1');
+
+    fileSystemMock.moveAsync.mockImplementation(async ({ from, to }: { from: string; to: string }) => {
+      if (to === targetPath && !from.includes('.backup-')) {
+        throw new Error('disk full during model placement');
+      }
+      return defaultMoveAsync({ from, to });
+    });
+
+    try {
+      await expect(redownloadMediaPipeModel()).rejects.toThrow('disk full during model placement');
+
+      expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(true);
+      expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(false);
+      expect(fileSystemMock.__mock.downloads.size).toBe(0);
+
+      await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+        kind: 'ready',
+        modelExists: true,
+      });
+    } finally {
+      fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
+    }
+  });
+
+  test('cleans up temporary backup file after successful replacement during redownload', async () => {
+    const targetPath = resolveMediaPipeModelPath()!;
+    fileSystemMock.__mock.existingFiles.add(targetPath);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+    await AppSettingsService.setMediaPipeModelVersion('v1');
+
+    await redownloadMediaPipeModel({
+      version: 'v2',
+    });
+
+    expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(true);
+    expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(false);
+    await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
+      kind: 'ready',
+      version: 'v2',
+      modelExists: true,
     });
   });
 });
