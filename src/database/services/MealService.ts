@@ -29,6 +29,7 @@ import {
 import { normalizeMealRow } from '../../domain/meals/mealRow';
 import { normalizeCookingLevel } from '../../utils/cookingLevel';
 import * as Crypto from 'expo-crypto';
+import type { SQLiteDatabase } from 'expo-sqlite';
 import { cleanupOrphanedPhotoFiles } from '../../media/photoLifecycle';
 
 export interface CreateMealData {
@@ -131,22 +132,7 @@ async function saveRows(rows: PersistedMealRow[]) {
   setInMemoryMeals(rows);
 }
 
-async function upsertRow(row: PersistedMealRow) {
-  await initializeDatabase();
-
-  if (!isUsingNativeDatabase()) {
-    const rows = getInMemoryMeals();
-    const nextRows = rows.filter(item => item.id !== row.id);
-    nextRows.push(row);
-    setInMemoryMeals(nextRows);
-    return;
-  }
-
-  const db = getDatabase();
-  if (!db) {
-    return;
-  }
-
+async function upsertRowInNativeDatabase(db: SQLiteDatabase, row: PersistedMealRow) {
   await db.runAsync(
     `INSERT OR REPLACE INTO meals (
       id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source, notes, cooking_level,
@@ -175,6 +161,29 @@ async function upsertRow(row: PersistedMealRow) {
     row.created_at,
     row.updated_at
   );
+}
+
+function upsertRowInMemory(row: PersistedMealRow) {
+  const rows = getInMemoryMeals();
+  const nextRows = rows.filter(item => item.id !== row.id);
+  nextRows.push(row);
+  setInMemoryMeals(nextRows);
+}
+
+async function upsertRow(row: PersistedMealRow) {
+  await initializeDatabase();
+
+  if (!isUsingNativeDatabase()) {
+    upsertRowInMemory(row);
+    return;
+  }
+
+  const db = getDatabase();
+  if (!db) {
+    return;
+  }
+
+  await upsertRowInNativeDatabase(db, row);
 }
 
 export class MealService {
