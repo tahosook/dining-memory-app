@@ -23,11 +23,19 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('CameraScreen Error:', error);
-    console.error('Error Info:', errorInfo);
+  componentDidCatch(error: Error, _errorInfo: ErrorInfo) {
+    // SECURITY: Sanitize error logging to prevent leaking sensitive PII or tokens
+    // that might be present in the raw error object or stack traces.
+    // We only log safe fields (name, message).
+    const safeError = {
+      name: error.name,
+      message: error.message,
+    };
 
-    // TODO: Send error to monitoring service (e.g., Sentry)
+    console.error('CameraScreen Error:', safeError);
+    // Component stack traces can contain sensitive data like props, so we omit errorInfo.
+
+    // TODO: Send sanitized error to monitoring service (e.g., Sentry)
   }
 
   handleRetry = () => {

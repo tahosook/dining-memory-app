@@ -7,6 +7,11 @@
 **Learning:** Returning `error.stack` from caught errors explicitly exposes sensitive internal execution paths or system structures, violating the principle of failing securely.
 **Prevention:** Avoid passing or returning `error.stack` in logs or API responses, only log standardized error messages instead.
 
+## 2026-09-25 - Prevent Data Exposure in Error Logs
+**Vulnerability:** Raw error objects and component stacks were logged directly to console, risking exposure of PII or sensitive tokens.
+**Learning:** Default error logging behavior in React ErrorBoundaries or global handlers can inadvertently capture and store sensitive data in logs.
+**Prevention:** Always sanitize error objects by explicitly selecting safe properties (e.g., name, message) before logging or sending them to a monitoring service.
+
 ## 2026-09-26 - Zip Slip / Unsafe Zip Extraction Prevention
 **Vulnerability:** Calling `unzip()` directly on untrusted zip files could expose the staging directory to path traversal (`../`) or unapproved files.
 **Learning:** Even if native libraries implement basic safeguards, extracting an entire archive allows potentially dangerous files to hit the file system before JS validation. `react-native-zip-archive`'s `listContents` is essential for pre-flight verification.
