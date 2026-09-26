@@ -32,10 +32,16 @@ describe('localDatabase migrations', () => {
 
     await localDatabase.initializeDatabase();
 
-    expect(await localDatabase.getDatabaseSchemaVersion()).toBe(localDatabase.DATABASE_SCHEMA_VERSION);
+    expect(await localDatabase.getDatabaseSchemaVersion()).toBe(
+      localDatabase.DATABASE_SCHEMA_VERSION
+    );
     expect(openDatabaseSync).toHaveBeenCalledTimes(1);
-    expect(mockDb.execSync).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS meals'));
-    expect(mockDb.execSync).toHaveBeenCalledWith(expect.stringContaining('CREATE TABLE IF NOT EXISTS search_vectors'));
+    expect(mockDb.execSync).toHaveBeenCalledWith(
+      expect.stringContaining('CREATE TABLE IF NOT EXISTS meals')
+    );
+    expect(mockDb.execSync).toHaveBeenCalledWith(
+      expect.stringContaining('CREATE TABLE IF NOT EXISTS search_vectors')
+    );
     expect(mockDb.execSync).toHaveBeenCalledWith('PRAGMA user_version = 1');
     expect(mockDb.execSync).toHaveBeenCalledWith('PRAGMA user_version = 2');
   });
@@ -99,7 +105,9 @@ describe('localDatabase migrations', () => {
       },
     ]);
 
-    expect(await localDatabase.getDatabaseSchemaVersion()).toBe(localDatabase.DATABASE_SCHEMA_VERSION);
+    expect(await localDatabase.getDatabaseSchemaVersion()).toBe(
+      localDatabase.DATABASE_SCHEMA_VERSION
+    );
     expect(localDatabase.getInMemorySearchVectors()).toHaveLength(1);
 
     localDatabase.resetInMemoryDatabase();
@@ -171,5 +179,66 @@ describe('localDatabase migrations', () => {
     expect(executedSql).toContain('DELETE FROM meals');
     expect(executedSql).toContain('DELETE FROM app_settings');
     expect(executedSql).toContain('DELETE FROM search_vectors');
+  });
+
+  test('replaceDatabaseWithBackup uses prepareAsync for bulk inserting meals and appSettings when available', async () => {
+    const executedSql: string[] = [];
+    const statementFinalizeMock = jest.fn();
+    const statementExecuteMock = jest.fn();
+    const mockStatement = {
+      executeAsync: statementExecuteMock,
+      finalizeAsync: statementFinalizeMock,
+    };
+    const prepareAsyncMock = jest.fn(async () => mockStatement);
+
+    const mockDb = {
+      execSync: jest.fn(),
+      getFirstSync: jest.fn(() => ({ user_version: 2 })),
+      withTransactionAsync: jest.fn(async (cb: () => Promise<void>) => cb()),
+      runAsync: jest.fn(async (sql: string) => {
+        executedSql.push(sql);
+      }),
+      prepareAsync: prepareAsyncMock,
+    };
+
+    jest.doMock('react-native', () => ({
+      Platform: { OS: 'ios' },
+    }));
+    jest.doMock('expo-sqlite', () => ({
+      openDatabaseSync: jest.fn(() => mockDb),
+    }));
+
+    let localDatabase!: typeof import('../src/database/services/localDatabase');
+    jest.isolateModules(() => {
+      localDatabase = require('../src/database/services/localDatabase');
+    });
+
+    await localDatabase.initializeDatabase();
+    await localDatabase.replaceDatabaseWithBackup(
+      [
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: 'ラーメン',
+          meal_datetime: 1000,
+          is_homemade: 0,
+          photo_path: 'file:///ramen.jpg',
+          is_deleted: 0,
+          created_at: 1000,
+          updated_at: 1000,
+        },
+      ],
+      [
+        {
+          key: 'theme',
+          value: 'dark',
+          updated_at: 1000,
+        },
+      ]
+    );
+
+    expect(prepareAsyncMock).toHaveBeenCalledTimes(2);
+    expect(statementExecuteMock).toHaveBeenCalledTimes(2);
+    expect(statementFinalizeMock).toHaveBeenCalledTimes(2);
   });
 });

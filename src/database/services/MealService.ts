@@ -198,8 +198,26 @@ export class MealService {
     latitude: number;
     longitude: number;
   }): Promise<boolean | null> {
-    const rows = await getAllRows();
+    await initializeDatabase();
     const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+    if (isUsingNativeDatabase()) {
+      const db = getDatabase();
+      if (db) {
+        // Optimization: Execute a direct SQL query to filter out deleted and old meals
+        // instead of loading all rows into memory. This reduces memory footprint.
+        const rows = await db.getAllAsync<PersistedMealRow>(
+          'SELECT * FROM meals WHERE is_deleted = 0 AND meal_datetime >= ?',
+          oneWeekAgo
+        );
+        return resolveNearbyHomemadeDefault(rows, origin, {
+          minMealDatetime: oneWeekAgo,
+          maxDistanceMeters: 80,
+        });
+      }
+    }
+
+    const rows = await getAllRows();
     return resolveNearbyHomemadeDefault(rows, origin, {
       minMealDatetime: oneWeekAgo,
       maxDistanceMeters: 80,
@@ -334,6 +352,8 @@ export class MealService {
     if (isUsingNativeDatabase()) {
       const db = getDatabase();
       if (db) {
+        // Optimization: Execute a direct SQL query with ORDER BY and LIMIT to avoid loading
+        // all rows into memory and processing in JavaScript. Reduces heap usage and CPU time.
         const conditions = ['is_deleted = 0'];
         const params: (string | number)[] = [];
 
