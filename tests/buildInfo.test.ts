@@ -10,17 +10,24 @@ import {
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Platform } from 'react-native';
 
+const mockExpoConfig = {
+  version: '1.0.0',
+  extra: {
+    commitHash: 'abcdefg',
+    buildDate: '2023-01-01T12:00:00.000Z',
+  },
+};
+
 jest.mock('expo-constants', () => {
   return {
     __esModule: true,
     default: {
       executionEnvironment: 'standalone',
-      expoConfig: {
-        version: '1.0.0',
-        extra: {
-          commitHash: 'abcdefg',
-          buildDate: '2023-01-01T12:00:00.000Z',
-        },
+      get expoConfig() {
+        return mockExpoConfig;
+      },
+      set expoConfig(val) {
+        // mock setter to allow assignments
       },
       platform: {
         android: {
@@ -46,50 +53,53 @@ jest.mock('react-native', () => ({
 }));
 
 describe('buildInfo utilities', () => {
+  let originalExpoConfig: any;
+  let originalPlatform: any;
+  let originalSupportedExpoSdks: any;
+  let originalExecutionEnvironment: any;
+
+  beforeEach(() => {
+    originalExpoConfig = JSON.parse(JSON.stringify(mockExpoConfig));
+    originalPlatform = JSON.parse(JSON.stringify(Constants.platform));
+    originalSupportedExpoSdks = [...Constants.supportedExpoSdks!];
+    originalExecutionEnvironment = Constants.executionEnvironment;
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
-    // Reset any manual overrides
-    Constants.executionEnvironment = ExecutionEnvironment.Standalone;
-    if (Constants.expoConfig) {
-      Constants.expoConfig.version = '1.0.0';
-      if (Constants.expoConfig.extra) {
-        Constants.expoConfig.extra.commitHash = 'abcdefg';
-        Constants.expoConfig.extra.buildDate = '2023-01-01T12:00:00.000Z';
-      }
-    }
+    Constants.executionEnvironment = originalExecutionEnvironment;
     Platform.OS = 'ios';
-    Constants.platform = {
-      android: { versionCode: 42 },
-      ios: { buildNumber: '100' },
-    };
-    Constants.supportedExpoSdks = ['48.0.0', '47.0.0'];
+    Constants.platform = originalPlatform;
+    Constants.supportedExpoSdks = originalSupportedExpoSdks;
+
+    // reset our mock
+    Object.assign(mockExpoConfig, originalExpoConfig);
+    // ensure extra is strictly equal to the original structure to avoid reference issues
+    mockExpoConfig.extra = { ...originalExpoConfig.extra };
   });
 
   describe('getBuildEnvironment', () => {
     it('should return "development" when __DEV__ is true', () => {
-      const originalDev = global.__DEV__;
-      // @ts-ignore
-      global.__DEV__ = true;
+      const originalDev = (global as any).__DEV__;
+      (global as any).__DEV__ = true;
       expect(getBuildEnvironment()).toBe('development');
-      global.__DEV__ = originalDev;
+      (global as any).__DEV__ = originalDev;
     });
 
     it('should return "production" when executionEnvironment is Standalone and __DEV__ is false', () => {
-      const originalDev = global.__DEV__;
-      // @ts-ignore
-      global.__DEV__ = false;
+      const originalDev = (global as any).__DEV__;
+      (global as any).__DEV__ = false;
       Constants.executionEnvironment = ExecutionEnvironment.Standalone;
       expect(getBuildEnvironment()).toBe('production');
-      global.__DEV__ = originalDev;
+      (global as any).__DEV__ = originalDev;
     });
 
     it('should return "preview" when executionEnvironment is not Standalone and __DEV__ is false', () => {
-      const originalDev = global.__DEV__;
-      // @ts-ignore
-      global.__DEV__ = false;
+      const originalDev = (global as any).__DEV__;
+      (global as any).__DEV__ = false;
       Constants.executionEnvironment = ExecutionEnvironment.StoreClient;
       expect(getBuildEnvironment()).toBe('preview');
-      global.__DEV__ = originalDev;
+      (global as any).__DEV__ = originalDev;
     });
   });
 
@@ -99,8 +109,13 @@ describe('buildInfo utilities', () => {
     });
 
     it('should return null if expoConfig or version is missing', () => {
-      Constants.expoConfig = null;
+      Object.defineProperty(Constants, 'expoConfig', { value: null, configurable: true });
       expect(getAppVersion()).toBeNull();
+      // restore after test
+      Object.defineProperty(Constants, 'expoConfig', {
+        get: () => mockExpoConfig,
+        configurable: true,
+      });
     });
   });
 
@@ -123,7 +138,7 @@ describe('buildInfo utilities', () => {
 
     it('should return null when android manifest is missing', () => {
       Platform.OS = 'android';
-      Constants.platform = { ios: { buildNumber: '100' } };
+      Constants.platform = { ios: { buildNumber: '100' } as any };
       expect(getAndroidVersionCode()).toBeNull();
     });
   });
@@ -172,29 +187,20 @@ describe('buildInfo utilities', () => {
     });
 
     it('should return the full hash if it is less than 7 characters', () => {
-      if (Constants.expoConfig?.extra) {
-        Constants.expoConfig.extra.commitHash = 'abc';
-      }
+      mockExpoConfig.extra.commitHash = 'abc';
       expect(getGitCommitHash()).toBe('abc');
     });
 
     it('should return null if commitHash is missing', () => {
-      if (Constants.expoConfig?.extra) {
-        Constants.expoConfig.extra.commitHash = undefined;
-      }
+      mockExpoConfig.extra.commitHash = undefined as any;
       expect(getGitCommitHash()).toBeNull();
     });
   });
 
   describe('getBuildDate', () => {
     it('should format a valid date string correctly', () => {
-      // 2023-01-01T12:00:00.000Z in local time.
-      // We will mock Date to ensure consistent timezone output or test against expected format.
-      // Since it depends on the local timezone, let's inject a predictable date
       const dateString = '2023-01-01T12:00:00.000Z';
-      if (Constants.expoConfig?.extra) {
-        Constants.expoConfig.extra.buildDate = dateString;
-      }
+      mockExpoConfig.extra.buildDate = dateString;
 
       const parsedDate = new Date(dateString);
       const year = parsedDate.getFullYear();
@@ -209,39 +215,23 @@ describe('buildInfo utilities', () => {
     });
 
     it('should return the raw string if date parsing throws an error', () => {
-      // Date parsing only throws in very specific environments, usually it returns "Invalid Date"
-      // But we can test with an invalid date string which results in Invalid Date.
-      // Wait, in buildInfo.ts:
-      // try {
-      //   const date = new Date(buildDate);
-      //   return formatBuildDate(date);
-      // } catch {
-      //   return buildDate;
-      // }
-      // The Date constructor doesn't throw on invalid strings, it creates a Date object with NaN time.
-      // But formatBuildDate will return NaN-NaN-NaN NaN:NaN.
-      // Let's spy on Date to make it throw
-      const originalDate = global.Date;
+      const originalDate = (global as any).Date;
       try {
         const mockDate = jest.fn().mockImplementation(() => {
           throw new Error('Fake Error');
         });
-        global.Date = mockDate as any;
+        (global as any).Date = mockDate as any;
 
-        if (Constants.expoConfig?.extra) {
-          Constants.expoConfig.extra.buildDate = 'invalid date';
-        }
+        mockExpoConfig.extra.buildDate = 'invalid date';
 
         expect(getBuildDate()).toBe('invalid date');
       } finally {
-        global.Date = originalDate;
+        (global as any).Date = originalDate;
       }
     });
 
     it('should return null if buildDate is missing', () => {
-      if (Constants.expoConfig?.extra) {
-        Constants.expoConfig.extra.buildDate = undefined;
-      }
+      mockExpoConfig.extra.buildDate = undefined as any;
       expect(getBuildDate()).toBeNull();
     });
   });
