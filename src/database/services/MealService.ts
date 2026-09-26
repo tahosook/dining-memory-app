@@ -9,6 +9,7 @@ import {
 } from './localDatabase';
 import type { CookingLevel, Meal } from '../../types/MealTypes';
 import {
+  getGeoBoundingBox,
   resolveDefaultMealName,
   resolveNearbyHomemadeDefault,
   resolveNearbyLocationName,
@@ -198,9 +199,21 @@ export class MealService {
       if (isUsingNativeDatabase()) {
         const db = getDatabase();
         if (db) {
+          const bbox = getGeoBoundingBox({
+            latitude: data.latitude,
+            longitude: data.longitude,
+          });
+
           let sql =
-            "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL";
+            "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != ''";
           const params: number[] = [];
+
+          if (bbox) {
+            sql += ' AND latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ?';
+            params.push(bbox.minLat, bbox.maxLat, bbox.minLon, bbox.maxLon);
+          } else {
+            sql += ' AND latitude IS NOT NULL AND longitude IS NOT NULL';
+          }
 
           if (needsDefaultMealName && !needsNearbyLocationName) {
             sql += ' AND meal_datetime >= ?';

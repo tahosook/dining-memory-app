@@ -6,6 +6,7 @@ import {
 } from '../src/database/services/localDatabase';
 import { buildStatisticsSummary, filterRowsForStatistics } from '../src/domain/meals/statistics';
 import type { SearchFilters } from '../src/domain/meals/search';
+import { getGeoBoundingBox } from '../src/domain/meals/defaults';
 
 jest.mock('expo-crypto', () => {
   let idCounter = 0;
@@ -820,9 +821,15 @@ describe('MealService', () => {
           longitude: 139.76712,
         });
 
-        // Verifies targeted SQL query was executed with parameter binding for oneWeekAgo
+        const targetBbox = getGeoBoundingBox({ latitude: 35.68122, longitude: 139.76712 })!;
+
+        // Verifies targeted SQL query was executed with parameter binding for bounding box and oneWeekAgo
         expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-          "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL AND meal_datetime >= ? ORDER BY meal_datetime DESC",
+          "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ? AND meal_datetime >= ? ORDER BY meal_datetime DESC",
+          targetBbox.minLat,
+          targetBbox.maxLat,
+          targetBbox.minLon,
+          targetBbox.maxLon,
           oneWeekAgo
         );
         // Verifies SELECT * FROM meals was NOT called
@@ -854,8 +861,13 @@ describe('MealService', () => {
         longitude: 139.76712,
       });
 
+      const targetBbox = getGeoBoundingBox({ latitude: 35.68122, longitude: 139.76712 })!;
       expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-        "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY meal_datetime DESC"
+        "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ? ORDER BY meal_datetime DESC",
+        targetBbox.minLat,
+        targetBbox.maxLat,
+        targetBbox.minLon,
+        targetBbox.maxLon
       );
       expect(mockDb.getAllAsync).not.toHaveBeenCalledWith('SELECT * FROM meals');
       expect(meal.location_name).toBe('老舗うどん');
@@ -885,10 +897,15 @@ describe('MealService', () => {
           longitude: 139.76712,
         });
 
+        const targetBbox = getGeoBoundingBox({ latitude: 35.68122, longitude: 139.76712 })!;
         // Exactly one query executed (no duplicate query)
         expect(mockDb.getAllAsync).toHaveBeenCalledTimes(1);
         expect(mockDb.getAllAsync).toHaveBeenCalledWith(
-          "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY meal_datetime DESC"
+          "SELECT id, meal_datetime, location_name, latitude, longitude, is_deleted FROM meals WHERE is_deleted = 0 AND location_name IS NOT NULL AND location_name != '' AND latitude BETWEEN ? AND ? AND longitude BETWEEN ? AND ? ORDER BY meal_datetime DESC",
+          targetBbox.minLat,
+          targetBbox.maxLat,
+          targetBbox.minLon,
+          targetBbox.maxLon
         );
         expect(meal.location_name).toBe('人気ラーメン');
         expect(meal.meal_name).toBe('人気ラーメン の 昼食');
@@ -2197,6 +2214,90 @@ describe('MealService', () => {
       expect(nativeMeal.location_name).toBe(inMemoryMeal.location_name);
       expect(nativeMeal.location_name).toBeUndefined();
       expect(nativeMeal.meal_name).toBe('昼食');
+    });
+
+    test('Parity: bounding box filters out distant records in SQLite query, reducing candidates to only nearby rows', async () => {
+      const distantRows = [
+        // 1. 近隣レコード (50m先)
+        {
+          id: 'near-1',
+          uuid: 'near-1',
+          meal_name: '鴨南蛮',
+          location_name: '神田そば',
+          latitude: 35.68123,
+          longitude: 139.76713,
+          meal_datetime: Date.now() - 1000,
+          is_homemade: 0,
+          is_deleted: 0,
+          created_at: 1000,
+          updated_at: 1000,
+        },
+        // 2. 遠方レコード A (約 5km 離れた新宿)
+        {
+          id: 'far-shinjuku',
+          uuid: 'far-shinjuku',
+          meal_name: '新宿パスタ',
+          location_name: '新宿イタリアン',
+          latitude: 35.6900,
+          longitude: 139.7000,
+          meal_datetime: Date.now() - 2000,
+          is_homemade: 0,
+          is_deleted: 0,
+          created_at: 2000,
+          updated_at: 2000,
+        },
+        // 3. 遠方レコード B (約 30km 離れた横浜)
+        {
+          id: 'far-yokohama',
+          uuid: 'far-yokohama',
+          meal_name: '中華そば',
+          location_name: '横浜中華街',
+          latitude: 35.4437,
+          longitude: 139.6380,
+          meal_datetime: Date.now() - 3000,
+          is_homemade: 0,
+          is_deleted: 0,
+          created_at: 3000,
+          updated_at: 3000,
+        },
+        // 4. 遠方レコード C (約 400km 離れた大阪)
+        {
+          id: 'far-osaka',
+          uuid: 'far-osaka',
+          meal_name: 'たこ焼き',
+          location_name: '道頓堀たこ八',
+          latitude: 34.6687,
+          longitude: 135.5013,
+          meal_datetime: Date.now() - 4000,
+          is_homemade: 0,
+          is_deleted: 0,
+          created_at: 4000,
+          updated_at: 4000,
+        },
+      ];
+
+      distantRows.forEach(row => parityDbFixture.insertMeal(row));
+      (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+      (getDatabase as jest.Mock).mockReturnValue(parityDbFixture.adapter);
+
+      const getAllSpy = jest.spyOn(parityDbFixture.adapter, 'getAllAsync');
+
+      const meal = await MealService.createMeal({
+        meal_name: '',
+        is_homemade: false,
+        photo_path: 'file:///target.jpg',
+        meal_datetime: new Date('2026-04-30T12:00:00+09:00'),
+        latitude: 35.6812,
+        longitude: 139.7671,
+      });
+
+      expect(meal.location_name).toBe('神田そば');
+      expect(meal.meal_name).toBe('神田そば の 昼食');
+
+      // SQLite クエリの結果（JS へ返された行数）が 1件のみ（遠方の3件は SQL の時点で除外）であることを検証
+      const spyResult = await getAllSpy.mock.results[0].value;
+      expect(spyResult).toHaveLength(1);
+      expect(spyResult[0].id).toBe('near-1');
     });
   });
 });

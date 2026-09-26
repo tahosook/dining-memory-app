@@ -39,6 +39,52 @@ export function getDistanceMeters(
   return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
 }
 
+export interface GeoBoundingBox {
+  minLat: number;
+  maxLat: number;
+  minLon: number;
+  maxLon: number;
+}
+
+export function getGeoBoundingBox(
+  origin: { latitude: number; longitude: number },
+  marginMeters: number = 1500
+): GeoBoundingBox | null {
+  const { latitude, longitude } = origin;
+  if (
+    typeof latitude !== 'number' ||
+    typeof longitude !== 'number' ||
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) {
+    return null;
+  }
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    return null;
+  }
+
+  const earthRadiusMeters = 6371000;
+  const latDelta = (marginMeters / earthRadiusMeters) * (180 / Math.PI);
+  const cosLat = Math.cos((Math.abs(latitude) * Math.PI) / 180);
+
+  if (cosLat < 0.01) {
+    return null;
+  }
+
+  const lonDelta = (marginMeters / (earthRadiusMeters * cosLat)) * (180 / Math.PI);
+
+  const minLat = latitude - latDelta;
+  const maxLat = latitude + latDelta;
+  const minLon = longitude - lonDelta;
+  const maxLon = longitude + lonDelta;
+
+  if (minLat < -90 || maxLat > 90 || minLon < -180 || maxLon > 180) {
+    return null;
+  }
+
+  return { minLat, maxLat, minLon, maxLon };
+}
+
 export function getMealNameByTime(date: Date): string {
   const hour = date.getHours();
 
