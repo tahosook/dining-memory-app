@@ -263,16 +263,13 @@ function buildReflectionText(
   }
 
   const subject = period === 'all' ? 'これまで' : periodLabel;
-  const lines = [`${subject}は${stats.totalMeals}件の食事を記録しました。`];
+  const reflections = [
+    `${subject}は${stats.totalMeals}件の食事を記録しました。`,
+    stats.favoriteCuisine ? `よく食べたジャンルは${stats.favoriteCuisine}です。` : null,
+    stats.favoriteLocation ? `よく行った場所は${stats.favoriteLocation}です。` : null,
+  ];
 
-  if (stats.favoriteCuisine) {
-    lines.push(`よく食べたジャンルは${stats.favoriteCuisine}です。`);
-  }
-  if (stats.favoriteLocation) {
-    lines.push(`よく行った場所は${stats.favoriteLocation}です。`);
-  }
-
-  return lines.join('\n');
+  return reflections.filter(Boolean).join('\n');
 }
 
 const styles = StyleSheet.create({
