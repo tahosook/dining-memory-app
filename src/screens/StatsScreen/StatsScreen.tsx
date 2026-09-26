@@ -182,7 +182,13 @@ export default function StatsScreen() {
 
 // Optimization: Extracted item rendering logic into a React.memo component
 // to prevent unnecessary re-renders of list items when StatsScreen re-renders.
-const SummaryCard = React.memo(function SummaryCardComponent({ label, value }: { label: string; value: string }) {
+const SummaryCard = React.memo(function SummaryCardComponent({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <View style={styles.summaryCard}>
       <Text style={styles.summaryLabel}>{label}</Text>
