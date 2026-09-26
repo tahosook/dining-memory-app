@@ -8,7 +8,9 @@ import {
   resolveRestoredPhotoUri,
   validateSafeFileName,
 } from './pathNormalizer';
-import type { PortableAppSettingRecord, PortableMealRecord } from './types';
+import type { PortableMealRecord, BackupValidationResult } from './types';
+
+type PortableAppSettingRecord = NonNullable<BackupValidationResult['appSettings']>[number];
 
 export interface SerializeMealsResult {
   portableMeals: PortableMealRecord[];
