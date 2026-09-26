@@ -37,9 +37,6 @@
 - [ ] Updated canonical docs if UX, schema, conventions, or behavior changed
 
 ## 6. 検証チェックリスト (Verification Checklist)
-- [ ] `npm run verify:pr-gates` (or `bash scripts/verify-pr-gates.sh`)
-- [ ] `npm run check:docs`
-- [ ] `npm run format:check`
-- [ ] `npm run lint`
-- [ ] `npm run type-check` (if code/types changed)
-- [ ] `npm test`
+- [ ] `npm run verify` (runs all gates: verify:pr-gates, check:docs, format:check, lint, type-check, test)
+- [ ] または個別検証: `npm run verify:pr-gates`, `npm run check:docs`, `npm run lint`, `npm test`
+

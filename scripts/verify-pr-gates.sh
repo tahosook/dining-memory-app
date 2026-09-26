@@ -57,11 +57,14 @@ if git diff --quiet "$TARGET_REF" 2>/dev/null; then
 fi
 echo "  ✓ Non-zero diff verified."
 
-# 2. New 'any' / type assertion check
+# 2. Extract code additions once for typing and quality checks
 # Restrict to code files (*.ts, *.tsx, *.js, *.jsx) to allow documentation references.
+CODE_ADDED_LINES=$(git diff -U0 "$TARGET_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null \
+  | grep '^\+[^+]' || true)
+
+# 2a. New 'any' / type assertion check
 # Blocks: ': any', 'as any', 'any[]', 'Array<any>', 'Promise<any>', 'Record<..., any>', '<any>'
-NEW_ANY_MATCHES=$(git diff -U0 "$TARGET_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null \
-  | grep '^\+[^+]' \
+NEW_ANY_MATCHES=$(echo "$CODE_ADDED_LINES" \
   | grep -E '(\bas\s+any\b|:\s*any\b|\bany\[\]|\bArray<any>|\bPromise<any>|\bRecord<[^>]*,\s*any>|<any>|<[^>]*[,\s]any[,\s>])' || true)
 
 if [ -n "$NEW_ANY_MATCHES" ]; then
@@ -73,8 +76,7 @@ fi
 echo "  ✓ No new 'any' types introduced."
 
 # 3. Escape hatches check
-ESCAPE_HATCH_MATCHES=$(git diff -U0 "$TARGET_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null \
-  | grep '^\+[^+]' \
+ESCAPE_HATCH_MATCHES=$(echo "$CODE_ADDED_LINES" \
   | grep -E '(@ts-ignore|@ts-nocheck|eslint-disable)' || true)
 
 if [ -n "$ESCAPE_HATCH_MATCHES" ]; then
@@ -133,11 +135,12 @@ if [ -n "$PR_BODY_INPUT" ]; then
     const body = process.argv[1] || "";
 
     // Flexible section matching (level 2 or 3 headings, optional numbering, Japanese and English labels)
+    const makePattern = (ja, en) => new RegExp(`(?:^|\\n)#{2,3}\\s*(?:(?:\\d+\\.\\s*)?${ja}\\s*\\(${en}\\)|${en}\\b)`, "i");
     const requiredSections = [
-      { id: "problem", label: "### 具体的な問題 (Problem)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?具体的な問題\s*\(Problem\)|Problem\b)/i },
-      { id: "evidence", label: "### 客観的証拠 (Evidence)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?客観的証拠\s*\(Evidence\)|Evidence\b)/i },
-      { id: "expected_impact", label: "### 期待される効果 (Expected Impact)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?期待される効果\s*\(Expected Impact\)|Expected Impact\b)/i },
-      { id: "out_of_scope", label: "### 意図して変更しなかったこと (Out of Scope)", pattern: /(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?意図して変更しなかったこと\s*\(Out of Scope\)|Out of Scope\b)/i },
+      { id: "problem", label: "### 具体的な問題 (Problem)", pattern: makePattern("具体的な問題", "Problem") },
+      { id: "evidence", label: "### 客観的証拠 (Evidence)", pattern: makePattern("客観的証拠", "Evidence") },
+      { id: "expected_impact", label: "### 期待される効果 (Expected Impact)", pattern: makePattern("期待される効果", "Expected Impact") },
+      { id: "out_of_scope", label: "### 意図して変更しなかったこと (Out of Scope)", pattern: makePattern("意図して変更しなかったこと", "Out of Scope") },
     ];
 
     const missing = [];
@@ -168,17 +171,10 @@ if [ -n "$PR_BODY_INPUT" ]; then
       process.exit(1);
     }
 
-    // Check if evidence contains only symbols, dashes, bullets, or whitespace
+    // Check if evidence is a placeholder (only symbols/dashes, or keywords like TODO, TBD, N/A)
     const strippedWithoutSymbols = stripped.replace(/[\s\-\*\•\d\.\:\(\)\/]+/g, "").trim();
-    if (!strippedWithoutSymbols) {
-      console.error("❌ [GATE FAIL] Evidence section contains only a placeholder (\"" + stripped + "\").");
-      console.error("   Core Principle: \"No evidence, no PR\". Genuine verification evidence is required.");
-      process.exit(1);
-    }
-
-    // Check for common placeholders: TODO, TBD, N/A, NA, none, なし
     const placeholderPattern = /^(TODO|TBD|N\/?A|none|なし|null|undefined)$/i;
-    if (placeholderPattern.test(strippedWithoutSymbols) || placeholderPattern.test(stripped.trim())) {
+    if (!strippedWithoutSymbols || placeholderPattern.test(strippedWithoutSymbols) || placeholderPattern.test(stripped.trim())) {
       console.error("❌ [GATE FAIL] Evidence section contains only a placeholder (\"" + stripped + "\").");
       console.error("   Core Principle: \"No evidence, no PR\". Genuine verification evidence is required.");
       process.exit(1);
