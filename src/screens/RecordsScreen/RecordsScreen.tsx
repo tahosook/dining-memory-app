@@ -134,7 +134,7 @@ function formatDateLabel(date: Date): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
-function groupMealsByDate(records: Meal[]): MealSection[] {
+function groupMealsByDateKey(records: Meal[]): Record<string, Meal[]> {
   const groups: Record<string, Meal[]> = {};
 
   records.forEach(meal => {
@@ -145,16 +145,30 @@ function groupMealsByDate(records: Meal[]): MealSection[] {
     groups[dateKey].push(meal);
   });
 
-  return Object.entries(groups)
-    .map(([dateKey, groupMeals]) => {
-      const sortedMeals = [...groupMeals].sort((a, b) => b.meal_datetime - a.meal_datetime);
-      return {
-        date: dateKey,
-        dateLabel: formatDateLabel(new Date(sortedMeals[0].meal_datetime)),
-        data: sortedMeals,
-      };
-    })
-    .sort((a, b) => (b.data[0]?.meal_datetime ?? 0) - (a.data[0]?.meal_datetime ?? 0));
+  return groups;
+}
+
+function createMealSection(dateKey: string, groupMeals: Meal[]): MealSection {
+  const sortedMeals = [...groupMeals].sort((a, b) => b.meal_datetime - a.meal_datetime);
+  return {
+    date: dateKey,
+    dateLabel: formatDateLabel(new Date(sortedMeals[0].meal_datetime)),
+    data: sortedMeals,
+  };
+}
+
+function sortMealSections(sections: MealSection[]): MealSection[] {
+  return [...sections].sort(
+    (a, b) => (b.data[0]?.meal_datetime ?? 0) - (a.data[0]?.meal_datetime ?? 0)
+  );
+}
+
+function groupMealsByDate(records: Meal[]): MealSection[] {
+  const groups = groupMealsByDateKey(records);
+  const sections = Object.entries(groups).map(([dateKey, groupMeals]) =>
+    createMealSection(dateKey, groupMeals)
+  );
+  return sortMealSections(sections);
 }
 
 const RECORDS_PAGE_SIZE = 50;
