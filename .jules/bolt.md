@@ -4,3 +4,8 @@
 ## 2026-09-21 - React.memo with Mutable Ref Pattern
 **Learning:** In a React Native `FlatList`, inline `renderItem` functions cause widespread unnecessary re-renders of all items when the parent component updates (like appending paginated results). However, memoizing the item requires stable callback references. Standard `useCallback` with dependencies causes the callback to recreate frequently.
 **Action:** Use the "Mutable Ref Pattern" to store frequently changing state (like the results list) in a `useRef`, allowing callbacks like `onPress` to access current state without breaking their stable reference, thereby enabling `React.memo` to effectively skip re-renders for list items.
+## 2024-05-19 - Concurrent Bulk Inserts
+
+**Learning:** When performing bulk inserts in `expo-sqlite` using `runAsync` within a transaction, sequential `await` calls in a `for` loop introduce significant JS-Native bridge latency.
+
+**Action:** Wrap independent `runAsync` calls in `Promise.all` to parallelize the requests across the bridge, maximizing throughput and reducing overall transaction time.
