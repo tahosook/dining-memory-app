@@ -4,3 +4,6 @@
 ## 2026-09-21 - React.memo with Mutable Ref Pattern
 **Learning:** In a React Native `FlatList`, inline `renderItem` functions cause widespread unnecessary re-renders of all items when the parent component updates (like appending paginated results). However, memoizing the item requires stable callback references. Standard `useCallback` with dependencies causes the callback to recreate frequently.
 **Action:** Use the "Mutable Ref Pattern" to store frequently changing state (like the results list) in a `useRef`, allowing callbacks like `onPress` to access current state without breaking their stable reference, thereby enabling `React.memo` to effectively skip re-renders for list items.
+## 2024-05-14 - React.memo for Pure Components in StatsScreen
+**Learning:** Pure components rendered as list items (like `SummaryCard` and `TopRankingCard` in `StatsScreen`) can unnecessarily re-render when the parent's state changes, even if their props are stable, slightly degrading main thread performance.
+**Action:** Use `React.memo` to wrap pure presentation components to avoid unnecessary re-renders when parent state updates.

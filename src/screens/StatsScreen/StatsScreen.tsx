@@ -180,16 +180,20 @@ export default function StatsScreen() {
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+// Optimization: Extracted item rendering logic into a React.memo component
+// to prevent unnecessary re-renders of list items when StatsScreen re-renders.
+const SummaryCard = React.memo(function SummaryCardComponent({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.summaryCard}>
       <Text style={styles.summaryLabel}>{label}</Text>
       <Text style={styles.summaryValue}>{value}</Text>
     </View>
   );
-}
+});
 
-function TopRankingCard({
+// Optimization: Extracted item rendering logic into a React.memo component
+// to prevent unnecessary re-renders of list items when StatsScreen re-renders.
+const TopRankingCard = React.memo(function TopRankingCardComponent({
   title,
   emptyText,
   items,
@@ -215,7 +219,7 @@ function TopRankingCard({
       )}
     </View>
   );
-}
+});
 
 function getStatsPeriodRange(period: StatsPeriodKey): { dateFrom?: Date; dateTo?: Date } {
   const now = new Date();
