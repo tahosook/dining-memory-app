@@ -149,7 +149,6 @@ const PermissionRequestView: React.FC<{ onRequestPermission: () => Promise<void>
         onPress={onRequestPermission}
         testID="request-camera-permission-button"
         accessibilityRole="button"
-        accessibilityLabel="カメラを許可する"
       >
         <Text style={styles.permissionButtonText}>カメラを許可する</Text>
       </TouchableOpacity>
@@ -171,7 +170,6 @@ const PermissionDeniedView: React.FC<{ onOpenSettings: () => Promise<void> }> = 
         onPress={onOpenSettings}
         testID="open-camera-settings-button"
         accessibilityRole="button"
-        accessibilityLabel="設定を開く"
       >
         <Text style={styles.permissionButtonText}>設定を開く</Text>
       </TouchableOpacity>
@@ -209,7 +207,6 @@ const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
         onPress={onPress}
         testID={`${testID}-trigger`}
         accessibilityRole="button"
-        accessibilityLabel={triggerLabel}
       >
         <Text style={styles.reviewCompactButtonText}>{triggerLabel}</Text>
       </TouchableOpacity>
@@ -382,7 +379,6 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             disabled={savingCapture}
             testID="cancel-capture-review-button"
             accessibilityRole="button"
-            accessibilityLabel="キャンセル"
             accessibilityState={{ disabled: savingCapture }}
           >
             <Text style={styles.reviewCancelText}>キャンセル</Text>
@@ -398,7 +394,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             testID="save-meal-button"
             accessibilityRole="button"
             accessibilityLabel={savingCapture ? '保存中' : '保存'}
-            accessibilityState={{ disabled: savingCapture }}
+            accessibilityState={{ disabled: savingCapture, busy: savingCapture }}
           >
             {savingCapture ? (
               <View style={styles.reviewSavingContent}>

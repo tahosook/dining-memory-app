@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import * as ReactNative from 'react-native';
-import { Alert } from 'react-native';
+import { ActivityIndicator, Alert } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as Camera from 'expo-camera';
 import { useCameraPermission, useCameraCapture, useMealInputAssist } from '../src/hooks/cameraCapture';
@@ -593,21 +593,25 @@ describe('CameraScreen', () => {
       expect(await findByTestId('save-meal-button')).toBeTruthy();
     });
 
-    test('disables the save button while capture review is saving', async () => {
+    test('disables the save button and shows spinner while capture review is saving', async () => {
       (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
         captureReview: createCaptureReview(),
         savingCapture: true,
       }));
 
-      const { findByTestId, findByText } = render(<CameraScreen />);
+      const { findByTestId, findByText, UNSAFE_getByType } = render(<CameraScreen />);
       const saveButton = await findByTestId('save-meal-button');
       const cancelButton = await findByTestId('cancel-capture-review-button');
       const closeButton = await findByTestId('close-button');
 
       expect(await findByText('保存中...')).toBeTruthy();
+      expect(UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
       expect(saveButton.props.disabled).toBe(true);
-      expect(saveButton.props.accessibilityState).toEqual({ disabled: true });
+      expect(saveButton.props.accessibilityRole).toBe('button');
+      expect(saveButton.props.accessibilityLabel).toBe('保存中');
+      expect(saveButton.props.accessibilityState).toEqual({ disabled: true, busy: true });
       expect(cancelButton.props.disabled).toBe(true);
+      expect(cancelButton.props.accessibilityRole).toBe('button');
       expect(cancelButton.props.accessibilityState).toEqual({ disabled: true });
       expect(closeButton.props.disabled).toBe(true);
       expect(closeButton.props.accessibilityState).toEqual({ disabled: true });
