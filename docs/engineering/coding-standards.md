@@ -25,7 +25,8 @@
 - `src/types/` for app-wide TypeScript types.
 
 ## TypeScript Rules
-- Avoid `any`.
+- Avoid `any`. Introducing `: any` or `as any` is machine-blocked by PR gates (`scripts/verify-pr-gates.sh`).
+- Escape hatches (`@ts-ignore`, `@ts-nocheck`, `eslint-disable`) are machine-blocked by PR gates.
 - Prefer explicit interfaces and literal unions.
 - Model nullable data intentionally.
 - Keep props small and readable.
@@ -92,6 +93,7 @@
 - Keep terms consistent across docs, code, and tests.
 
 ## Review Checklist
+- Have PR machine gates passed (`npm run verify:pr-gates`)?
 - Is the change as small as it can be?
 - Is the logic easy to trace?
 - Are tests updated?
