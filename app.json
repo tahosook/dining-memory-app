@@ -83,7 +83,8 @@
       ],
       "expo-sharing",
       "expo-document-picker",
-      "react-native-zip-archive"
+      "react-native-zip-archive",
+      "@sentry/react-native/expo"
     ],
     "extra": {
       "eas": {
