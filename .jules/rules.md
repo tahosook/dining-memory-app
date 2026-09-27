@@ -48,3 +48,14 @@ PR を作成する際は、Description（PR 本文）に以下の **4 つの見�
 ### 意図して変更しなかったこと (Out of Scope)
 意図的に今回の変更に含めなかった関連領域、不要なリファクタリングの排除。
 ```
+
+### PR 起票前のローカル検証手順（Shift-Left 推奨）
+PR を作成する前に、作成予定の PR 本文（Description）が Evidence Gate を通過するかローカルで事前検証できます:
+
+```bash
+# 文字列を直接渡して検証
+npm run verify:pr-gates -- --pr-body "### 具体的な問題 (Problem)..."
+
+# またはファイル経由で検証
+npm run verify:pr-gates -- --pr-body-file /path/to/pr-body.md
+```

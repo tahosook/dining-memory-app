@@ -217,14 +217,14 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(res.stdout).toContain('PR body Evidence Gate passed');
     });
 
-    it('10. 見出し柔軟性 (Jules エージェント形式: What/Why/Accessibility/Measured Improvement) -> PASS', () => {
-      const julesA11yBody = [
+    it('10. 見出し柔軟性 (エージェント形式: What/Why/Measured Improvement/Verification) -> PASS', () => {
+      const julesVerificationBody = [
         '## 💡 What\nFix accessibility for stats buttons',
-        '## ♿ Accessibility\nVerified with screen reader and automated smoke test',
+        '## 🔍 Verification\nVerified with screen reader and automated smoke test',
         '## 🎯 Why\nImproves usability for visually impaired users',
         '## Out of Scope\nUI redesign',
       ].join('\n\n');
-      const res1 = runGate(['HEAD~1...HEAD', '--pr-body', julesA11yBody]);
+      const res1 = runGate(['HEAD~1...HEAD', '--pr-body', julesVerificationBody]);
       expect(res1.status).toBe(0);
       expect(res1.stdout).toContain('PR body Evidence Gate passed');
 
@@ -237,6 +237,19 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       const res2 = runGate(['HEAD~1...HEAD', '--pr-body', julesPerfBody]);
       expect(res2.status).toBe(0);
       expect(res2.stdout).toContain('PR body Evidence Gate passed');
+    });
+
+    it('11. ドメイン名詞 (Accessibility 単体など) は Evidence とみなされず FAIL', () => {
+      const misleadingBody = [
+        '## 💡 What\nAdd accessibility features',
+        '## ♿ Accessibility\nSome generic accessibility notes without explicit verification',
+        '## 🎯 Why\nBetter UX',
+        '## Out of Scope\nNone',
+      ].join('\n\n');
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', misleadingBody]);
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain('PR body is missing mandatory section(s)');
+      expect(res.stderr).toContain('### 客観的証拠 (Evidence)');
     });
   });
 

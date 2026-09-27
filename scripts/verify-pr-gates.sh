@@ -145,8 +145,8 @@ if [ -n "$PR_BODY_INPUT" ]; then
       {
         id: "evidence",
         label: "### 客観的証拠 (Evidence)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Accessibility|Benchmark)/i,
-        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / ♿ Accessibility"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark)/i,
+        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / Verification"
       },
       {
         id: "expected_impact",
@@ -177,7 +177,7 @@ if [ -n "$PR_BODY_INPUT" ]; then
     }
 
     // Extract Evidence section content up to the next heading or horizontal rule
-    const evidenceMatch = body.match(/(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Accessibility|Benchmark)[^\n]*\n([\s\S]*?)(?=(?:\n#{1,4}\s+|\n---|$(?![\s\S])))/i);
+    const evidenceMatch = body.match(/(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark)[^\n]*\n([\s\S]*?)(?=(?:\n#{1,4}\s+|\n---|$(?![\s\S])))/i);
     const rawEvidence = evidenceMatch ? evidenceMatch[1] : "";
 
     // Strip HTML comments <!-- ... -->
