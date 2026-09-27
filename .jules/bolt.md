@@ -28,7 +28,7 @@
 
 ## Learnings
 
-### 2024-09-20 - Preventing O(N^2) Re-renders in Lists
+### 2026-09-20 - Preventing O(N^2) Re-renders in Lists
 
 **Learning:** In React Native, if a list item's `onPress` callback depends on the entire list data (e.g., to pass the full list to a detail screen for swiping), updating a single item (like lazily loading a thumbnail) changes the list data reference. This invalidates the `onPress` callback for ALL items, causing the entire list to re-render for every single thumbnail loaded, completely bypassing `React.memo`.
 **Action:** Use a `useRef` to hold the latest list data for the `onPress` callback to keep its reference stable. Combined with `useCallback` for `renderItem`, this allows `React.memo` to properly skip re-renders for unchanged list items.
@@ -38,7 +38,7 @@
 **Learning:** In a React Native `FlatList`, inline `renderItem` functions cause widespread unnecessary re-renders of all items when the parent component updates (like appending paginated results). However, memoizing the item requires stable callback references. Standard `useCallback` with dependencies causes the callback to recreate frequently.
 **Action:** Use the "Mutable Ref Pattern" to store frequently changing state (like the results list) in a `useRef`, allowing callbacks like `onPress` to access current state without breaking their stable reference, thereby enabling `React.memo` to effectively skip re-renders for list items.
 
-### 2024-05-18 - Optimize expo-sqlite Bulk Inserts with Prepared Statements
+### 2026-05-18 - Optimize expo-sqlite Bulk Inserts with Prepared Statements
 
 **Learning:** Using `db.runAsync` inside a loop in `expo-sqlite` causes a significant performance hit due to N+1 query compilation overhead.
 **Action:** When performing bulk inserts or repetitive queries, always compile a prepared statement outside the loop using `await db.prepareAsync(...)`, execute it inside the loop, and clean it up inside a `finally` block with `await statement.finalizeAsync()` to prevent resource leaks and maximize performance.

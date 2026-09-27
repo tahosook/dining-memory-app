@@ -14,11 +14,13 @@ OWASP ガイドライン、Zip Slip、SQLi、パストラバーサル、機微�
 
 ## 3. Toolchain
 - `npm test`
+- `npm run lint`
+- `npm run type-check`
 - `node scripts/check-docs.cjs`
 
 ## 4. Boundaries
 - 既存の安全なバインド SQL に対する誤検知パッチの禁止。
-- 生ログへの機微情報・写真パス露出の禁止（`src/utils/logSanitizer.ts` の利用義務）。
+- 生ログへの機微情報・写真パス露出の禁止（`src/utils/logSanitizer.ts` の利用義務）。`error.stack` や raw error オブジェクトを直接ログ出力せず、`name` と `message` のみを選択的にログすること。
 - 差分 0 行の PR 起票禁止（安全上の実質的問題がない場合は「変更なし」でタスク終了する）。
 
 ## 5. Journaling Protocol
