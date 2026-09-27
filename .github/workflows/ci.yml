@@ -52,7 +52,7 @@ jobs:
         run: npm run format:check
 
       - name: Run Expo Doctor
-        run: npm run check:expo-doctor
+        run: npx --yes expo-doctor
 
   test:
     runs-on: ubuntu-latest

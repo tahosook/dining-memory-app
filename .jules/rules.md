@@ -29,33 +29,3 @@ PR を起票する前に、以下の全項目を満たしていることを確�
 3. エスケープハッチの追加 (`@ts-ignore`, `@ts-nocheck`, `eslint-disable`)
 4. `tests/` 配下のテストファイル削除およびテスト弱体化 (`it.skip`, `test.skip`, `describe.skip`, `xit`, `xdescribe`)
 5. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence（Feature/Spec PR は仕様・Issue 参照で可）
-
-## Mandatory PR Description Template
-PR を作成する際は、Description（PR 本文）に以下の **4 つの見出しをすべて含めること**。
-セクションの欠落や、Evidence の空欄・プレースホルダー（`TODO`, `TBD`, `N/A`, `なし` 等）は CI（Evidence Gate）により機械的にブロックされる。
-
-```markdown
-### 具体的な問題 (Problem)
-現行コードベースにおける具体的な事実、不具合、測定されたボトルネック、または要求仕様。
-
-### 客観的証拠 (Evidence)
-客観的証拠（失敗テストログ、実測値、プロファイル結果、または仕様/Issue/受入基準の参照）。
-※空欄や「TODO」「なし」等のプレースホルダーは不可。
-
-### 期待される効果 (Expected Impact)
-変更によって得られる具体的な成果や改善点。
-
-### 意図して変更しなかったこと (Out of Scope)
-意図的に今回の変更に含めなかった関連領域、不要なリファクタリングの排除。
-```
-
-### PR 起票前のローカル検証手順（Shift-Left 推奨）
-PR を作成する前に、作成予定の PR 本文（Description）が Evidence Gate を通過するかローカルで事前検証できます:
-
-```bash
-# 文字列を直接渡して検証
-npm run verify:pr-gates -- --pr-body "### 具体的な問題 (Problem)..."
-
-# またはファイル経由で検証
-npm run verify:pr-gates -- --pr-body-file /path/to/pr-body.md
-```

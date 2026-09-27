@@ -65,4 +65,4 @@
 ### 2026-09-27 - Safe Concurrency with Promise.allSettled for File Exports
 
 **Learning:** While `Promise.all()` is generally an anti-pattern for concurrent file operations due to memory and bridge congestion, chunked `Promise.allSettled()` is highly effective and safe for I/O operations like exporting large amounts of files, significantly reducing latency without causing EMFILE errors.
-**Action:** Use chunked `Promise.allSettled()` (e.g., with a limit of 25) instead of sequential loops for independent I/O tasks where throughput is important, ensuring that failures are detected per chunk and prevent execution of subsequent chunks.
+**Action:** Use chunked `Promise.allSettled()` (e.g., with a limit of 25) instead of sequential loops for independent I/O tasks where throughput is important, ensuring that failures are caught, logged, and appropriately propagated to maintain fail-fast semantics.

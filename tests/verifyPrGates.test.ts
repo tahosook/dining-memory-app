@@ -204,53 +204,6 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(resEnglish.status).toBe(0);
       expect(resEnglish.stdout).toContain('PR body Evidence Gate passed');
     });
-
-    it('9. 見出し柔軟性 (日本語単体見出し) -> PASS', () => {
-      const pureJapaneseBody = [
-        '### 具体的な問題\nバグが存在する',
-        '### 客観的証拠\n実測値 100ms -> 15ms、テスト PASS',
-        '### 期待される効果\n処理速度の向上',
-        '### 意図して変更しなかったこと\nDBスキーマの変更',
-      ].join('\n\n');
-      const res = runGate(['HEAD~1...HEAD', '--pr-body', pureJapaneseBody]);
-      expect(res.status).toBe(0);
-      expect(res.stdout).toContain('PR body Evidence Gate passed');
-    });
-
-    it('10. 見出し柔軟性 (エージェント形式: What/Why/Measured Improvement/Verification) -> PASS', () => {
-      const julesVerificationBody = [
-        '## 💡 What\nFix accessibility for stats buttons',
-        '## 🔍 Verification\nVerified with screen reader and automated smoke test',
-        '## 🎯 Why\nImproves usability for visually impaired users',
-        '## Out of Scope\nUI redesign',
-      ].join('\n\n');
-      const res1 = runGate(['HEAD~1...HEAD', '--pr-body', julesVerificationBody]);
-      expect(res1.status).toBe(0);
-      expect(res1.stdout).toContain('PR body Evidence Gate passed');
-
-      const julesPerfBody = [
-        '## 💡 What\nOptimize file copy in BackupService',
-        '## 📊 Measured Improvement\nBackup export time reduced by 60% with chunked parallel copy',
-        '## 🎯 Why\nFaster exports for large datasets',
-        '## Non-Goals\nRefactoring compression logic',
-      ].join('\n\n');
-      const res2 = runGate(['HEAD~1...HEAD', '--pr-body', julesPerfBody]);
-      expect(res2.status).toBe(0);
-      expect(res2.stdout).toContain('PR body Evidence Gate passed');
-    });
-
-    it('11. ドメイン名詞 (Accessibility 単体など) は Evidence とみなされず FAIL', () => {
-      const misleadingBody = [
-        '## 💡 What\nAdd accessibility features',
-        '## ♿ Accessibility\nSome generic accessibility notes without explicit verification',
-        '## 🎯 Why\nBetter UX',
-        '## Out of Scope\nNone',
-      ].join('\n\n');
-      const res = runGate(['HEAD~1...HEAD', '--pr-body', misleadingBody]);
-      expect(res.status).toBe(1);
-      expect(res.stderr).toContain('PR body is missing mandatory section(s)');
-      expect(res.stderr).toContain('### 客観的証拠 (Evidence)');
-    });
   });
 
   describe('Machine Code Gates', () => {

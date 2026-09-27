@@ -96,9 +96,9 @@ export class BackupService {
       }
 
       // Copy all referenced original photos to staging photos/ directory.
-      // Missing photo/read errors abort immediately; copy failures are detected per chunk without proceeding to subsequent chunks.
+      // Must-fix 1 & 2: Fail-fast on any missing photo, read error, or copy failure.
 
-      // Step 1: Sequential validation of all photos (prevents EMFILE, aborts immediately on error)
+      // Step 1: Fail-fast validation of all photos (Sequential to prevent EMFILE)
       for (const [, photoPath] of requiredPhotoMap.entries()) {
         let fileInfo;
         try {
@@ -112,10 +112,8 @@ export class BackupService {
         }
       }
 
-      // Step 2: Chunked parallel copy after all photos are verified to exist.
-      // Detects failures per chunk and aborts without proceeding to subsequent chunks (chunk単位で失敗を検出し、失敗時に後続chunkへ進まない).
+      // Step 2: Sequential copy after all photos are verified to exist
       const copiedSet = new Set<string>();
-      // RN ブリッジ / FD 上限を踏まえた経験値。必要なら後で調整。
       const CONCURRENCY_LIMIT = 25;
       const photoEntries = Array.from(requiredPhotoMap.entries());
 

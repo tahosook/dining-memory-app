@@ -69,7 +69,7 @@
 - 現状: 本アプリは `expo-file-system` を使用しているが、現在のコードベースではアップロード機能を使用していません。
 - リスク: 将来アップロード機能を追加する際、ユーザー入力をそのままフィールド名やファイル名に使用すると脆弱性が露出する可能性があります。
 - 推奨修正: アップロード機能を追加する場合は、フィールド名・パラメータ・ファイル名に対して CRLF 文字のエスケープを行うか、信頼できる固定値のみを使用する。`expo-file-system` のアップデートで修正版がリリースされるまで、ユーザー入力を直接使用しない方針を維持します。
-- 関連ファイル: [package.json](../../package.json), [node_modules/expo-file-system/ios/FileSystemUploadTask.swift](../../node_modules/expo-file-system/ios/FileSystemUploadTask.swift)
+- 関連ファイル: [package.json](../../package.json), node_modules/expo-file-system/ios/FileSystemUploadTask.swift
 - 導入後の確認方法: `grep -r "uploadTask\|UploadTask\|upload" src/` でアップロードコードが追加されていないことを確認します。
 
 ### アイコン assets の生成手順を repo 内に残す
