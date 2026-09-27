@@ -185,6 +185,80 @@ describe('BackupService', () => {
       expect(deleteAsync).toHaveBeenCalled();
     });
 
+    const createMockMealsWithPhotos = (count: number): PersistedMealRow[] => {
+      return Array.from({ length: count }, (_, i) => {
+        const indexStr = String(i + 1).padStart(3, '0');
+        return {
+          ...mockMealRows[0],
+          id: `meal-${indexStr}`,
+          uuid: `uuid-${indexStr}`,
+          photo_path: `file:///mock-documents/meal-${indexStr}.jpg`,
+          photo_thumbnail_path: `file:///mock-documents/meal-${indexStr}-thumb.jpg`,
+        };
+      });
+    };
+
+    test('copies all photos successfully when exporting backup', async () => {
+      const mockMeals = createMockMealsWithPhotos(3);
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue(mockMeals);
+
+      const result = await BackupService.exportBackup();
+
+      expect(result.photoCount).toBe(3);
+      expect(copyAsync).toHaveBeenCalledTimes(3);
+      for (let i = 1; i <= 3; i++) {
+        const fileName = `meal-${String(i).padStart(3, '0')}.jpg`;
+        expect(copyAsync).toHaveBeenCalledWith({
+          from: `file:///mock-documents/${fileName}`,
+          to: expect.stringContaining(`/photos/${fileName}`),
+        });
+      }
+      expect(zip).toHaveBeenCalledTimes(1);
+      expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+    });
+
+    test('rejects exportBackup when copying a photo fails in a chunk and does not proceed to subsequent chunks', async () => {
+      // 30 photos total: chunk 1 has 25, chunk 2 has 5
+      const mockMeals = createMockMealsWithPhotos(30);
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue(mockMeals);
+
+      (copyAsync as jest.Mock).mockImplementation(async ({ from }: { from: string }) => {
+        if (from.includes('meal-005.jpg')) {
+          throw new Error('Disk write failure');
+        }
+      });
+
+      await expect(BackupService.exportBackup()).rejects.toThrow(
+        '写真ファイルのバックアップ一時領域へのコピーに失敗しました。'
+      );
+
+      // The entire chunk (25 items) is processed by Promise.allSettled, but chunk 2 is never executed
+      expect(copyAsync).toHaveBeenCalledTimes(25);
+      expect(zip).not.toHaveBeenCalled();
+      expect(Sharing.shareAsync).not.toHaveBeenCalled();
+      expect(deleteAsync).toHaveBeenCalled();
+    });
+
+    test('processes all photos across multiple chunks when count exceeds concurrency limit of 25', async () => {
+      const totalPhotos = 30;
+      const mockMeals = createMockMealsWithPhotos(totalPhotos);
+      (getAllPersistedMealRows as jest.Mock).mockResolvedValue(mockMeals);
+
+      const result = await BackupService.exportBackup();
+
+      expect(result.photoCount).toBe(totalPhotos);
+      expect(copyAsync).toHaveBeenCalledTimes(totalPhotos);
+      for (let i = 1; i <= totalPhotos; i++) {
+        const fileName = `meal-${String(i).padStart(3, '0')}.jpg`;
+        expect(copyAsync).toHaveBeenCalledWith({
+          from: `file:///mock-documents/${fileName}`,
+          to: expect.stringContaining(`/photos/${fileName}`),
+        });
+      }
+      expect(zip).toHaveBeenCalledTimes(1);
+      expect(Sharing.shareAsync).toHaveBeenCalledTimes(1);
+    });
+
     test('rejects exportBackup and fails fast when getInfoAsync throws error', async () => {
       // Create three meals with different photos
       (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
