@@ -304,9 +304,14 @@ describe('StatsScreen', () => {
       dateTo: expect.any(Date),
     }));
 
-    fireEvent.press(getByTestId('stats-period-all'));
+    const allPeriodButton = getByTestId('stats-period-all');
+    expect(allPeriodButton.props.accessibilityRole).toBe('button');
+    expect(allPeriodButton.props.accessibilityState).toEqual({ selected: false });
+
+    fireEvent.press(allPeriodButton);
 
     await waitFor(() => {
+      expect(allPeriodButton.props.accessibilityState).toEqual({ selected: true });
       expect(MealService.getStatistics).toHaveBeenCalledWith({});
     });
   });

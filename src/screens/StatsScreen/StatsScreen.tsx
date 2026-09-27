@@ -96,6 +96,8 @@ export default function StatsScreen() {
               style={[styles.periodButton, selected ? styles.periodButtonSelected : null]}
               onPress={() => handlePeriodChange(period.key)}
               testID={`stats-period-${period.key}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
             >
               <Text
                 style={[styles.periodButtonText, selected ? styles.periodButtonTextSelected : null]}
