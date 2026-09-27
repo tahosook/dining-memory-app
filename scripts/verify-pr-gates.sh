@@ -134,31 +134,50 @@ if [ -n "$PR_BODY_INPUT" ]; then
   node -e '
     const body = process.argv[1] || "";
 
-    // Flexible section matching (level 2 or 3 headings, optional numbering, Japanese and English labels)
-    const makePattern = (ja, en) => new RegExp(`(?:^|\\n)#{2,3}\\s*(?:(?:\\d+\\.\\s*)?${ja}\\s*\\(${en}\\)|${en}\\b)`, "i");
+    // Flexible section matching (level 1-4 headings, Japanese, English, and agent aliases like What/Why/Accessibility)
     const requiredSections = [
-      { id: "problem", label: "### 具体的な問題 (Problem)", pattern: makePattern("具体的な問題", "Problem") },
-      { id: "evidence", label: "### 客観的証拠 (Evidence)", pattern: makePattern("客観的証拠", "Evidence") },
-      { id: "expected_impact", label: "### 期待される効果 (Expected Impact)", pattern: makePattern("期待される効果", "Expected Impact") },
-      { id: "out_of_scope", label: "### 意図して変更しなかったこと (Out of Scope)", pattern: makePattern("意図して変更しなかったこと", "Out of Scope") },
+      {
+        id: "problem",
+        label: "### 具体的な問題 (Problem)",
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:具体的な問題|問題点?|Problem|Issue|\bWhat\b)/i,
+        hint: "具体的な問題 (Problem) / Problem / 💡 What"
+      },
+      {
+        id: "evidence",
+        label: "### 客観的証拠 (Evidence)",
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Accessibility|Benchmark)/i,
+        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / ♿ Accessibility"
+      },
+      {
+        id: "expected_impact",
+        label: "### 期待される効果 (Expected Impact)",
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:期待される効果|効果|Expected Impact|\bImpact\b|\bWhy\b)/i,
+        hint: "期待される効果 (Expected Impact) / Expected Impact / 🎯 Why"
+      },
+      {
+        id: "out_of_scope",
+        label: "### 意図して変更しなかったこと (Out of Scope)",
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:意図して変更しなかったこと|変更しなかったこと|スコープ外|Out of Scope|Non-?Goals?)/i,
+        hint: "意図して変更しなかったこと (Out of Scope) / Out of Scope / Non-Goals"
+      },
     ];
 
     const missing = [];
     for (const sec of requiredSections) {
       if (!sec.pattern.test(body)) {
-        missing.push(sec.label);
+        missing.push(`${sec.label} (accepted aliases: ${sec.hint})`);
       }
     }
 
     if (missing.length > 0) {
       console.error("❌ [GATE FAIL] PR body is missing mandatory section(s):");
       missing.forEach(m => console.error("   - " + m));
-      console.error("   Rule: PR body must contain all 4 standard governance sections.");
+      console.error("   Rule: PR body must contain all 4 standard governance sections. See .jules/rules.md for the template.");
       process.exit(1);
     }
 
     // Extract Evidence section content up to the next heading or horizontal rule
-    const evidenceMatch = body.match(/(?:^|\n)#{2,3}\s*(?:(?:\d+\.\s*)?客観的証拠\s*\(Evidence\)|Evidence\b)[^\n]*\n([\s\S]*?)(?=(?:\n#{2,3}\s+|\n---|$(?![\s\S])))/i);
+    const evidenceMatch = body.match(/(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Accessibility|Benchmark)[^\n]*\n([\s\S]*?)(?=(?:\n#{1,4}\s+|\n---|$(?![\s\S])))/i);
     const rawEvidence = evidenceMatch ? evidenceMatch[1] : "";
 
     // Strip HTML comments <!-- ... -->
