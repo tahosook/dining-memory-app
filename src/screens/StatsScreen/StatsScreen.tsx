@@ -97,7 +97,6 @@ export default function StatsScreen() {
               onPress={() => handlePeriodChange(period.key)}
               testID={`stats-period-${period.key}`}
               accessibilityRole="button"
-              accessibilityLabel={period.label}
               accessibilityState={{ selected }}
             >
               <Text

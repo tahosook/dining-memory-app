@@ -49,4 +49,4 @@ WCAG / アクセシビリティ（a11y）、スクリーンリーダー対応、
 
 ### 2026-09-26 - Dynamic Accessibility State for Segmented Controls / Tabs
 **Learning:** Found a custom segmented control / tab bar for statistics periods (StatsScreen.tsx) that changed visual state (selected tab) but didn't announce its `selected` state to screen readers, leaving users unaware of which tab was currently active.
-**Action:** Next time, when building custom segmented controls or tab bars with `Pressable` or `TouchableOpacity`, always include `accessibilityRole="button"`, an appropriate `accessibilityLabel`, and `accessibilityState={{ selected: isSelected }}` to ensure screen reader users are aware of the active selection.
+**Action:** Next time, when building custom segmented controls or tab bars with `Pressable` or `TouchableOpacity`, always include `accessibilityRole="button"` and `accessibilityState={{ selected: isSelected }}`. An `accessibilityLabel` is unnecessary if the child `<Text>` already provides the exact label, avoiding redundant announcements.
