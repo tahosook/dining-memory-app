@@ -134,7 +134,7 @@ if [ -n "$PR_BODY_INPUT" ]; then
   node -e '
     const body = process.argv[1] || "";
 
-    // Flexible section matching (level 1-4 headings, Japanese, English, and agent aliases like What/Why/Accessibility)
+    // Flexible section matching (level 1-4 headings, Japanese, English, and agent aliases like What/Why/Measured Improvement/Verification)
     const requiredSections = [
       {
         id: "problem",
