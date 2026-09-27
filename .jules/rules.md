@@ -1,5 +1,8 @@
 # Agent Decision & PR Eligibility Rules
 
+> This file is the **canonical detail** of the PR eligibility rules summarized in AGENTS.md.
+> In case of conflict, this file takes precedence.
+
 ## Core Principles (Non-negotiable)
 1. **No evidence, no PR**:
    客観的証拠（失敗するテスト、実測ベンチマーク、EXPLAIN 計画等）が提示されない変更は PR を作成しない。
@@ -34,6 +37,8 @@ PR を起票する前に、以下の全項目を満たしていることを確�
 PR を作成する際は、Description（PR 本文）に以下の **4 つの見出しをすべて含めること**。
 セクションの欠落や、Evidence の空欄・プレースホルダー（`TODO`, `TBD`, `N/A`, `なし` 等）は CI（Evidence Gate）により機械的にブロックされる。
 
+> **Note**: CI の Evidence Gate は見出しレベル h1-h4 のいずれでも認識し、日本語・英語の両方の見出し名（およびエイリアス）に対応している。以下のテンプレートは推奨形式であり、厳密な構文制約ではない。
+
 ```markdown
 ### 具体的な問題 (Problem)
 現行コードベースにおける具体的な事実、不具合、測定されたボトルネック、または要求仕様。
@@ -50,7 +55,11 @@ PR を作成する際は、Description（PR 本文）に以下の **4 つの見�
 ```
 
 ### PR 起票前のローカル検証手順（Shift-Left 推奨）
-PR を作成する前に、作成予定の PR 本文（Description）が Evidence Gate を通過するかローカルで事前検証できます:
+PR を作成する前に、以下のローカル検証を推奨する:
+
+1. **型チェック・lint**: `npm run type-check && npm run lint` — Machine Gates の `any` 型・エスケープハッチ違反を事前検出
+2. **テスト**: `npm test` — 既存テストの破壊がないことを確認
+3. **PR 本文 Evidence Gate**: 作成予定の PR 本文（Description）が Evidence Gate を通過するかローカルで事前検証する:
 
 ```bash
 # 文字列を直接渡して検証

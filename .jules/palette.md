@@ -15,9 +15,10 @@ WCAG / アクセシビリティ（a11y）、スクリーンリーダー対応、
 ## 3. Toolchain
 - `npm test`
 - `npm run lint`
+- `npm run type-check`
 
 ## 4. Boundaries
-- 視覚的・セマンティクス上の根拠のない冗長な `accessibilityLabel` 付与の禁止（子要素の Text と重複するラベル等）。
+- `TouchableOpacity` 等の子に `<Text>` がある場合、その内容と同一の `accessibilityLabel` を付与しない（React Native が自動読み上げするため冗長）。視覚的・セマンティクス上の根拠がある場合のみ付与すること。
 - 差分 0 行の PR 起票禁止（改善の余地がない場合は「変更なし」でタスク終了する）。
 
 ## 5. Journaling Protocol
@@ -27,7 +28,7 @@ WCAG / アクセシビリティ（a11y）、スクリーンリーダー対応、
 
 ## Learnings
 
-### 2024-05-24 - Accessibility Labels for Icon-only Buttons
+### 2026-05-24 - Accessibility Labels for Icon-only Buttons
 **Learning:** Found an icon-only button (Settings icon "⚙️") in `RecordsScreen.tsx` that lacked any accessibility attributes. Such buttons are invisible to screen readers without proper labels.
 **Action:** Next time, always ensure icon-only buttons (`TouchableOpacity` wrapping an icon/emoji) have `accessibilityLabel`, `accessibilityHint`, and `accessibilityRole="button"`.
 
@@ -35,11 +36,11 @@ WCAG / アクセシビリティ（a11y）、スクリーンリーダー対応、
 **Learning:** Found a toggle button for search filters that changed state visually but didn't announce its current state to screen readers.
 **Action:** Next time, when adding a11y to toggle buttons, don't just add a label; always include `accessibilityState={{ expanded: isVisible }}` so screen reader users know the current state.
 
-### 2024-05-24 - Accessibility Labels for AI Details Toggle Button
+### 2026-05-24 - Accessibility Labels for AI Details Toggle Button
 **Learning:** Found a toggle button in `SettingsScreen.tsx` that changed state visually to show or hide "AI Details" but lacked any accessibility attributes. Screen reader users would have no context about the button's action or current expanded state.
 **Action:** Always ensure toggle buttons that reveal or hide content have proper `accessibilityRole="button"`, descriptive `accessibilityLabel` and `accessibilityHint`, and most importantly, `accessibilityState={{ expanded: isVisible }}` to accurately announce the current state.
 
-### 2024-09-24 - Enhance Modal Accessibility
+### 2026-09-24 - Enhance Modal Accessibility
 **Learning:** Adding comprehensive accessibility props (`accessibilityRole`, `accessibilityLabel`, and `accessibilityState`) to interactive elements within complex forms (like `MealEditModal`) ensures that screen readers can accurately interpret the form's structure and state, making the app significantly more usable for visually impaired users.
 **Action:** Always verify that interactive components have the necessary accessibility attributes, especially in heavily-used forms and modals.
 
