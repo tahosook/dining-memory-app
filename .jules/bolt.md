@@ -66,3 +66,8 @@
 
 **Learning:** While `Promise.all()` is generally an anti-pattern for concurrent file operations due to memory and bridge congestion, chunked `Promise.allSettled()` is highly effective and safe for I/O operations like exporting large amounts of files, significantly reducing latency without causing EMFILE errors.
 **Action:** Use chunked `Promise.allSettled()` (e.g., with a limit of 25) instead of sequential loops for independent I/O tasks where throughput is important, ensuring that failures are detected per chunk and prevent execution of subsequent chunks.
+
+### 2026-09-27 - Safe Concurrency with Promise.allSettled for File Existence Checks
+
+**Learning:** In a React Native Expo environment, using an unbounded `Promise.all` to perform massive concurrent file system operations (like `getInfoAsync` for thumbnails across hundreds of meals) can cause bridge congestion, EMFILE errors, and Out-Of-Memory (OOM) crashes.
+**Action:** Use chunked concurrency (e.g., limit of 25) combined with `Promise.allSettled` instead of unbounded `Promise.all` for bulk I/O tasks like checking file existence to ensure stability without sacrificing throughput.

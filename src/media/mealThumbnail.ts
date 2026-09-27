@@ -242,28 +242,45 @@ export function requestMealThumbnails(
   options?: ThumbnailRequestOptions
 ): void {
   (async () => {
-    const candidateMeals = await Promise.all(
-      meals.map(async meal => {
-        if (!meal.photo_path) {
-          return null;
-        }
+    // Optimization: Use a chunked concurrency limit with Promise.allSettled instead of an unbounded
+    // Promise.all to prevent bridge congestion, EMFILE errors, and Out-Of-Memory crashes when checking
+    // file existence for a large array of meals (e.g., during pagination or background backfill).
+    const CONCURRENCY_LIMIT = 25;
+    const candidateMeals: (Pick<Meal, 'id' | 'photo_path' | 'photo_thumbnail_path'> | null)[] = [];
 
-        if (!meal.photo_thumbnail_path) {
-          return meal;
-        }
+    for (let i = 0; i < meals.length; i += CONCURRENCY_LIMIT) {
+      const chunk = meals.slice(i, i + CONCURRENCY_LIMIT);
+      const results = await Promise.allSettled(
+        chunk.map(async meal => {
+          if (!meal.photo_path) {
+            return null;
+          }
 
-        try {
-          const info = await getInfoAsync(meal.photo_thumbnail_path);
-          if (!info.exists) {
+          if (!meal.photo_thumbnail_path) {
             return meal;
           }
-        } catch {
-          return meal;
-        }
 
-        return null;
-      })
-    );
+          try {
+            const info = await getInfoAsync(meal.photo_thumbnail_path);
+            if (!info.exists) {
+              return meal;
+            }
+          } catch {
+            return meal;
+          }
+
+          return null;
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          candidateMeals.push(result.value);
+        } else {
+          console.warn('Failed to inspect meal for thumbnail backfill in chunk:', result.reason);
+        }
+      }
+    }
 
     for (const meal of candidateMeals) {
       if (meal) {
