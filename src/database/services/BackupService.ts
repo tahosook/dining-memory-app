@@ -96,9 +96,9 @@ export class BackupService {
       }
 
       // Copy all referenced original photos to staging photos/ directory.
-      // Must-fix 1 & 2: Fail-fast on any missing photo, read error, or copy failure.
+      // Missing photo/read errors abort immediately; copy failures are detected per chunk without proceeding to subsequent chunks.
 
-      // Step 1: Fail-fast validation of all photos (Sequential to prevent EMFILE)
+      // Step 1: Sequential validation of all photos (prevents EMFILE, aborts immediately on error)
       for (const [, photoPath] of requiredPhotoMap.entries()) {
         let fileInfo;
         try {
@@ -112,19 +112,35 @@ export class BackupService {
         }
       }
 
-      // Step 2: Sequential copy after all photos are verified to exist
+      // Step 2: Chunked parallel copy after all photos are verified to exist.
+      // Detects failures per chunk and aborts without proceeding to subsequent chunks (chunk単位で失敗を検出し、失敗時に後続chunkへ進まない).
       const copiedSet = new Set<string>();
-      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
-        try {
-          await copyAsync({
-            from: photoPath,
-            to: `${photosDir}${fileName}`,
-          });
-        } catch {
+      // RN ブリッジ / FD 上限を踏まえた経験値。必要なら後で調整。
+      const CONCURRENCY_LIMIT = 25;
+      const photoEntries = Array.from(requiredPhotoMap.entries());
+
+      for (let i = 0; i < photoEntries.length; i += CONCURRENCY_LIMIT) {
+        const chunk = photoEntries.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          chunk.map(async ([fileName, photoPath]) => {
+            await copyAsync({
+              from: photoPath,
+              to: `${photosDir}${fileName}`,
+            });
+            return fileName;
+          })
+        );
+
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length > 0) {
           throw new Error('写真ファイルのバックアップ一時領域へのコピーに失敗しました。');
         }
 
-        copiedSet.add(fileName);
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            copiedSet.add(result.value);
+          }
+        }
       }
 
       if (copiedSet.size !== requiredPhotoMap.size) {
