@@ -114,17 +114,31 @@ export class BackupService {
 
       // Step 2: Sequential copy after all photos are verified to exist
       const copiedSet = new Set<string>();
-      for (const [fileName, photoPath] of requiredPhotoMap.entries()) {
-        try {
-          await copyAsync({
-            from: photoPath,
-            to: `${photosDir}${fileName}`,
-          });
-        } catch {
+      const CONCURRENCY_LIMIT = 25;
+      const photoEntries = Array.from(requiredPhotoMap.entries());
+
+      for (let i = 0; i < photoEntries.length; i += CONCURRENCY_LIMIT) {
+        const chunk = photoEntries.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          chunk.map(async ([fileName, photoPath]) => {
+            await copyAsync({
+              from: photoPath,
+              to: `${photosDir}${fileName}`,
+            });
+            return fileName;
+          })
+        );
+
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length > 0) {
           throw new Error('写真ファイルのバックアップ一時領域へのコピーに失敗しました。');
         }
 
-        copiedSet.add(fileName);
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            copiedSet.add(result.value);
+          }
+        }
       }
 
       if (copiedSet.size !== requiredPhotoMap.size) {

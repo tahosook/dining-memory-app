@@ -62,3 +62,7 @@
 
 **Learning:** In React Native, when asynchronously processing items for a large list (like generating thumbnails for 100+ meals) and firing individual callbacks per item (`onGenerated`), mapping over the entire list state (`setFlatMeals(current => current.map(...))`) inside the callback results in O(N * K) complexity (effectively O(N^2) worst case) and triggers massive unnecessary re-renders.
 **Action:** Instead of mapping over the entire list to update a single item's property, extract that property into a separate dictionary/hash map State (e.g., `const [thumbnails, setThumbnails] = useState<Record<string, string>>({})`). Update the dictionary in O(1) time (`setThumbnails(prev => ({...prev, [id]: uri}))`) and pass the specific dictionary value to a `React.memo`-wrapped list item component. This drastically reduces main-thread blocking and re-renders.
+### 2026-09-27 - Safe Concurrency with Promise.allSettled for File Exports
+
+**Learning:** While `Promise.all()` is generally an anti-pattern for concurrent file operations due to memory and bridge congestion, chunked `Promise.allSettled()` is highly effective and safe for I/O operations like exporting large amounts of files, significantly reducing latency without causing EMFILE errors.
+**Action:** Use chunked `Promise.allSettled()` (e.g., with a limit of 25) instead of sequential loops for independent I/O tasks where throughput is important, ensuring that failures are caught, logged, and appropriately propagated to maintain fail-fast semantics.
