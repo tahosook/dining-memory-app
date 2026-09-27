@@ -46,3 +46,7 @@ WCAG / アクセシビリティ（a11y）、スクリーンリーダー対応、
 ### 2026-09-25 - Redundant Accessibility Labels in React Native
 **Learning:** Adding an `accessibilityLabel` that exactly matches the button's only `<Text>` child is redundant in React Native, as screen readers natively read the child text of a `TouchableOpacity`.
 **Action:** Only add `accessibilityLabel` to buttons when the child text is not descriptive enough, when it's an icon-only button, or when providing a more descriptive label for screen reader users than the visible text.
+
+### 2026-09-26 - Dynamic Accessibility State for Segmented Controls / Tabs
+**Learning:** Found a custom segmented control / tab bar for statistics periods (StatsScreen.tsx) that changed visual state (selected tab) but didn't announce its `selected` state to screen readers, leaving users unaware of which tab was currently active.
+**Action:** Next time, when building custom segmented controls or tab bars with `Pressable` or `TouchableOpacity`, always include `accessibilityRole="button"`, an appropriate `accessibilityLabel`, and `accessibilityState={{ selected: isSelected }}` to ensure screen reader users are aware of the active selection.
