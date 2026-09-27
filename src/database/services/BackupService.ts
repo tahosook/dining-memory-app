@@ -115,6 +115,7 @@ export class BackupService {
       // Step 2: Chunked parallel copy after all photos are verified to exist.
       // Detects failures per chunk and aborts without proceeding to subsequent chunks (chunk単位で失敗を検出し、失敗時に後続chunkへ進まない).
       const copiedSet = new Set<string>();
+      // RN ブリッジ / FD 上限を踏まえた経験値。必要なら後で調整。
       const CONCURRENCY_LIMIT = 25;
       const photoEntries = Array.from(requiredPhotoMap.entries());
 
