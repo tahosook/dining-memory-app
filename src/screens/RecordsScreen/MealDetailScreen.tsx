@@ -491,6 +491,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             onPress={openEditModal}
             testID="meal-detail-edit-button"
             accessibilityRole="button"
+            accessibilityLabel="編集"
           >
             <Text style={styles.secondaryButtonText}>編集</Text>
           </TouchableOpacity>
@@ -499,6 +500,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             onPress={openShareComposer}
             testID="meal-detail-share-button"
             accessibilityRole="button"
+            accessibilityLabel="共有"
           >
             <Text style={styles.primaryButtonText}>共有</Text>
           </TouchableOpacity>
@@ -507,6 +509,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             onPress={confirmDelete}
             testID="meal-detail-delete-button"
             accessibilityRole="button"
+            accessibilityLabel="削除"
           >
             <Text style={styles.dangerButtonText}>削除</Text>
           </TouchableOpacity>
@@ -588,6 +591,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
                 onPress={() => setShareComposerVisible(false)}
                 testID="share-cancel-button"
                 accessibilityRole="button"
+                accessibilityLabel="閉じる"
               >
                 <Text style={styles.secondaryButtonText}>閉じる</Text>
               </TouchableOpacity>
@@ -596,6 +600,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
                 onPress={submitShare}
                 testID="share-submit-button"
                 accessibilityRole="button"
+                accessibilityLabel="共有を開く"
               >
                 <Text style={styles.primaryButtonText}>共有を開く</Text>
               </TouchableOpacity>
