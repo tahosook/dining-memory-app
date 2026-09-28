@@ -251,6 +251,71 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(res.stderr).toContain('PR body is missing mandatory section(s)');
       expect(res.stderr).toContain('### 客観的証拠 (Evidence)');
     });
+
+    it('12. ドメイン名詞 (Accessibility 単体など) は Out of Scope とみなされず FAIL', () => {
+      const misleadingBody = [
+        '## 💡 What\nAdd accessibility features',
+        '## 🔍 Verification\nTested and verified with test suite passing',
+        '## 🎯 Why\nBetter UX',
+        '## ♿ Accessibility\nSome generic accessibility notes without explicit out of scope',
+      ].join('\n\n');
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', misleadingBody]);
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain('PR body is missing mandatory section(s)');
+      expect(res.stderr).toContain('### 意図して変更しなかったこと (Out of Scope)');
+    });
+
+    it('13. 正規の Out of Scope セクション (Out of Scope / Non-Goals / 意図して変更しなかったこと) は通る -> PASS', () => {
+      for (const heading of [
+        '### 意図して変更しなかったこと (Out of Scope)',
+        '## Out of Scope',
+        '## Non-Goals',
+        '### 意図して変更しなかったこと',
+        '### スコープ外',
+      ]) {
+        const bodyWithOutOfScope = [
+          validProblem,
+          validEvidence,
+          validImpact,
+          `${heading}\nNo database schema or migration changes.`,
+        ].join('\n\n');
+        const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithOutOfScope]);
+        expect(res.status).toBe(0);
+        expect(res.stdout).toContain('PR body Evidence Gate passed');
+      }
+    });
+
+    it('14. 正規の Evidence セクション (客観的証拠 / Evidence / Verification / Measured Improvement / Benchmark) は通る -> PASS', () => {
+      for (const heading of [
+        '### 客観的証拠 (Evidence)',
+        '## 🔍 Verification',
+        '## 📊 Measured Improvement',
+        '### Benchmark',
+        '### 証拠',
+      ]) {
+        const bodyWithEvidence = [
+          validProblem,
+          `${heading}\nBenchmark results show 45ms -> 12ms, 100% test coverage.`,
+          validImpact,
+          validOutOfScope,
+        ].join('\n\n');
+        const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithEvidence]);
+        expect(res.status).toBe(0);
+        expect(res.stdout).toContain('PR body Evidence Gate passed');
+      }
+    });
+
+    it('15. 意味の違う見出し (Architecture / Summary / Notes など) は alias として誤認識されず FAIL', () => {
+      const unrelatedHeadingBody = [
+        '## Architecture\nOverview of system architecture',
+        '## Summary\nOverall summary of changes',
+        '## Notes\nAdditional design notes',
+        '## Future Work\nFuture plans',
+      ].join('\n\n');
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', unrelatedHeadingBody]);
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain('PR body is missing mandatory section(s)');
+    });
   });
 
   describe('Machine Code Gates', () => {

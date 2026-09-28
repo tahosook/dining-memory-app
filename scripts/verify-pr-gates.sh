@@ -134,6 +134,11 @@ if [ -n "$PR_BODY_INPUT" ]; then
   node -e '
     const body = process.argv[1] || "";
 
+    // Evidence section aliases: Japanese, English, and agent verification terms (Measured Improvement, Benchmark)
+    const evidenceHeaderTerms = "(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark)";
+    const evidenceSectionPattern = new RegExp(`(?:^|\\n)#{1,4}[^\\n]*?${evidenceHeaderTerms}`, "i");
+    const evidenceExtractPattern = new RegExp(`(?:^|\\n)#{1,4}[^\\n]*?${evidenceHeaderTerms}[^\\n]*\\n([\\s\\S]*?)(?=(?:\\n#{1,4}\\s+|\\n---|$(?![\\s\\S])))`, "i");
+
     // Flexible section matching (level 1-4 headings, Japanese, English, and agent aliases like What/Why/Measured Improvement/Verification)
     const requiredSections = [
       {
@@ -145,20 +150,20 @@ if [ -n "$PR_BODY_INPUT" ]; then
       {
         id: "evidence",
         label: "### 客観的証拠 (Evidence)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark|Before\/After|\bCoverage\b)/i,
-        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / Verification / Before/After / Coverage"
+        pattern: evidenceSectionPattern,
+        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / Verification"
       },
       {
         id: "expected_impact",
         label: "### 期待される効果 (Expected Impact)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:期待される効果|効果|Expected Impact|\bImpact\b|\bWhy\b|\bResult\b)/i,
-        hint: "期待される効果 (Expected Impact) / Expected Impact / 🎯 Why / Result"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:期待される効果|効果|Expected Impact|\bImpact\b|\bWhy\b)/i,
+        hint: "期待される効果 (Expected Impact) / Expected Impact / 🎯 Why"
       },
       {
         id: "out_of_scope",
         label: "### 意図して変更しなかったこと (Out of Scope)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:意図して変更しなかったこと|変更しなかったこと|スコープ外|Out of Scope|Non-?Goals?|\bAccessibility\b)/i,
-        hint: "意図して変更しなかったこと (Out of Scope) / Out of Scope / Non-Goals / Accessibility"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:意図して変更しなかったこと|変更しなかったこと|スコープ外|Out of Scope|Non-?Goals?)/i,
+        hint: "意図して変更しなかったこと (Out of Scope) / Out of Scope / Non-Goals"
       },
     ];
 
@@ -177,7 +182,7 @@ if [ -n "$PR_BODY_INPUT" ]; then
     }
 
     // Extract Evidence section content up to the next heading or horizontal rule
-    const evidenceMatch = body.match(/(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark|Before\/After|\bCoverage\b)[^\n]*\n([\s\S]*?)(?=(?:\n#{1,4}\s+|\n---|$(?![\s\S])))/i);
+    const evidenceMatch = body.match(evidenceExtractPattern);
     const rawEvidence = evidenceMatch ? evidenceMatch[1] : "";
 
     // Strip HTML comments <!-- ... -->
