@@ -251,6 +251,71 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(res.stderr).toContain('PR body is missing mandatory section(s)');
       expect(res.stderr).toContain('### 客観的証拠 (Evidence)');
     });
+
+    it('12. ドメイン名詞 (Accessibility 単体など) は Out of Scope とみなされず FAIL', () => {
+      const misleadingBody = [
+        '## 💡 What\nAdd accessibility features',
+        '## 🔍 Verification\nTested and verified with test suite passing',
+        '## 🎯 Why\nBetter UX',
+        '## ♿ Accessibility\nSome generic accessibility notes without explicit out of scope',
+      ].join('\n\n');
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', misleadingBody]);
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain('PR body is missing mandatory section(s)');
+      expect(res.stderr).toContain('### 意図して変更しなかったこと (Out of Scope)');
+    });
+
+    it('13. 正規の Out of Scope セクション (Out of Scope / Non-Goals / 意図して変更しなかったこと) は通る -> PASS', () => {
+      for (const heading of [
+        '### 意図して変更しなかったこと (Out of Scope)',
+        '## Out of Scope',
+        '## Non-Goals',
+        '### 意図して変更しなかったこと',
+        '### スコープ外',
+      ]) {
+        const bodyWithOutOfScope = [
+          validProblem,
+          validEvidence,
+          validImpact,
+          `${heading}\nNo database schema or migration changes.`,
+        ].join('\n\n');
+        const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithOutOfScope]);
+        expect(res.status).toBe(0);
+        expect(res.stdout).toContain('PR body Evidence Gate passed');
+      }
+    });
+
+    it('14. 正規の Evidence セクション (客観的証拠 / Evidence / Verification / Measured Improvement / Benchmark) は通る -> PASS', () => {
+      for (const heading of [
+        '### 客観的証拠 (Evidence)',
+        '## 🔍 Verification',
+        '## 📊 Measured Improvement',
+        '### Benchmark',
+        '### 証拠',
+      ]) {
+        const bodyWithEvidence = [
+          validProblem,
+          `${heading}\nBenchmark results show 45ms -> 12ms, 100% test coverage.`,
+          validImpact,
+          validOutOfScope,
+        ].join('\n\n');
+        const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithEvidence]);
+        expect(res.status).toBe(0);
+        expect(res.stdout).toContain('PR body Evidence Gate passed');
+      }
+    });
+
+    it('15. 意味の違う見出し (Architecture / Summary / Notes など) は alias として誤認識されず FAIL', () => {
+      const unrelatedHeadingBody = [
+        '## Architecture\nOverview of system architecture',
+        '## Summary\nOverall summary of changes',
+        '## Notes\nAdditional design notes',
+        '## Future Work\nFuture plans',
+      ].join('\n\n');
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', unrelatedHeadingBody]);
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain('PR body is missing mandatory section(s)');
+    });
   });
 
   describe('Machine Code Gates', () => {
@@ -260,38 +325,30 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(res.stdout).toContain('Zero diff detected');
     });
 
-    it('any 拡張検知: 配列・ジェネリクス・プロミス・レコード・旧式キャストをブロックする', () => {
-      const anyWord = 'any';
-      const patterns = [
-        `export const a: ${anyWord} = 1;`,
-        `export const b = 1 as ${anyWord};`,
-        `export const c: ${anyWord}[] = [];`,
-        `export const d: Array<${anyWord}> = [];`,
-        `export async function e(): Promise<${anyWord}> { return 1; }`,
-        `export const f: Record<string, ${anyWord}> = {};`,
-        `export const g = <${anyWord}>1;`,
-      ];
-
-      for (const pat of patterns) {
-        fs.writeFileSync(path.join(testRepoDir, 'src_file.ts'), pat + '\n');
-        execGit('git add src_file.ts');
-        execGit('git commit -m "add any test"');
-
-        const res = runGate(['HEAD~1...HEAD', '--pr-body', fullValidBody]);
-        expect(res.status).toBe(1);
-        expect(res.stdout).toContain(
-          "New 'any' type annotation, generic, array, or cast detected"
-        );
-
-        execGit('git reset --hard HEAD~1');
+    it('any および @ts-ignore の混入は ESLint (static-analysis) でブロックされる', () => {
+      const tempSrc = path.resolve(__dirname, '../src/__test_gate_check.ts');
+      fs.writeFileSync(
+        tempSrc,
+        'export const badAny: any = 1;\n// @ts-ignore\nexport const badIgnore = 2;\n'
+      );
+      try {
+        const res = spawnSync('npx', ['eslint', tempSrc], {
+          cwd: path.resolve(__dirname, '..'),
+          encoding: 'utf-8',
+        });
+        expect(res.status).not.toBe(0);
+        expect(res.stdout).toContain('@typescript-eslint/no-explicit-any');
+        expect(res.stdout).toContain('@typescript-eslint/ban-ts-comment');
+      } finally {
+        fs.rmSync(tempSrc, { force: true });
       }
     });
 
-    it('エスケープハッチ検知: ts-ignore, ts-nocheck, eslint 抑止コメントをブロックする', () => {
+    it('エスケープハッチ検知: eslint-disable コメントをブロックする', () => {
       const escapes = [
-        `// @ts-${'ignore'}\nexport const a = 1;`,
-        `// @ts-${'nocheck'}\nexport const b = 1;`,
-        `/* eslint-${'disable'} */\nexport const c = 1;`,
+        '/* ' + 'eslint-disable */\nexport const a = 1;',
+        '// ' + 'eslint-disable-next-line\nexport const b = 1;',
+        '// ' + 'eslint-disable-line\nexport const c = 1;',
       ];
 
       for (const esc of escapes) {

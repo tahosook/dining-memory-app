@@ -6,10 +6,10 @@ set -euo pipefail
 #
 # Machine-enforced PR quality and governance gates:
 # 1. Zero diff check: Blocks empty PRs (No actionable finding, stop without PR).
-# 2. New 'any' check: Blocks additions of ': any', 'as any', 'any[]', 'Array<any>', etc.
-# 3. Escape hatches check: Blocks additions of '@ts-ignore', '@ts-nocheck', 'eslint-disable'.
-# 4. Test protection check: Blocks deletion of test files and introduction of skipped tests.
-# 5. PR body Evidence Gate: Validates mandatory sections and non-empty Evidence in PR body.
+# 2. Escape hatch check: Blocks 'eslint-disable' comments to prevent suppressing static analysis.
+# 3. Test protection check: Blocks deletion of test files and introduction of skipped tests.
+# 4. PR body Evidence Gate: Validates mandatory sections and requires concrete Evidence.
+# Note: Type safety ('any', '@ts-ignore', '@ts-nocheck') is enforced via ESLint in static-analysis.
 # -----------------------------------------------------------------------------
 
 TARGET_REF=""
@@ -57,38 +57,26 @@ if git diff --quiet "$TARGET_REF" 2>/dev/null; then
 fi
 echo "  ✓ Non-zero diff verified."
 
-# 2. Extract code additions once for typing and quality checks
+# 2. Escape hatch check (eslint-disable)
 # Restrict to code files (*.ts, *.tsx, *.js, *.jsx) to allow documentation references.
+# Note: Type safety ('any', '@ts-ignore', '@ts-nocheck') is enforced via ESLint in static-analysis.
+# 'eslint-disable' comments are blocked here to prevent suppressing ESLint itself.
 CODE_ADDED_LINES=$(git diff -U0 "$TARGET_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null \
   | grep '^\+[^+]' || true)
 
-# 2a. New 'any' / type assertion check
-# Blocks: ': any', 'as any', 'any[]', 'Array<any>', 'Promise<any>', 'Record<..., any>', '<any>'
-NEW_ANY_MATCHES=$(echo "$CODE_ADDED_LINES" \
-  | grep -E '(\bas\s+any\b|:\s*any\b|\bany\[\]|\bArray<any>|\bPromise<any>|\bRecord<[^>]*,\s*any>|<any>|<[^>]*[,\s]any[,\s>])' || true)
-
-if [ -n "$NEW_ANY_MATCHES" ]; then
-  echo "❌ [GATE FAIL] New 'any' type annotation, generic, array, or cast detected:"
-  echo "$NEW_ANY_MATCHES"
-  echo "   Core Principle: Machine-enforced typing. Introducing 'any' types is blocked."
-  exit 1
-fi
-echo "  ✓ No new 'any' types introduced."
-
-# 3. Escape hatches check
 ESCAPE_HATCH_MATCHES=$(echo "$CODE_ADDED_LINES" \
-  | grep -E '(@ts-ignore|@ts-nocheck|eslint-disable)' || true)
+  | grep -E '(\/\/|\/\*)\s*eslint-disable' || true)
 
 if [ -n "$ESCAPE_HATCH_MATCHES" ]; then
   echo "❌ [GATE FAIL] Escape hatch comment detected:"
   echo "$ESCAPE_HATCH_MATCHES"
-  echo "   Core Principle: Machine-enforced quality. Adding '@ts-ignore', '@ts-nocheck', or 'eslint-disable' is blocked."
+  echo "   Core Principle: Machine-enforced quality. Adding 'eslint-disable' comments is blocked."
   exit 1
 fi
-echo "  ✓ No escape hatches introduced."
+echo "  ✓ No 'eslint-disable' escape hatches introduced."
 
-# 4. Test protection check
-# 4a. Deletion check
+# 3. Test protection check
+# 3a. Deletion check
 DELETED_TESTS=$(git diff --name-only --diff-filter=D "$TARGET_REF" -- 'tests/*' 2>/dev/null || true)
 
 if [ -n "$DELETED_TESTS" ]; then
@@ -99,7 +87,7 @@ if [ -n "$DELETED_TESTS" ]; then
 fi
 echo "  ✓ No test files deleted."
 
-# 4b. Test weakening check (blocks it.skip, test.skip, describe.skip, xit, xdescribe)
+# 3b. Test weakening check (blocks it.skip, test.skip, describe.skip, xit, xdescribe)
 TEST_WEAKENING_MATCHES=$(git diff -U0 "$TARGET_REF" -- 'tests/*' 2>/dev/null \
   | grep '^\+[^+]' \
   | grep -E '(\b(it|test|describe)\.skip\b|\b(xit|xdescribe)\s*\()' || true)
@@ -112,7 +100,7 @@ if [ -n "$TEST_WEAKENING_MATCHES" ]; then
 fi
 echo "  ✓ No skipped or weakened tests introduced."
 
-# 5. PR body Evidence Gate
+# 4. PR body Evidence Gate
 # Resolve PR body from stdin, file, environment, or GitHub Actions event file if not explicitly passed
 if [ "$PR_BODY_FILE" = "-" ]; then
   PR_BODY_INPUT=$(cat)
@@ -134,6 +122,11 @@ if [ -n "$PR_BODY_INPUT" ]; then
   node -e '
     const body = process.argv[1] || "";
 
+    // Evidence section aliases: Japanese, English, and agent verification terms (Measured Improvement, Benchmark)
+    const evidenceHeaderTerms = "(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark)";
+    const evidenceSectionPattern = new RegExp(`(?:^|\\n)#{1,4}[^\\n]*?${evidenceHeaderTerms}`, "i");
+    const evidenceExtractPattern = new RegExp(`(?:^|\\n)#{1,4}[^\\n]*?${evidenceHeaderTerms}[^\\n]*\\n([\\s\\S]*?)(?=(?:\\n#{1,4}\\s+|\\n---|$(?![\\s\\S])))`, "i");
+
     // Flexible section matching (level 1-4 headings, Japanese, English, and agent aliases like What/Why/Measured Improvement/Verification)
     const requiredSections = [
       {
@@ -145,20 +138,20 @@ if [ -n "$PR_BODY_INPUT" ]; then
       {
         id: "evidence",
         label: "### 客観的証拠 (Evidence)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark|Before\/After|\bCoverage\b)/i,
-        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / Verification / Before/After / Coverage"
+        pattern: evidenceSectionPattern,
+        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / Verification"
       },
       {
         id: "expected_impact",
         label: "### 期待される効果 (Expected Impact)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:期待される効果|効果|Expected Impact|\bImpact\b|\bWhy\b|\bResult\b)/i,
-        hint: "期待される効果 (Expected Impact) / Expected Impact / 🎯 Why / Result"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:期待される効果|効果|Expected Impact|\bImpact\b|\bWhy\b)/i,
+        hint: "期待される効果 (Expected Impact) / Expected Impact / 🎯 Why"
       },
       {
         id: "out_of_scope",
         label: "### 意図して変更しなかったこと (Out of Scope)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:意図して変更しなかったこと|変更しなかったこと|スコープ外|Out of Scope|Non-?Goals?|\bAccessibility\b)/i,
-        hint: "意図して変更しなかったこと (Out of Scope) / Out of Scope / Non-Goals / Accessibility"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:意図して変更しなかったこと|変更しなかったこと|スコープ外|Out of Scope|Non-?Goals?)/i,
+        hint: "意図して変更しなかったこと (Out of Scope) / Out of Scope / Non-Goals"
       },
     ];
 
@@ -177,11 +170,12 @@ if [ -n "$PR_BODY_INPUT" ]; then
     }
 
     // Extract Evidence section content up to the next heading or horizontal rule
-    const evidenceMatch = body.match(/(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark|Before\/After|\bCoverage\b)[^\n]*\n([\s\S]*?)(?=(?:\n#{1,4}\s+|\n---|$(?![\s\S])))/i);
+    const evidenceMatch = body.match(evidenceExtractPattern);
     const rawEvidence = evidenceMatch ? evidenceMatch[1] : "";
 
     // Strip HTML comments <!-- ... -->
     const stripped = rawEvidence.replace(/<!--[\s\S]*?-->/g, "").trim();
+    const placeholderPattern = /^(TODO|TBD|N\/?A|none|なし|null|undefined)$/i;
 
     if (!stripped) {
       console.error("❌ [GATE FAIL] Evidence section in PR body is empty (or contains only HTML comments).");
@@ -192,7 +186,6 @@ if [ -n "$PR_BODY_INPUT" ]; then
 
     // Check if evidence is a placeholder (only symbols/dashes, or keywords like TODO, TBD, N/A)
     const strippedWithoutSymbols = stripped.replace(/[\s\-\*\•\d\.\:\(\)\/]+/g, "").trim();
-    const placeholderPattern = /^(TODO|TBD|N\/?A|none|なし|null|undefined)$/i;
     if (!strippedWithoutSymbols || placeholderPattern.test(strippedWithoutSymbols) || placeholderPattern.test(stripped.trim())) {
       console.error("❌ [GATE FAIL] Evidence section contains only a placeholder (\"" + stripped + "\").");
       console.error("   Core Principle: \"No evidence, no PR\". Genuine verification evidence is required.");
