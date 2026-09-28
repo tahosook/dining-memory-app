@@ -70,7 +70,7 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 
 ## Core Governance Principles
 - **自然言語の禁止リスト依存からの脱却**: 言い訳で容易にすり抜けられる細かな禁止構文の列挙でエージェントを縛るアプローチを廃止し、機械判定と客観的証拠にオフロードする（詳細は [.jules/rules.md](../../.jules/rules.md) 参照）。
-- **機械的判定への完全オフロード (No machine gate, no trust)**: 差分ゼロ、新規 `any`、エスケープハッチ（`@ts-ignore` 等）、テスト削除・弱体化、PR本文の Evidence 欠落などは `scripts/verify-pr-gates.sh` および CI で物理的に遮断する。
+- **機械的判定への完全オフロード (No machine gate, no trust)**: 差分ゼロ、テスト削除・弱体化は `scripts/verify-pr-gates.sh` で、新規 `any` やエスケープハッチ（`@ts-ignore` 等）は ESLint で物理的に遮断する。PR 本文の Evidence 欠落は Warning として可視化する。
 - **客観的証拠の義務化 (No evidence, no PR)**: 具体的課題と客観的証拠（失敗テスト、実測値、EXPLAIN 結果等）が示されない PR は起票しない。
 - **「変更しないこと」の成功定義 (No actionable finding, stop)**: 調査の結果、対処すべき問題がなければ無理にコード変更を捏造せず、レポートを残して「変更なし」で終了することを成功とする。
 
@@ -87,7 +87,7 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 
 ## Review Gate
 - Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
-- Machine gate for PRs: `npm run verify:pr-gates` (`bash scripts/verify-pr-gates.sh`). Automatically enforced in CI for pull requests.
+- Machine gate for PRs: `npm run verify:pr-gates` (`bash scripts/verify-pr-gates.sh`). Automatically enforced in CI for pull requests (zero diff check, test protection, and PR body guidance warnings).
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
 - Add `npm run check:deps` and `npm run check:react-versions` when dependencies are added, removed, or reorganized. Follow [docs/engineering/dependency-policy.md](dependency-policy.md).
 - If native dependencies (Tier 1) or Expo SDK change, run `npm run build:android:debug` locally (Jest tests pass via mocks and do not guarantee native compatibility). In CI, the `native-build` job automatically runs `build:android:debug` when native-sensitive files change.

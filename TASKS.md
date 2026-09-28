@@ -21,8 +21,8 @@
 
 ## Later
 ### Future-triggered evaluation（将来トリガー待ち評価）
-- Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能劣化条件と移行トリガーの評価（※本IssueではKeyset実装を行わず、必要と判断された場合に別Issue切り出し） ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
-- 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。Issue #59 実測評価レポート（現時点見送り）を引き継ぎ、10,000件超等のトリガー到達時に再評価（※今すぐインデックス追加せず実機性能とクエリ計画を確認して判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
+- Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能特性と移行トリガーの実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点は見送りとし、20,000件超かつ深いスクロール・大量同期時に別Issueで実装 ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
+- 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点は見送りとし、10,000件到達時または実機遅延報告時に Version 3 マイグレーションを別Issueで実装 ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
 
 ### Backlog / Future ideas（バックログ・将来検討）
 - EXIF / GPS / ファイル名保存方針: 要確認。保存時 EXIF / GPS は実装方針あり。backup / export / file naming まで広げる場合は data policy と privacy を再確認する。
@@ -30,7 +30,7 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
-- エージェント運用のガバナンス刷新と機械的 PR ゲートの配備 (Core Machine-Enforced & Evidence-Based Governance): 自然言語禁止リストの肥大化を廃止し、3層構造（`.jules/rules.md` での意思決定ポリシー、`bolt.md`/`sentinel.md` での標準5セクションペルソナ定義、および `scripts/verify-pr-gates.sh` による機械的ゲート）を配備。差分ゼロ・新規 `any`・エスケープハッチ・テスト削除を CI で物理遮断し、PR テンプレート（`.github/pull_request_template.md`）で客観的証拠提示を必須化。
+- エージェント運用のガバナンス刷新と機械的 PR ゲートの最適化 (Core Machine-Enforced & Evidence-Based Governance): 自然言語禁止リストの肥大化を廃止し、3層構造（`.jules/rules.md` での意思決定ポリシー、`bolt.md`/`sentinel.md` での標準5セクションペルソナ定義、および `scripts/verify-pr-gates.sh` による機械的ゲート）を配備。差分ゼロ・テスト削除・テスト弱体化を CI で物理遮断し、`any`・エスケープハッチは ESLint で静的検査、PR テンプレート（`.github/pull_request_template.md`）の客観的証拠提示は Warning（警告）モードで柔軟に運用。
 - Android 実機環境における写真保存パイプラインの実測プロファイリング (GitHub Issue #60) & Native EXIF 移行要否判断 (GitHub Issue #61): Google Pixel 9a (Android 17, 8GB RAM) 実機での写真保存パイプライン全8ステップの所要時間、メモリ推移（PSS/RSS）、GC 挙動、および UI フレーム描画（Jank）を実測（2回施行）。今回の測定条件では EXIF 処理時間は平均 42.4ms、Java Heap PSS は 11〜22MB、GC ポーズは 3ms 未満、Jank 率は 3.9〜5.4% で推移し、顕著な UI 停止やメモリ圧迫は観測されず。この実機データに基づき、Issue #61（Kotlin Native EXIF 化）は未実測の机上試算（~10ms）と比較しても得られる短縮幅が限定的であることから現状維持と判断（[docs/notes/photo-save-benchmark-issue-60.md](docs/notes/photo-save-benchmark-issue-60.md)、完了）。
 - RecordsScreen におけるページネーション・無限スクロールの導入 (GitHub Issue #89): 100件固定取得を廃止し、`MealService.getRecentMeals` のカーソル（Keyset: `beforeMealDatetime` / `beforeId`）対応および `SectionList` の `onEndReached`（50件単位の無限スクロール）による、データ追加・削除時にも欠落しない過去記録の段階的追加読み込み機構を導入。
 - リリースビルド署名鍵（Keystore）の管理・注入方針の策定 (GitHub Issue #109, 内部ドキュメント issue-12): 本番リリース時の Keystore 生成規格（RSA 4096bit / PKCS12）、多重保管・バックアップ運用、および各ビルド環境（ローカル / CI / EAS）へのシークレット注入方法の確立、Play App Signing 運用方針の策定（[docs/engineering/release-keystore-guidelines.md](docs/engineering/release-keystore-guidelines.md)、完了 / Closed）。

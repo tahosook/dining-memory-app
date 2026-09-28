@@ -25,17 +25,15 @@ PR を起票する前に、以下の全項目を満たしていることを確�
 - 実行した検証（ベンチマーク実測値、プロファイル結果、型チェック結果等）
 - 結論（現状維持が最適である理由）
 
-## Machine Gates
-本リポジトリでは以下の違反を CI および `scripts/verify-pr-gates.sh` により機械的・物理的に遮断する:
-1. 差分ゼロの PR
-2. 新規 `any` 型注釈・複合型・型アサーション (`: any`, `as any`, `any[]`, `Array<any>`, `Promise<any>`, `Record<..., any>`, `<any>`)
-3. エスケープハッチの追加 (`@ts-ignore`, `@ts-nocheck`, `eslint-disable`)
-4. `tests/` 配下のテストファイル削除およびテスト弱体化 (`it.skip`, `test.skip`, `describe.skip`, `xit`, `xdescribe`)
-5. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence（Feature/Spec PR は仕様・Issue 参照で可）
+## Machine Gates & Code Quality
+本リポジトリでは以下の違反を CI およびツールにより機械的・物理的に遮断する:
+1. 差分ゼロの PR (`scripts/verify-pr-gates.sh`)
+2. 新規 `any` 型注釈・型アサーション、およびエスケープハッチ (`@ts-ignore`, `@ts-nocheck`) は ESLint (`npm run lint`) によりブロック
+3. `tests/` 配下のテストファイル削除およびテスト弱体化 (`it.skip`, `test.skip`, `describe.skip`, `xit`, `xdescribe`) (`scripts/verify-pr-gates.sh`)
+4. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence は CI（Evidence Gate）により **Warning（警告）** として可視化（Feature/Spec PR は仕様・Issue 参照で可）
 
 ## Mandatory PR Description Template
-PR を作成する際は、Description（PR 本文）に以下の **4 つの見出しをすべて含めること**。
-セクションの欠落や、Evidence の空欄・プレースホルダー（`TODO`, `TBD`, `N/A`, `なし` 等）は CI（Evidence Gate）により機械的にブロックされる。
+PR を作成する際は、Description（PR 本文）に以下の **4 つの見出しをすべて含めること**（欠落やプレースホルダーは CI で Warning として通知される）。
 
 > **Note**: CI の Evidence Gate は見出しレベル h1-h4 のいずれでも認識し、日本語・英語の両方の見出し名（およびエイリアス）に対応している。以下のテンプレートは推奨形式であり、厳密な構文制約ではない。
 
