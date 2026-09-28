@@ -411,6 +411,12 @@ export const RecordsScreen: React.FC = () => {
             onRefresh={handleRefresh}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
+            // Optimization: Limit initial mount and per-batch renders to roughly one screen (8 items)
+            // to suppress initial rendering time and JS thread spikes. Reduce windowSize to 5
+            // to conserve memory by unmounting off-screen items earlier.
+            initialNumToRender={8}
+            maxToRenderPerBatch={8}
+            windowSize={5}
             ListFooterComponent={
               loadingMore ? (
                 <View style={styles.loadingMoreContainer} testID="records-loading-more">
