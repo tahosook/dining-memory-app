@@ -344,6 +344,26 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       }
     });
 
+    it('エスケープハッチ検知: eslint-disable コメントをブロックする', () => {
+      const escapes = [
+        '/* ' + 'eslint-disable */\nexport const a = 1;',
+        '// ' + 'eslint-disable-next-line\nexport const b = 1;',
+        '// ' + 'eslint-disable-line\nexport const c = 1;',
+      ];
+
+      for (const esc of escapes) {
+        fs.writeFileSync(path.join(testRepoDir, 'src_file.ts'), esc + '\n');
+        execGit('git add src_file.ts');
+        execGit('git commit -m "add escape hatch"');
+
+        const res = runGate(['HEAD~1...HEAD', '--pr-body', fullValidBody]);
+        expect(res.status).toBe(1);
+        expect(res.stdout).toContain('Escape hatch comment detected');
+
+        execGit('git reset --hard HEAD~1');
+      }
+    });
+
     it('テスト保護: tests/ 配下のテストファイル削除をブロックする', () => {
       fs.unlinkSync(path.join(testRepoDir, 'tests/sample.test.ts'));
       execGit('git add tests/sample.test.ts');

@@ -28,7 +28,7 @@ PR を起票する前に、以下の全項目を満たしていることを確�
 ## Machine Gates & Code Quality
 本リポジトリでは以下の違反を CI およびツールにより機械的・物理的に遮断する:
 1. 差分ゼロの PR (`scripts/verify-pr-gates.sh`)
-2. 新規 `any` 型注釈・型アサーション、およびエスケープハッチ (`@ts-ignore`, `@ts-nocheck`) は ESLint (`npm run lint`) によりブロック
+2. 新規 `any` 型注釈・型アサーション、およびエスケープハッチ (`@ts-ignore`, `@ts-nocheck`) は ESLint (`npm run lint`) によりブロック、`eslint-disable` コメントは `scripts/verify-pr-gates.sh` によりブロック
 3. `tests/` 配下のテストファイル削除およびテスト弱体化 (`it.skip`, `test.skip`, `describe.skip`, `xit`, `xdescribe`) (`scripts/verify-pr-gates.sh`)
 4. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence (`scripts/verify-pr-gates.sh`)（Feature/Spec PR は仕様・Issue 参照で可）
 

@@ -6,8 +6,9 @@ set -euo pipefail
 #
 # Machine-enforced PR quality and governance gates:
 # 1. Zero diff check: Blocks empty PRs (No actionable finding, stop without PR).
-# 2. Test protection check: Blocks deletion of test files and introduction of skipped tests.
-# 3. PR body Evidence Gate: Validates mandatory sections and requires concrete Evidence.
+# 2. Escape hatch check: Blocks 'eslint-disable' comments to prevent suppressing static analysis.
+# 3. Test protection check: Blocks deletion of test files and introduction of skipped tests.
+# 4. PR body Evidence Gate: Validates mandatory sections and requires concrete Evidence.
 # Note: Type safety ('any', '@ts-ignore', '@ts-nocheck') is enforced via ESLint in static-analysis.
 # -----------------------------------------------------------------------------
 
@@ -56,8 +57,26 @@ if git diff --quiet "$TARGET_REF" 2>/dev/null; then
 fi
 echo "  ✓ Non-zero diff verified."
 
-# 2. Test protection check
-# 2a. Deletion check
+# 2. Escape hatch check (eslint-disable)
+# Restrict to code files (*.ts, *.tsx, *.js, *.jsx) to allow documentation references.
+# Note: Type safety ('any', '@ts-ignore', '@ts-nocheck') is enforced via ESLint in static-analysis.
+# 'eslint-disable' comments are blocked here to prevent suppressing ESLint itself.
+CODE_ADDED_LINES=$(git diff -U0 "$TARGET_REF" -- '*.ts' '*.tsx' '*.js' '*.jsx' 2>/dev/null \
+  | grep '^\+[^+]' || true)
+
+ESCAPE_HATCH_MATCHES=$(echo "$CODE_ADDED_LINES" \
+  | grep -E '(\/\/|\/\*)\s*eslint-disable' || true)
+
+if [ -n "$ESCAPE_HATCH_MATCHES" ]; then
+  echo "❌ [GATE FAIL] Escape hatch comment detected:"
+  echo "$ESCAPE_HATCH_MATCHES"
+  echo "   Core Principle: Machine-enforced quality. Adding 'eslint-disable' comments is blocked."
+  exit 1
+fi
+echo "  ✓ No 'eslint-disable' escape hatches introduced."
+
+# 3. Test protection check
+# 3a. Deletion check
 DELETED_TESTS=$(git diff --name-only --diff-filter=D "$TARGET_REF" -- 'tests/*' 2>/dev/null || true)
 
 if [ -n "$DELETED_TESTS" ]; then
@@ -68,7 +87,7 @@ if [ -n "$DELETED_TESTS" ]; then
 fi
 echo "  ✓ No test files deleted."
 
-# 2b. Test weakening check (blocks it.skip, test.skip, describe.skip, xit, xdescribe)
+# 3b. Test weakening check (blocks it.skip, test.skip, describe.skip, xit, xdescribe)
 TEST_WEAKENING_MATCHES=$(git diff -U0 "$TARGET_REF" -- 'tests/*' 2>/dev/null \
   | grep '^\+[^+]' \
   | grep -E '(\b(it|test|describe)\.skip\b|\b(xit|xdescribe)\s*\()' || true)
@@ -81,7 +100,7 @@ if [ -n "$TEST_WEAKENING_MATCHES" ]; then
 fi
 echo "  ✓ No skipped or weakened tests introduced."
 
-# 3. PR body Evidence Gate
+# 4. PR body Evidence Gate
 # Resolve PR body from stdin, file, environment, or GitHub Actions event file if not explicitly passed
 if [ "$PR_BODY_FILE" = "-" ]; then
   PR_BODY_INPUT=$(cat)
