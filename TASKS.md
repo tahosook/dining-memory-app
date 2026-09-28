@@ -21,8 +21,8 @@
 
 ## Later
 ### Future-triggered evaluation（将来トリガー待ち評価）
-- Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能劣化条件と移行トリガーの評価（※本IssueではKeyset実装を行わず、必要と判断された場合に別Issue切り出し） ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
-- 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。Issue #59 実測評価レポート（現時点見送り）を引き継ぎ、10,000件超等のトリガー到達時に再評価（※今すぐインデックス追加せず実機性能とクエリ計画を確認して判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
+- Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能特性と移行トリガーの実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では実装見送りとし、正しいタイブレーカー条件を文書化。20,000件超かつ深いスクロール・大量同期時に別Issueで実装 ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
+- 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では本番INDEX追加を見送り、10,000件以上を「再評価トリガー」として記録（実機体感・データ分布等と併せて別Issueで判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
 
 ### Backlog / Future ideas（バックログ・将来検討）
 - EXIF / GPS / ファイル名保存方針: 要確認。保存時 EXIF / GPS は実装方針あり。backup / export / file naming まで広げる場合は data policy と privacy を再確認する。
