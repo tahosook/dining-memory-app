@@ -21,6 +21,7 @@ import { MealService } from '../../database/services/MealService';
 import type { Meal } from '../../types/MealTypes';
 import type { RootStackParamList } from '../../navigation/types';
 import { getMealListImageUri } from '../../utils/mealImage';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 type SearchFilterState = {
   searchQuery: string;
@@ -140,7 +141,7 @@ export const SearchScreen: React.FC = () => {
       if (searchId !== activeSearchIdRef.current) {
         return;
       }
-      console.error('Failed to search meals:', error);
+      console.error('Failed to search meals:', sanitizeLogObject(error));
       setErrorMessage('検索結果の更新に失敗しました。');
     } finally {
       if (searchId === activeSearchIdRef.current) {
@@ -187,7 +188,7 @@ export const SearchScreen: React.FC = () => {
       if (searchId !== activeSearchIdRef.current) {
         return;
       }
-      console.error('Failed to load more search results:', error);
+      console.error('Failed to load more search results:', sanitizeLogObject(error));
     } finally {
       if (searchId === activeSearchIdRef.current) {
         loadingMoreRef.current = false;
