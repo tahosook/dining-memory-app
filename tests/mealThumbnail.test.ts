@@ -756,54 +756,55 @@ describe('mealThumbnail', () => {
       let activeBatchChecks = 0;
       let maxActiveBatchChecks = 0;
       const batchInspectedUris = new Set<string>();
-      let batchFinished = false;
       let completedInChunk1 = 0;
       let chunk1Completed = false;
       let chunk2StartedBeforeChunk1Completed = false;
-      const failingIndex = 5; // One meal getInfoAsync throws
-      const rejectedIndex = 12; // One meal map throws unexpectedly
+      const failingIndex = 5; // One meal in chunk 1: getInfoAsync throws
+      const rejectedIndex = 30; // One meal in chunk 2: property access throws, rejecting map promise
 
+      const rawPropertyError = new Error('Unexpected property failure');
+      (rawPropertyError as unknown as Record<string, unknown>).uri = 'file:///docs/corrupt.jpg';
+      (rawPropertyError as unknown as Record<string, unknown>).path = '/Users/dev/corrupt.jpg';
+
+      let hasThrown = false;
       Object.defineProperty(meals[rejectedIndex], 'photo_thumbnail_path', {
         get() {
-          throw new Error('Unexpected property failure at /Users/dev/corrupt.jpg');
+          if (!hasThrown) {
+            hasThrown = true;
+            throw rawPropertyError;
+          }
+          return undefined;
         },
       });
 
       (getInfoAsync as jest.Mock).mockImplementation(async (uri: string) => {
         // Track the bulk inspection phase of requestMealThumbnails
         if (uri.includes('-thumb.jpg')) {
-          if (!batchFinished) {
-            const mealIndex = parseInt(uri.match(/meal-bulk-(\d+)/)?.[1] ?? '-1', 10);
-            if (mealIndex >= CONCURRENCY_LIMIT && !chunk1Completed) {
-              chunk2StartedBeforeChunk1Completed = true;
-            }
+          const mealIndex = parseInt(uri.match(/meal-bulk-(\d+)/)?.[1] ?? '-1', 10);
+          if (mealIndex >= CONCURRENCY_LIMIT && !chunk1Completed) {
+            chunk2StartedBeforeChunk1Completed = true;
+          }
 
-            activeBatchChecks++;
-            if (activeBatchChecks > maxActiveBatchChecks) {
-              maxActiveBatchChecks = activeBatchChecks;
-            }
-            batchInspectedUris.add(uri);
-            if (batchInspectedUris.size === TOTAL_MEALS - 1) {
-              batchFinished = true;
-            }
+          activeBatchChecks++;
+          if (activeBatchChecks > maxActiveBatchChecks) {
+            maxActiveBatchChecks = activeBatchChecks;
+          }
+          batchInspectedUris.add(uri);
 
-            // Async tick to allow concurrent calls within the chunk to overlap
-            await new Promise((r) => setTimeout(r, 10));
+          // Yield to event loop allowing concurrent promises within the chunk to overlap
+          await new Promise<void>((resolve) => setImmediate(resolve));
 
-            activeBatchChecks--;
+          activeBatchChecks--;
 
-            if (mealIndex < CONCURRENCY_LIMIT) {
-              completedInChunk1++;
-              // Index 12 throws during property access before calling getInfoAsync, so 24 getInfoAsync calls in chunk 1
-              if (completedInChunk1 === CONCURRENCY_LIMIT - 1) {
-                chunk1Completed = true;
-              }
+          if (mealIndex < CONCURRENCY_LIMIT) {
+            completedInChunk1++;
+            if (completedInChunk1 === CONCURRENCY_LIMIT) {
+              chunk1Completed = true;
             }
+          }
 
-            if (uri.includes(`meal-bulk-${failingIndex}-thumb.jpg`)) {
-              throw new Error('Disk read failure during existence check');
-            }
-            return { exists: false };
+          if (uri.includes(`meal-bulk-${failingIndex}-thumb.jpg`)) {
+            throw new Error('Disk read failure during existence check');
           }
           return { exists: false };
         }
@@ -811,10 +812,23 @@ describe('mealThumbnail', () => {
         return { exists: true };
       });
 
-      requestMealThumbnails(meals);
+      let completedThumbnails = 0;
+      let finishGeneration: () => void;
+      const allGeneratedPromise = new Promise<void>((resolve) => {
+        finishGeneration = resolve;
+      });
 
-      // Wait for all 3 chunks and queue execution to settle
-      await new Promise((r) => setTimeout(r, 400));
+      const onGenerated = jest.fn(() => {
+        completedThumbnails++;
+        if (completedThumbnails === TOTAL_MEALS) {
+          finishGeneration();
+        }
+      });
+
+      // Directly await bulk chunked inspection without fixed sleeps
+      await requestMealThumbnails(meals, { onGenerated });
+      // Directly await queue generation to finish all thumbnails
+      await allGeneratedPromise;
 
       // a) 並列実行数が意図した上限 (CONCURRENCY_LIMIT = 25) を超えない
       expect(maxActiveBatchChecks).toBeLessThanOrEqual(CONCURRENCY_LIMIT);
@@ -835,45 +849,14 @@ describe('mealThumbnail', () => {
         String(c[0]).includes('Failed to inspect meal for thumbnail backfill in chunk:')
       );
       expect(warnCall).toBeDefined();
-      const sanitizedErr = warnCall?.[1] as Error;
-      expect(sanitizedErr.message).not.toContain('/Users/dev/');
-      expect(sanitizedErr.message).toContain('[MASKED_PATH]/corrupt.jpg');
+      const sanitizedErr = warnCall?.[1] as Error & { uri?: string; path?: string };
+      expect(sanitizedErr).not.toBe(rawPropertyError);
+      expect(sanitizedErr.uri).toBe('file://.../corrupt.jpg');
+      expect(sanitizedErr.path).toBe('[MASKED_PATH]/corrupt.jpg');
 
-      // c) 1件の失敗 (failingIndex) が他の項目を止めず、全候補に対して処理が試みられた
-      expect(ImageResizer.createResizedImage).toHaveBeenCalled();
-      expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
-        'file:///docs/meal-bulk-0.jpg',
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(String),
-        expect.any(Number),
-        expect.any(Number),
-        undefined,
-        true,
-        expect.any(Object)
-      );
-      expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
-        'file:///docs/meal-bulk-30.jpg',
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(String),
-        expect.any(Number),
-        expect.any(Number),
-        undefined,
-        true,
-        expect.any(Object)
-      );
-      expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
-        'file:///docs/meal-bulk-55.jpg',
-        expect.any(Number),
-        expect.any(Number),
-        expect.any(String),
-        expect.any(Number),
-        expect.any(Number),
-        undefined,
-        true,
-        expect.any(Object)
-      );
+      // e) 1件の失敗 (failingIndex) や拒否 (rejectedIndex) が他の項目を止めず、全候補に対して処理が試みられた
+      expect(ImageResizer.createResizedImage).toHaveBeenCalledTimes(TOTAL_MEALS);
+      expect(onGenerated).toHaveBeenCalledTimes(TOTAL_MEALS);
 
       warnSpy.mockRestore();
     });

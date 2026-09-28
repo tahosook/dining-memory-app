@@ -252,8 +252,8 @@ export const THUMBNAIL_CHECK_CHUNK_SIZE = CONCURRENCY_LIMIT;
 export function requestMealThumbnails(
   meals: Pick<Meal, 'id' | 'photo_path' | 'photo_thumbnail_path'>[],
   options?: ThumbnailRequestOptions
-): void {
-  (async () => {
+): Promise<void> {
+  return (async () => {
     const candidateMeals: (Pick<Meal, 'id' | 'photo_path' | 'photo_thumbnail_path'> | null)[] = [];
 
     for (let i = 0; i < meals.length; i += CONCURRENCY_LIMIT) {
