@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { ScreenStateCard } from '../../components/common/ScreenStateCard';
 import { Colors } from '../../constants/Colors';
 import { MealService, type StatisticsSummary } from '../../database/services/MealService';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 const emptyStats: StatisticsSummary = {
   totalMeals: 0,
@@ -45,7 +46,7 @@ export default function StatsScreen() {
       if (requestId !== activeStatsRequestIdRef.current) {
         return;
       }
-      console.error('Failed to load stats:', error);
+      console.error('Failed to load stats:', sanitizeLogObject(error));
       setErrorMessage('統計情報の更新に失敗しました。');
     } finally {
       if (requestId === activeStatsRequestIdRef.current) {
