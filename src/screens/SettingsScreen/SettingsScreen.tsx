@@ -47,6 +47,7 @@ import { MealService } from '../../database/services/MealService';
 import { RuntimeStatusCard } from '../../components/screens/SettingsScreen/RuntimeStatusCard';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
 import { BackupService } from '../../database/services/BackupService';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 type ModelActionState = 'idle' | 'downloading' | 'deleting';
 type BackupActionState = 'idle' | 'exporting' | 'importing';
@@ -82,7 +83,7 @@ export default function SettingsScreen() {
       const nextEnabled = await AppSettingsService.getAiInputAssistEnabled();
       setAiInputAssistEnabled(nextEnabled);
     } catch (error) {
-      console.error('Failed to load AI input assist setting:', error);
+      console.error('Failed to load AI input assist setting:', sanitizeLogObject(error));
       setAiInputAssistEnabled(false);
     } finally {
       setAiInputAssistLoading(false);
@@ -96,7 +97,7 @@ export default function SettingsScreen() {
       const nextStatus = await getMealInputAssistModelStatus();
       setMealInputAssistModelStatus(nextStatus);
     } catch (error) {
-      console.error('Failed to load meal input assist model status:', error);
+      console.error('Failed to load meal input assist model status:', sanitizeLogObject(error));
       setMealInputAssistModelStatus(null);
     } finally {
       setMealInputAssistModelStatusLoading(false);
@@ -110,7 +111,7 @@ export default function SettingsScreen() {
       const snapshot = await getLocalAiRuntimeStatusSnapshot();
       setLocalAiRuntimeStatus(snapshot);
     } catch (error) {
-      console.error('Failed to load local AI runtime status:', error);
+      console.error('Failed to load local AI runtime status:', sanitizeLogObject(error));
       setLocalAiRuntimeStatus(null);
     } finally {
       setLocalAiRuntimeStatusLoading(false);
@@ -131,7 +132,7 @@ export default function SettingsScreen() {
       const nextStatus = await getMediaPipeModelStatus();
       setMediaPipeModelStatus(nextStatus);
     } catch (error) {
-      console.error('Failed to load MediaPipe model status:', error);
+      console.error('Failed to load MediaPipe model status:', sanitizeLogObject(error));
       setMediaPipeModelStatus(null);
     } finally {
       setMediaPipeModelStatusLoading(false);
@@ -152,7 +153,7 @@ export default function SettingsScreen() {
     try {
       await AppSettingsService.setAiInputAssistEnabled(nextValue);
     } catch (error) {
-      console.error('Failed to save AI input assist setting:', error);
+      console.error('Failed to save AI input assist setting:', sanitizeLogObject(error));
       setAiInputAssistEnabled(current => !current);
       Alert.alert(
         '設定を保存できませんでした',
@@ -180,7 +181,7 @@ export default function SettingsScreen() {
         await reloadLocalAiSection();
         Alert.alert('ダウンロード完了', 'AI入力補助に必要なデータを端末に保存しました。');
       } catch (error) {
-        console.error('Failed to download meal input assist model:', error);
+        console.error('Failed to download meal input assist model:', sanitizeLogObject(error));
         await reloadLocalAiSection().catch(() => undefined);
         const message =
           error instanceof Error && error.message
@@ -212,7 +213,7 @@ export default function SettingsScreen() {
               await Promise.all([reloadLocalAiSection(), loadMediaPipeModelStatus()]);
               Alert.alert('削除完了', 'ダウンロード済みモデルを削除しました。');
             } catch (error) {
-              console.error('Failed to delete downloaded AI models:', error);
+              console.error('Failed to delete downloaded AI models:', sanitizeLogObject(error));
               await Promise.all([
                 reloadLocalAiSection().catch(() => undefined),
                 loadMediaPipeModelStatus().catch(() => undefined),
@@ -250,7 +251,7 @@ export default function SettingsScreen() {
         await loadMediaPipeModelStatus();
         Alert.alert('ダウンロード完了', `${MEDIAPIPE_MODEL_DISPLAY_NAME} を端末に保存しました。`);
       } catch (error) {
-        console.error('Failed to download MediaPipe model:', error);
+        console.error('Failed to download MediaPipe model:', sanitizeLogObject(error));
         await loadMediaPipeModelStatus().catch(() => undefined);
         const message =
           error instanceof Error && error.message
@@ -282,7 +283,7 @@ export default function SettingsScreen() {
               await loadMediaPipeModelStatus();
               Alert.alert('削除完了', `${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除しました。`);
             } catch (error) {
-              console.error('Failed to delete MediaPipe model:', error);
+              console.error('Failed to delete MediaPipe model:', sanitizeLogObject(error));
               await loadMediaPipeModelStatus().catch(() => undefined);
               const message =
                 error instanceof Error && error.message
@@ -325,7 +326,7 @@ export default function SettingsScreen() {
         `食事記録 ${result.mealCount}件、写真 ${result.photoCount}枚をバックアップファイルとして書き出しました。`
       );
     } catch (error) {
-      console.error('Failed to export backup:', error);
+      console.error('Failed to export backup:', sanitizeLogObject(error));
       const message =
         error instanceof Error && error.message
           ? error.message
@@ -379,7 +380,7 @@ export default function SettingsScreen() {
                   `食事記録 ${restoreResult.restoredMealCount}件、写真 ${restoreResult.restoredPhotoCount}枚を復元しました。`
                 );
               } catch (restoreError) {
-                console.error('Failed to restore backup:', restoreError);
+                console.error('Failed to restore backup:', sanitizeLogObject(restoreError));
                 const message =
                   restoreError instanceof Error && restoreError.message
                     ? restoreError.message
@@ -393,7 +394,7 @@ export default function SettingsScreen() {
         ]
       );
     } catch (error) {
-      console.error('Failed to import backup:', error);
+      console.error('Failed to import backup:', sanitizeLogObject(error));
       const message =
         error instanceof Error && error.message
           ? error.message
