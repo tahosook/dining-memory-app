@@ -9,8 +9,8 @@ AI エージェントがこの repo で自律的に活動しつつ品質とガ�
    - 言い訳（「保守性向上」「テスト容易性」等の再フレーミング）によるすり抜けを防ぐため、細かな禁止構文の列挙でエージェントを縛るアプローチを廃止し、機械的判定（Machine Gate）と客観的証拠（Evidence）の2軸で強制します。
 2. **機械的判定への完全オフロード (No machine gate, no trust)**:
    - 差分ゼロ、テスト削除・弱体化は CI / スクリプト (`scripts/verify-pr-gates.sh`) で物理的にブロックし、`any` やエスケープハッチ（`@ts-ignore` 等）は ESLint で静的にブロックします。PR 本文の Evidence 欠落は Warning（警告）として可視化します。
-3. **客観的証拠の義務化 (No evidence, no PR)**:
-   - 具体的な課題と客観的証拠（失敗テストログ、実測ベンチマーク、EXPLAIN QUERY PLAN 等）が示されない PR は作成しません。
+3. **客観的証拠の原則 (Evidence-based PRs)**:
+   - PR では客観的証拠（失敗テストログ、実測ベンチマーク、EXPLAIN QUERY PLAN 等）を提示することを原則とします。ただし PR 本文の Evidence Gate 欠落は CI failure ではなく Warning として通知します。
 4. **「変更しないこと」の成功定義 (No actionable finding, stop)**:
    - 調査の結果、安全に対処すべき問題がない場合、無理にコード変更を捏造（manufacture）せず「変更なし」で調査レポートを残してタスク完了（成功）とします。
 

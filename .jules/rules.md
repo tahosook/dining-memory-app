@@ -4,8 +4,8 @@
 > In case of conflict, this file takes precedence.
 
 ## Core Principles (Non-negotiable)
-1. **No evidence, no PR**:
-   客観的証拠（失敗するテスト、実測ベンチマーク、EXPLAIN 計画等）が提示されない変更は PR を作成しない。
+1. **客観的証拠の原則 (Evidence-based PRs)**:
+   PR では客観的証拠（失敗するテスト、実測ベンチマーク、EXPLAIN 計画等）を提示することを原則とする。ただし PR 本文の Evidence Gate 欠落は CI failure ではなく Warning として通知する。
 2. **No actionable finding, stop**:
    調査の結果、安全に対処すべき具体的な問題が存在しない場合は、無理にコード変更を捏造（manufacture）せず、「変更なし（調査レポートのみ）」でタスクを正常終了（最善の成果）とする。
 
