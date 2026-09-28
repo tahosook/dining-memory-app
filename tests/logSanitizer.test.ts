@@ -119,6 +119,22 @@ describe('logSanitizer', () => {
       expect(sanitized.message).toBe('Failed to open file://.../meal-202.jpg');
     });
 
+    it('sanitizes Windows absolute paths in Error.message and Error.stack', () => {
+      const rawWinPath = 'C:\\Users\\developer\\project\\config.json';
+      const error = new Error(`Failed to read ${rawWinPath}`);
+      error.stack = `Error: Failed to read\n    at load (${rawWinPath}:15:4)`;
+      const sanitized = sanitizeLogObject(error);
+
+      expect(sanitized).toBeInstanceOf(Error);
+      expect(sanitized.message).not.toContain('C:\\Users\\developer\\');
+      expect(sanitized.message).not.toContain(rawWinPath);
+      expect(sanitized.message).toBe('Failed to read [MASKED_PATH]/config.json');
+
+      expect(sanitized.stack).toBeDefined();
+      expect(sanitized.stack).not.toContain('C:\\Users\\developer\\');
+      expect(sanitized.stack).toContain('[MASKED_PATH]/config.json:15:4');
+    });
+
     it('sanitizes absolute paths in Error.stack', () => {
       const rawPath = '/Users/developer/project/src/screens/SettingsScreen.tsx';
       const error = new Error('Something failed');
