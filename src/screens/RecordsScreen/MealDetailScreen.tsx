@@ -21,6 +21,7 @@ import {
 } from '../../components/common/MealPhotoViewer';
 import { Colors } from '../../constants/Colors';
 import { MealService } from '../../database/services/MealService';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 import { useMealInputAssist } from '../../hooks/cameraCapture/useMealInputAssist';
 import type { Meal } from '../../types/MealTypes';
 import type {
@@ -297,7 +298,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
       setEditingMeal(null);
     } catch (error) {
-      console.error('Failed to update meal:', error);
+      console.error('Failed to update meal:', sanitizeLogObject(error));
       Alert.alert('エラー', '更新に失敗しました。');
     } finally {
       setSavingEdit(false);
@@ -365,7 +366,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             await MealService.softDeleteMeal(meal.id);
             navigation.goBack();
           } catch (error) {
-            console.error('Failed to delete meal:', error);
+            console.error('Failed to delete meal:', sanitizeLogObject(error));
             Alert.alert('エラー', '削除に失敗しました。');
           }
         },
@@ -407,7 +408,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
       setShareComposerVisible(false);
     } catch (error) {
-      console.error('Failed to open share sheet:', error);
+      console.error('Failed to open share sheet:', sanitizeLogObject(error));
       Alert.alert('エラー', '共有シートを開けませんでした。');
     }
   }, [meal.meal_name, photoUri, shareText]);

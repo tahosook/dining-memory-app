@@ -481,7 +481,7 @@ describe('MealDetailScreen', () => {
   });
 
   test('shows an alert and keeps the edit modal open when meal update fails', async () => {
-    const error = new Error('update failed');
+    const error = new Error('update failed: /Users/developer/data/db.sqlite');
     (MealService.updateMeal as jest.Mock).mockRejectedValue(error);
 
     const { getByTestId } = render(<MealDetailScreen {...createProps()} />);
@@ -493,7 +493,12 @@ describe('MealDetailScreen', () => {
       expect(Alert.alert).toHaveBeenCalledWith('エラー', '更新に失敗しました。');
     });
 
-    expect(console.error).toHaveBeenCalledWith('Failed to update meal:', error);
+    expect(console.error).toHaveBeenCalledWith(
+      'Failed to update meal:',
+      expect.objectContaining({
+        message: 'update failed: [MASKED_PATH]/db.sqlite',
+      })
+    );
 
     // The modal should still be visible because setEditingMeal(null) wasn't called
     expect(getByTestId('detail-edit-save-button')).toBeTruthy();
@@ -793,7 +798,8 @@ describe('MealDetailScreen', () => {
   });
 
   test('shows an alert when shareMealContent fails', async () => {
-    jest.spyOn(MealShareModule, 'shareMealContent').mockRejectedValueOnce(new Error('share failed'));
+    const error = new Error('share failed: /data/user/0/com.app/photos/meal.jpg');
+    jest.spyOn(MealShareModule, 'shareMealContent').mockRejectedValueOnce(error);
 
     const { getByTestId, getByText } = render(<MealDetailScreen {...createProps()} />);
 
@@ -806,6 +812,39 @@ describe('MealDetailScreen', () => {
     await waitFor(() => {
       expect(Alert.alert).toHaveBeenCalledWith('エラー', '共有シートを開けませんでした。');
     });
+    expect(console.error).toHaveBeenCalledWith(
+      'Failed to open share sheet:',
+      expect.objectContaining({
+        message: 'share failed: [MASKED_PATH]/meal.jpg',
+      })
+    );
+  });
+
+  test('shows an alert and logs sanitized error when meal deletion fails', async () => {
+    const props = createProps();
+    const error = new Error('delete failed: /Users/developer/data/db.sqlite');
+    (MealService.softDeleteMeal as jest.Mock).mockRejectedValueOnce(error);
+
+    const { getByTestId } = render(<MealDetailScreen {...props} />);
+
+    fireEvent.press(getByTestId('meal-detail-delete-button'));
+
+    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as {
+      text: string;
+      onPress?: () => void;
+    }[];
+
+    await act(async () => {
+      await buttons.find(button => button.text === '削除')?.onPress?.();
+    });
+
+    expect(console.error).toHaveBeenCalledWith(
+      'Failed to delete meal:',
+      expect.objectContaining({
+        message: 'delete failed: [MASKED_PATH]/db.sqlite',
+      })
+    );
+    expect(Alert.alert).toHaveBeenCalledWith('エラー', '削除に失敗しました。');
   });
 
   test('uses MealShare native module on Android when available', async () => {
