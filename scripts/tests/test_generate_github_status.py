@@ -49,8 +49,8 @@ class GenerateGitHubStatusTests(unittest.TestCase):
         assert issue_08 is not None
         self.assertEqual(issue_08.github_issue_num, 80)
         self.assertIn("将来トリガー待ち", issue_08.status)
-        self.assertEqual(issue_08.completed_criteria, 0)
-        self.assertGreater(issue_08.total_criteria, 0)
+        self.assertEqual(issue_08.completed_criteria, 7)
+        self.assertEqual(issue_08.total_criteria, 7)
 
     def test_is_later_issue(self) -> None:
         doc_map = {

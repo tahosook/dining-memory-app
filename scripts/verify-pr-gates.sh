@@ -145,20 +145,20 @@ if [ -n "$PR_BODY_INPUT" ]; then
       {
         id: "evidence",
         label: "### 客観的証拠 (Evidence)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark)/i,
-        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / Verification"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark|Before\/After|\bCoverage\b)/i,
+        hint: "客観的証拠 (Evidence) / Evidence / 📊 Measured Improvement / Verification / Before/After / Coverage"
       },
       {
         id: "expected_impact",
         label: "### 期待される効果 (Expected Impact)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:期待される効果|効果|Expected Impact|\bImpact\b|\bWhy\b)/i,
-        hint: "期待される効果 (Expected Impact) / Expected Impact / 🎯 Why"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:期待される効果|効果|Expected Impact|\bImpact\b|\bWhy\b|\bResult\b)/i,
+        hint: "期待される効果 (Expected Impact) / Expected Impact / 🎯 Why / Result"
       },
       {
         id: "out_of_scope",
         label: "### 意図して変更しなかったこと (Out of Scope)",
-        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:意図して変更しなかったこと|変更しなかったこと|スコープ外|Out of Scope|Non-?Goals?)/i,
-        hint: "意図して変更しなかったこと (Out of Scope) / Out of Scope / Non-Goals"
+        pattern: /(?:^|\n)#{1,4}[^\n]*?(?:意図して変更しなかったこと|変更しなかったこと|スコープ外|Out of Scope|Non-?Goals?|\bAccessibility\b)/i,
+        hint: "意図して変更しなかったこと (Out of Scope) / Out of Scope / Non-Goals / Accessibility"
       },
     ];
 
@@ -177,7 +177,7 @@ if [ -n "$PR_BODY_INPUT" ]; then
     }
 
     // Extract Evidence section content up to the next heading or horizontal rule
-    const evidenceMatch = body.match(/(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark)[^\n]*\n([\s\S]*?)(?=(?:\n#{1,4}\s+|\n---|$(?![\s\S])))/i);
+    const evidenceMatch = body.match(/(?:^|\n)#{1,4}[^\n]*?(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark|Before\/After|\bCoverage\b)[^\n]*\n([\s\S]*?)(?=(?:\n#{1,4}\s+|\n---|$(?![\s\S])))/i);
     const rawEvidence = evidenceMatch ? evidenceMatch[1] : "";
 
     // Strip HTML comments <!-- ... -->

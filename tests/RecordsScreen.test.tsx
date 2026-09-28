@@ -767,4 +767,58 @@ describe('RecordsScreen', () => {
     // リフレッシュ時も先頭から再フェッチされる
     expect(MealService.getRecentMeals).toHaveBeenLastCalledWith(50);
   });
+
+  test('logs sanitized error and shows alert when initial load fails', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+    const rawError = new Error('load failed: /Users/developer/data/records.sqlite');
+    (MealService.getRecentMeals as jest.Mock).mockRejectedValueOnce(rawError);
+
+    render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to load meals:',
+      expect.objectContaining({
+        message: 'load failed: [MASKED_PATH]/records.sqlite',
+      })
+    );
+    expect(Alert.alert).toHaveBeenCalledWith('エラー', '食事記録の読み込みに失敗しました。');
+    consoleErrorSpy.mockRestore();
+  });
+
+  test('logs sanitized error when load more fails', async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+    const initialMeals = Array.from({ length: 50 }, (_, i) => ({
+      id: `init-${i}`,
+      uuid: `uuid-${i}`,
+      meal_name: `初期料理 ${i}`,
+      meal_datetime: new Date('2026-04-12T12:00:00+09:00').getTime() - i * 1000,
+      is_homemade: false,
+      photo_path: `file:///init-${i}.jpg`,
+      is_deleted: false,
+      created_at: 1,
+      updated_at: 1,
+    }));
+
+    (MealService.getRecentMeals as jest.Mock)
+      .mockResolvedValueOnce(initialMeals)
+      .mockRejectedValueOnce(new Error('load more failed: /data/user/0/app/cache/db.sqlite'));
+
+    const { getByTestId } = render(<RecordsScreen />);
+    await triggerLatestFocus();
+
+    const sectionList = getByTestId('records-section-list');
+    await act(async () => {
+      sectionList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to load more meals:',
+      expect.objectContaining({
+        message: 'load more failed: [MASKED_PATH]/db.sqlite',
+      })
+    );
+    consoleErrorSpy.mockRestore();
+  });
 });

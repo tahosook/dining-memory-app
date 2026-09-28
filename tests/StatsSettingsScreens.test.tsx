@@ -208,7 +208,7 @@ describe('StatsScreen', () => {
 
   test('shows an error card with retry when the initial load fails', async () => {
     (MealService.getStatistics as jest.Mock)
-      .mockRejectedValueOnce(new Error('stats failed'))
+      .mockRejectedValueOnce(new Error('stats failed: /Users/developer/data/stats.db'))
       .mockResolvedValueOnce({
         totalMeals: 0,
         homemadeMeals: 0,
@@ -219,6 +219,12 @@ describe('StatsScreen', () => {
     await triggerLatestFocus();
 
     expect(await findByTestId('stats-error')).toBeTruthy();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to load stats:',
+      expect.objectContaining({
+        message: 'stats failed: [MASKED_PATH]/stats.db',
+      })
+    );
 
     fireEvent.press(await findByTestId('stats-error-action'));
 

@@ -99,14 +99,21 @@ describe('SearchScreen', () => {
   });
 
   test('shows an error card and retry action when the initial search fails', async () => {
+    const rawError = new Error('search failed at /Users/developer/data/db.sqlite');
     (MealService.searchMeals as jest.Mock)
-      .mockRejectedValueOnce(new Error('search failed'))
+      .mockRejectedValueOnce(rawError)
       .mockResolvedValueOnce([]);
 
     const { findByTestId } = render(<SearchScreen />);
     await triggerLatestFocus();
 
     expect(await findByTestId('search-error')).toBeTruthy();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to search meals:',
+      expect.objectContaining({
+        message: 'search failed at [MASKED_PATH]/db.sqlite',
+      })
+    );
 
     fireEvent.press(await findByTestId('search-error-action'));
 
@@ -455,6 +462,33 @@ describe('SearchScreen', () => {
     // 新しい検索結果 'curry-1' のみが表示され、古い loadMore の 'stale-page2' は混入しない
     expect(await findByTestId('search-result-curry-1')).toBeTruthy();
     expect(queryByTestId('search-result-stale-page2')).toBeNull();
+  });
+
+  test('sanitizes error log when load more search results fails', async () => {
+    const page1Meals = Array.from({ length: 60 }, (_, i) =>
+      createMeal({ id: `page1-${i}`, meal_name: `食事1-${i}` })
+    );
+    (MealService.searchMeals as jest.Mock)
+      .mockResolvedValueOnce(page1Meals)
+      .mockRejectedValueOnce(new Error('pagination error: /data/user/0/app/cache/db.sqlite'));
+
+    const { findByTestId } = render(<SearchScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByTestId('search-result-page1-0')).toBeTruthy();
+
+    const flatList = await findByTestId('search-results-list');
+    await act(async () => {
+      flatList.props.onEndReached?.();
+      await Promise.resolve();
+    });
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to load more search results:',
+      expect.objectContaining({
+        message: 'pagination error: [MASKED_PATH]/db.sqlite',
+      })
+    );
   });
 });
 
