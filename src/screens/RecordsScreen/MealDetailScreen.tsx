@@ -21,6 +21,7 @@ import {
 } from '../../components/common/MealPhotoViewer';
 import { Colors } from '../../constants/Colors';
 import { MealService } from '../../database/services/MealService';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 import { useMealInputAssist } from '../../hooks/cameraCapture/useMealInputAssist';
 import type { Meal } from '../../types/MealTypes';
 import type {
@@ -297,7 +298,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
       setEditingMeal(null);
     } catch (error) {
-      console.error('Failed to update meal:', error);
+      console.error('Failed to update meal:', sanitizeLogObject(error));
       Alert.alert('エラー', '更新に失敗しました。');
     } finally {
       setSavingEdit(false);
@@ -365,7 +366,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             await MealService.softDeleteMeal(meal.id);
             navigation.goBack();
           } catch (error) {
-            console.error('Failed to delete meal:', error);
+            console.error('Failed to delete meal:', sanitizeLogObject(error));
             Alert.alert('エラー', '削除に失敗しました。');
           }
         },
@@ -407,7 +408,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
 
       setShareComposerVisible(false);
     } catch (error) {
-      console.error('Failed to open share sheet:', error);
+      console.error('Failed to open share sheet:', sanitizeLogObject(error));
       Alert.alert('エラー', '共有シートを開けませんでした。');
     }
   }, [meal.meal_name, photoUri, shareText]);
@@ -445,6 +446,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         {detailMeals.length > 1 ? (
           <View style={styles.photoNavRow}>
             <TouchableOpacity
+              accessibilityRole="button"
               accessibilityLabel="前の食事記録へ"
               accessibilityState={{ disabled: !canNavigateDetail || isAtFirstMeal }}
               disabled={!canNavigateDetail || isAtFirstMeal}
@@ -458,6 +460,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
               <Text style={styles.photoNavButtonText}>前の記録</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              accessibilityRole="button"
               accessibilityLabel="次の食事記録へ"
               accessibilityState={{ disabled: !canNavigateDetail || isAtLastMeal }}
               disabled={!canNavigateDetail || isAtLastMeal}
@@ -488,6 +491,8 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             style={styles.secondaryButton}
             onPress={openEditModal}
             testID="meal-detail-edit-button"
+            accessibilityRole="button"
+            accessibilityLabel="編集"
           >
             <Text style={styles.secondaryButtonText}>編集</Text>
           </TouchableOpacity>
@@ -495,6 +500,8 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             style={styles.primaryButton}
             onPress={openShareComposer}
             testID="meal-detail-share-button"
+            accessibilityRole="button"
+            accessibilityLabel="共有"
           >
             <Text style={styles.primaryButtonText}>共有</Text>
           </TouchableOpacity>
@@ -502,6 +509,8 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
             style={styles.dangerButton}
             onPress={confirmDelete}
             testID="meal-detail-delete-button"
+            accessibilityRole="button"
+            accessibilityLabel="削除"
           >
             <Text style={styles.dangerButtonText}>削除</Text>
           </TouchableOpacity>
@@ -582,6 +591,8 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
                 style={styles.secondaryButton}
                 onPress={() => setShareComposerVisible(false)}
                 testID="share-cancel-button"
+                accessibilityRole="button"
+                accessibilityLabel="閉じる"
               >
                 <Text style={styles.secondaryButtonText}>閉じる</Text>
               </TouchableOpacity>
@@ -589,6 +600,8 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
                 style={styles.primaryButton}
                 onPress={submitShare}
                 testID="share-submit-button"
+                accessibilityRole="button"
+                accessibilityLabel="共有を開く"
               >
                 <Text style={styles.primaryButtonText}>共有を開く</Text>
               </TouchableOpacity>

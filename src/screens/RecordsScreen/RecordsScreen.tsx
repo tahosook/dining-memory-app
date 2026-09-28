@@ -19,6 +19,7 @@ import type { RootStackParamList } from '../../navigation/types';
 import { getMealListImageUri } from '../../utils/mealImage';
 import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
 import { requestMealThumbnails } from '../../media/mealThumbnail';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 interface MealSection {
   date: string;
@@ -253,7 +254,7 @@ export const RecordsScreen: React.FC = () => {
       if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
         return;
       }
-      console.error('Failed to load meals:', error);
+      console.error('Failed to load meals:', sanitizeLogObject(error));
       Alert.alert('エラー', '食事記録の読み込みに失敗しました。');
     } finally {
       if (loadId === activeLoadIdRef.current && isMountedRef.current) {
@@ -322,7 +323,7 @@ export const RecordsScreen: React.FC = () => {
       if (loadId !== activeLoadIdRef.current || !isMountedRef.current) {
         return;
       }
-      console.error('Failed to load more meals:', error);
+      console.error('Failed to load more meals:', sanitizeLogObject(error));
     } finally {
       if (loadId === activeLoadIdRef.current && isMountedRef.current) {
         loadingMoreRef.current = false;

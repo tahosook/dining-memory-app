@@ -72,7 +72,7 @@ jobs:
         run: npm ci
 
       - name: Test
-        run: npm run test:coverage -- --runInBand
+        run: npm run test:coverage
 
   native-build:
     runs-on: ubuntu-latest

@@ -31,6 +31,8 @@ export function ScreenStateCard({
           style={styles.actionButton}
           onPress={onAction}
           testID={testIDPrefix ? `${testIDPrefix}-action` : undefined}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
         >
           <Text style={styles.actionText}>{actionLabel}</Text>
         </TouchableOpacity>
