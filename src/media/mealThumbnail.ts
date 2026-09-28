@@ -5,7 +5,6 @@ import { MealService } from '../database/services/MealService';
 import type { Meal } from '../types/MealTypes';
 import { persistThumbnailToStablePath } from './photoStorage';
 import { cleanupTempFile } from './tempFiles';
-import { sanitizeLogObject } from '../utils/logSanitizer';
 
 export const MAX_CONCURRENT_THUMBNAILS = 2;
 
@@ -234,67 +233,37 @@ export function requestMealThumbnail(
       }
     })
     .catch(error => {
-      console.warn(
-        `Background thumbnail request failed for meal ${mealId}:`,
-        sanitizeLogObject(error)
-      );
+      console.warn(`Background thumbnail request failed for meal ${mealId}:`, error);
     });
 }
-
-// Practical implementation choice for batching getInfoAsync calls during bulk thumbnail
-// inspection. This bounds concurrent file system calls to avoid bridge congestion and memory
-// pressure in React Native Expo, without starving execution.
-// Note: CONCURRENCY_LIMIT (25) is distinct from MAX_CONCURRENT_THUMBNAILS (2), which limits
-// active thumbnail generation tasks in the queue.
-export const CONCURRENCY_LIMIT = 25;
-export const THUMBNAIL_CHECK_CHUNK_SIZE = CONCURRENCY_LIMIT;
 
 export function requestMealThumbnails(
   meals: Pick<Meal, 'id' | 'photo_path' | 'photo_thumbnail_path'>[],
   options?: ThumbnailRequestOptions
-): Promise<void> {
-  return (async () => {
-    const candidateMeals: (Pick<Meal, 'id' | 'photo_path' | 'photo_thumbnail_path'> | null)[] = [];
-
-    for (let i = 0; i < meals.length; i += CONCURRENCY_LIMIT) {
-      const chunk = meals.slice(i, i + CONCURRENCY_LIMIT);
-      const results = await Promise.allSettled(
-        chunk.map(async meal => {
-          if (!meal.photo_path) {
-            return null;
-          }
-
-          if (!meal.photo_thumbnail_path) {
-            return meal;
-          }
-
-          try {
-            const info = await getInfoAsync(meal.photo_thumbnail_path);
-            if (!info.exists) {
-              return meal;
-            }
-          } catch {
-            return meal;
-          }
-
+): void {
+  (async () => {
+    const candidateMeals = await Promise.all(
+      meals.map(async meal => {
+        if (!meal.photo_path) {
           return null;
-        })
-      );
-
-      for (let j = 0; j < results.length; j++) {
-        const result = results[j];
-        if (result.status === 'fulfilled') {
-          candidateMeals.push(result.value);
-        } else {
-          console.warn(
-            'Failed to inspect meal for thumbnail backfill in chunk:',
-            sanitizeLogObject(result.reason)
-          );
-          // Fail-safe: treat inspection failure as requiring backfill so generation queue can attempt repair
-          candidateMeals.push(chunk[j]);
         }
-      }
-    }
+
+        if (!meal.photo_thumbnail_path) {
+          return meal;
+        }
+
+        try {
+          const info = await getInfoAsync(meal.photo_thumbnail_path);
+          if (!info.exists) {
+            return meal;
+          }
+        } catch {
+          return meal;
+        }
+
+        return null;
+      })
+    );
 
     for (const meal of candidateMeals) {
       if (meal) {
@@ -302,7 +271,7 @@ export function requestMealThumbnails(
       }
     }
   })().catch(error => {
-    console.warn('Failed to inspect meals for thumbnail backfill:', sanitizeLogObject(error));
+    console.warn('Failed to inspect meals for thumbnail backfill:', error);
   });
 }
 

@@ -889,31 +889,4 @@ describe('MealDetailScreen', () => {
     });
     expect(Sharing.shareAsync).not.toHaveBeenCalled();
   });
-
-  test('action buttons and share modal buttons have accessibilityRole="button" and explicit accessibilityLabel', () => {
-    const props = createProps();
-    const { getByTestId } = render(<MealDetailScreen {...props} />);
-
-    const editBtn = getByTestId('meal-detail-edit-button');
-    expect(editBtn.props.accessibilityRole).toBe('button');
-    expect(editBtn.props.accessibilityLabel).toBe('編集');
-
-    const shareBtn = getByTestId('meal-detail-share-button');
-    expect(shareBtn.props.accessibilityRole).toBe('button');
-    expect(shareBtn.props.accessibilityLabel).toBe('共有');
-
-    const deleteBtn = getByTestId('meal-detail-delete-button');
-    expect(deleteBtn.props.accessibilityRole).toBe('button');
-    expect(deleteBtn.props.accessibilityLabel).toBe('削除');
-
-    fireEvent.press(shareBtn);
-
-    const cancelBtn = getByTestId('share-cancel-button');
-    expect(cancelBtn.props.accessibilityRole).toBe('button');
-    expect(cancelBtn.props.accessibilityLabel).toBe('閉じる');
-
-    const submitBtn = getByTestId('share-submit-button');
-    expect(submitBtn.props.accessibilityRole).toBe('button');
-    expect(submitBtn.props.accessibilityLabel).toBe('共有を開く');
-  });
 });

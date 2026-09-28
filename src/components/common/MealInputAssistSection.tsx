@@ -192,9 +192,6 @@ export const MealInputAssistSection: React.FC<MealInputAssistSectionProps> = ({
         onPress={onRequestSuggestions}
         disabled={actionDisabled}
         testID={resolvedTestIDs.button}
-        accessibilityRole="button"
-        accessibilityLabel={actionLabel}
-        accessibilityState={{ disabled: actionDisabled, busy: status === 'running' }}
       >
         <Text style={styles.buttonText}>{actionLabel}</Text>
       </TouchableOpacity>
@@ -222,8 +219,6 @@ export const MealInputAssistSection: React.FC<MealInputAssistSectionProps> = ({
             ]}
             onPress={() => onApplyNoteDraftSuggestion(noteDraft)}
             testID={resolvedTestIDs.noteDraftApplyButton}
-            accessibilityRole="button"
-            accessibilityLabel="メモに追加"
           >
             <Text
               style={[
