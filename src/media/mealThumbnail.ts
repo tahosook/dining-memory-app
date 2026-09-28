@@ -5,6 +5,7 @@ import { MealService } from '../database/services/MealService';
 import type { Meal } from '../types/MealTypes';
 import { persistThumbnailToStablePath } from './photoStorage';
 import { cleanupTempFile } from './tempFiles';
+import { sanitizeLogObject } from '../utils/logSanitizer';
 
 export const MAX_CONCURRENT_THUMBNAILS = 2;
 
@@ -233,19 +234,26 @@ export function requestMealThumbnail(
       }
     })
     .catch(error => {
-      console.warn(`Background thumbnail request failed for meal ${mealId}:`, error);
+      console.warn(
+        `Background thumbnail request failed for meal ${mealId}:`,
+        sanitizeLogObject(error)
+      );
     });
 }
+
+// Practical implementation choice for batching getInfoAsync calls during bulk thumbnail
+// inspection. This bounds concurrent file system calls to avoid bridge congestion and memory
+// pressure in React Native Expo, without starving execution.
+// Note: CONCURRENCY_LIMIT (25) is distinct from MAX_CONCURRENT_THUMBNAILS (2), which limits
+// active thumbnail generation tasks in the queue.
+export const CONCURRENCY_LIMIT = 25;
+export const THUMBNAIL_CHECK_CHUNK_SIZE = CONCURRENCY_LIMIT;
 
 export function requestMealThumbnails(
   meals: Pick<Meal, 'id' | 'photo_path' | 'photo_thumbnail_path'>[],
   options?: ThumbnailRequestOptions
 ): void {
   (async () => {
-    // Optimization: Use a chunked concurrency limit with Promise.allSettled instead of an unbounded
-    // Promise.all to prevent bridge congestion, EMFILE errors, and Out-Of-Memory crashes when checking
-    // file existence for a large array of meals (e.g., during pagination or background backfill).
-    const CONCURRENCY_LIMIT = 25;
     const candidateMeals: (Pick<Meal, 'id' | 'photo_path' | 'photo_thumbnail_path'> | null)[] = [];
 
     for (let i = 0; i < meals.length; i += CONCURRENCY_LIMIT) {
@@ -273,11 +281,16 @@ export function requestMealThumbnails(
         })
       );
 
-      for (const result of results) {
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j];
         if (result.status === 'fulfilled') {
           candidateMeals.push(result.value);
         } else {
-          console.warn('Failed to inspect meal for thumbnail backfill in chunk:', result.reason);
+          console.warn(
+            'Failed to inspect meal for thumbnail backfill in chunk:',
+            sanitizeLogObject(result.reason)
+          );
+          candidateMeals.push(chunk[j]);
         }
       }
     }
@@ -288,7 +301,7 @@ export function requestMealThumbnails(
       }
     }
   })().catch(error => {
-    console.warn('Failed to inspect meals for thumbnail backfill:', error);
+    console.warn('Failed to inspect meals for thumbnail backfill:', sanitizeLogObject(error));
   });
 }
 
