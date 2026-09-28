@@ -290,6 +290,7 @@ export function requestMealThumbnails(
             'Failed to inspect meal for thumbnail backfill in chunk:',
             sanitizeLogObject(result.reason)
           );
+          // Fail-safe: treat inspection failure as requiring backfill so generation queue can attempt repair
           candidateMeals.push(chunk[j]);
         }
       }
