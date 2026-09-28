@@ -4,8 +4,8 @@
 > In case of conflict, this file takes precedence.
 
 ## Core Principles (Non-negotiable)
-1. **客観的証拠の原則 (Evidence-based PRs)**:
-   PR では客観的証拠（失敗するテスト、実測ベンチマーク、EXPLAIN 計画等）を提示することを原則とする。ただし PR 本文の Evidence Gate 欠落は CI failure ではなく Warning として通知する。
+1. **No evidence, no PR**:
+   客観的証拠（失敗するテスト、実測ベンチマーク、EXPLAIN 計画等）が提示されない変更は PR を作成しない。
 2. **No actionable finding, stop**:
    調査の結果、安全に対処すべき具体的な問題が存在しない場合は、無理にコード変更を捏造（manufacture）せず、「変更なし（調査レポートのみ）」でタスクを正常終了（最善の成果）とする。
 
@@ -30,10 +30,10 @@ PR を起票する前に、以下の全項目を満たしていることを確�
 1. 差分ゼロの PR (`scripts/verify-pr-gates.sh`)
 2. 新規 `any` 型注釈・型アサーション、およびエスケープハッチ (`@ts-ignore`, `@ts-nocheck`) は ESLint (`npm run lint`) によりブロック
 3. `tests/` 配下のテストファイル削除およびテスト弱体化 (`it.skip`, `test.skip`, `describe.skip`, `xit`, `xdescribe`) (`scripts/verify-pr-gates.sh`)
-4. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence は CI（Evidence Gate）により **Warning（警告）** として可視化（Feature/Spec PR は仕様・Issue 参照で可）
+4. PR 本文の必須 4 セクション欠落、空・プレースホルダーのみの Evidence (`scripts/verify-pr-gates.sh`)（Feature/Spec PR は仕様・Issue 参照で可）
 
 ## Mandatory PR Description Template
-PR を作成する際は、Description（PR 本文）に以下の **4 つの見出しをすべて含めること**（欠落やプレースホルダーは CI で Warning として通知される）。
+PR を作成する際は、Description（PR 本文）に以下の **4 つの見出しをすべて含めること**（欠落やプレースホルダーは CI の Evidence Gate でブロックされる。PR 本文修正時は `edited` イベントにより自動再検証される）。
 
 > **Note**: CI の Evidence Gate は見出しレベル h1-h4 のいずれでも認識し、日本語・英語の両方の見出し名（およびエイリアス）に対応している。以下のテンプレートは推奨形式であり、厳密な構文制約ではない。
 

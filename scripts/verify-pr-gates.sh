@@ -7,7 +7,7 @@ set -euo pipefail
 # Machine-enforced PR quality and governance gates:
 # 1. Zero diff check: Blocks empty PRs (No actionable finding, stop without PR).
 # 2. Test protection check: Blocks deletion of test files and introduction of skipped tests.
-# 3. PR body Evidence Gate: Validates mandatory sections and provides warnings for missing Evidence.
+# 3. PR body Evidence Gate: Validates mandatory sections and requires concrete Evidence.
 # Note: Type safety ('any', '@ts-ignore', '@ts-nocheck') is enforced via ESLint in static-analysis.
 # -----------------------------------------------------------------------------
 
@@ -81,7 +81,7 @@ if [ -n "$TEST_WEAKENING_MATCHES" ]; then
 fi
 echo "  ✓ No skipped or weakened tests introduced."
 
-# 3. PR body Evidence Gate (Warning only)
+# 3. PR body Evidence Gate
 # Resolve PR body from stdin, file, environment, or GitHub Actions event file if not explicitly passed
 if [ "$PR_BODY_FILE" = "-" ]; then
   PR_BODY_INPUT=$(cat)
@@ -99,17 +99,9 @@ elif [ -z "$PR_BODY_INPUT" ] && [ -n "${GITHUB_EVENT_PATH:-}" ] && [ -f "$GITHUB
 fi
 
 if [ -n "$PR_BODY_INPUT" ]; then
-  echo "🔍 Verifying PR body Evidence Gate (Warning mode)..."
+  echo "🔍 Verifying PR body Evidence Gate..."
   node -e '
     const body = process.argv[1] || "";
-    const isCI = process.env.GITHUB_ACTIONS === "true";
-
-    function warn(title, message) {
-      if (isCI) {
-        console.log(`::warning title=${title}::${message}`);
-      }
-      console.warn(`⚠️ [GATE WARNING] ${message}`);
-    }
 
     // Evidence section aliases: Japanese, English, and agent verification terms (Measured Improvement, Benchmark)
     const evidenceHeaderTerms = "(?:客観的証拠|証拠|Evidence|Verification|Test Results?|Measured Improvement|Benchmark)";
@@ -152,8 +144,10 @@ if [ -n "$PR_BODY_INPUT" ]; then
     }
 
     if (missing.length > 0) {
-      warn("Evidence Gate (Missing Sections)", "PR body is missing mandatory section(s): " + missing.join(", "));
-      console.warn("   Recommendation: Include all 4 standard governance sections. See .jules/rules.md for the template.");
+      console.error("❌ [GATE FAIL] PR body is missing mandatory section(s):");
+      missing.forEach(m => console.error("   - " + m));
+      console.error("   Rule: PR body must contain all 4 standard governance sections. See .jules/rules.md for the template.");
+      process.exit(1);
     }
 
     // Extract Evidence section content up to the next heading or horizontal rule
@@ -165,23 +159,27 @@ if [ -n "$PR_BODY_INPUT" ]; then
     const placeholderPattern = /^(TODO|TBD|N\/?A|none|なし|null|undefined)$/i;
 
     if (!stripped) {
-      warn("Evidence Gate (Empty Evidence)", "Evidence section in PR body is empty (or contains only HTML comments). Concrete evidence is recommended.");
-    } else {
-      // Check if evidence is a placeholder (only symbols/dashes, or keywords like TODO, TBD, N/A)
-      const strippedWithoutSymbols = stripped.replace(/[\s\-\*\•\d\.\:\(\)\/]+/g, "").trim();
-      if (!strippedWithoutSymbols || placeholderPattern.test(strippedWithoutSymbols) || placeholderPattern.test(stripped)) {
-        warn("Evidence Gate (Placeholder Evidence)", "Evidence section contains only a placeholder (\"" + stripped + "\"). Genuine verification evidence is recommended.");
-      }
+      console.error("❌ [GATE FAIL] Evidence section in PR body is empty (or contains only HTML comments).");
+      console.error("   Core Principle: \"No evidence, no PR\".");
+      console.error("   Provide concrete evidence (failing test, benchmark, trace, or spec/issue reference for features).");
+      process.exit(1);
     }
 
-    if (missing.length === 0 && stripped && !placeholderPattern.test(stripped.trim())) {
-      console.log("  ✓ PR body Evidence Gate passed (all 4 sections present with valid evidence content).");
+    // Check if evidence is a placeholder (only symbols/dashes, or keywords like TODO, TBD, N/A)
+    const strippedWithoutSymbols = stripped.replace(/[\s\-\*\•\d\.\:\(\)\/]+/g, "").trim();
+    if (!strippedWithoutSymbols || placeholderPattern.test(strippedWithoutSymbols) || placeholderPattern.test(stripped.trim())) {
+      console.error("❌ [GATE FAIL] Evidence section contains only a placeholder (\"" + stripped + "\").");
+      console.error("   Core Principle: \"No evidence, no PR\". Genuine verification evidence is required.");
+      process.exit(1);
     }
+
+    console.log("  ✓ PR body Evidence Gate passed (all 4 sections present with valid evidence content).");
   ' "$PR_BODY_INPUT"
 else
   if [ "${GITHUB_ACTIONS:-false}" = "true" ] && [ "${GITHUB_EVENT_NAME:-}" = "pull_request" ]; then
-    echo "::warning title=Evidence Gate::PR body could not be resolved in CI pull_request event."
-    echo "⚠️ [GATE WARNING] PR body could not be resolved in CI pull_request event."
+    echo "❌ [GATE FAIL] PR body could not be resolved in CI pull_request event."
+    echo "   Ensure PR body is provided or GITHUB_EVENT_PATH is accessible."
+    exit 1
   else
     echo "  ℹ PR body not provided; skipping Evidence Gate (local diff-only mode)."
   fi

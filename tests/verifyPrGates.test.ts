@@ -82,20 +82,19 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(res.status).toBe(0);
     });
 
-    it('2. Evidenceセクションなし -> WARNING (status 0)', () => {
+    it('2. Evidenceセクションなし -> FAIL', () => {
       const bodyWithoutEvidence = [
         validProblem,
         validImpact,
         validOutOfScope,
       ].join('\n\n');
       const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithoutEvidence]);
-      expect(res.status).toBe(0);
+      expect(res.status).toBe(1);
       expect(res.stderr).toContain('PR body is missing mandatory section(s)');
       expect(res.stderr).toContain('### 客観的証拠 (Evidence)');
-      expect(res.stderr).toContain('[GATE WARNING]');
     });
 
-    it('3. Evidenceが空 -> WARNING (status 0)', () => {
+    it('3. Evidenceが空 -> FAIL', () => {
       const bodyWithEmptyEvidence = [
         validProblem,
         '### 客観的証拠 (Evidence)\n',
@@ -103,12 +102,11 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         validOutOfScope,
       ].join('\n\n');
       const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithEmptyEvidence]);
-      expect(res.status).toBe(0);
+      expect(res.status).toBe(1);
       expect(res.stderr).toContain('Evidence section in PR body is empty');
-      expect(res.stderr).toContain('[GATE WARNING]');
     });
 
-    it('4. EvidenceがHTMLコメントだけ -> WARNING (status 0)', () => {
+    it('4. EvidenceがHTMLコメントだけ -> FAIL', () => {
       const bodyWithHtmlCommentOnly = [
         validProblem,
         '### 客観的証拠 (Evidence)\n<!-- 失敗するテストログ、実測ベンチマークなど -->',
@@ -120,14 +118,13 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         '--pr-body',
         bodyWithHtmlCommentOnly,
       ]);
-      expect(res.status).toBe(0);
+      expect(res.status).toBe(1);
       expect(res.stderr).toContain(
         'Evidence section in PR body is empty (or contains only HTML comments)'
       );
-      expect(res.stderr).toContain('[GATE WARNING]');
     });
 
-    it('5. EvidenceがTODO/TBD/N/Aだけ -> WARNING (status 0)', () => {
+    it('5. EvidenceがTODO/TBD/N/Aだけ -> FAIL', () => {
       for (const placeholder of [
         'TODO',
         'TBD',
@@ -148,11 +145,10 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
           '--pr-body',
           bodyWithPlaceholder,
         ]);
-        expect(res.status).toBe(0);
+        expect(res.status).toBe(1);
         expect(res.stderr).toContain(
           'Evidence section contains only a placeholder'
         );
-        expect(res.stderr).toContain('[GATE WARNING]');
       }
     });
 
@@ -243,7 +239,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(res2.stdout).toContain('PR body Evidence Gate passed');
     });
 
-    it('11. ドメイン名詞 (Accessibility 単体など) は Evidence とみなされず WARNING (status 0)', () => {
+    it('11. ドメイン名詞 (Accessibility 単体など) は Evidence とみなされず FAIL', () => {
       const misleadingBody = [
         '## 💡 What\nAdd accessibility features',
         '## ♿ Accessibility\nSome generic accessibility notes without explicit verification',
@@ -251,13 +247,12 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         '## Out of Scope\nNone',
       ].join('\n\n');
       const res = runGate(['HEAD~1...HEAD', '--pr-body', misleadingBody]);
-      expect(res.status).toBe(0);
+      expect(res.status).toBe(1);
       expect(res.stderr).toContain('PR body is missing mandatory section(s)');
       expect(res.stderr).toContain('### 客観的証拠 (Evidence)');
-      expect(res.stderr).toContain('[GATE WARNING]');
     });
 
-    it('12. ドメイン名詞 (Accessibility 単体など) は Out of Scope とみなされず WARNING (status 0)', () => {
+    it('12. ドメイン名詞 (Accessibility 単体など) は Out of Scope とみなされず FAIL', () => {
       const misleadingBody = [
         '## 💡 What\nAdd accessibility features',
         '## 🔍 Verification\nTested and verified with test suite passing',
@@ -265,10 +260,9 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         '## ♿ Accessibility\nSome generic accessibility notes without explicit out of scope',
       ].join('\n\n');
       const res = runGate(['HEAD~1...HEAD', '--pr-body', misleadingBody]);
-      expect(res.status).toBe(0);
+      expect(res.status).toBe(1);
       expect(res.stderr).toContain('PR body is missing mandatory section(s)');
       expect(res.stderr).toContain('### 意図して変更しなかったこと (Out of Scope)');
-      expect(res.stderr).toContain('[GATE WARNING]');
     });
 
     it('13. 正規の Out of Scope セクション (Out of Scope / Non-Goals / 意図して変更しなかったこと) は通る -> PASS', () => {
@@ -311,7 +305,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       }
     });
 
-    it('15. 意味の違う見出し (Architecture / Summary / Notes など) は alias として誤認識されず WARNING (status 0)', () => {
+    it('15. 意味の違う見出し (Architecture / Summary / Notes など) は alias として誤認識されず FAIL', () => {
       const unrelatedHeadingBody = [
         '## Architecture\nOverview of system architecture',
         '## Summary\nOverall summary of changes',
@@ -319,9 +313,8 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         '## Future Work\nFuture plans',
       ].join('\n\n');
       const res = runGate(['HEAD~1...HEAD', '--pr-body', unrelatedHeadingBody]);
-      expect(res.status).toBe(0);
+      expect(res.status).toBe(1);
       expect(res.stderr).toContain('PR body is missing mandatory section(s)');
-      expect(res.stderr).toContain('[GATE WARNING]');
     });
   });
 
