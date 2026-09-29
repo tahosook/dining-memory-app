@@ -75,3 +75,6 @@
 ## 2024-05-24 - Benchmarking React Native Modules
 **Learning:** Jest environments with mocked `expo-file-system` modules do not reflect true bridge or native module performance. Running Node.js directly also fails because Expo native modules require the React Native runtime.
 **Action:** When direct measurement of native bridge performance improvements is impractical in a CI/testing environment, document the theoretical performance rationale clearly in the PR description instead of attempting to build complex mocks.
+## 2024-05-24 - Test Mocks for Chunked Parallel Processing
+**Learning:** When refactoring a purely sequential loop to a chunked parallel loop (e.g. `Promise.allSettled` with chunk size 25), you must update test assertions that relied on the sequential failure logic. In a sequential loop, I/O stops instantly on the 2nd item if it fails. In a chunked approach, the entire chunk of up to 25 items is dispatched concurrently, so a failure on the 2nd item means the 3rd item's mock will still be called within that same chunk.
+**Action:** When parallelizing loops, review test suites that use `toHaveBeenCalledTimes()` to ensure they reflect the new chunk dispatch behavior where all items in the first chunk are invoked before the first error is re-thrown.

@@ -280,8 +280,9 @@ describe('BackupService', () => {
 
       await expect(BackupService.exportBackup()).rejects.toThrow('バックアップ対象の写真ファイルの読み取りに失敗しました。');
 
-      // Fails fast: validation halts at the failing photo, getInfoAsync called only twice, copyAsync never called
-      expect(getInfoAsync).toHaveBeenCalledTimes(2);
+      // Fails fast: With chunked parallel processing, all promises in the current chunk (size 25) are launched.
+      // We have 3 items total, so it will call getInfoAsync 3 times (the entire chunk) before the failure is caught and halts execution.
+      expect(getInfoAsync).toHaveBeenCalledTimes(3);
       expect(copyAsync).not.toHaveBeenCalled();
       expect(zip).not.toHaveBeenCalled();
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
