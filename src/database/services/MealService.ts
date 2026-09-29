@@ -180,6 +180,9 @@ async function upsertRow(row: PersistedMealRow) {
 }
 
 export class MealService {
+  private static mealCache = new Map<string, Meal>();
+  private static MAX_CACHE_SIZE = 50;
+
   static async createMeal(data: CreateMealData): Promise<Meal> {
     await initializeDatabase();
 
@@ -238,8 +241,29 @@ export class MealService {
   }
 
   static async getMealById(mealId: string): Promise<Meal | null> {
+    if (this.mealCache.has(mealId)) {
+      const cached = this.mealCache.get(mealId)!;
+      // Refresh position (LRU)
+      this.mealCache.delete(mealId);
+      this.mealCache.set(mealId, cached);
+      return cached;
+    }
+
     const row = await getRowById(mealId);
-    return row ? mapRowToMeal(row) : null;
+    if (!row) return null;
+
+    const meal = mapRowToMeal(row);
+
+    if (this.mealCache.size >= this.MAX_CACHE_SIZE) {
+      // Evict oldest
+      const firstKey = this.mealCache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.mealCache.delete(firstKey);
+      }
+    }
+    this.mealCache.set(mealId, meal);
+
+    return meal;
   }
 
   static async getRecentNearbyHomemadeDefault(origin: {
@@ -448,6 +472,7 @@ export class MealService {
   }
 
   static async softDeleteMeal(mealId: string): Promise<void> {
+    this.mealCache.delete(mealId);
     await initializeDatabase();
 
     if (isUsingNativeDatabase()) {
@@ -474,6 +499,7 @@ export class MealService {
   }
 
   static async updateMeal(mealId: string, updates: MealUpdateData): Promise<Meal | null> {
+    this.mealCache.delete(mealId);
     const row = await getRowById(mealId);
     if (!row) {
       return null;
@@ -511,6 +537,7 @@ export class MealService {
     thumbnailPath: string,
     expectedPhotoPath: string
   ): Promise<boolean> {
+    this.mealCache.delete(mealId);
     await initializeDatabase();
 
     if (isUsingNativeDatabase()) {
@@ -599,6 +626,7 @@ export class MealService {
   }
 
   static async clearAllMeals(options: { cleanupPhotos?: boolean } = {}): Promise<void> {
+    this.mealCache.clear();
     await initializeDatabase();
 
     if (!isUsingNativeDatabase()) {
