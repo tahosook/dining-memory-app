@@ -588,28 +588,33 @@ export class BackupService {
     } catch (restoreError) {
       // Rollback photo modifications if anything failed
       let rollbackFailedCount = 0;
+      const CONCURRENCY_LIMIT = 25;
 
-      for (const fileName of newlyCreatedFiles) {
-        if (copiedFiles.has(fileName)) {
-          try {
-            await deleteAsync(`${targetDocDir}${fileName}`, { idempotent: true });
-          } catch {
-            rollbackFailedCount++;
-          }
-        }
+      // ⚡ Optimization: Chunked parallel deletion to speed up rollback on large failures
+      // Expected impact: Faster recovery during OOM/disk full events and reduced bridge congestion
+      const filesToDelete = newlyCreatedFiles.filter(f => copiedFiles.has(f));
+      for (let i = 0; i < filesToDelete.length; i += CONCURRENCY_LIMIT) {
+        const chunk = filesToDelete.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          chunk.map(fileName => deleteAsync(`${targetDocDir}${fileName}`, { idempotent: true }))
+        );
+        rollbackFailedCount += results.filter(r => r.status === 'rejected').length;
       }
 
-      for (const fileName of backedUpFiles) {
-        if (copiedFiles.has(fileName)) {
-          try {
-            await copyAsync({
+      // ⚡ Optimization: Chunked parallel copy to speed up rollback on large failures
+      // Expected impact: Faster recovery during OOM/disk full events and reduced bridge congestion
+      const filesToRestore = backedUpFiles.filter(f => copiedFiles.has(f));
+      for (let i = 0; i < filesToRestore.length; i += CONCURRENCY_LIMIT) {
+        const chunk = filesToRestore.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          chunk.map(fileName =>
+            copyAsync({
               from: `${rollbackDir}${fileName}`,
               to: `${targetDocDir}${fileName}`,
-            });
-          } catch {
-            rollbackFailedCount++;
-          }
-        }
+            })
+          )
+        );
+        rollbackFailedCount += results.filter(r => r.status === 'rejected').length;
       }
 
       if (rollbackFailedCount > 0) {

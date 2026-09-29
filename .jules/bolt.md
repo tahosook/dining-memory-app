@@ -72,3 +72,37 @@
 **Learning:** In a React Native Expo environment, using an unbounded `Promise.all` to perform massive concurrent file system operations (like `getInfoAsync` for thumbnails across hundreds of meals) can cause bridge congestion, EMFILE errors, and Out-Of-Memory (OOM) crashes.
 **Action:** Use bounded chunk concurrency with `Promise.allSettled` instead of unbounded `Promise.all` for bulk I/O tasks like checking file existence to ensure stability without sacrificing throughput. (In `mealThumbnail.ts`, `CONCURRENCY_LIMIT = 25` represents the bounded concurrency value chosen for this specific implementation at this time to avoid bridge congestion, rather than a generalized system-wide recommendation. It remains separate from `MAX_CONCURRENT_THUMBNAILS = 2` for the thumbnail generation queue).
 
+## 2025-02-18 - Native Module Mock Limitations in Node
+**Learning:** When benchmarking performance improvements for React Native native modules (e.g., `expo-file-system`), you cannot execute them directly via standard Node.js scripts (like  or Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.2.14+6a363a38d)
+
+Usage: bun <command> [...flags] [...args]
+
+Commands:
+  run       ./my-script.ts       Execute a file with Bun
+            lint                 Run a package.json script
+  test                           Run unit tests with Bun
+  x         eslint               Execute a package binary (CLI), installing if needed (bunx)
+  repl                           Start a REPL session with Bun
+  exec                           Run a shell script directly with Bun
+
+  install                        Install dependencies for a package.json (bun i)
+  add       zod                  Add a dependency to package.json (bun a)
+  remove    backbone             Remove a dependency from package.json (bun rm)
+  update    tailwindcss          Update outdated dependencies
+  outdated                       Display latest versions of outdated dependencies
+  link      [<package>]          Register or link a local npm package
+  unlink                         Unregister a local npm package
+  publish                        Publish a package to the npm registry
+  patch <pkg>                    Prepare a package for patching
+  pm <subcommand>                Additional package management utilities
+
+  build     ./a.ts ./b.jsx       Bundle TypeScript & JavaScript into a single file
+
+  init                           Start an empty Bun project from a built-in template
+  create    next-app             Create a new project from a template (bun c)
+  upgrade                        Upgrade to latest version of Bun.
+  <command> --help               Print help text for command.
+
+Learn more about Bun:            https://bun.sh/docs
+Join our Discord community:      https://bun.sh/discord) as they rely on the native JSI/bridge mechanisms. Mocks only simulate latencies.
+**Action:** If direct device measurement is impractical, clearly document the theoretical performance rationale (e.g., reduction in bridge roundtrips, concurrent I/O) in the PR description's Measured Improvement section instead of presenting mock timings as true native performance metrics.
