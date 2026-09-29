@@ -49,15 +49,15 @@ function buildAiAssistDescription(
 ) {
   switch (state) {
     case 'checking':
-      return 'AI入力補助の状態を確認しています。';
+      return 'AI入力補助を利用できるか確認しています。';
     case 'downloading':
-      return 'AI入力補助に必要なデータをダウンロードしています。通信環境の良い場所でお待ちください。';
+      return 'AI入力補助に必要なデータを端末へ保存しています。';
     case 'ready':
-      return 'AI入力補助に必要なデータが端末に導入され、利用可能な状態です。';
+      return '写真を外部送信せず、端末内で食事メモの下書きを作成できます。';
     case 'error':
-      return 'AI入力補助の状態に問題があります。';
+      return 'AI入力補助の準備に問題があります。再ダウンロードを試してください。';
     case 'not_ready':
-      return 'AI入力補助を利用するには、モデルデータ（約20MB）のダウンロードが必要です。一度ダウンロードするとオフラインで動作します。';
+      return 'モデルをダウンロードすると、撮影後に食事メモの下書きを作成できます。';
     default:
       return '不明な状態です。';
   }
