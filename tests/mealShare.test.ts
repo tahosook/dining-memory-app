@@ -48,6 +48,7 @@ describe('mealShare', () => {
     });
 
     test('masks file paths and keeps only the file basename', () => {
+      expect(sanitizeUriForLog('just_a_filename')).toBe('file://...');
       expect(sanitizeUriForLog('file:///data/user/0/com.app/files/meal-123.jpg')).toBe(
         'file://.../meal-123.jpg'
       );
@@ -175,6 +176,8 @@ describe('mealShare', () => {
     });
 
     test('falls back to expo-sharing when native module throws an error', async () => {
+      Platform.OS = 'android';
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
       const mockShareMeal = jest.fn().mockRejectedValue(new Error('Native module crashed'));
       NativeModules.MealShare = { shareMeal: mockShareMeal };
       (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
@@ -193,6 +196,11 @@ describe('mealShare', () => {
       });
       expect(result.completed).toBe(true);
       expect(result.method).toBe('expoSharing');
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[MealShare] Android native share threw, falling back to next available method:',
+        expect.anything()
+      );
+      consoleWarnSpy.mockRestore();
     });
 
     test('falls back to standard Share.share when native module throws and photo is missing', async () => {
