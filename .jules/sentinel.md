@@ -49,3 +49,7 @@ OWASP ガイドライン、Zip Slip、SQLi、パストラバーサル、機微�
 **Vulnerability:** Calling `unzip()` directly on untrusted zip files could expose the staging directory to path traversal (`../`) or unapproved files.
 **Learning:** Even if native libraries implement basic safeguards, extracting an entire archive allows potentially dangerous files to hit the file system before JS validation. `react-native-zip-archive`'s `listContents` is essential for pre-flight verification.
 **Prevention:** Implement Defense-in-Depth. Use `listContents` to strictly whitelist allowed file paths and explicitly reject malicious patterns (e.g. `../`, null bytes) *before* calling `unzip()`.
+## 2026-09-29 - SQLite PRAGMA Parameterization
+**Vulnerability:** SQL Injection in dynamic PRAGMA execution.
+**Learning:** SQLite `PRAGMA` statements do not support parameterized variables (`?`), making direct string interpolation inherently risky.
+**Prevention:** Explicitly validate and coerce dynamic inputs to strictly expected types (e.g., using `Number.isInteger()` for versions) before interpolation to neutralize injection vectors safely.

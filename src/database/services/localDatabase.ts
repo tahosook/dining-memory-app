@@ -143,8 +143,16 @@ function applyNativeMigrations(database: SQLiteDatabase) {
     }
 
     database.execSync(migration.sql);
-    database.execSync(`PRAGMA user_version = ${migration.version}`);
-    currentVersion = migration.version;
+
+    // Explicitly validate as integer to prevent SQL injection,
+    // as SQLite PRAGMA statements do not support parameterized variables.
+    const safeVersion = Number(migration.version);
+    if (!Number.isInteger(safeVersion)) {
+      throw new Error(`Invalid database migration version: ${String(migration.version)}`);
+    }
+    database.execSync(`PRAGMA user_version = ${safeVersion}`);
+
+    currentVersion = safeVersion;
   });
 }
 
