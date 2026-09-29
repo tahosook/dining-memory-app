@@ -78,3 +78,4 @@
 ## 2024-05-24 - Test Mocks for Chunked Parallel Processing
 **Learning:** When refactoring a purely sequential loop to a chunked parallel loop (e.g. `Promise.allSettled` with chunk size 25), you must update test assertions that relied on the sequential failure logic. In a sequential loop, I/O stops instantly on the 2nd item if it fails. In a chunked approach, the entire chunk of up to 25 items is dispatched concurrently, so a failure on the 2nd item means the 3rd item's mock will still be called within that same chunk.
 **Action:** When parallelizing loops, review test suites that use `toHaveBeenCalledTimes()` to ensure they reflect the new chunk dispatch behavior where all items in the first chunk are invoked before the first error is re-thrown.
+triggering ci with trivial file edit
