@@ -241,11 +241,21 @@ describe('mealShare', () => {
       (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
       (Sharing.shareAsync as jest.Mock).mockRejectedValue(new Error('expo-sharing failure'));
 
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
       const result = await shareMealContent({
         title: 'ラーメン',
         text: '美味しいラーメンでした',
         photoUri: 'file:///data/user/0/com.app/files/ramen.jpg',
       });
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[MealShare] Fallback expo-sharing failed, attempting standard Share:',
+        expect.any(Error)
+      );
+
+      const loggedError = consoleWarnSpy.mock.calls[0][1] as Error;
+      expect(loggedError.message).toContain('expo-sharing failure');
 
       expect(Share.share).toHaveBeenCalledWith(
         {
@@ -258,6 +268,8 @@ describe('mealShare', () => {
       );
       expect(result.completed).toBe(true);
       expect(result.method).toBe('reactNativeShare');
+
+      consoleWarnSpy.mockRestore();
     });
 
     test('falls back to standard Share.share when no photo exists', async () => {
