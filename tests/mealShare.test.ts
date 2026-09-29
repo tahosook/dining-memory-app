@@ -147,6 +147,28 @@ describe('mealShare', () => {
       expect(result.completed).toBe(true);
       expect(result.method).toBe('reactNativeShare');
     });
+
+    test('logs error and rethrows when sharing fails on iOS', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      (Share.share as jest.Mock).mockRejectedValue(new Error('iOS Share sheet failed'));
+
+      await expect(
+        shareMealContent({
+          title: 'ラーメン',
+          text: '美味しいラーメンでした',
+          photoUri: 'file:///data/user/0/com.app/files/ramen.jpg',
+        })
+      ).rejects.toThrow('iOS Share sheet failed');
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[MealShare] Failed to share meal:',
+        expect.objectContaining({
+          error: 'iOS Share sheet failed',
+          platform: 'ios',
+        })
+      );
+      consoleSpy.mockRestore();
+    });
   });
 
   describe('shareMealContent on Android', () => {
