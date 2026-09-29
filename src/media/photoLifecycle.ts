@@ -100,20 +100,23 @@ export async function getReferencedPhotoPaths(
  * 対象写真パスがすでに DB（meals テーブル）に存在するため、DB 参照側の保護集合によって保護されます。
  */
 export function getInFlightThumbnailProtectionSet(): Set<string> {
-  const protectionSet = new Set<string>();
   const inFlightPaths = getInFlightThumbnailPhotoPaths();
-  for (const inFlightPath of inFlightPaths) {
-    protectionSet.add(inFlightPath);
-    const fileName = extractPhotoFileName(inFlightPath);
-    if (fileName) {
-      protectionSet.add(fileName);
-    }
+  const protectionSet = new Set<string>(inFlightPaths);
 
+  for (const inFlightPath of inFlightPaths) {
     // 生成予定のサムネイルパスも保護
     const expectedThumbUri = resolveThumbnailDestinationUri(inFlightPath);
     protectionSet.add(expectedThumbUri);
-    const expectedThumbFileName = extractPhotoFileName(expectedThumbUri);
-    if (expectedThumbFileName) {
+
+    // 抽出は1回だけ行う
+    const fileName = extractPhotoFileName(inFlightPath);
+    if (fileName) {
+      protectionSet.add(fileName);
+
+      // 既存のファイル名から直接サムネイルファイル名を生成し、無駄な文字列抽出を削減
+      // resolveThumbnailDestinationUri は内部で .jpg や .jpeg にマッチして置換するため、
+      // プレーンなファイル名に対しても正しく動作し 'xxx-thumb.jpg' を返す
+      const expectedThumbFileName = resolveThumbnailDestinationUri(fileName);
       protectionSet.add(expectedThumbFileName);
     }
   }
