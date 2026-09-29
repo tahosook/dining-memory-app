@@ -588,28 +588,29 @@ export class BackupService {
     } catch (restoreError) {
       // Rollback photo modifications if anything failed
       let rollbackFailedCount = 0;
+      const ROLLBACK_CONCURRENCY = 25;
 
-      for (const fileName of newlyCreatedFiles) {
-        if (copiedFiles.has(fileName)) {
-          try {
-            await deleteAsync(`${targetDocDir}${fileName}`, { idempotent: true });
-          } catch {
-            rollbackFailedCount++;
-          }
-        }
+      const createdFilesToRollback = newlyCreatedFiles.filter(f => copiedFiles.has(f));
+      for (let i = 0; i < createdFilesToRollback.length; i += ROLLBACK_CONCURRENCY) {
+        const chunk = createdFilesToRollback.slice(i, i + ROLLBACK_CONCURRENCY);
+        const results = await Promise.allSettled(
+          chunk.map(fileName => deleteAsync(`${targetDocDir}${fileName}`, { idempotent: true }))
+        );
+        rollbackFailedCount += results.filter(r => r.status === 'rejected').length;
       }
 
-      for (const fileName of backedUpFiles) {
-        if (copiedFiles.has(fileName)) {
-          try {
-            await copyAsync({
+      const backedUpFilesToRollback = backedUpFiles.filter(f => copiedFiles.has(f));
+      for (let i = 0; i < backedUpFilesToRollback.length; i += ROLLBACK_CONCURRENCY) {
+        const chunk = backedUpFilesToRollback.slice(i, i + ROLLBACK_CONCURRENCY);
+        const results = await Promise.allSettled(
+          chunk.map(fileName =>
+            copyAsync({
               from: `${rollbackDir}${fileName}`,
               to: `${targetDocDir}${fileName}`,
-            });
-          } catch {
-            rollbackFailedCount++;
-          }
-        }
+            })
+          )
+        );
+        rollbackFailedCount += results.filter(r => r.status === 'rejected').length;
       }
 
       if (rollbackFailedCount > 0) {

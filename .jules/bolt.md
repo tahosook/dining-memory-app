@@ -72,3 +72,6 @@
 **Learning:** In a React Native Expo environment, using an unbounded `Promise.all` to perform massive concurrent file system operations (like `getInfoAsync` for thumbnails across hundreds of meals) can cause bridge congestion, EMFILE errors, and Out-Of-Memory (OOM) crashes.
 **Action:** Use bounded chunk concurrency with `Promise.allSettled` instead of unbounded `Promise.all` for bulk I/O tasks like checking file existence to ensure stability without sacrificing throughput. (In `mealThumbnail.ts`, `CONCURRENCY_LIMIT = 25` represents the bounded concurrency value chosen for this specific implementation at this time to avoid bridge congestion, rather than a generalized system-wide recommendation. It remains separate from `MAX_CONCURRENT_THUMBNAILS = 2` for the thumbnail generation queue).
 
+## 2025-02-28 - Optimize sequential loop with Promise.allSettled chunking
+**Learning:** Rollback file operations like deleteAsync and copyAsync can create large sequential performance bottlenecks.
+**Action:** Use Promise.allSettled with a chunk size limit (e.g., 25) to parallelize rollback file operations, reducing operation time significantly while preserving error handling capabilities.
