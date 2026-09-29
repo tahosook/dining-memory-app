@@ -187,4 +187,20 @@ describe('photoExif', () => {
       thumbnail: null,
     });
   });
+
+  test('returns original JPEG string when EXIF stripping fails', async () => {
+    (piexif.remove as jest.Mock).mockImplementation(() => {
+      throw new Error('Failed to remove EXIF');
+    });
+
+    await writePhotoExifToJpeg('file:///photo.jpg', {
+      capturedAt,
+      softwareName: 'Dining Memory',
+    });
+
+    expect(piexif.insert).toHaveBeenCalledWith(
+      expect.anything(),
+      'data:image/jpeg;base64,ORIGINAL_BASE64'
+    );
+  });
 });
