@@ -112,6 +112,7 @@ export type CameraViewProps = Pick<
 interface RevealableReviewFieldProps {
   placeholder: string;
   triggerLabel: string;
+  accessibilityLabel: string;
   value: string;
   visible: boolean;
   onPress: () => void;
@@ -174,6 +175,7 @@ const CameraPreviewSpacer: React.FC = () => <View style={styles.cameraPreviewSpa
 const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
   placeholder,
   triggerLabel,
+  accessibilityLabel,
   value,
   visible,
   onPress,
@@ -192,6 +194,7 @@ const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
         onChangeText={onChange}
         multiline={multiline}
         testID={testID}
+        accessibilityLabel={accessibilityLabel}
       />
     ) : (
       <TouchableOpacity
@@ -318,6 +321,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             value={captureReview.mealName}
             onChangeText={value => onChange('mealName', value)}
             testID="meal-name-input"
+            accessibilityLabel="料理名"
           />
 
           <CuisineTypeSelector
@@ -333,12 +337,17 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
             <Switch
               value={captureReview.isHomemade}
               onValueChange={value => onChange('isHomemade', value)}
+              accessibilityRole="switch"
+              accessibilityLabel="自炊"
+              accessibilityState={{ checked: captureReview.isHomemade }}
+              testID="homemade-switch"
             />
           </View>
 
           <RevealableReviewField
             placeholder="場所"
             triggerLabel="場所を追加"
+            accessibilityLabel="場所"
             value={captureReview.locationName}
             visible={showLocationInput}
             onPress={() => revealField('location')}
@@ -350,6 +359,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
           <RevealableReviewField
             placeholder="メモ"
             triggerLabel="メモを追加"
+            accessibilityLabel="メモ"
             value={captureReview.notes}
             visible={showNotesInput}
             onPress={() => revealField('notes')}
