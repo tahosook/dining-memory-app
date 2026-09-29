@@ -181,15 +181,8 @@ describe('localDatabase migrations', () => {
     expect(executedSql).toContain('DELETE FROM search_vectors');
   });
 
-  test('replaceDatabaseWithBackup uses prepareAsync for bulk inserting meals and appSettings when available', async () => {
+  test('replaceDatabaseWithBackup uses chunked batch insertion for meals and appSettings', async () => {
     const executedSql: string[] = [];
-    const statementFinalizeMock = jest.fn();
-    const statementExecuteMock = jest.fn();
-    const mockStatement = {
-      executeAsync: statementExecuteMock,
-      finalizeAsync: statementFinalizeMock,
-    };
-    const prepareAsyncMock = jest.fn(async () => mockStatement);
 
     const mockDb = {
       execSync: jest.fn(),
@@ -198,7 +191,6 @@ describe('localDatabase migrations', () => {
       runAsync: jest.fn(async (sql: string) => {
         executedSql.push(sql);
       }),
-      prepareAsync: prepareAsyncMock,
     };
 
     jest.doMock('react-native', () => ({
@@ -237,8 +229,9 @@ describe('localDatabase migrations', () => {
       ]
     );
 
-    expect(prepareAsyncMock).toHaveBeenCalledTimes(2);
-    expect(statementExecuteMock).toHaveBeenCalledTimes(2);
-    expect(statementFinalizeMock).toHaveBeenCalledTimes(2);
+    const mealInserts = executedSql.filter((sql) => sql.includes('INSERT INTO meals'));
+    const settingInserts = executedSql.filter((sql) => sql.includes('INSERT INTO app_settings'));
+    expect(mealInserts.length).toBe(1);
+    expect(settingInserts.length).toBe(1);
   });
 });
