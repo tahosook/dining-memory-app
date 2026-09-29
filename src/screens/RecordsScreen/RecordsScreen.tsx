@@ -308,9 +308,14 @@ export const RecordsScreen: React.FC = () => {
           setFlatMeals(mergedMeals);
           setMealSections(groupMealsByDate(mergedMeals));
           setThumbnails(current => {
-            const next = { ...current };
+            let next = current;
+            let hasChanges = false;
             for (const meal of uniqueNextMeals) {
               if (meal.photo_thumbnail_path && !next[meal.id]) {
+                if (!hasChanges) {
+                  next = { ...current };
+                  hasChanges = true;
+                }
                 next[meal.id] = meal.photo_thumbnail_path;
               }
             }
