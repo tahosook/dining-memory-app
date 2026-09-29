@@ -11,10 +11,7 @@ import {
   type MealInputAssistModelDownloadProgress,
   type MealInputAssistModelStatus,
 } from '../../../ai/mealInputAssist';
-import {
-  getLocalAiRuntimeStatusSnapshot,
-  type LocalAiRuntimeStatusSnapshot,
-} from '../../../ai/runtime';
+import { getLocalAiRuntimeStatusSnapshot, type LocalAiRuntimeStatusSnapshot } from '../../../ai/runtime';
 import { AppSettingsService } from '../../../database/services/AppSettingsService';
 import { sanitizeLogObject } from '../../../utils/logSanitizer';
 import { Colors } from '../../../constants/Colors';
@@ -37,10 +34,8 @@ function formatAiAssistStateLabel(
       return '利用可能';
     case 'error':
       return 'エラー';
-    case 'not_ready':
-      return '未準備';
     default:
-      return '不明';
+      return '未準備';
   }
 }
 
@@ -56,10 +51,8 @@ function buildAiAssistDescription(
       return '写真を外部送信せず、端末内で食事メモの下書きを作成できます。';
     case 'error':
       return 'AI入力補助の準備に問題があります。再ダウンロードを試してください。';
-    case 'not_ready':
-      return 'モデルをダウンロードすると、撮影後に食事メモの下書きを作成できます。';
     default:
-      return '不明な状態です。';
+      return 'モデルをダウンロードすると、撮影後に食事メモの下書きを作成できます。';
   }
 }
 
