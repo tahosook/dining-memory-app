@@ -354,35 +354,49 @@ export async function replaceDatabaseWithBackup(
           await insertMealStatement.finalizeAsync();
         }
       } else {
-        for (const meal of meals) {
+        // Fallback batched insert: maximum 999 parameters per query. 21 columns per meal -> max 47 items per chunk.
+        const maxMealsPerChunk = 40;
+        for (let i = 0; i < meals.length; i += maxMealsPerChunk) {
+          const chunk = meals.slice(i, i + maxMealsPerChunk);
+          const placeholders = chunk
+            .map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .join(', ');
+          const params: (string | number | boolean | null)[] = [];
+
+          for (const meal of chunk) {
+            params.push(
+              meal.id,
+              meal.uuid,
+              meal.meal_name,
+              meal.meal_type ?? null,
+              meal.cuisine_type ?? null,
+              meal.ai_confidence ?? null,
+              meal.ai_source ?? null,
+              meal.notes ?? null,
+              meal.cooking_level ?? null,
+              meal.is_homemade,
+              meal.photo_path,
+              meal.photo_thumbnail_path ?? null,
+              meal.location_name ?? null,
+              meal.latitude ?? null,
+              meal.longitude ?? null,
+              meal.meal_datetime,
+              meal.search_text ?? null,
+              meal.tags ?? null,
+              meal.is_deleted,
+              meal.created_at,
+              meal.updated_at
+            );
+          }
+
           await db.runAsync(
             `INSERT INTO meals (
               id, uuid, meal_name, meal_type, cuisine_type, ai_confidence, ai_source,
               notes, cooking_level, is_homemade, photo_path, photo_thumbnail_path,
               location_name, latitude, longitude, meal_datetime, search_text,
               tags, is_deleted, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            meal.id,
-            meal.uuid,
-            meal.meal_name,
-            meal.meal_type ?? null,
-            meal.cuisine_type ?? null,
-            meal.ai_confidence ?? null,
-            meal.ai_source ?? null,
-            meal.notes ?? null,
-            meal.cooking_level ?? null,
-            meal.is_homemade,
-            meal.photo_path,
-            meal.photo_thumbnail_path ?? null,
-            meal.location_name ?? null,
-            meal.latitude ?? null,
-            meal.longitude ?? null,
-            meal.meal_datetime,
-            meal.search_text ?? null,
-            meal.tags ?? null,
-            meal.is_deleted,
-            meal.created_at,
-            meal.updated_at
+            ) VALUES ${placeholders}`,
+            ...params
           );
         }
       }
@@ -406,12 +420,20 @@ export async function replaceDatabaseWithBackup(
           await insertSettingStatement.finalizeAsync();
         }
       } else {
-        for (const setting of appSettings) {
+        // Fallback batched insert: maximum 999 parameters per query. 3 columns per setting -> max 333 items per chunk.
+        const maxSettingsPerChunk = 300;
+        for (let i = 0; i < appSettings.length; i += maxSettingsPerChunk) {
+          const chunk = appSettings.slice(i, i + maxSettingsPerChunk);
+          const placeholders = chunk.map(() => '(?, ?, ?)').join(', ');
+          const params: (string | number | boolean | null)[] = [];
+
+          for (const setting of chunk) {
+            params.push(setting.key, setting.value ?? null, setting.updated_at);
+          }
+
           await db.runAsync(
-            'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
-            setting.key,
-            setting.value ?? null,
-            setting.updated_at
+            `INSERT INTO app_settings (key, value, updated_at) VALUES ${placeholders}`,
+            ...params
           );
         }
       }

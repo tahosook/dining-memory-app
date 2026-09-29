@@ -72,3 +72,7 @@
 **Learning:** In a React Native Expo environment, using an unbounded `Promise.all` to perform massive concurrent file system operations (like `getInfoAsync` for thumbnails across hundreds of meals) can cause bridge congestion, EMFILE errors, and Out-Of-Memory (OOM) crashes.
 **Action:** Use bounded chunk concurrency with `Promise.allSettled` instead of unbounded `Promise.all` for bulk I/O tasks like checking file existence to ensure stability without sacrificing throughput. (In `mealThumbnail.ts`, `CONCURRENCY_LIMIT = 25` represents the bounded concurrency value chosen for this specific implementation at this time to avoid bridge congestion, rather than a generalized system-wide recommendation. It remains separate from `MAX_CONCURRENT_THUMBNAILS = 2` for the thumbnail generation queue).
 
+
+## 2026-09-29 - Do not alter or delete lockfiles when attempting to fix test environments
+**Learning:** The agent deleted `package-lock.json` and replaced it with `pnpm-lock.yaml` when attempting to fix a test environment failure, which broke the repository's tooling configuration and constituted a massive, risky workspace side-effect.
+**Action:** Never unilaterally delete or replace lockfiles (e.g., `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) or `node_modules` without explicit instruction. If a test environment has pre-existing issues, proceed as-is or gracefully document the failure without altering the package manager setup.
