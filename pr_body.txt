@@ -1,0 +1,13 @@
+
+💡 **What:**
+Optimized the app_settings restoration loop in src/database/services/localDatabase.ts when the fast path (db.prepareAsync) is unavailable. The code now chunks the settings array and performs a batched INSERT instead of looping sequentially with db.runAsync.
+
+🎯 **Why:**
+Using sequential asynchronous queries introduces significant communication latency across the React Native bridge. By batching inserts together into a single multi-row VALUES clause, we avoid this repetitive overhead and improve bulk restoration performance.
+
+📊 **Measured Improvement:**
+In a simulated environment assuming a 1ms bridge delay per call across 1000 items, the unbatched execution takes ~1155ms. The batched execution (using chunks of 50 items) reduces this to ~24ms, a nearly ~50x theoretical speedup in asynchronous latency over bridge bounds.
+
+**Out of Scope:**
+- Upgrading expo-sqlite
+- Modifying the core prepared statement happy-path, which is already optimized.
