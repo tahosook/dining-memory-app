@@ -406,12 +406,18 @@ export async function replaceDatabaseWithBackup(
           await insertSettingStatement.finalizeAsync();
         }
       } else {
-        for (const setting of appSettings) {
+        // Optimization: Batch inserts to minimize asynchronous overhead when prepareAsync is unavailable
+        const chunkSize = 50;
+        for (let i = 0; i < appSettings.length; i += chunkSize) {
+          const chunk = appSettings.slice(i, i + chunkSize);
+          const placeholders = chunk.map(() => '(?, ?, ?)').join(', ');
+          const args: (string | number | null)[] = [];
+          for (const setting of chunk) {
+            args.push(setting.key, setting.value ?? null, setting.updated_at);
+          }
           await db.runAsync(
-            'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)',
-            setting.key,
-            setting.value ?? null,
-            setting.updated_at
+            `INSERT INTO app_settings (key, value, updated_at) VALUES ${placeholders}`,
+            ...args
           );
         }
       }
