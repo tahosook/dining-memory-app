@@ -5,28 +5,21 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { CameraView, PermissionResponse } from 'expo-camera';
 import { ROUTE_NAMES } from '../../constants/CameraConstants';
-import { MealService } from '../../database/services/MealService';
-import { openAppSettings } from '../../utils/openAppSettings';
 import type { RootTabParamList } from '../../navigation/types';
 import type { AppliedMealInputAssistMetadata } from '../../ai/mealInputAssist/types';
-import {
-  createCaptureReviewState,
-  type CaptureReviewEditableField,
-  type CaptureReviewSource,
-  type CaptureReviewState,
-  type ReviewablePhoto,
-} from './captureReviewState';
+
 import {
   isWebWithoutCameraPermission,
   pickPhotoFromLibraryForReview,
   takePhotoForReview,
 } from './photoAcquisition';
-import { ensureAndroidPhotoSavePermission } from './photoSavePermission';
 import { getCurrentLocationSnapshot } from './locationSnapshot';
 import { cleanupTempFile } from '../../media/tempFiles';
 import { persistCapturePhotoLocally } from './capturePhotoPersistence';
 import { savePhotoToMediaLibrary } from './mediaLibrarySave';
 import { saveCaptureReviewWorkflow } from './captureSaveWorkflow';
+import { useCaptureReview } from './useCaptureReview';
+import { usePhotoSavePermission } from './usePhotoSavePermission';
 
 export type { CaptureReviewEditableField, CaptureReviewState } from './captureReviewState';
 
@@ -50,116 +43,21 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
   const savingCaptureRef = useRef(false);
   const captureAttemptIdRef = useRef(0);
   const saveAttemptIdRef = useRef(0);
-  const captureReviewRequestIdRef = useRef(0);
-  const captureReviewManualHomemadeOverrideRef = useRef(false);
   const [takingPhoto, setTakingPhoto] = useState(false);
   const [pickingPhotoFromLibrary, setPickingPhotoFromLibrary] = useState(false);
   const [savingCapture, setSavingCapture] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
-  const [captureReview, setCaptureReview] = useState<CaptureReviewState | null>(null);
-  const captureReviewRef = useRef<CaptureReviewState | null>(null);
-  captureReviewRef.current = captureReview;
+
+  const { ensurePhotoSavePermission } = usePhotoSavePermission();
+  const { captureReview, captureReviewRef, beginReview, updateCaptureReview, clearReview } = useCaptureReview();
 
   // 撮影中の状態管理
   const isTakingPhoto = takingPhoto;
-
-  const openPhotoSettings = useCallback(async () => {
-    await openAppSettings({
-      errorLogLabel: 'Open photo settings error',
-      alertMessage: 'アプリの設定画面から写真の保存権限を許可してください。',
-    });
-  }, []);
-
-  const promptForPhotoSavePermission = useCallback(() => {
-    Alert.alert(
-      '写真の保存権限が必要です',
-      'Dining Memory アルバムへ写真を保存するには、アプリ設定で写真の保存権限を許可してください。',
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '設定を開く',
-          onPress: async () => {
-            await openPhotoSettings();
-          },
-        },
-      ]
-    );
-  }, [openPhotoSettings]);
-
-  const ensurePhotoSavePermission = useCallback(async (): Promise<boolean> => {
-    const hasPermission = await ensureAndroidPhotoSavePermission();
-    if (hasPermission) {
-      return true;
-    }
-
-    promptForPhotoSavePermission();
-    return false;
-  }, [promptForPhotoSavePermission]);
 
   // レコード画面への遷移
   const navigateToRecords = useCallback(() => {
     navigation.navigate(ROUTE_NAMES.RECORDS);
   }, [navigation]);
-
-  const applyNearbyHomemadeDefault = useCallback(async (reviewRequestId: number) => {
-    try {
-      const locationSnapshot = await getCurrentLocationSnapshot();
-      if (
-        captureReviewRequestIdRef.current !== reviewRequestId ||
-        captureReviewManualHomemadeOverrideRef.current
-      ) {
-        return;
-      }
-
-      if (
-        typeof locationSnapshot.latitude !== 'number' ||
-        typeof locationSnapshot.longitude !== 'number'
-      ) {
-        return;
-      }
-
-      const defaultValue = await MealService.getRecentNearbyHomemadeDefault({
-        latitude: locationSnapshot.latitude,
-        longitude: locationSnapshot.longitude,
-      });
-
-      if (
-        captureReviewRequestIdRef.current !== reviewRequestId ||
-        captureReviewManualHomemadeOverrideRef.current
-      ) {
-        return;
-      }
-
-      if (typeof defaultValue !== 'boolean') {
-        return;
-      }
-
-      setCaptureReview(current => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          isHomemade: defaultValue,
-        };
-      });
-    } catch {
-      // 位置取得や履歴参照に失敗しても、手動入力と保存を優先する
-    }
-  }, []);
-
-  const beginReview = useCallback(
-    (photo: ReviewablePhoto, source: CaptureReviewSource) => {
-      const reviewRequestId = captureReviewRequestIdRef.current + 1;
-      captureReviewRequestIdRef.current = reviewRequestId;
-      captureReviewManualHomemadeOverrideRef.current = false;
-
-      setCaptureReview(createCaptureReviewState(photo, source));
-      void applyNearbyHomemadeDefault(reviewRequestId);
-    },
-    [applyNearbyHomemadeDefault]
-  );
 
   // 写真撮影のメイン関数
   const takePicture = useCallback(async (): Promise<void> => {
@@ -237,33 +135,13 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
     navigateToRecords();
   }, [navigateToRecords]);
 
-  const updateCaptureReview = useCallback(
-    (field: CaptureReviewEditableField, value: string | boolean) => {
-      if (field === 'isHomemade') {
-        captureReviewManualHomemadeOverrideRef.current = true;
-      }
-
-      setCaptureReview(current => {
-        if (!current) {
-          return current;
-        }
-
-        return {
-          ...current,
-          [field]: value,
-        };
-      });
-    },
-    []
-  );
-
   const cancelReview = useCallback(() => {
     if (savingCaptureRef.current) {
       return;
     }
 
-    setCaptureReview(null);
-  }, []);
+    clearReview();
+  }, [clearReview]);
 
   useFocusEffect(
     useCallback(() => {
@@ -276,14 +154,14 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
           return true;
         }
 
-        setCaptureReview(null);
+        clearReview();
         return true;
       });
 
       return () => {
         subscription.remove();
       };
-    }, [])
+    }, [clearReview, captureReviewRef])
   );
 
   const saveCapture = useCallback(
@@ -347,7 +225,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
             })
           );
         }
-        setCaptureReview(null);
+        clearReview();
         navigateToRecords();
       } catch {
         if (shouldLogCaptureDiagnostics()) {
@@ -366,7 +244,7 @@ export const useCameraCapture = (cameraPermission: PermissionResponse | null) =>
         setSavingCapture(false);
       }
     },
-    [cameraPermission, captureReview, ensurePhotoSavePermission, navigateToRecords]
+    [cameraPermission, captureReview, ensurePhotoSavePermission, navigateToRecords, clearReview]
   );
 
   return {
