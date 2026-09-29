@@ -541,27 +541,46 @@ export class BackupService {
       }
 
       // 2. Copy all verified photos to documentDirectory (Fail-fast: no best-effort)
-      // Must remain sequential to guarantee fail-fast behavior without lingering background writes
-      for (const fileName of uniquePhotosToRestore) {
-        const sourcePath = `${stagingDir}photos/${fileName}`;
-        const destPath = `${targetDocDir}${fileName}`;
+      // Optimized: Chunked parallelization for I/O efficiency while maintaining fail-fast behavior
+      const photosList = Array.from(uniquePhotosToRestore);
+      for (let i = 0; i < photosList.length; i += CONCURRENCY_LIMIT) {
+        const chunk = photosList.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          chunk.map(async fileName => {
+            const sourcePath = `${stagingDir}photos/${fileName}`;
+            const destPath = `${targetDocDir}${fileName}`;
 
-        const sourceInfo = await getInfoAsync(sourcePath);
-        if (!sourceInfo.exists) {
-          throw new Error('写真ファイルが見つかりません。');
+            const sourceInfo = await getInfoAsync(sourcePath);
+            if (!sourceInfo.exists) {
+              throw new Error('写真ファイルが見つかりません。');
+            }
+
+            await copyAsync({
+              from: sourcePath,
+              to: destPath,
+            });
+
+            const destInfo = await getInfoAsync(destPath);
+            if (!destInfo.exists) {
+              throw new Error('写真ファイルのコピーに失敗しました。');
+            }
+            return fileName;
+          })
+        );
+
+        // Record all successes first to ensure rollback/cleanup works correctly
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            copiedFiles.add(result.value);
+          }
         }
 
-        await copyAsync({
-          from: sourcePath,
-          to: destPath,
-        });
-
-        const destInfo = await getInfoAsync(destPath);
-        if (!destInfo.exists) {
-          throw new Error('写真ファイルのコピーに失敗しました。');
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length > 0) {
+          // Re-throw the first error encountered in the chunk,
+          // ensuring all promises in this chunk have finished executing
+          throw (failures[0] as PromiseRejectedResult).reason;
         }
-
-        copiedFiles.add(fileName);
       }
 
       // 3. Deserialize portable meals with rewritten photo_path and null thumbnail_path
