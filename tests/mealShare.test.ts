@@ -110,12 +110,20 @@ describe('mealShare', () => {
     });
 
     test('handles file inspection error gracefully', async () => {
-      (getInfoAsync as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const testError = new Error('Permission denied');
+      (getInfoAsync as jest.Mock).mockRejectedValue(testError);
 
       const debugInfo = await inspectSharePhoto('file:///data/user/0/com.app/files/error.jpg');
 
       expect(debugInfo.exists).toBeUndefined();
       expect(debugInfo.fileSize).toBeUndefined();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[MealShare] Failed to inspect photoUri file info:',
+        testError
+      );
+
+      consoleWarnSpy.mockRestore();
     });
 
     test('handles missing photo gracefully', async () => {
