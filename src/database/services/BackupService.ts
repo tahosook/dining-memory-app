@@ -98,26 +98,41 @@ export class BackupService {
       // Copy all referenced original photos to staging photos/ directory.
       // Missing photo/read errors abort immediately; copy failures are detected per chunk without proceeding to subsequent chunks.
 
-      // Step 1: Sequential validation of all photos (prevents EMFILE, aborts immediately on error)
-      for (const [, photoPath] of requiredPhotoMap.entries()) {
-        let fileInfo;
-        try {
-          fileInfo = await getInfoAsync(photoPath);
-        } catch {
-          throw new Error('バックアップ対象の写真ファイルの読み取りに失敗しました。');
-        }
+      // RN ブリッジ / FD 上限を踏まえた経験値。必要なら後で調整。
+      const CONCURRENCY_LIMIT = 25;
+      const photoEntries = Array.from(requiredPhotoMap.entries());
 
-        if (!fileInfo || !fileInfo.exists) {
-          throw new Error('バックアップ対象の写真ファイルが端末内に見つかりません。');
+      // Step 1: Chunked parallel validation of all photos (prevents EMFILE, aborts quickly on error)
+      // Detects failures per chunk and aborts without proceeding to subsequent chunks.
+      for (let i = 0; i < photoEntries.length; i += CONCURRENCY_LIMIT) {
+        const chunk = photoEntries.slice(i, i + CONCURRENCY_LIMIT);
+        const results = await Promise.allSettled(
+          chunk.map(async ([, photoPath]) => {
+            const fileInfo = await getInfoAsync(photoPath);
+            if (!fileInfo || !fileInfo.exists) {
+              throw new Error('バックアップ対象の写真ファイルが端末内に見つかりません。');
+            }
+            return fileInfo;
+          })
+        );
+
+        const failures = results.filter(r => r.status === 'rejected');
+        if (failures.length > 0) {
+          // If the error message is not our custom error, it's a read error
+          const reason = (failures[0] as PromiseRejectedResult).reason;
+          if (
+            reason instanceof Error &&
+            reason.message === 'バックアップ対象の写真ファイルが端末内に見つかりません。'
+          ) {
+            throw reason;
+          }
+          throw new Error('バックアップ対象の写真ファイルの読み取りに失敗しました。');
         }
       }
 
       // Step 2: Chunked parallel copy after all photos are verified to exist.
       // Detects failures per chunk and aborts without proceeding to subsequent chunks (chunk単位で失敗を検出し、失敗時に後続chunkへ進まない).
       const copiedSet = new Set<string>();
-      // RN ブリッジ / FD 上限を踏まえた経験値。必要なら後で調整。
-      const CONCURRENCY_LIMIT = 25;
-      const photoEntries = Array.from(requiredPhotoMap.entries());
 
       for (let i = 0; i < photoEntries.length; i += CONCURRENCY_LIMIT) {
         const chunk = photoEntries.slice(i, i + CONCURRENCY_LIMIT);
