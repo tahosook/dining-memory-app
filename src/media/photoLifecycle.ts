@@ -246,48 +246,65 @@ export async function cleanupOrphanedPhotoFiles(
   const failedFileNames: string[] = [];
   const skippedFileNames: string[] = [];
 
-  for (let i = 0; i < scanResult.orphanUris.length; i++) {
-    const uri = scanResult.orphanUris[i];
-    const fileName = scanResult.orphanFileNames[i];
+  // Optimization: use chunked parallelization to speed up large deletions without hitting bridge limits
+  const CONCURRENCY_LIMIT = 25;
 
-    // 1. 安全な対象か（documentDirectory 直下、かつ命名規則を満たしていることを確認）
-    if (!uri.startsWith(docDir) || !matcher(fileName)) {
-      console.warn(
-        '[photoLifecycle] Refusing to delete file that violated safety invariants:',
-        uri
-      );
-      failedFileNames.push(fileName);
-      continue;
-    }
-
-    // 早期スキップ判定（ループ開始時点で既に参照されていた場合）
-    if (dbReferenced.has(fileName) || dbReferenced.has(uri)) {
-      skippedFileNames.push(fileName);
-      continue;
-    }
+  for (let i = 0; i < scanResult.orphanUris.length; i += CONCURRENCY_LIMIT) {
+    const chunkUris = scanResult.orphanUris.slice(i, i + CONCURRENCY_LIMIT);
+    const chunkNames = scanResult.orphanFileNames.slice(i, i + CONCURRENCY_LIMIT);
 
     // 2. 最新DB参照を確認（削除直前に必ず実DBから最新状態を取得して race condition を完全に防止）
-    // options.referencedPaths は使用しない：古いスナップショットで最終判定を行うと
-    // scan 後〜delete 直前にDB参照が追加された写真を誤削除する可能性があるため
+    // チャンク単位で1度だけ取得することでDB負荷を最適化。
     const latestReferenced = await getReferencedPhotoPaths(options);
-    if (latestReferenced.has(fileName) || latestReferenced.has(uri)) {
-      skippedFileNames.push(fileName);
-      continue;
-    }
 
     // 3. 最新in-flight thumbnail状態を確認 (Issue #102 競合防止)
     const currentInFlight = getInFlightThumbnailProtectionSet();
-    if (currentInFlight.has(fileName) || currentInFlight.has(uri)) {
-      skippedFileNames.push(fileName);
-      continue;
-    }
 
-    try {
-      await deleteAsync(uri, { idempotent: true });
-      deletedFileNames.push(fileName);
-    } catch (deleteError) {
-      console.warn(`[photoLifecycle] Failed to delete orphan photo: ${uri}`, deleteError);
-      failedFileNames.push(fileName);
+    const chunkResults = await Promise.allSettled(
+      chunkUris.map(async (uri, index) => {
+        const fileName = chunkNames[index];
+
+        // 1. 安全な対象か（documentDirectory 直下、かつ命名規則を満たしていることを確認）
+        if (!uri.startsWith(docDir) || !matcher(fileName)) {
+          console.warn(
+            '[photoLifecycle] Refusing to delete file that violated safety invariants:',
+            uri
+          );
+          failedFileNames.push(fileName);
+          return;
+        }
+
+        // 早期スキップ判定（ループ開始時点で既に参照されていた場合）
+        if (dbReferenced.has(fileName) || dbReferenced.has(uri)) {
+          skippedFileNames.push(fileName);
+          return;
+        }
+
+        if (latestReferenced.has(fileName) || latestReferenced.has(uri)) {
+          skippedFileNames.push(fileName);
+          return;
+        }
+
+        if (currentInFlight.has(fileName) || currentInFlight.has(uri)) {
+          skippedFileNames.push(fileName);
+          return;
+        }
+
+        try {
+          await deleteAsync(uri, { idempotent: true });
+          deletedFileNames.push(fileName);
+        } catch (deleteError) {
+          console.warn(`[photoLifecycle] Failed to delete orphan photo: ${uri}`, deleteError);
+          failedFileNames.push(fileName);
+        }
+      })
+    );
+
+    // Fail-fast behavior for unexpected errors (e.g. database errors in getReferencedPhotoPaths)
+    for (const result of chunkResults) {
+      if (result.status === 'rejected') {
+        throw result.reason;
+      }
     }
   }
 
