@@ -440,6 +440,37 @@ describe('MediaPipe model installer', () => {
     }
   });
 
+  test('throws original error and leaves backup file when restore fails after model placement fails', async () => {
+    const targetPath = resolveMediaPipeModelPath()!;
+    fileSystemMock.__mock.existingFiles.add(targetPath);
+    await AppSettingsService.setMediaPipeModelStatus('ready');
+    await AppSettingsService.setMediaPipeModelVersion('v1');
+
+    fileSystemMock.moveAsync.mockImplementation(async ({ from, to }: { from: string; to: string }) => {
+      // 1. Target placement fails (moves from temporary download to target path)
+      if (to === targetPath && !from.includes('.backup-')) {
+        throw new Error('disk full during model placement');
+      }
+      // 2. Backup restoration fails (moves from backup back to target path)
+      if (to === targetPath && from.includes('.backup-')) {
+        throw new Error('disk full during backup restoration');
+      }
+      return defaultMoveAsync({ from, to });
+    });
+
+    try {
+      await expect(redownloadMediaPipeModel()).rejects.toThrow('disk full during model placement');
+
+      // The target path should not exist since placement failed and restore failed
+      expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(false);
+      // The backup file should still exist
+      expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(true);
+      expect(fileSystemMock.__mock.downloads.size).toBe(0);
+    } finally {
+      fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
+    }
+  });
+
   test('cleans up temporary backup file after successful replacement during redownload', async () => {
     const targetPath = resolveMediaPipeModelPath()!;
     fileSystemMock.__mock.existingFiles.add(targetPath);
