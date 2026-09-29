@@ -51,3 +51,7 @@ WCAG / アクセシビリティ（a11y）、スクリーンリーダー対応、
 ### 2026-09-26 - Dynamic Accessibility State for Segmented Controls / Tabs
 **Learning:** Found a custom segmented control / tab bar for statistics periods (StatsScreen.tsx) that changed visual state (selected tab) but didn't announce its `selected` state to screen readers, leaving users unaware of which tab was currently active.
 **Action:** Next time, when building custom segmented controls or tab bars with `Pressable` or `TouchableOpacity`, always include `accessibilityRole="button"` and `accessibilityState={{ selected: isSelected }}`. An `accessibilityLabel` is unnecessary if the child `<Text>` already provides the exact label, avoiding redundant announcements.
+
+### 2026-09-28 - Switch Component Accessibility in React Native
+**Learning:** React Native's `Switch` component does not automatically convey its role or checked state correctly to all screen readers on both iOS and Android platforms without explicit properties.
+**Action:** Always include `accessibilityRole="switch"`, `accessibilityLabel`, and `accessibilityState={{ checked: value }}` when using a `Switch` component.
