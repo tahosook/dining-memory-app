@@ -98,4 +98,37 @@ describe('useCameraPermission', () => {
 
     expect(Alert.alert).toHaveBeenCalledWith('設定を開けませんでした', 'アプリの設定画面からカメラ権限を許可してください。');
   });
+
+  test('handles generic permission request error without exposing raw error message to alert', async () => {
+    const requestPermission = jest.fn().mockRejectedValue(new Error('/var/mobile/secret_path/crash.log'));
+    (useCameraPermissions as jest.Mock).mockReturnValue([undeterminedPermission, requestPermission]);
+
+    const { result } = renderHook(() => useCameraPermission());
+
+    await act(async () => {
+      await result.current.requestPermissions();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith('エラー', '権限確認中にエラーが発生しました。');
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Permission request failed:',
+      expect.anything()
+    );
+  });
+
+  test('handles camera-specific initialization error alert', async () => {
+    const requestPermission = jest.fn().mockRejectedValue(new Error('failed to initialize camera'));
+    (useCameraPermissions as jest.Mock).mockReturnValue([undeterminedPermission, requestPermission]);
+
+    const { result } = renderHook(() => useCameraPermission());
+
+    await act(async () => {
+      await result.current.requestPermissions();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'カメラエラー',
+      'カメラの初期化に失敗しました。Expo Goを再起動するか、開発ビルドを使用してください。'
+    );
+  });
 });

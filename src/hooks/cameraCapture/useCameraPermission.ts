@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { Alert } from 'react-native';
 import { PermissionResponse, useCameraPermissions } from 'expo-camera';
 import { openAppSettings as openSystemSettings } from '../../utils/openAppSettings';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 export type CameraPermissionUiState = 'checking' | 'needs_request' | 'denied' | 'granted';
 
@@ -20,7 +21,7 @@ export const useCameraPermission = (): CameraPermissionState => {
   const [permission, requestPermission] = useCameraPermissions();
 
   const handlePermissionError = useCallback((error: unknown): void => {
-    console.error('Permission request failed.');
+    console.error('Permission request failed:', sanitizeLogObject(error));
 
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     if (errorMessage.includes('camera')) {
@@ -34,7 +35,7 @@ export const useCameraPermission = (): CameraPermissionState => {
         'カメラ権限が拒否されました。アプリの設定から権限を許可してください。'
       );
     } else {
-      Alert.alert('エラー', `権限確認中にエラーが発生しました: ${errorMessage}`);
+      Alert.alert('エラー', '権限確認中にエラーが発生しました。');
     }
   }, []);
 
