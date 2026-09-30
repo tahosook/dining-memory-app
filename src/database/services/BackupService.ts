@@ -245,6 +245,15 @@ export class BackupService {
           };
         }
 
+        // Prevent absolute paths to avoid extracting outside the staging directory
+        if (path.startsWith('/') || path.startsWith('\\')) {
+          await this.cleanupStaging(stagingDir);
+          return {
+            valid: false,
+            error: 'バックアップファイルに不正な絶対パスが含まれています。',
+          };
+        }
+
         // Whitelist directories/files.
         // In our export format, we only expect:
         // manifest.json, database/meals.json, database/app_settings.json, and photos/*
@@ -257,15 +266,6 @@ export class BackupService {
           return {
             valid: false,
             error: 'バックアップファイルに未許可のファイルが含まれています。',
-          };
-        }
-
-        // Prevent absolute paths to avoid extracting outside the staging directory
-        if (path.startsWith('/') || path.startsWith('\\')) {
-          await this.cleanupStaging(stagingDir);
-          return {
-            valid: false,
-            error: 'バックアップファイルに不正な絶対パスが含まれています。',
           };
         }
       }
