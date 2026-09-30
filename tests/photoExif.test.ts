@@ -60,6 +60,14 @@ describe('photoExif', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (readAsStringAsync as jest.Mock).mockResolvedValue('ORIGINAL_BASE64');
+    (piexif.load as jest.Mock).mockReturnValue({
+      '0th': {},
+      Exif: {},
+      GPS: {},
+      Interop: {},
+      '1st': {},
+      thumbnail: null,
+    });
     (piexif.dump as jest.Mock).mockReturnValue('EXIF_BYTES');
     (piexif.remove as jest.Mock).mockReturnValue('data:image/jpeg;base64,STRIPPED_BASE64');
     (piexif.insert as jest.Mock).mockReturnValue('data:image/jpeg;base64,UPDATED_BASE64');
@@ -186,5 +194,75 @@ describe('photoExif', () => {
       '1st': {},
       thumbnail: null,
     });
+  });
+
+  test('recovers and creates EXIF from scratch if EXIF parsing fails with an EXIF error string', async () => {
+    (piexif.load as jest.Mock).mockImplementation(() => {
+      throw 'Corrupted exif data';
+    });
+
+    await writePhotoExifToJpeg('file:///photo.jpg', {
+      capturedAt,
+      softwareName: 'Dining Memory',
+    });
+
+    expect(piexif.dump).toHaveBeenCalledWith({
+      '0th': {
+        274: 1,
+        305: 'Dining Memory',
+      },
+      Exif: {
+        36867: formatExpectedLocalExifDateTime(capturedAt),
+        36868: formatExpectedLocalExifDateTime(capturedAt),
+      },
+      GPS: {},
+      Interop: {},
+      '1st': {},
+      thumbnail: null,
+    });
+  });
+
+  test('re-throws standard Error if EXIF parsing fails with a non-EXIF error', async () => {
+    const error = new Error('Invalid JPEG format');
+    (piexif.load as jest.Mock).mockImplementation(() => {
+      throw error;
+    });
+
+    await expect(
+      writePhotoExifToJpeg('file:///photo.jpg', {
+        capturedAt,
+        softwareName: 'Dining Memory',
+      })
+    ).rejects.toThrow(error);
+  });
+
+  test('re-throws string exception if EXIF parsing fails with a non-EXIF error string', async () => {
+    const errorString = 'Invalid JPEG format';
+    (piexif.load as jest.Mock).mockImplementation(() => {
+      throw errorString;
+    });
+
+    await expect(
+      writePhotoExifToJpeg('file:///photo.jpg', {
+        capturedAt,
+        softwareName: 'Dining Memory',
+      })
+    ).rejects.toEqual(errorString);
+  });
+
+  test('returns original JPEG string when EXIF stripping fails', async () => {
+    (piexif.remove as jest.Mock).mockImplementation(() => {
+      throw new Error('Failed to remove EXIF');
+    });
+
+    await writePhotoExifToJpeg('file:///photo.jpg', {
+      capturedAt,
+      softwareName: 'Dining Memory',
+    });
+
+    expect(piexif.insert).toHaveBeenCalledWith(
+      expect.anything(),
+      'data:image/jpeg;base64,ORIGINAL_BASE64'
+    );
   });
 });
