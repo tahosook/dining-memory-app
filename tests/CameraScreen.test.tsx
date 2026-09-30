@@ -524,6 +524,44 @@ describe('CameraScreen', () => {
       expect((await findByTestId('notes-input')).props.placeholder).toBe('メモ');
     });
 
+    test('provides accessibility attributes for form inputs and switch with isHomemade=false', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview({ isHomemade: false }),
+      }));
+
+      const { findByTestId } = render(<CameraScreen />);
+
+      const mealNameInput = await findByTestId('meal-name-input');
+      expect(mealNameInput.props.accessibilityLabel).toBe('料理名');
+
+      fireEvent.press(await findByTestId('location-input-trigger'));
+      fireEvent.press(await findByTestId('notes-input-trigger'));
+
+      const locationInput = await findByTestId('location-input');
+      expect(locationInput.props.accessibilityLabel).toBe('場所');
+
+      const notesInput = await findByTestId('notes-input');
+      expect(notesInput.props.accessibilityLabel).toBe('メモ');
+
+      const homemadeSwitch = await findByTestId('homemade-switch');
+      expect(homemadeSwitch.props.accessibilityRole).toBe('switch');
+      expect(homemadeSwitch.props.accessibilityLabel).toBe('自炊');
+      expect(homemadeSwitch.props.accessibilityState).toEqual({ checked: false });
+    });
+
+    test('sets accessibilityState.checked to true on homemade switch when isHomemade is true', async () => {
+      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
+        captureReview: createCaptureReview({ isHomemade: true }),
+      }));
+
+      const { findByTestId } = render(<CameraScreen />);
+
+      const homemadeSwitch = await findByTestId('homemade-switch');
+      expect(homemadeSwitch.props.accessibilityRole).toBe('switch');
+      expect(homemadeSwitch.props.accessibilityLabel).toBe('自炊');
+      expect(homemadeSwitch.props.accessibilityState).toEqual({ checked: true });
+    });
+
     test('requests AI suggestions when the assist button is pressed', async () => {
       const requestSuggestions = jest.fn().mockResolvedValue(undefined);
       (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
