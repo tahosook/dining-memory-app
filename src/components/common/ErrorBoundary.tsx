@@ -2,6 +2,7 @@ import React, { Component, type ErrorInfo, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { GlobalStyles } from '../../constants/Styles';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 interface Props {
   children: ReactNode;
@@ -26,16 +27,13 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, _errorInfo: ErrorInfo) {
     // SECURITY: Sanitize error logging to prevent leaking sensitive PII or tokens
     // that might be present in the raw error object or stack traces.
-    // We only log safe fields (name, message).
-    const safeError = {
-      name: error.name,
-      message: error.message,
-    };
+    const safeError = sanitizeLogObject(error);
 
     console.error('CameraScreen Error:', safeError);
     // Component stack traces can contain sensitive data like props, so we omit errorInfo.
 
-    // TODO: Send sanitized error to monitoring service (e.g., Sentry)
+    // Note: Integration with external monitoring SDKs (like Sentry) is deferred
+    // to the infrastructure task (Issue #51). For now, we rely on standard logging.
   }
 
   handleRetry = () => {
