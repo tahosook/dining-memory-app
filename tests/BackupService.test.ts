@@ -660,6 +660,40 @@ describe('BackupService', () => {
       expect(result.valid).toBe(false);
     });
 
+    test('rejects backup containing malicious absolute path in zip contents', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: '/etc/passwd' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('不正な絶対パス');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing malicious Windows absolute path in zip contents', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: '\\Windows\\evil.exe' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('不正な絶対パス');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
     test('rejects backup when app_settings.json has invalid JSON syntax', async () => {
       (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
         canceled: false,

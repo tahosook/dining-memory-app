@@ -49,8 +49,3 @@ OWASP ガイドライン、Zip Slip、SQLi、パストラバーサル、機微�
 **Vulnerability:** Calling `unzip()` directly on untrusted zip files could expose the staging directory to path traversal (`../`) or unapproved files.
 **Learning:** Even if native libraries implement basic safeguards, extracting an entire archive allows potentially dangerous files to hit the file system before JS validation. `react-native-zip-archive`'s `listContents` is essential for pre-flight verification.
 **Prevention:** Implement Defense-in-Depth. Use `listContents` to strictly whitelist allowed file paths and explicitly reject malicious patterns (e.g. `../`, null bytes) *before* calling `unzip()`.
-
-### 2026-09-28 - Zip Slip / Absolute Path Extraction Prevention
-**Vulnerability:** Even when relative path traversal (`../`) is blocked, calling `unzip()` on untrusted zip files could expose the filesystem to Zip Slip if entries contain absolute paths (e.g., `/data/...`).
-**Learning:** Checking for `../` is not enough. Absolute paths can also be used maliciously to extract files outside the designated staging directory, particularly on Unix-based OS like Android/iOS.
-**Prevention:** In addition to blocking relative traversal, always explicitly reject absolute paths (starting with `/` or `\\`) during the `listContents` pre-flight verification before invoking `unzip`.
