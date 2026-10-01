@@ -72,3 +72,6 @@
 **Learning:** In a React Native Expo environment, using an unbounded `Promise.all` to perform massive concurrent file system operations (like `getInfoAsync` for thumbnails across hundreds of meals) can cause bridge congestion, EMFILE errors, and Out-Of-Memory (OOM) crashes.
 **Action:** Use bounded chunk concurrency with `Promise.allSettled` instead of unbounded `Promise.all` for bulk I/O tasks like checking file existence to ensure stability without sacrificing throughput. (In `mealThumbnail.ts`, `CONCURRENCY_LIMIT = 25` represents the bounded concurrency value chosen for this specific implementation at this time to avoid bridge congestion, rather than a generalized system-wide recommendation. It remains separate from `MAX_CONCURRENT_THUMBNAILS = 2` for the thumbnail generation queue).
 
+## 2024-05-20 - Unnecessary LRU Cache
+**Learning:** SQLite primary key lookups (< 0.2ms) do not need LRU caches. Adding one introduces high risk of stale data.
+**Action:** Do not attempt to add LRU cache for standard indexed queries without evidence of a massive bottleneck.
