@@ -23,11 +23,15 @@
 ### Future-triggered evaluation（将来トリガー待ち評価）
 - Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能特性と移行トリガーの実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では実装見送りとし、正しいタイブレーカー条件を文書化。20,000件超かつ深いスクロール・大量同期時に別Issueで実装 ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
 - 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では本番INDEX追加を見送り、10,000件以上を「再評価トリガー」として記録（実機体感・データ分布等と併せて別Issueで判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
+- バックアップ復元の写真コピー並列化 — 再開条件と必須 Evidence の定義: 将来トリガー待ち評価（GitHub Issue #229、内部ドキュメント issue-14）。低スペック端末を含む実機実測データ・ロールバック整合性テスト・並列度根拠が揃うまで実装見送り（Refs #220、[docs/issues/issue-14-backup-restore-concurrency-criteria.md](docs/issues/issue-14-backup-restore-concurrency-criteria.md)）。
+- Expo SQLite prepareAsync 可用性の根拠固定: 将来トリガー待ち評価（GitHub Issue #231）。現行ランタイムでの prepareAsync 常時利用可能の根拠を固定し、SDKアップグレード時の再確認トリガーを定義（Refs #209, #197）。
 
 ### Backlog / Future ideas（バックログ・将来検討）
 - EXIF / GPS / ファイル名保存方針: 要確認。保存時 EXIF / GPS は実装方針あり。backup / export / file naming まで広げる場合は data policy と privacy を再確認する。
 - X共有導線: 候補。現在は Records detail から OS share sheet へ明示操作で進む最小導線がある。投稿状態保存や自動送信はしない。
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
+- mealShare エラーパス統合テストの完全性確認: 調査・確認候補（GitHub Issue #230）。Issue #228 で統合したエラーパス・フォールバック検証の完全性チェックリスト照合（Refs #228, #226, #211, #202, #196）。
+- BackupService Zip Slip 拒否ケースのテスト行列確認: 調査・確認候補（GitHub Issue #232）。PR #194 マージ後の絶対パス・トラバーサル拒否テスト行列の確認（Refs #194）。
 
 ## Done / Historical Notes
 - エージェント運用のガバナンス刷新と機械的 PR ゲートの最適化 (Core Machine-Enforced & Evidence-Based Governance): 自然言語禁止リストの肥大化を廃止し、3層構造（`.jules/rules.md` での意思決定ポリシー、`bolt.md`/`sentinel.md` での標準5セクションペルソナ定義、および `scripts/verify-pr-gates.sh` による機械的ゲート）を配備。差分ゼロ・テスト削除・テスト弱体化および PR 本文 Evidence Gate を CI で物理遮断し、`any`・エスケープハッチは ESLint で静的検査、PR 本文修正時の CI 自動再検証（`pull_request.edited` トリガー）を配備。
