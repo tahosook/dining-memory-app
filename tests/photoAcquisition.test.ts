@@ -11,10 +11,6 @@ import { CAMERA_CONSTANTS } from '../src/constants/CameraConstants';
 
 import * as ImagePicker from 'expo-image-picker';
 
-jest.mock('expo-image-picker', () => ({
-  launchImageLibraryAsync: jest.fn(),
-}));
-
 jest.mock('../src/hooks/cameraCapture/useCameraCaptureMock', () => ({
   CameraCaptureMock: {
     createMockImage: jest.fn(),
