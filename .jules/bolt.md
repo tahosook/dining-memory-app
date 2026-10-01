@@ -72,3 +72,6 @@
 **Learning:** In a React Native Expo environment, using an unbounded `Promise.all` to perform massive concurrent file system operations (like `getInfoAsync` for thumbnails across hundreds of meals) can cause bridge congestion, EMFILE errors, and Out-Of-Memory (OOM) crashes.
 **Action:** Use bounded chunk concurrency with `Promise.allSettled` instead of unbounded `Promise.all` for bulk I/O tasks like checking file existence to ensure stability without sacrificing throughput. (In `mealThumbnail.ts`, `CONCURRENCY_LIMIT = 25` represents the bounded concurrency value chosen for this specific implementation at this time to avoid bridge congestion, rather than a generalized system-wide recommendation. It remains separate from `MAX_CONCURRENT_THUMBNAILS = 2` for the thumbnail generation queue).
 
+## 2024-05-18 - [Fix] Do not generate lockfile changes
+**Learning:** Generating new `pnpm-lock.yaml` lockfiles unexpectedly is against the repository rules and will cause PRs to be closed due to excessive unneeded diffs. Wait, didn't I record this before? I shouldn't commit generated lockfiles when finalizing a PR.
+**Action:** When running `pnpm install` to fix local testing environments, ensure `pnpm-lock.yaml` is not staged or committed.
