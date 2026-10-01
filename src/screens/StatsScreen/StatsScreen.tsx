@@ -5,6 +5,11 @@ import { ScreenStateCard } from '../../components/common/ScreenStateCard';
 import { Colors } from '../../constants/Colors';
 import { MealService, type StatisticsSummary } from '../../database/services/MealService';
 import { sanitizeLogObject } from '../../utils/logSanitizer';
+import { SummaryCard } from './components/SummaryCard';
+import { TopRankingCard } from './components/TopRankingCard';
+import { STATS_PERIODS } from './constants';
+import type { StatsPeriodKey } from './types';
+import { buildReflectionText, getStatsPeriodRange } from './utils';
 
 const emptyStats: StatisticsSummary = {
   totalMeals: 0,
@@ -13,15 +18,6 @@ const emptyStats: StatisticsSummary = {
   topCuisines: [],
   topLocations: [],
 };
-
-type StatsPeriodKey = 'last7days' | 'thisMonth' | 'lastMonth' | 'all';
-
-const STATS_PERIODS: Array<{ key: StatsPeriodKey; label: string }> = [
-  { key: 'last7days', label: '7日' },
-  { key: 'thisMonth', label: '今月' },
-  { key: 'lastMonth', label: '先月' },
-  { key: 'all', label: '全期間' },
-];
 
 export default function StatsScreen() {
   const [stats, setStats] = useState<StatisticsSummary>(emptyStats);
@@ -183,111 +179,6 @@ export default function StatsScreen() {
   );
 }
 
-// Optimization: Extracted item rendering logic into a React.memo component
-// to prevent unnecessary re-renders of list items when StatsScreen re-renders.
-const SummaryCard = React.memo(function SummaryCardComponent({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <View style={styles.summaryCard}>
-      <Text style={styles.summaryLabel}>{label}</Text>
-      <Text style={styles.summaryValue}>{value}</Text>
-    </View>
-  );
-});
-
-// Optimization: Extracted item rendering logic into a React.memo component
-// to prevent unnecessary re-renders of list items when StatsScreen re-renders.
-const TopRankingCard = React.memo(function TopRankingCardComponent({
-  title,
-  emptyText,
-  items,
-}: {
-  title: string;
-  emptyText: string;
-  items: Array<{ label: string; count: number }>;
-}) {
-  return (
-    <View style={styles.detailCard}>
-      <Text style={styles.detailTitle}>{title}</Text>
-      {items.length > 0 ? (
-        items.map((item, index) => (
-          <View key={item.label} style={styles.rankingRow}>
-            <Text style={styles.rankingLabel}>
-              {index + 1}. {item.label}
-            </Text>
-            <Text style={styles.rankingCount}>{item.count}件</Text>
-          </View>
-        ))
-      ) : (
-        <Text style={styles.detailText}>{emptyText}</Text>
-      )}
-    </View>
-  );
-});
-
-function getStatsPeriodRange(period: StatsPeriodKey): { dateFrom?: Date; dateTo?: Date } {
-  const now = new Date();
-
-  if (period === 'all') {
-    return {};
-  }
-
-  if (period === 'last7days') {
-    const dateFrom = startOfDay(now);
-    dateFrom.setDate(dateFrom.getDate() - 6);
-    return {
-      dateFrom,
-      dateTo: endOfDay(now),
-    };
-  }
-
-  if (period === 'lastMonth') {
-    const dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
-    const dateTo = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-    return { dateFrom, dateTo };
-  }
-
-  return {
-    dateFrom: new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0),
-    dateTo: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999),
-  };
-}
-
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
-}
-
-function endOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
-}
-
-function buildReflectionText(
-  stats: StatisticsSummary,
-  periodLabel: string,
-  period: StatsPeriodKey
-) {
-  if (stats.totalMeals === 0) {
-    return 'この期間の食事記録はまだありません。';
-  }
-
-  const subject = period === 'all' ? 'これまで' : periodLabel;
-  const lines = [`${subject}は${stats.totalMeals}件の食事を記録しました。`];
-
-  if (stats.favoriteCuisine) {
-    lines.push(`よく食べたジャンルは${stats.favoriteCuisine}です。`);
-  }
-  if (stats.favoriteLocation) {
-    lines.push(`よく行った場所は${stats.favoriteLocation}です。`);
-  }
-
-  return lines.join('\n');
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -337,22 +228,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
   },
-  summaryCard: {
-    width: '47%',
-    backgroundColor: Colors.white,
-    borderRadius: 8,
-    padding: 16,
-    gap: 8,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: Colors.gray,
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
   reflectionCard: {
     backgroundColor: Colors.white,
     borderRadius: 8,
@@ -360,12 +235,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   balanceCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 8,
-    padding: 16,
-    gap: 10,
-  },
-  detailCard: {
     backgroundColor: Colors.white,
     borderRadius: 8,
     padding: 16,
@@ -390,20 +259,5 @@ const styles = StyleSheet.create({
   balanceFill: {
     height: '100%',
     backgroundColor: Colors.primary,
-  },
-  rankingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  rankingLabel: {
-    flex: 1,
-    fontSize: 15,
-    color: Colors.text,
-  },
-  rankingCount: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.text,
   },
 });
