@@ -11,6 +11,33 @@ export interface MealShareOptions {
   dialogTitle?: string;
 }
 
+export interface MealShareTextInput {
+  meal_name: string;
+  cuisine_type?: string | null;
+  notes?: string | null;
+  location_name?: string | null;
+}
+
+/**
+ * Builds the initial share text for a meal.
+ * Privacy rule: Location information (e.g., location_name, coordinates) is
+ * intentionally excluded from the share text to prevent unintentional disclosure
+ * of private locations / living areas on social media (Issue #228).
+ */
+export function buildMealShareText(meal: MealShareTextInput): string {
+  const parts = [`食事記録: ${meal.meal_name}`];
+
+  if (meal.cuisine_type) {
+    parts.push(`料理ジャンル: ${meal.cuisine_type}`);
+  }
+
+  if (meal.notes) {
+    parts.push(`メモ: ${meal.notes}`);
+  }
+
+  return parts.join('\n');
+}
+
 export type StorageLocationType =
   'cache' | 'document' | 'mediaStore' | 'external' | 'unknown' | 'none';
 

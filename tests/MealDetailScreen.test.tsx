@@ -862,11 +862,13 @@ describe('MealDetailScreen', () => {
     await waitFor(() => {
       expect(mockShareMeal).toHaveBeenCalledWith({
         title: '共有',
-        text: '食事記録: 焼き魚定食\n料理ジャンル: 和食\n場所: 自宅',
+        text: '食事記録: 焼き魚定食\n料理ジャンル: 和食\nメモ: 焼き加減がよかった',
         photoUri: 'file:///full-photo.jpg',
         mimeType: 'image/jpeg',
       });
     });
+    expect(mockShareMeal.mock.calls[0][0].text).not.toContain('自宅');
+    expect(mockShareMeal.mock.calls[0][0].text).not.toContain('場所');
     expect(Sharing.shareAsync).not.toHaveBeenCalled();
     expect(Share.share).not.toHaveBeenCalled();
   });
@@ -919,13 +921,15 @@ describe('MealDetailScreen', () => {
       expect(Share.share).toHaveBeenCalledWith(
         {
           title: '焼き魚定食',
-          message: '食事記録: 焼き魚定食\n料理ジャンル: 和食\n場所: 自宅',
+          message: '食事記録: 焼き魚定食\n料理ジャンル: 和食\nメモ: 焼き加減がよかった',
         },
         {
           dialogTitle: '共有',
         }
       );
     });
+    expect((Share.share as jest.Mock).mock.calls[0][0].message).not.toContain('自宅');
+    expect((Share.share as jest.Mock).mock.calls[0][0].message).not.toContain('場所');
     expect(Sharing.shareAsync).not.toHaveBeenCalled();
   });
 

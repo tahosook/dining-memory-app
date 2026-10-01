@@ -12,7 +12,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { shareMealContent } from '../../media/mealShare';
+import { buildMealShareText, shareMealContent } from '../../media/mealShare';
 import { DetailRow } from '../../components/common/DetailRow';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
 import {
@@ -62,17 +62,7 @@ function createMealEditDraft(meal: Meal): MealEditDraft {
 }
 
 function buildInitialShareText(meal: Meal): string {
-  const parts = [`食事記録: ${meal.meal_name}`];
-
-  if (meal.cuisine_type) {
-    parts.push(`料理ジャンル: ${meal.cuisine_type}`);
-  }
-
-  if (meal.location_name) {
-    parts.push(`場所: ${meal.location_name}`);
-  }
-
-  return parts.join('\n');
+  return buildMealShareText(meal);
 }
 
 function formatMealDate(mealDatetime: number): string {

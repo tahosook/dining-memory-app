@@ -2,6 +2,7 @@ import { NativeModules, Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { getInfoAsync } from 'expo-file-system/legacy';
 import {
+  buildMealShareText,
   detectStorageLocation,
   inspectSharePhoto,
   sanitizeUriForLog,
@@ -48,6 +49,7 @@ describe('mealShare', () => {
     });
 
     test('masks file paths and keeps only the file basename', () => {
+      expect(sanitizeUriForLog('just_a_filename')).toBe('file://...');
       expect(sanitizeUriForLog('file:///data/user/0/com.app/files/meal-123.jpg')).toBe(
         'file://.../meal-123.jpg'
       );
@@ -110,12 +112,20 @@ describe('mealShare', () => {
     });
 
     test('handles file inspection error gracefully', async () => {
-      (getInfoAsync as jest.Mock).mockRejectedValue(new Error('Permission denied'));
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const testError = new Error('Permission denied');
+      (getInfoAsync as jest.Mock).mockRejectedValue(testError);
 
       const debugInfo = await inspectSharePhoto('file:///data/user/0/com.app/files/error.jpg');
 
       expect(debugInfo.exists).toBeUndefined();
       expect(debugInfo.fileSize).toBeUndefined();
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[MealShare] Failed to inspect photoUri file info:',
+        testError
+      );
+
+      consoleWarnSpy.mockRestore();
     });
 
     test('handles missing photo gracefully', async () => {
@@ -147,6 +157,31 @@ describe('mealShare', () => {
       expect(result.completed).toBe(true);
       expect(result.method).toBe('reactNativeShare');
     });
+
+    test('logs error and rethrows when sharing fails on iOS', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      (Share.share as jest.Mock).mockRejectedValueOnce(new Error('iOS Share sheet failed'));
+
+      try {
+        await expect(
+          shareMealContent({
+            title: 'ラーメン',
+            text: '美味しいラーメンでした',
+            photoUri: 'file:///data/user/0/com.app/files/ramen.jpg',
+          })
+        ).rejects.toThrow('iOS Share sheet failed');
+
+        expect(consoleSpy).toHaveBeenCalledWith(
+          '[MealShare] Failed to share meal:',
+          expect.objectContaining({
+            error: 'iOS Share sheet failed',
+            platform: 'ios',
+          })
+        );
+      } finally {
+        consoleSpy.mockRestore();
+      }
+    });
   });
 
   describe('shareMealContent on Android', () => {
@@ -175,6 +210,7 @@ describe('mealShare', () => {
     });
 
     test('falls back to expo-sharing when native module throws an error', async () => {
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
       const mockShareMeal = jest.fn().mockRejectedValue(new Error('Native module crashed'));
       NativeModules.MealShare = { shareMeal: mockShareMeal };
       (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
@@ -193,6 +229,11 @@ describe('mealShare', () => {
       });
       expect(result.completed).toBe(true);
       expect(result.method).toBe('expoSharing');
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[MealShare] Android native share threw, falling back to next available method:',
+        expect.anything()
+      );
+      consoleWarnSpy.mockRestore();
     });
 
     test('falls back to standard Share.share when native module throws and photo is missing', async () => {
@@ -241,11 +282,21 @@ describe('mealShare', () => {
       (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
       (Sharing.shareAsync as jest.Mock).mockRejectedValue(new Error('expo-sharing failure'));
 
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
+
       const result = await shareMealContent({
         title: 'ラーメン',
         text: '美味しいラーメンでした',
         photoUri: 'file:///data/user/0/com.app/files/ramen.jpg',
       });
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[MealShare] Fallback expo-sharing failed, attempting standard Share:',
+        expect.any(Error)
+      );
+
+      const loggedError = consoleWarnSpy.mock.calls[0][1] as Error;
+      expect(loggedError.message).toContain('expo-sharing failure');
 
       expect(Share.share).toHaveBeenCalledWith(
         {
@@ -258,6 +309,8 @@ describe('mealShare', () => {
       );
       expect(result.completed).toBe(true);
       expect(result.method).toBe('reactNativeShare');
+
+      consoleWarnSpy.mockRestore();
     });
 
     test('falls back to standard Share.share when no photo exists', async () => {
@@ -354,4 +407,54 @@ describe('mealShare', () => {
       consoleSpy.mockRestore();
     });
   });
+
+  describe('buildMealShareText', () => {
+    test('builds share text with meal_name, cuisine_type, and notes while strictly excluding location', () => {
+      const shareText = buildMealShareText({
+        meal_name: '天ぷら蕎麦',
+        cuisine_type: '和食',
+        notes: '出汁が効いて美味しい',
+        location_name: '神田まつや',
+      });
+
+      expect(shareText).toBe(
+        '食事記録: 天ぷら蕎麦\n料理ジャンル: 和食\nメモ: 出汁が効いて美味しい'
+      );
+      expect(shareText).not.toContain('神田まつや');
+      expect(shareText).not.toContain('場所');
+    });
+
+    test('excludes location_name even if explicitly provided to prevent location leak', () => {
+      const shareText = buildMealShareText({
+        meal_name: 'カレーライス',
+        location_name: '自宅リビング',
+      });
+
+      expect(shareText).toBe('食事記録: カレーライス');
+      expect(shareText).not.toContain('自宅リビング');
+      expect(shareText).not.toContain('場所');
+    });
+
+    test('formats text when optional fields are null or undefined', () => {
+      const shareText = buildMealShareText({
+        meal_name: 'トースト',
+        cuisine_type: null,
+        notes: undefined,
+        location_name: '喫茶店',
+      });
+
+      expect(shareText).toBe('食事記録: トースト');
+      expect(shareText).not.toContain('喫茶店');
+    });
+
+    test('preserves notes when cuisine_type is omitted', () => {
+      const shareText = buildMealShareText({
+        meal_name: 'サンドイッチ',
+        notes: 'ピクニックで食べた',
+      });
+
+      expect(shareText).toBe('食事記録: サンドイッチ\nメモ: ピクニックで食べた');
+    });
+  });
 });
+

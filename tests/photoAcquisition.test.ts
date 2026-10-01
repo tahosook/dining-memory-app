@@ -9,12 +9,11 @@ import {
 import { CameraCaptureMock } from '../src/hooks/cameraCapture/useCameraCaptureMock';
 import { CAMERA_CONSTANTS } from '../src/constants/CameraConstants';
 
-const mockLaunchImageLibraryAsync = jest.fn();
-jest.mock('expo-image-picker', () => {
-  return {
-    launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibraryAsync(...args),
-  };
-});
+import * as ImagePicker from 'expo-image-picker';
+
+jest.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: jest.fn(),
+}));
 
 jest.mock('../src/hooks/cameraCapture/useCameraCaptureMock', () => ({
   CameraCaptureMock: {
@@ -125,14 +124,14 @@ describe('photoAcquisition', () => {
 
   describe('pickPhotoFromLibraryForReview', () => {
     test('returns null if canceled', async () => {
-      mockLaunchImageLibraryAsync.mockResolvedValue({
+      (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
         canceled: true,
         assets: null,
       });
 
       const result = await pickPhotoFromLibraryForReview();
 
-      expect(mockLaunchImageLibraryAsync).toHaveBeenCalledWith({
+      expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith({
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
         exif: false,
@@ -142,7 +141,7 @@ describe('photoAcquisition', () => {
     });
 
     test('returns null if assets is empty', async () => {
-      mockLaunchImageLibraryAsync.mockResolvedValue({
+      (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
         canceled: false,
         assets: [],
       });
@@ -152,7 +151,7 @@ describe('photoAcquisition', () => {
     });
 
     test('returns ReviewablePhoto when photo is picked', async () => {
-      mockLaunchImageLibraryAsync.mockResolvedValue({
+      (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
         canceled: false,
         assets: [
           {
@@ -173,7 +172,7 @@ describe('photoAcquisition', () => {
     });
 
     test('returns ReviewablePhoto with default dimensions if width/height are missing', async () => {
-      mockLaunchImageLibraryAsync.mockResolvedValue({
+      (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
         canceled: false,
         assets: [
           {
