@@ -1,10 +1,8 @@
 import {
   ActivityIndicator,
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -12,6 +10,8 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { CuisineTypeSelector } from './CuisineTypeSelector';
+import { HomemadeStyleSection } from './HomemadeStyleSection';
+import { MealEditImagePreview } from './MealEditImagePreview';
 import { MealInputAssistSection } from './MealInputAssistSection';
 import type {
   MealInputAssistProgress,
@@ -20,7 +20,6 @@ import type {
   MealInputAssistTextSuggestion,
 } from '../../ai/mealInputAssist';
 import type { CookingLevel } from '../../types/MealTypes';
-import { formatCookingLevel } from '../../utils/cookingLevel';
 
 export type MealEditDraft = {
   mealName: string;
@@ -99,34 +98,13 @@ export function MealEditModal({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {imageUri ? (
-              <View style={styles.imageBlock}>
-                <Image
-                  source={{ uri: imageUri }}
-                  style={styles.previewImage}
-                  resizeMode="cover"
-                  testID={`${testIDPrefix}-image-preview`}
-                />
-                {onRotateImage ? (
-                  <TouchableOpacity
-                    style={[
-                      styles.rotateButton,
-                      saving || rotatingImage ? styles.rotateButtonDisabled : null,
-                    ]}
-                    onPress={onRotateImage}
-                    disabled={saving || rotatingImage}
-                    accessibilityRole="button"
-                    accessibilityLabel={rotatingImage ? '画像を回転中' : '画像を右に90度回転'}
-                    accessibilityState={{ disabled: saving || rotatingImage }}
-                    testID={`${testIDPrefix}-rotate-image-button`}
-                  >
-                    <Text style={styles.rotateButtonText}>
-                      {rotatingImage ? '回転中...' : '右に90°回転'}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : null}
+            <MealEditImagePreview
+              imageUri={imageUri}
+              onRotateImage={onRotateImage}
+              saving={saving}
+              rotatingImage={rotatingImage}
+              testIDPrefix={testIDPrefix}
+            />
             <TextInput
               style={styles.input}
               value={draft.mealName}
@@ -181,50 +159,13 @@ export function MealEditModal({
               multiline
               testID={`${testIDPrefix}-notes-input`}
             />
-            <View style={styles.switchRow}>
-              <Text style={styles.switchLabel}>自炊として記録</Text>
-              <Switch
-                value={draft.isHomemade}
-                onValueChange={updateHomemade}
-                accessibilityRole="switch"
-                accessibilityLabel="自炊として記録"
-                accessibilityState={{ checked: draft.isHomemade }}
-                testID={`${testIDPrefix}-homemade-switch`}
-              />
-            </View>
-            {draft.isHomemade ? (
-              <View style={styles.styleBlock}>
-                <Text style={styles.fieldLabel}>自炊スタイル</Text>
-                <View style={styles.segmentedRow}>
-                  {(['quick', 'daily', 'gourmet'] as const).map(level => {
-                    const selected = draft.cookingLevel === level;
-                    return (
-                      <TouchableOpacity
-                        key={level}
-                        style={[
-                          styles.segmentButton,
-                          selected ? styles.segmentButtonSelected : null,
-                        ]}
-                        onPress={() => updateDraft('cookingLevel', level)}
-                        accessibilityRole="button"
-                        accessibilityLabel={formatCookingLevel(level)}
-                        accessibilityState={{ selected }}
-                        testID={`${testIDPrefix}-cooking-level-${level}`}
-                      >
-                        <Text
-                          style={[
-                            styles.segmentButtonText,
-                            selected ? styles.segmentButtonTextSelected : null,
-                          ]}
-                        >
-                          {formatCookingLevel(level)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
+            <HomemadeStyleSection
+              isHomemade={draft.isHomemade}
+              cookingLevel={draft.cookingLevel}
+              updateHomemade={updateHomemade}
+              updateDraft={updateDraft}
+              testIDPrefix={testIDPrefix}
+            />
           </ScrollView>
           <View style={styles.buttonRow}>
             <TouchableOpacity
@@ -289,29 +230,6 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 4,
   },
-  imageBlock: {
-    gap: 8,
-  },
-  previewImage: {
-    width: '100%',
-    height: 180,
-    borderRadius: 10,
-    backgroundColor: '#e9ecef',
-  },
-  rotateButton: {
-    borderWidth: 1,
-    borderColor: Colors.primary,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  rotateButtonDisabled: {
-    opacity: 0.6,
-  },
-  rotateButtonText: {
-    color: Colors.primary,
-    fontWeight: '700',
-  },
   input: {
     borderWidth: 1,
     borderColor: '#d9d9d9',
@@ -323,49 +241,6 @@ const styles = StyleSheet.create({
   notesInput: {
     minHeight: 90,
     textAlignVertical: 'top',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  switchLabel: {
-    fontSize: 15,
-    color: Colors.text,
-  },
-  styleBlock: {
-    gap: 8,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  segmentedRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  segmentButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    backgroundColor: Colors.white,
-  },
-  segmentButtonSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: '#eaf4ff',
-  },
-  segmentButtonText: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  segmentButtonTextSelected: {
-    color: Colors.primary,
-    fontWeight: '700',
   },
   buttonRow: {
     flexDirection: 'row',

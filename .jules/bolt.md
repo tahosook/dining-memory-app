@@ -72,3 +72,11 @@
 **Learning:** In a React Native Expo environment, using an unbounded `Promise.all` to perform massive concurrent file system operations (like `getInfoAsync` for thumbnails across hundreds of meals) can cause bridge congestion, EMFILE errors, and Out-Of-Memory (OOM) crashes.
 **Action:** Use bounded chunk concurrency with `Promise.allSettled` instead of unbounded `Promise.all` for bulk I/O tasks like checking file existence to ensure stability without sacrificing throughput. (In `mealThumbnail.ts`, `CONCURRENCY_LIMIT = 25` represents the bounded concurrency value chosen for this specific implementation at this time to avoid bridge congestion, rather than a generalized system-wide recommendation. It remains separate from `MAX_CONCURRENT_THUMBNAILS = 2` for the thumbnail generation queue).
 
+
+## 2024-05-18 - Fix PR Evidence Gate CI failure
+**Learning:** The PR body template validation script (`scripts/verify-pr-gates.sh`) enforces strict presence of headers in the PR description via regex matching. When extracting helper components (a refactor) as an agent, the generated PR body might miss standard headers recognized by the CI (Problem, Evidence, Expected Impact, Out of Scope), resulting in a `[GATE FAIL] PR body is missing mandatory section(s)` error in the static-analysis CI job.
+**Action:** When updating a PR or setting the PR description via `submit`, ensure the PR description uses the exact exact keywords or their aliases required by the PR Evidence Gate: `💡 What` (for Problem), `📊 Measured Improvement` or `Verification` (for Evidence), `🎯 Why` (for Expected Impact), and `Out of Scope` or `Non-Goals` (for Out of Scope). A failure to include all four sections, or just using bullet points like "What:" without the header hashtag or exact alias, will fail the CI check.
+
+## 2024-05-18 - Understanding PR Close Comments
+**Learning:** When a user replies with a comment indicating the PR is being closed due to policy violation (e.g., AGENTS.md rules about refactoring), it is a non-actionable comment meant to conclude the task.
+**Action:** Simply acknowledge the closure comment, indicate understanding of the rule that was cited, and state that no further action will be taken.
