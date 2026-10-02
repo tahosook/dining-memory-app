@@ -98,6 +98,7 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 
 ## Review Gate
 - Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
+- Test-only PR gate: PRs that add or update tests must pass the full test suite (`npm test`) across the entire repository. Running only the single targeted test file (e.g. `npx jest tests/myTest.test.ts`) is strictly insufficient to prevent Jest global mock collisions and cross-suite regressions.
 - Machine gate for PRs: `npm run verify:pr-gates` (`bash scripts/verify-pr-gates.sh`). Automatically enforced in CI for pull requests (zero diff check, test protection, and PR body Evidence Gate).
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
 - Add `npm run check:deps` and `npm run check:react-versions` when dependencies are added, removed, or reorganized. Follow [docs/engineering/dependency-policy.md](dependency-policy.md).
@@ -107,6 +108,23 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 - Use the narrowest useful verification first, but do not skip the standard gate for meaningful behavior changes.
 - Add a security review pass when changes touch permissions, file storage, location, export, backup, or external AI calls.
 - Run `npm run check:docs` when a task changes AI input assist, MediaPipe labeling, Records, Search, Stats, Settings, storage, runtime assumptions, or documentation about current behavior.
+
+## Test Quality and Mock Isolation Standard
+テスト追加・修正 PR における品質維持およびモック干渉防止のための必須基準です（GitHub Issue #233）。
+
+1. **フルテストスイート（`npm test`）実行の義務化**:
+   - テスト専用 PR（`tests/` 配下のみの変更、またはテストコードの追加・修正）であっても、マージ前に必ずリポジトリ全体のフルスイート（`npm test` / CI では `test:coverage`）を実行しパスさせる。
+   - 単一テストファイルの実行（例: `npx jest tests/myTest.test.ts`）のみで完了とみなすことは禁止。
+   - 他のテストファイル（特に共通ネイティブモジュールや Expo API をモックしているスイート）との干渉やリグレッションがないことを機械的に検証する。
+
+2. **モック干渉（Mock Collision）防止とグローバル環境保護**:
+   - **共通モックの集約**: プロジェクト全体で頻繁にモックされる Expo / React Native ネイティブモジュール（例: `expo-image-picker`, `expo-media-library` など）は、個別テストファイル内で多重に `jest.mock()` 定義せず、`jest.setup.js` に共通モックとして集約する。
+   - **スコープ内制御の徹底**: 個別テストで特定の戻り値や例外をテストする場合は、モック全体の再定義を避け、`jest.mocked(...).mockResolvedValueOnce(...)` や `mockReturnValueOnce(...)` を使用する。
+   - **クリーンアップ**: 各テストスイートでモック呼び出し履歴や一時的な振る舞いが残留しないよう、`beforeEach(() => { jest.clearAllMocks(); })` などを適切に配置する。
+
+3. **アサーション品質の維持 (No Shallow Assertions)**:
+   - 単なる「要素が存在すること」「関数が呼ばれたこと」だけの形式的・表層的なアサーション（Shallow assertion）を量産しない。
+   - 不具合や仕様逸脱が発生した際に、どの境界値やビジネスロジックが壊れたかを客観的に特定できるよう、期待される入出力、エラー分岐、状態変化を明示的に検証するアサーションを義務付ける。
 
 ## Doc Sync Gate
 - Before editing, identify the source area and the canonical docs that describe it.
@@ -123,6 +141,7 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 - Docs-only changes: verify links, filenames, and document consistency.
 - Type or interface changes: run `npm run type-check`.
 - Behavior changes: run `npm test`, and run `npm run lint` if touched files include application code.
+- Test-only changes (`tests/` additions or updates): run full `npm test` across the entire repository (never stop at single-file validation) to guard against Jest global mock collisions and verify cross-suite isolation, plus `npm run type-check`.
 - Dependency changes: run `npm run check:deps`, `npm run check:react-versions`, and follow [docs/engineering/dependency-policy.md](dependency-policy.md). If native modules (Tier 1) change, also run `npm run build:android:debug`.
 - Dependency or CI runtime changes: run `npm ci` and confirm `README.md` and `.github/workflows/ci.yml` still describe the same runtime expectation.
 - Permission, export, backup, location, file, or external-send changes: confirm what data is accessed, stored, logged, or sent.
