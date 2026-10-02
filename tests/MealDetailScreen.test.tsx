@@ -862,7 +862,7 @@ describe('MealDetailScreen', () => {
     await waitFor(() => {
       expect(mockShareMeal).toHaveBeenCalledWith({
         title: '共有',
-        text: '食事記録: 焼き魚定食\n料理ジャンル: 和食\nメモ: 焼き加減がよかった',
+        text: '焼き加減がよかった',
         photoUri: 'file:///full-photo.jpg',
         mimeType: 'image/jpeg',
       });
@@ -921,7 +921,7 @@ describe('MealDetailScreen', () => {
       expect(Share.share).toHaveBeenCalledWith(
         {
           title: '焼き魚定食',
-          message: '食事記録: 焼き魚定食\n料理ジャンル: 和食\nメモ: 焼き加減がよかった',
+          message: '焼き加減がよかった',
         },
         {
           dialogTitle: '共有',
@@ -958,5 +958,27 @@ describe('MealDetailScreen', () => {
     const submitBtn = getByTestId('share-submit-button');
     expect(submitBtn.props.accessibilityRole).toBe('button');
     expect(submitBtn.props.accessibilityLabel).toBe('共有を開く');
+  });
+
+  test('displays placeholder in share composer when meal has no notes', () => {
+    const props = createProps({
+      route: {
+        key: 'MealDetail-test',
+        name: 'MealDetail',
+        params: {
+          meal: {
+            ...baseMeal,
+            notes: undefined,
+          },
+        },
+      },
+    });
+
+    const { getByTestId, getByPlaceholderText } = render(<MealDetailScreen {...props} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(getByPlaceholderText('写真のみ共有されます（テキストを追加可能）')).toBeTruthy();
+    expect(getByTestId('share-text-input').props.value).toBe('');
   });
 });

@@ -570,6 +570,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
               style={styles.shareInput}
               value={shareText}
               onChangeText={setShareText}
+              placeholder="写真のみ共有されます（テキストを追加可能）"
               multiline
               testID="share-text-input"
             />
