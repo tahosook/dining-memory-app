@@ -57,9 +57,6 @@ jest.mock('@bam.tech/react-native-image-resizer', () => ({
     createResizedImage: jest.fn(),
   },
 }));
-jest.mock('expo-image-picker', () => ({
-  launchImageLibraryAsync: jest.fn(),
-}), { virtual: true });
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

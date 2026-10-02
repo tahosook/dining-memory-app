@@ -74,4 +74,10 @@ jest.mock('expo-media-library', () => ({
   getPermissionsAsync: jest.fn(),
 }));
 
+// Expo Image Picker mock
+jest.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: jest.fn(),
+}));
+
+
 
