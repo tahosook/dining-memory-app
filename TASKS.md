@@ -23,7 +23,7 @@
 ### Future-triggered evaluation（将来トリガー待ち評価）
 - Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能特性と移行トリガーの実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では実装見送りとし、正しいタイブレーカー条件を文書化。20,000件超かつ深いスクロール・大量同期時に別Issueで実装 ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
 - 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では本番INDEX追加を見送り、10,000件以上を「再評価トリガー」として記録（実機体感・データ分布等と併せて別Issueで判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
-- バックアップ復元の写真コピー並列化 — 再開条件と必須 Evidence の定義: 将来トリガー待ち評価（GitHub Issue #229、内部ドキュメント issue-14）。低スペック端末を含む実機実測データ・ロールバック整合性テスト・並列度根拠が揃うまで実装見送り（Refs #220、[docs/issues/issue-14-backup-restore-concurrency-criteria.md](docs/issues/issue-14-backup-restore-concurrency-criteria.md)）。
+- バックアップ復元の写真コピー並列化 — 再開条件と必須 Evidence の定義: 将来トリガー待ち評価（GitHub Issue #229、内部ドキュメント issue-14）。低スペック端末を含む実機実測データ・ロールバック整合性テスト・並列度根拠が揃うまで実装見送り（Refs #220、[docs/issues/issue-14-backup-restore-concurrency-criteria.md](docs/issues/issue-14-backup-restore-concurrency-criteria.md)、[docs/notes/backup-restore-copy-evaluation.md](docs/notes/backup-restore-copy-evaluation.md)）。
 - 孤立写真削除のチャンク化 — 再開条件の定義: 将来トリガー待ち評価（GitHub Issue #239）。実機大量孤立データプロファイル・誤削除防止テスト・中断再開冪等性が揃うまで実装見送り（Refs #210、[docs/notes/orphan-photos-cleanup-criteria.md](docs/notes/orphan-photos-cleanup-criteria.md)）。
 
 ### Backlog / Future ideas（バックログ・将来検討）
@@ -34,7 +34,9 @@
 ### Process / governance follow-ups（運用・ガバナンス追跡）
 - エージェントによる `.jules/` 変更の拒否方針とゲート化の検討（GitHub Issue #236）。
 - Issue #80 / #81 クローズコメントへの再オープン条件・ベンチマークリンク補完（GitHub Issue #237）。
+
 ## Done / Historical Notes
+- バックアップ復元の写真コピー並列化 — 再開条件と必須 Evidence の定義: 完了（GitHub Issue #229、内部ドキュメント issue-14）。PR #220 のクローズ理由（障害系テスト欠落、モック遅延シミュレーション値の不適格性、EMFILE/過負荷リスク、sequential設計意図）を踏まえ、安全設計の維持と再開受入基準を [docs/notes/backup-restore-copy-evaluation.md](docs/notes/backup-restore-copy-evaluation.md) に定義・記録（完了 / Closed）。
 - 孤立写真削除のチャンク化 — 再開条件の定義: 完了（GitHub Issue #239）。PR #210 のクローズ理由（レースコンディション窓の拡大、実運用データ規模との乖離、誤削除防止テスト欠落）を踏まえ、安全設計の維持と再開受入基準を [docs/notes/orphan-photos-cleanup-criteria.md](docs/notes/orphan-photos-cleanup-criteria.md) に定義・記録（完了 / Closed）。
 - テスト専用 PR のマージ前ゲート（フル npm test + モック干渉）の明文化: 完了（GitHub Issue #233）。テスト追加・修正 PR におけるフルテストスイート（`npm test`）実行の義務化、ネイティブモジュール共通モックの `jest.setup.js` 集約、テスト個別スコープ制御によるグローバル環境保護、およびアサーション品質基準を [docs/engineering/development-workflow.md](docs/engineering/development-workflow.md) に明文化（完了 / Closed）。
 - main 直コミット + PR ブランチ force-push 運用の見直し: 完了（GitHub Issue #235）。GitHub Ruleset（ID 19937013）により main への直接 push・force-push が例外なく機械的にブロックされている事実を確認。作業ブランチにおける CI 監査性維持のための運用ガイドラインを docs/engineering/development-workflow.md に反映（[docs/notes/git-branching-and-ci-governance.md](docs/notes/git-branching-and-ci-governance.md)、完了 / Closed）。

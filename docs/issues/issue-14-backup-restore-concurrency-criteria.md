@@ -4,6 +4,7 @@
 - **対応 GitHub Issue**: GitHub Issue #229
 - **ステータス**: 保留 / 将来トリガー待ち評価 (Later)
 - **関連 PR**: PR #220
+- **関連ノート**: [docs/notes/backup-restore-copy-evaluation.md](../notes/backup-restore-copy-evaluation.md)
 
 ## 概要
 PR #220（バックアップ復元時の写真コピー並列化）の事後レビューに基づき、並列化を再開・着手するために満たすべき必須条件と客観的証拠（Evidence）の基準を定義・記録します。
