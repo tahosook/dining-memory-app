@@ -73,6 +73,7 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 - **機械的判定への完全オフロード (No machine gate, no trust)**: 差分ゼロ、テスト削除・弱体化、および PR 本文の Evidence 欠落は `scripts/verify-pr-gates.sh` で、新規 `any` やエスケープハッチ（`@ts-ignore` 等）は ESLint で物理的に遮断する。
 - **客観的証拠の義務化 (No evidence, no PR)**: 具体的課題と客観的証拠（失敗テスト、実測値、EXPLAIN 結果等）が示されない PR は起票しない。
 - **「変更しないこと」の成功定義 (No actionable finding, stop)**: 調査の結果、対処すべき問題がなければ無理にコード変更を捏造せず、レポートを残して「変更なし」で終了することを成功とする。
+- **ブランチ保護と直接プッシュ禁止の機械的強制**: main ブランチへの直接コミットおよび force-push は GitHub Ruleset（ID 19937013）によって例外なく（Bypass 不可）物理的にブロックされている。ドキュメント単独更新を含むすべての変更はトピックブランチから PR を作成し、必須ステータスチェックを通過させてマージする（詳細は [docs/notes/git-branching-and-ci-governance.md](../notes/git-branching-and-ci-governance.md) 参照）。
 
 ## PR Eligibility Criteria
 - **Problem**: 現行コードベースにおける具体的な事実（破損、脆弱性、測定されたボトルネック、明示された要件）。
