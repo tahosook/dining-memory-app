@@ -12,30 +12,22 @@ export interface MealShareOptions {
 }
 
 export interface MealShareTextInput {
-  meal_name: string;
+  meal_name?: string;
   cuisine_type?: string | null;
   notes?: string | null;
   location_name?: string | null;
+  location?: string | null;
 }
 
 /**
  * Builds the initial share text for a meal.
- * Privacy rule: Location information (e.g., location_name, coordinates) is
- * intentionally excluded from the share text to prevent unintentional disclosure
- * of private locations / living areas on social media (Issue #228).
+ * Privacy rule: Only user-written notes (trimmed) are included in the share text.
+ * Location, meal_name, cuisine_type, and system labels are strictly excluded
+ * to completely eliminate privacy leak risks and post-share cleanup effort.
+ * If notes is empty or whitespace-only, returns an empty string ("").
  */
 export function buildMealShareText(meal: MealShareTextInput): string {
-  const parts = [`食事記録: ${meal.meal_name}`];
-
-  if (meal.cuisine_type) {
-    parts.push(`料理ジャンル: ${meal.cuisine_type}`);
-  }
-
-  if (meal.notes) {
-    parts.push(`メモ: ${meal.notes}`);
-  }
-
-  return parts.join('\n');
+  return meal.notes?.trim() || '';
 }
 
 export type StorageLocationType =

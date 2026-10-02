@@ -862,7 +862,7 @@ describe('MealDetailScreen', () => {
     await waitFor(() => {
       expect(mockShareMeal).toHaveBeenCalledWith({
         title: '共有',
-        text: '食事記録: 焼き魚定食\n料理ジャンル: 和食\nメモ: 焼き加減がよかった',
+        text: '焼き加減がよかった',
         photoUri: 'file:///full-photo.jpg',
         mimeType: 'image/jpeg',
       });
@@ -921,7 +921,7 @@ describe('MealDetailScreen', () => {
       expect(Share.share).toHaveBeenCalledWith(
         {
           title: '焼き魚定食',
-          message: '食事記録: 焼き魚定食\n料理ジャンル: 和食\nメモ: 焼き加減がよかった',
+          message: '焼き加減がよかった',
         },
         {
           dialogTitle: '共有',
