@@ -36,10 +36,10 @@
 - main 直コミット + PR ブランチ force-push 運用の見直し（GitHub Issue #235）。
 - エージェントによる `.jules/` 変更の拒否方針とゲート化の検討（GitHub Issue #236）。
 - Issue #80 / #81 クローズコメントへの再オープン条件・ベンチマークリンク補完（GitHub Issue #237）。
-- カメラ権限エラー表示の汎用化によるデバッグ性・UX 影響の確認（GitHub Issue #238、Refs #198）。
 - 孤立写真削除のチャンク化 — 再開条件の定義（GitHub Issue #239、Refs #210）。
 
 ## Done / Historical Notes
+- カメラ権限エラー表示の汎用化によるデバッグ性・UX 影響の確認: 完了（GitHub Issue #238）。PR #198 で導入されたアラート文言汎用化について、UI 上の設定アプリ常設導線（Actionable UX）およびサニタイズ内部ログ（例外追跡性・Sentry親和性）が十分に担保されていることを確認し、現状維持・追加変更不要と判断（Refs #198、[docs/notes/camera-permission-error-ux-evaluation.md](docs/notes/camera-permission-error-ux-evaluation.md)、完了 / Closed）。
 - Expo SQLite prepareAsync 可用性の根拠固定: 完了（GitHub Issue #231）。Expo SDK 57 / expo-sqlite ~57.0.3 の型定義およびランタイム実装（runAsync 等が内部で prepareAsync を直接使用）に基づき、prepareAsync が常時利用可能でありフォールバック分岐が死パスであることを固定。SDKアップグレード時の再確認トリガーを定義（Refs #209, #197、[docs/notes/sqlite-prepareasync-availability.md](docs/notes/sqlite-prepareasync-availability.md)、完了 / Closed）。
 - BackupService Zip Slip 拒否ケースのテスト行列確認: 完了（GitHub Issue #232、内部ドキュメント issue-16）。PR #194 で実装された絶対パス拒否に加え、既存テストで不足していた相対パストラバーサル（photos/../../evil.sh 等の正規化後エスケープ）、Windows形式（..\）、ヌルバイト（\0）、境界値（photos/../、..単体、/）、および安全な相対パス（ドット付きファイル名）のテスト行列を tests/BackupService.test.ts に補完（Refs #194、[docs/issues/issue-16-backup-service-zip-slip-matrix.md](docs/issues/issue-16-backup-service-zip-slip-matrix.md)、完了 / Closed）。
 - mealShare エラーパス統合テストの完全性確認: 調査・確認完了（GitHub Issue #230、内部ドキュメント issue-15）。MealDetailScreen から mealShare への呼び出し経路、エラー伝播、フォールバック（Android: NativeModule -> expo-sharing -> Share.share）、UI 側でのエラーアラート表示、およびパスサニタイズ処理が既存のテスト（tests/mealShare.test.ts、tests/MealDetailScreen.test.tsx）にて網羅（カバレッジ 100%）されており、追加変更不要で完了と判断（Refs #228, #226, #211, #202, #196、[docs/issues/issue-15-mealshare-error-path-verification.md](docs/issues/issue-15-mealshare-error-path-verification.md)、完了 / Closed）。
