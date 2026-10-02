@@ -959,4 +959,26 @@ describe('MealDetailScreen', () => {
     expect(submitBtn.props.accessibilityRole).toBe('button');
     expect(submitBtn.props.accessibilityLabel).toBe('共有を開く');
   });
+
+  test('displays placeholder in share composer when meal has no notes', () => {
+    const props = createProps({
+      route: {
+        key: 'MealDetail-test',
+        name: 'MealDetail',
+        params: {
+          meal: {
+            ...baseMeal,
+            notes: undefined,
+          },
+        },
+      },
+    });
+
+    const { getByTestId, getByPlaceholderText } = render(<MealDetailScreen {...props} />);
+
+    fireEvent.press(getByTestId('meal-detail-share-button'));
+
+    expect(getByPlaceholderText('写真のみ共有されます（テキストを追加可能）')).toBeTruthy();
+    expect(getByTestId('share-text-input').props.value).toBe('');
+  });
 });

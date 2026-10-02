@@ -16,7 +16,6 @@ export interface MealShareTextInput {
   cuisine_type?: string | null;
   notes?: string | null;
   location_name?: string | null;
-  location?: string | null;
 }
 
 /**

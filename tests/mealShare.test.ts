@@ -471,11 +471,10 @@ describe('mealShare', () => {
       expect(shareText).not.toContain('サンドイッチ');
     });
 
-    test('strictly excludes meal_name, location_name, location, and cuisine_type from share text', () => {
+    test('strictly excludes meal_name, location_name, and cuisine_type from share text', () => {
       const shareText = buildMealShareText({
         meal_name: '自宅 の 朝食',
         location_name: '自宅',
-        location: '東京都千代田区',
         cuisine_type: '和食',
         notes: '朝ごはんメモ',
       });
@@ -483,7 +482,6 @@ describe('mealShare', () => {
       expect(shareText).toBe('朝ごはんメモ');
       expect(shareText).not.toContain('自宅');
       expect(shareText).not.toContain('朝食');
-      expect(shareText).not.toContain('東京都千代田区');
       expect(shareText).not.toContain('和食');
       expect(shareText).not.toContain('食事記録');
       expect(shareText).not.toContain('場所');
