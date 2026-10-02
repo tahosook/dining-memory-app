@@ -32,12 +32,12 @@
 
 ### Process / governance follow-ups（運用・ガバナンス追跡）
 - テスト専用 PR のマージ前ゲート（フル npm test + モック干渉）の明文化（GitHub Issue #233）。
-- main 直コミット + PR ブランチ force-push 運用の見直し（GitHub Issue #235）。
 - エージェントによる `.jules/` 変更の拒否方針とゲート化の検討（GitHub Issue #236）。
 - Issue #80 / #81 クローズコメントへの再オープン条件・ベンチマークリンク補完（GitHub Issue #237）。
 - 孤立写真削除のチャンク化 — 再開条件の定義（GitHub Issue #239、Refs #210）。
 
 ## Done / Historical Notes
+- main 直コミット + PR ブランチ force-push 運用の見直し: 完了（GitHub Issue #235）。GitHub Ruleset（ID 19937013）により main への直接 push・force-push が例外なく機械的にブロックされている事実を確認。作業ブランチにおける CI 監査性維持のための運用ガイドラインを docs/engineering/development-workflow.md に反映（[docs/notes/git-branching-and-ci-governance.md](docs/notes/git-branching-and-ci-governance.md)、完了 / Closed）。
 - PR クローズコメント標準 — 再開条件と根拠ドキュメントリンクの必須化: 完了（GitHub Issue #234）。マージせず閉じる PR において「客観的理由」「再開受入基準チェックリスト」「根拠ドキュメントリンク」の3要素を必須化する標準を docs/engineering/development-workflow.md に策定（Refs #220、完了 / Closed）。
 - カメラ権限エラー表示の汎用化によるデバッグ性・UX 影響の確認: 完了（GitHub Issue #238）。PR #198 で導入されたアラート文言汎用化について、UI 上の設定アプリ常設導線（Actionable UX）およびサニタイズ内部ログ（例外追跡性・Sentry親和性）が十分に担保されていることを確認し、現状維持・追加変更不要と判断（Refs #198、[docs/notes/camera-permission-error-ux-evaluation.md](docs/notes/camera-permission-error-ux-evaluation.md)、完了 / Closed）。
 - Expo SQLite prepareAsync 可用性の根拠固定: 完了（GitHub Issue #231）。Expo SDK 57 / expo-sqlite ~57.0.3 の型定義およびランタイム実装（runAsync 等が内部で prepareAsync を直接使用）に基づき、prepareAsync が常時利用可能でありフォールバック分岐が死パスであることを固定。SDKアップグレード時の再確認トリガーを定義（Refs #209, #197、[docs/notes/sqlite-prepareasync-availability.md](docs/notes/sqlite-prepareasync-availability.md)、完了 / Closed）。
