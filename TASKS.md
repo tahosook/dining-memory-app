@@ -32,6 +32,15 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 - BackupService Zip Slip 拒否ケースのテスト行列確認: 調査・確認候補（GitHub Issue #232）。PR #194 マージ後の絶対パス・トラバーサル拒否テスト行列の確認（Refs #194）。
 
+### Process / governance follow-ups（運用・ガバナンス追跡）
+- テスト専用 PR のマージ前ゲート（フル npm test + モック干渉）の明文化（GitHub Issue #233）。
+- PR クローズコメント標準 — 再開条件と根拠ドキュメントリンクの必須化（GitHub Issue #234）。
+- main 直コミット + PR ブランチ force-push 運用の見直し（GitHub Issue #235）。
+- エージェントによる `.jules/` 変更の拒否方針とゲート化の検討（GitHub Issue #236）。
+- Issue #80 / #81 クローズコメントへの再オープン条件・ベンチマークリンク補完（GitHub Issue #237）。
+- カメラ権限エラー表示の汎用化によるデバッグ性・UX 影響の確認（GitHub Issue #238、Refs #198）。
+- 孤立写真削除のチャンク化 — 再開条件の定義（GitHub Issue #239、Refs #210）。
+
 ## Done / Historical Notes
 - mealShare エラーパス統合テストの完全性確認: 調査・確認完了（GitHub Issue #230、内部ドキュメント issue-15）。MealDetailScreen から mealShare への呼び出し経路、エラー伝播、フォールバック（Android: NativeModule -> expo-sharing -> Share.share）、UI 側でのエラーアラート表示、およびパスサニタイズ処理が既存のテスト（tests/mealShare.test.ts、tests/MealDetailScreen.test.tsx）にて網羅（カバレッジ 100%）されており、追加変更不要で完了と判断（Refs #228, #226, #211, #202, #196、[docs/issues/issue-15-mealshare-error-path-verification.md](docs/issues/issue-15-mealshare-error-path-verification.md)、完了 / Closed）。
 - エージェント運用のガバナンス刷新と機械的 PR ゲートの最適化 (Core Machine-Enforced & Evidence-Based Governance): 自然言語禁止リストの肥大化を廃止し、3層構造（`.jules/rules.md` での意思決定ポリシー、`bolt.md`/`sentinel.md` での標準5セクションペルソナ定義、および `scripts/verify-pr-gates.sh` による機械的ゲート）を配備。差分ゼロ・テスト削除・テスト弱体化および PR 本文 Evidence Gate を CI で物理遮断し、`any`・エスケープハッチは ESLint で静的検査、PR 本文修正時の CI 自動再検証（`pull_request.edited` トリガー）を配備。
