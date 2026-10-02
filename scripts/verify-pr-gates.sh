@@ -8,7 +8,8 @@ set -euo pipefail
 # 1. Zero diff check: Blocks empty PRs (No actionable finding, stop without PR).
 # 2. Escape hatch check: Blocks 'eslint-disable' comments to prevent suppressing static analysis.
 # 3. Test protection check: Blocks deletion of test files and introduction of skipped tests.
-# 4. PR body Evidence Gate: Validates mandatory sections and requires concrete Evidence.
+# 4. .jules/ directory protection check: Blocks unauthorized modifications to .jules/ files.
+# 5. PR body Evidence Gate: Validates mandatory sections and requires concrete Evidence.
 # Note: Type safety ('any', '@ts-ignore', '@ts-nocheck') is enforced via ESLint in static-analysis.
 # -----------------------------------------------------------------------------
 
@@ -100,7 +101,24 @@ if [ -n "$TEST_WEAKENING_MATCHES" ]; then
 fi
 echo "  ✓ No skipped or weakened tests introduced."
 
-# 4. PR body Evidence Gate
+# 4. .jules/ directory protection check
+# Blocks changes to .jules/ unless explicitly authorized via ALLOW_JULES_CHANGE=true
+JULES_MODIFIED=$(git diff --name-only "$TARGET_REF" -- '.jules/*' 2>/dev/null || true)
+
+if [ -n "$JULES_MODIFIED" ]; then
+  if [ "${ALLOW_JULES_CHANGE:-false}" != "true" ]; then
+    echo "❌ [GATE FAIL] Unauthorized modification to .jules/ directory detected:"
+    echo "$JULES_MODIFIED"
+    echo "   Core Principle: Machine-enforced governance. Automated agents must not modify .jules/."
+    echo "   To legitimately update governance rules as maintainer, set ALLOW_JULES_CHANGE=true."
+    exit 1
+  fi
+  echo "  ℹ .jules/ modification permitted via ALLOW_JULES_CHANGE=true."
+else
+  echo "  ✓ No unauthorized changes to .jules/ directory."
+fi
+
+# 5. PR body Evidence Gate
 # Resolve PR body from stdin, file, environment, or GitHub Actions event file if not explicitly passed
 if [ "$PR_BODY_FILE" = "-" ]; then
   PR_BODY_INPUT=$(cat)
