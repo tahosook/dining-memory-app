@@ -30,10 +30,10 @@
 - EXIF / GPS / ファイル名保存方針: 要確認。保存時 EXIF / GPS は実装方針あり。backup / export / file naming まで広げる場合は data policy と privacy を再確認する。
 - X共有導線: 候補。現在は Records detail から OS share sheet へ明示操作で進む最小導線がある。投稿状態保存や自動送信はしない。
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
-- mealShare エラーパス統合テストの完全性確認: 調査・確認候補（GitHub Issue #230）。Issue #228 で統合したエラーパス・フォールバック検証の完全性チェックリスト照合（Refs #228, #226, #211, #202, #196）。
 - BackupService Zip Slip 拒否ケースのテスト行列確認: 調査・確認候補（GitHub Issue #232）。PR #194 マージ後の絶対パス・トラバーサル拒否テスト行列の確認（Refs #194）。
 
 ## Done / Historical Notes
+- mealShare エラーパス統合テストの完全性確認: 調査・確認完了（GitHub Issue #230、内部ドキュメント issue-15）。MealDetailScreen から mealShare への呼び出し経路、エラー伝播、フォールバック（Android: NativeModule -> expo-sharing -> Share.share）、UI 側でのエラーアラート表示、およびパスサニタイズ処理が既存のテスト（tests/mealShare.test.ts、tests/MealDetailScreen.test.tsx）にて網羅（カバレッジ 100%）されており、追加変更不要で完了と判断（Refs #228, #226, #211, #202, #196、[docs/issues/issue-15-mealshare-error-path-verification.md](docs/issues/issue-15-mealshare-error-path-verification.md)、完了 / Closed）。
 - エージェント運用のガバナンス刷新と機械的 PR ゲートの最適化 (Core Machine-Enforced & Evidence-Based Governance): 自然言語禁止リストの肥大化を廃止し、3層構造（`.jules/rules.md` での意思決定ポリシー、`bolt.md`/`sentinel.md` での標準5セクションペルソナ定義、および `scripts/verify-pr-gates.sh` による機械的ゲート）を配備。差分ゼロ・テスト削除・テスト弱体化および PR 本文 Evidence Gate を CI で物理遮断し、`any`・エスケープハッチは ESLint で静的検査、PR 本文修正時の CI 自動再検証（`pull_request.edited` トリガー）を配備。
 - Android 実機環境における写真保存パイプラインの実測プロファイリング (GitHub Issue #60) & Native EXIF 移行要否判断 (GitHub Issue #61): Google Pixel 9a (Android 17, 8GB RAM) 実機での写真保存パイプライン全8ステップの所要時間、メモリ推移（PSS/RSS）、GC 挙動、および UI フレーム描画（Jank）を実測（2回施行）。今回の測定条件では EXIF 処理時間は平均 42.4ms、Java Heap PSS は 11〜22MB、GC ポーズは 3ms 未満、Jank 率は 3.9〜5.4% で推移し、顕著な UI 停止やメモリ圧迫は観測されず。この実機データに基づき、Issue #61（Kotlin Native EXIF 化）は未実測の机上試算（~10ms）と比較しても得られる短縮幅が限定的であることから現状維持と判断（[docs/notes/photo-save-benchmark-issue-60.md](docs/notes/photo-save-benchmark-issue-60.md)、完了）。
 - RecordsScreen におけるページネーション・無限スクロールの導入 (GitHub Issue #89): 100件固定取得を廃止し、`MealService.getRecentMeals` のカーソル（Keyset: `beforeMealDatetime` / `beforeId`）対応および `SectionList` の `onEndReached`（50件単位の無限スクロール）による、データ追加・削除時にも欠落しない過去記録の段階的追加読み込み機構を導入。
