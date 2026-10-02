@@ -56,6 +56,16 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
    - In all `docs/issues/` headers, explicitly specify both `- **内部ドキュメントID**: issue-XX` and `- **対応 GitHub Issue**: GitHub Issue #YY` (or `未起票`).
    - Always refer to GitHub Issues with the full prefix `GitHub Issue #YY` to prevent AI agents and contributors from conflating internal doc numbers with GitHub issue numbers.
 
+7. **PR Close Comment Standard（PR クローズコメント標準 — 再開条件と根拠ドキュメントリンクの必須化）**:
+   - PR をマージせずクローズ（Reject / Close without merge）する際は、単に理由を述べるだけでなく、以下の3要素をコメントに必須で記載する：
+     1. **クローズ理由の要約 (Objective Reason)**:
+        - 技術的根拠、安全性の懸念、設計意図（fail-fast / sequential 等）への抵触、既存 PR との重複、または必須 Evidence（実測値・テスト）の不足など、客観的な事実に基づいた理由。
+     2. **再開・再提案の受け入れ条件 (Reopening Criteria Checklist)**:
+        - 将来どのような実測ベンチマーク、障害系・エッジケーステスト、またはアーキテクチャ合意が得られれば再開できるかをチェックリスト（`- [ ]`）形式で明文化する。
+     3. **根拠ドキュメント・関連リンク (Evidence Links)**:
+        - 関連する内部 Issue Doc（`docs/issues/issue-XX.md`）、実測ノート（`docs/notes/*.md`）、関連 Issue / PR へのハイパーリンクを必ず記載する。
+   - これにより、再開条件が曖昧なまま不完全な PR が再提案されるループを防止し、後続のエージェントや開発者が判断根拠を即座に辿れるようにする（例: PR #220 のクローズコメントおよび [docs/issues/issue-14-backup-restore-concurrency-criteria.md](../issues/issue-14-backup-restore-concurrency-criteria.md)）。
+
 ## Before Editing
 - Identify the canonical doc and the implementation files that are the source of truth.
 - Prefer `src/` and current canonical docs over deprecated docs and historical notes.
