@@ -12,17 +12,14 @@ export interface MealShareOptions {
 }
 
 export interface MealShareTextInput {
-  meal_name?: string;
-  cuisine_type?: string | null;
   notes?: string | null;
-  location_name?: string | null;
 }
 
 /**
  * Builds the initial share text for a meal.
  * Privacy rule: Only user-written notes (trimmed) are included in the share text.
  * Location, meal_name, cuisine_type, and system labels are strictly excluded
- * to completely eliminate privacy leak risks and post-share cleanup effort.
+ * to prevent unintentional disclosure of location or other meal attributes (Issue #228).
  * If notes is empty or whitespace-only, returns an empty string ("").
  */
 export function buildMealShareText(meal: MealShareTextInput): string {

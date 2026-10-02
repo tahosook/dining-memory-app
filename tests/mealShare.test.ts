@@ -411,16 +411,10 @@ describe('mealShare', () => {
   describe('buildMealShareText', () => {
     test('returns only trimmed notes when notes are provided', () => {
       const shareText = buildMealShareText({
-        meal_name: '天ぷら蕎麦',
-        cuisine_type: '和食',
         notes: '出汁が効いて美味しい',
-        location_name: '神田まつや',
       });
 
       expect(shareText).toBe('出汁が効いて美味しい');
-      expect(shareText).not.toContain('天ぷら蕎麦');
-      expect(shareText).not.toContain('和食');
-      expect(shareText).not.toContain('神田まつや');
       expect(shareText).not.toContain('食事記録');
       expect(shareText).not.toContain('メモ');
       expect(shareText).not.toContain('料理ジャンル');
@@ -429,7 +423,6 @@ describe('mealShare', () => {
 
     test('trims surrounding whitespace from notes', () => {
       const shareText = buildMealShareText({
-        meal_name: 'カレーライス',
         notes: '  ピリ辛で美味しかった！ \n ',
       });
 
@@ -437,47 +430,27 @@ describe('mealShare', () => {
     });
 
     test('returns empty string when notes is empty or undefined', () => {
-      expect(
-        buildMealShareText({
-          meal_name: 'トースト',
-          notes: undefined,
-          location_name: '喫茶店',
-        })
-      ).toBe('');
-
-      expect(
-        buildMealShareText({
-          meal_name: 'トースト',
-          notes: '',
-          location_name: '喫茶店',
-        })
-      ).toBe('');
-
-      expect(
-        buildMealShareText({
-          meal_name: 'トースト',
-          notes: null,
-        })
-      ).toBe('');
+      expect(buildMealShareText({ notes: undefined })).toBe('');
+      expect(buildMealShareText({ notes: '' })).toBe('');
+      expect(buildMealShareText({ notes: null })).toBe('');
     });
 
     test('returns empty string when notes contains only whitespace', () => {
       const shareText = buildMealShareText({
-        meal_name: 'サンドイッチ',
         notes: '   \n\t  ',
       });
 
       expect(shareText).toBe('');
-      expect(shareText).not.toContain('サンドイッチ');
     });
 
     test('strictly excludes meal_name, location_name, and cuisine_type from share text', () => {
-      const shareText = buildMealShareText({
+      const meal = {
         meal_name: '自宅 の 朝食',
         location_name: '自宅',
         cuisine_type: '和食',
         notes: '朝ごはんメモ',
-      });
+      };
+      const shareText = buildMealShareText(meal);
 
       expect(shareText).toBe('朝ごはんメモ');
       expect(shareText).not.toContain('自宅');
@@ -488,11 +461,13 @@ describe('mealShare', () => {
     });
 
     test('returns empty string without leaking meal_name or location when notes is absent', () => {
-      const shareText = buildMealShareText({
+      const meal = {
         meal_name: '自宅 の 朝食',
         location_name: '自宅',
         cuisine_type: '和食',
-      });
+        notes: undefined,
+      };
+      const shareText = buildMealShareText(meal);
 
       expect(shareText).toBe('');
       expect(shareText).not.toContain('自宅');
