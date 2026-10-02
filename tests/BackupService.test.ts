@@ -615,8 +615,8 @@ describe('BackupService', () => {
       expect(unzip).not.toHaveBeenCalled();
     });
 
-    // Test G: Zip Slip / malicious paths test
-    test('rejects backup containing malicious path traversal in photos directory or meals', async () => {
+    // Test G: Zip Slip / malicious paths test matrix
+    test('rejects backup containing malicious path traversal in zip contents', async () => {
       (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
         canceled: false,
         assets: [{ uri: 'file:///mock-picker/backup.zip' }],
@@ -627,37 +627,61 @@ describe('BackupService', () => {
         { path: '../evil.sh' },
       ]);
 
-      const manifestContent = JSON.stringify({
-        formatVersion: 1,
-        appId: 'com.tahosook.diningmemory',
-        appVersion: '1.0.0',
-        schemaVersion: 2,
-        exportedAt: '2026-09-19T10:00:00.000Z',
-        mealCount: 1,
-        photoCount: 1,
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing traversal path that escapes staging directory after normalization', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
       });
 
-      const mealsContent = JSON.stringify([
-        {
-          id: 'meal-1',
-          uuid: 'uuid-1',
-          meal_name: '不正',
-          photo_file_name: '../../evil.jpg',
-          is_homemade: 0,
-          meal_datetime: 1713800000000,
-          created_at: 1713800000000,
-          updated_at: 1713800000000,
-        },
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'photos/../../evil.sh' },
       ]);
-
-      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
-        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
-        if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
-        return Promise.resolve('{}');
-      });
 
       const result = await BackupService.pickAndValidateBackup();
       expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing Windows-style path traversal (..\\)', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'photos\\..\\evil.sh' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing null byte injection in entry path', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'photos/meal.jpg\0evil.jpg' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
     });
 
     test('rejects backup containing malicious absolute path in zip contents', async () => {
@@ -692,6 +716,184 @@ describe('BackupService', () => {
       expect(result.valid).toBe(false);
       expect(result.error).toContain('不正な絶対パス');
       expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing absolute path mimicking allowed directory prefix', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: '/photos/meal-20260422-01.jpg' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('不正な絶対パス');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing single root slash as entry path', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: '/' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('不正な絶対パス');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing traversal boundary entry (photos/../)', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'photos/../' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('rejects backup containing isolated dot-dot entry (..)', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: '..' },
+      ]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('バックアップファイルに未許可のファイルが含まれています。');
+      expect(unzip).not.toHaveBeenCalled();
+    });
+
+    test('accepts safe relative photo paths containing dots in filename', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      const photoFileName = 'meal.lunch.2026.04.22.jpg';
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'database/meals.json' },
+        { path: 'database/app_settings.json' },
+        { path: `photos/${photoFileName}` },
+      ]);
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 1,
+        photoCount: 1,
+      });
+
+      const mealsContent = JSON.stringify([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: '安全なドット付き写真名',
+          photo_file_name: photoFileName,
+          is_homemade: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+      ]);
+
+      const settingsContent = JSON.stringify([
+        { key: 'ai_input_assist_enabled', value: 'true', updated_at: 1713800000000 },
+      ]);
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        if (path.endsWith('app_settings.json')) return Promise.resolve(settingsContent);
+        return Promise.resolve('{}');
+      });
+
+      (readDirectoryAsync as jest.Mock).mockResolvedValue([photoFileName]);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(true);
+      expect(unzip).toHaveBeenCalled();
+    });
+
+    test('rejects backup when meals data contains malicious path traversal in photo_file_name after extraction', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+
+      (listContents as jest.Mock).mockResolvedValue([
+        { path: 'manifest.json' },
+        { path: 'database/meals.json' },
+        { path: 'database/app_settings.json' },
+        { path: 'photos/meal-20260422-01.jpg' },
+      ]);
+
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 1,
+        photoCount: 1,
+      });
+
+      const mealsContent = JSON.stringify([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: '不正写真名',
+          photo_file_name: '../../evil.jpg',
+          is_homemade: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+      ]);
+
+      const settingsContent = JSON.stringify([
+        { key: 'ai_input_assist_enabled', value: 'true', updated_at: 1713800000000 },
+      ]);
+
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve(mealsContent);
+        if (path.endsWith('app_settings.json')) return Promise.resolve(settingsContent);
+        return Promise.resolve('{}');
+      });
+
+      (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-20260422-01.jpg']);
+
+      const result = await BackupService.pickAndValidateBackup();
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('写真ファイル名が不正または非オリジナルです');
+      expect(unzip).toHaveBeenCalled();
     });
 
     test('rejects backup when app_settings.json has invalid JSON syntax', async () => {
