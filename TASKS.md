@@ -24,25 +24,26 @@
 - Keyset (Cursor) ページネーションへの移行検討: 将来トリガー待ち評価（GitHub Issue #80、内部ドキュメント issue-08）。`searchMeals` の大量データ時における性能特性と移行トリガーの実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では実装見送りとし、正しいタイブレーカー条件を文書化。20,000件超かつ深いスクロール・大量同期時に別Issueで実装 ([docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md))。
 - 大量データ規模における複合インデックス導入の再評価: 将来トリガー待ち評価（GitHub Issue #81、内部ドキュメント issue-09）。実測評価完了（[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）。現時点では本番INDEX追加を見送り、10,000件以上を「再評価トリガー」として記録（実機体感・データ分布等と併せて別Issueで判断） ([docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md))。
 - バックアップ復元の写真コピー並列化 — 再開条件と必須 Evidence の定義: 将来トリガー待ち評価（GitHub Issue #229、内部ドキュメント issue-14）。低スペック端末を含む実機実測データ・ロールバック整合性テスト・並列度根拠が揃うまで実装見送り（Refs #220、[docs/issues/issue-14-backup-restore-concurrency-criteria.md](docs/issues/issue-14-backup-restore-concurrency-criteria.md)、[docs/notes/backup-restore-copy-evaluation.md](docs/notes/backup-restore-copy-evaluation.md)）。
-- Expo SQLite prepareAsync 可用性の根拠固定: 将来トリガー待ち評価（GitHub Issue #231）。現行ランタイムでの prepareAsync 常時利用可能の根拠を固定し、SDKアップグレード時の再確認トリガーを定義（Refs #209, #197）。
+- 孤立写真削除のチャンク化 — 再開条件の定義: 将来トリガー待ち評価（GitHub Issue #239）。実機大量孤立データプロファイル・誤削除防止テスト・中断再開冪等性が揃うまで実装見送り（Refs #210、[docs/notes/orphan-photos-cleanup-criteria.md](docs/notes/orphan-photos-cleanup-criteria.md)）。
 
 ### Backlog / Future ideas（バックログ・将来検討）
 - EXIF / GPS / ファイル名保存方針: 要確認。保存時 EXIF / GPS は実装方針あり。backup / export / file naming まで広げる場合は data policy と privacy を再確認する。
 - X共有導線: 候補。現在は Records detail から OS share sheet へ明示操作で進む最小導線がある。投稿状態保存や自動送信はしない。
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
-- BackupService Zip Slip 拒否ケースのテスト行列確認: 調査・確認候補（GitHub Issue #232）。PR #194 マージ後の絶対パス・トラバーサル拒否テスト行列の確認（Refs #194）。
 
 ### Process / governance follow-ups（運用・ガバナンス追跡）
-- テスト専用 PR のマージ前ゲート（フル npm test + モック干渉）の明文化（GitHub Issue #233）。
-- PR クローズコメント標準 — 再開条件と根拠ドキュメントリンクの必須化（GitHub Issue #234）。
-- main 直コミット + PR ブランチ force-push 運用の見直し（GitHub Issue #235）。
 - エージェントによる `.jules/` 変更の拒否方針とゲート化の検討（GitHub Issue #236）。
 - Issue #80 / #81 クローズコメントへの再オープン条件・ベンチマークリンク補完（GitHub Issue #237）。
-- カメラ権限エラー表示の汎用化によるデバッグ性・UX 影響の確認（GitHub Issue #238、Refs #198）。
-- 孤立写真削除のチャンク化 — 再開条件の定義（GitHub Issue #239、Refs #210）。
 
 ## Done / Historical Notes
 - バックアップ復元の写真コピー並列化 — 再開条件と必須 Evidence の定義: 完了（GitHub Issue #229、内部ドキュメント issue-14）。PR #220 のクローズ理由（障害系テスト欠落、モック遅延シミュレーション値の不適格性、EMFILE/過負荷リスク、sequential設計意図）を踏まえ、安全設計の維持と再開受入基準を [docs/notes/backup-restore-copy-evaluation.md](docs/notes/backup-restore-copy-evaluation.md) に定義・記録（完了 / Closed）。
+- 孤立写真削除のチャンク化 — 再開条件の定義: 完了（GitHub Issue #239）。PR #210 のクローズ理由（レースコンディション窓の拡大、実運用データ規模との乖離、誤削除防止テスト欠落）を踏まえ、安全設計の維持と再開受入基準を [docs/notes/orphan-photos-cleanup-criteria.md](docs/notes/orphan-photos-cleanup-criteria.md) に定義・記録（完了 / Closed）。
+- テスト専用 PR のマージ前ゲート（フル npm test + モック干渉）の明文化: 完了（GitHub Issue #233）。テスト追加・修正 PR におけるフルテストスイート（`npm test`）実行の義務化、ネイティブモジュール共通モックの `jest.setup.js` 集約、テスト個別スコープ制御によるグローバル環境保護、およびアサーション品質基準を [docs/engineering/development-workflow.md](docs/engineering/development-workflow.md) に明文化（完了 / Closed）。
+- main 直コミット + PR ブランチ force-push 運用の見直し: 完了（GitHub Issue #235）。GitHub Ruleset（ID 19937013）により main への直接 push・force-push が例外なく機械的にブロックされている事実を確認。作業ブランチにおける CI 監査性維持のための運用ガイドラインを docs/engineering/development-workflow.md に反映（[docs/notes/git-branching-and-ci-governance.md](docs/notes/git-branching-and-ci-governance.md)、完了 / Closed）。
+- PR クローズコメント標準 — 再開条件と根拠ドキュメントリンクの必須化: 完了（GitHub Issue #234）。マージせず閉じる PR において「客観的理由」「再開受入基準チェックリスト」「根拠ドキュメントリンク」の3要素を必須化する標準を docs/engineering/development-workflow.md に策定（Refs #220、完了 / Closed）。
+- カメラ権限エラー表示の汎用化によるデバッグ性・UX 影響の確認: 完了（GitHub Issue #238）。PR #198 で導入されたアラート文言汎用化について、UI 上の設定アプリ常設導線（Actionable UX）およびサニタイズ内部ログ（例外追跡性・Sentry親和性）が十分に担保されていることを確認し、現状維持・追加変更不要と判断（Refs #198、[docs/notes/camera-permission-error-ux-evaluation.md](docs/notes/camera-permission-error-ux-evaluation.md)、完了 / Closed）。
+- Expo SQLite prepareAsync 可用性の根拠固定: 完了（GitHub Issue #231）。Expo SDK 57 / expo-sqlite ~57.0.3 の型定義およびランタイム実装（runAsync 等が内部で prepareAsync を直接使用）に基づき、prepareAsync が常時利用可能でありフォールバック分岐が死パスであることを固定。SDKアップグレード時の再確認トリガーを定義（Refs #209, #197、[docs/notes/sqlite-prepareasync-availability.md](docs/notes/sqlite-prepareasync-availability.md)、完了 / Closed）。
+- BackupService Zip Slip 拒否ケースのテスト行列確認: 完了（GitHub Issue #232、内部ドキュメント issue-16）。PR #194 で実装された絶対パス拒否に加え、既存テストで不足していた相対パストラバーサル（photos/../../evil.sh 等の正規化後エスケープ）、Windows形式（..\）、ヌルバイト（\0）、境界値（photos/../、..単体、/）、および安全な相対パス（ドット付きファイル名）のテスト行列を tests/BackupService.test.ts に補完（Refs #194、[docs/issues/issue-16-backup-service-zip-slip-matrix.md](docs/issues/issue-16-backup-service-zip-slip-matrix.md)、完了 / Closed）。
 - mealShare エラーパス統合テストの完全性確認: 調査・確認完了（GitHub Issue #230、内部ドキュメント issue-15）。MealDetailScreen から mealShare への呼び出し経路、エラー伝播、フォールバック（Android: NativeModule -> expo-sharing -> Share.share）、UI 側でのエラーアラート表示、およびパスサニタイズ処理が既存のテスト（tests/mealShare.test.ts、tests/MealDetailScreen.test.tsx）にて網羅（カバレッジ 100%）されており、追加変更不要で完了と判断（Refs #228, #226, #211, #202, #196、[docs/issues/issue-15-mealshare-error-path-verification.md](docs/issues/issue-15-mealshare-error-path-verification.md)、完了 / Closed）。
 - エージェント運用のガバナンス刷新と機械的 PR ゲートの最適化 (Core Machine-Enforced & Evidence-Based Governance): 自然言語禁止リストの肥大化を廃止し、3層構造（`.jules/rules.md` での意思決定ポリシー、`bolt.md`/`sentinel.md` での標準5セクションペルソナ定義、および `scripts/verify-pr-gates.sh` による機械的ゲート）を配備。差分ゼロ・テスト削除・テスト弱体化および PR 本文 Evidence Gate を CI で物理遮断し、`any`・エスケープハッチは ESLint で静的検査、PR 本文修正時の CI 自動再検証（`pull_request.edited` トリガー）を配備。
 - Android 実機環境における写真保存パイプラインの実測プロファイリング (GitHub Issue #60) & Native EXIF 移行要否判断 (GitHub Issue #61): Google Pixel 9a (Android 17, 8GB RAM) 実機での写真保存パイプライン全8ステップの所要時間、メモリ推移（PSS/RSS）、GC 挙動、および UI フレーム描画（Jank）を実測（2回施行）。今回の測定条件では EXIF 処理時間は平均 42.4ms、Java Heap PSS は 11〜22MB、GC ポーズは 3ms 未満、Jank 率は 3.9〜5.4% で推移し、顕著な UI 停止やメモリ圧迫は観測されず。この実機データに基づき、Issue #61（Kotlin Native EXIF 化）は未実測の机上試算（~10ms）と比較しても得られる短縮幅が限定的であることから現状維持と判断（[docs/notes/photo-save-benchmark-issue-60.md](docs/notes/photo-save-benchmark-issue-60.md)、完了）。
