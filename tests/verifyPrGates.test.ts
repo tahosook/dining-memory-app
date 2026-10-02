@@ -401,5 +401,39 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         execGit('git reset --hard HEAD~1');
       }
     });
+
+    it('.jules/ ディレクトリ保護: 許可フラグなしでの変更をブロックする', () => {
+      fs.mkdirSync(path.join(testRepoDir, '.jules'), { recursive: true });
+      fs.writeFileSync(
+        path.join(testRepoDir, '.jules/rules.md'),
+        '# Modified rules\n'
+      );
+      execGit('git add .jules/rules.md');
+      execGit('git commit -m "modify jules rule"');
+
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', fullValidBody]);
+      expect(res.status).toBe(1);
+      expect(res.stdout).toContain(
+        'Unauthorized modification to .jules/ directory detected'
+      );
+    });
+
+    it('.jules/ ディレクトリ保護: ALLOW_JULES_CHANGE=true 指定時は変更を許可する', () => {
+      fs.mkdirSync(path.join(testRepoDir, '.jules'), { recursive: true });
+      fs.writeFileSync(
+        path.join(testRepoDir, '.jules/rules.md'),
+        '# Legitimate rules update\n'
+      );
+      execGit('git add .jules/rules.md');
+      execGit('git commit -m "legitimate jules rule update"');
+
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', fullValidBody], {
+        ALLOW_JULES_CHANGE: 'true',
+      });
+      expect(res.status).toBe(0);
+      expect(res.stdout).toContain(
+        '.jules/ modification permitted via ALLOW_JULES_CHANGE=true'
+      );
+    });
   });
 });
