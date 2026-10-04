@@ -31,10 +31,8 @@
 - X共有導線: 候補。現在は Records detail から OS share sheet へ明示操作で進む最小導線がある。投稿状態保存や自動送信はしない。
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
-### Process / governance follow-ups（運用・ガバナンス追跡）
-- Issue #80 / #81 クローズコメントへの再オープン条件・ベンチマークリンク補完（GitHub Issue #237）。
-
 ## Done / Historical Notes
+- Issue #80 / #81 クローズコメントへの再オープン条件・ベンチマークリンク補完: 完了（GitHub Issue #237）。GitHub Issue #80（Keyset pagination）および #81（複合インデックス）のクローズコメントにおいて、実測ベンチマークレポート（PR #191、[docs/notes/pagination-index-benchmark-report.md](docs/notes/pagination-index-benchmark-report.md)）への言及、恒久的追跡ドキュメント（[docs/issues/issue-08-keyset-cursor-pagination.md](docs/issues/issue-08-keyset-cursor-pagination.md)、[docs/issues/issue-09-composite-index-follow-up.md](docs/issues/issue-09-composite-index-follow-up.md)）への参照、再評価トリガー（10,000件到達、実機遅延報告等）と現時点の見送り判断根拠が既に十分に網羅されていることを確認し、追加変更不要として完了（完了 / Closed）。
 - エージェントによる .jules/ 変更の拒否方針とゲート化の検討: 完了（GitHub Issue #236）。エージェントによる意図的・偶発的な .jules/ 改変を機械的に遮断する scripts/verify-pr-gates.sh の保護ロジックおよび管理者バイパス運用の設計を固定（[docs/notes/jules-directory-governance-gate.md](docs/notes/jules-directory-governance-gate.md)、完了 / Closed）。
 - バックアップ復元の写真コピー並列化 — 再開条件と必須 Evidence の定義: 完了（GitHub Issue #229、内部ドキュメント issue-14）。PR #220 のクローズ理由（障害系テスト欠落、モック遅延シミュレーション値の不適格性、EMFILE/過負荷リスク、sequential設計意図）を踏まえ、安全設計の維持と再開受入基準を [docs/notes/backup-restore-copy-evaluation.md](docs/notes/backup-restore-copy-evaluation.md) に定義・記録（完了 / Closed）。
 - 孤立写真削除のチャンク化 — 再開条件の定義: 完了（GitHub Issue #239）。PR #210 のクローズ理由（レースコンディション窓の拡大、実運用データ規模との乖離、誤削除防止テスト欠落）を踏まえ、安全設計の維持と再開受入基準を [docs/notes/orphan-photos-cleanup-criteria.md](docs/notes/orphan-photos-cleanup-criteria.md) に定義・記録（完了 / Closed）。
