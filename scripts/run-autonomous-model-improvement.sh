@@ -36,8 +36,8 @@ BATCH_SIZE="${BATCH_SIZE:-4}"
 export REQUIRED_TEST_SET_SIZE="7"
 export GATE_MIN_TOP3_CORRECT="5"          # >= 5/7 (71.4%)
 export GATE_MIN_TOP1_CORRECT="2"          # >= 2/7 (28.6%)
-export GATE_MAX_MODEL_SIZE_BYTES=15728640 # <= 15MB
-export GATE_MIN_MODEL_SIZE_BYTES=1048576  # >= 1MB
+export GATE_MAX_MODEL_SIZE_BYTES=15728640 # <= 15 MiB (15,728,640 bytes)
+export GATE_MIN_MODEL_SIZE_BYTES=1048576  # >= 1 MiB (1,048,576 bytes)
 export GATE_MAX_LATENCY_MS="100.0"        # <= 100ms (eval host benchmark gate; does not guarantee on-device latency)
 
 validate_dataset() {
@@ -52,10 +52,11 @@ const crypto = require('crypto');
 const datasetDir = path.resolve(process.argv[1]);
 const goldenTestDir = path.resolve(process.argv[2]);
 
-const REQUIRED_CLASSES = [
+const CANONICAL_CLASSES = [
   'curry_rice', 'drink', 'fish_dish', 'fried_dish',
   'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
-].sort();
+];
+const REQUIRED_CLASSES = CANONICAL_CLASSES;
 
 function sha256(filePath) {
   const data = fs.readFileSync(filePath);
@@ -114,12 +115,41 @@ if (unknown.length > 0) {
 // Check labels.txt if present
 const labelsFile = path.join(datasetDir, 'labels.txt');
 if (fs.existsSync(labelsFile)) {
-  const fileClasses = fs.readFileSync(labelsFile, 'utf8').split(/\\r?\\n/).map(s => s.trim()).filter(Boolean).sort();
-  const missingL = REQUIRED_CLASSES.filter(c => !fileClasses.includes(c));
-  const unknownL = fileClasses.filter(c => !REQUIRED_CLASSES.includes(c));
-  if (missingL.length > 0 || unknownL.length > 0) {
-    console.error('❌ Error: labels.txt class mismatch in dataset (missing: [' + missingL.join(', ') + '], unknown: [' + unknownL.join(', ') + '])');
+  const content = fs.readFileSync(labelsFile, 'utf8').trimEnd();
+  const rawLines = content === '' ? [] : content.split(/\\r?\\n/).map(s => s.trim());
+  const fileClasses = rawLines.filter(Boolean);
+
+  if (rawLines.length !== CANONICAL_CLASSES.length) {
+    console.error('❌ Error: labels.txt line count mismatch in dataset. Expected ' + CANONICAL_CLASSES.length + ' lines, found ' + rawLines.length);
     process.exit(1);
+  }
+
+  if (fileClasses.length !== CANONICAL_CLASSES.length) {
+    console.error('❌ Error: labels.txt non-empty class count mismatch in dataset. Expected ' + CANONICAL_CLASSES.length + ' classes, found ' + fileClasses.length);
+    process.exit(1);
+  }
+
+  const missingL = CANONICAL_CLASSES.filter(c => !fileClasses.includes(c));
+  const unknownL = fileClasses.filter(c => !CANONICAL_CLASSES.includes(c));
+  if (missingL.length > 0) {
+    console.error('❌ Error: Missing required class(es) in labels.txt: ' + missingL.join(', '));
+    process.exit(1);
+  }
+  if (unknownL.length > 0) {
+    console.error('❌ Error: Unknown unexpected class(es) in labels.txt: ' + unknownL.join(', '));
+    process.exit(1);
+  }
+
+  for (let i = 0; i < CANONICAL_CLASSES.length; i++) {
+    if (fileClasses[i] !== CANONICAL_CLASSES[i]) {
+      console.error(
+        '❌ Error: labels.txt class order mismatch in dataset at index ' + i +
+        '. Expected ' + JSON.stringify(CANONICAL_CLASSES[i]) + ', found ' + JSON.stringify(fileClasses[i]) + '.\n' +
+        'Expected canonical order:\n  ' + CANONICAL_CLASSES.join('\n  ') + '\n' +
+        'Actual labels.txt order:\n  ' + fileClasses.join('\n  ')
+      );
+      process.exit(1);
+    }
   }
 }
 
@@ -389,7 +419,7 @@ echo "Epochs:               $EPOCHS (batch size: $BATCH_SIZE)"
 echo "Promotion criteria:   Golden Test Samples == $REQUIRED_TEST_SET_SIZE"
 echo "                      Top-3 >= $GATE_MIN_TOP3_CORRECT/$REQUIRED_TEST_SET_SIZE (71.4%) AND Top-1 >= $GATE_MIN_TOP1_CORRECT/$REQUIRED_TEST_SET_SIZE (28.6%)"
 echo "                      + Minority class improvement (> Champion measured baseline)"
-echo "                      + Model size <= 15MB AND Eval Latency <= 100ms"
+echo "                      + Model size <= 15 MiB (15,728,640 bytes) AND Eval Latency <= 100ms"
 echo "                      (Latency gate evaluates CI/host execution; does not prove device latency)"
 echo "========================================================"
 
@@ -432,13 +462,13 @@ if [ ! -f "$CHALLENGER_MODEL" ]; then
   exit 1
 fi
 
-# Model size validation check: <= 15MB and >= 1MB
+# Model size validation check: <= 15 MiB (15,728,640 bytes) and >= 1 MiB (1,048,576 bytes)
 MODEL_SIZE=$(wc -c < "$CHALLENGER_MODEL" | tr -d ' ')
 if [ "$MODEL_SIZE" -lt "$GATE_MIN_MODEL_SIZE_BYTES" ] || [ "$MODEL_SIZE" -gt "$GATE_MAX_MODEL_SIZE_BYTES" ]; then
-  echo "❌ Error: Model size ($MODEL_SIZE bytes) exceeds canonical gate bounds [1MB, 15MB]. Rejecting model."
+  echo "❌ Error: Model size ($MODEL_SIZE bytes) exceeds canonical gate bounds [1 MiB, 15 MiB (15,728,640 bytes)]. Rejecting model."
   exit 1
 fi
-echo "✓ Challenger model size verified: $(( MODEL_SIZE / 1024 / 1024 )) MB ($MODEL_SIZE bytes <= 15MB)"
+echo "✓ Challenger model size verified: $(( MODEL_SIZE / 1024 / 1024 )) MiB ($MODEL_SIZE bytes <= 15 MiB (15,728,640 bytes))"
 
 # Step 3: Autonomous Evaluation on Golden Test Set
 echo -e "\n📊 [Step 3/4] Evaluating models against Golden Test Set..."

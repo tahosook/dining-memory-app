@@ -19,7 +19,7 @@
 3. **Top-1 完全一致精度**: 正解サンプル数 **>= 2/7 (28.6%以上)** を維持・向上すること（初期 Champion 実績: 2/7 = 28.6%）。
 4. **少数クラスの改善 (Champion 実測必須・fallback 禁止)**: 現在の本番 Champion モデル（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）を同一 Golden Test Set で実測評価することが必須要件であり、ハードコードされた baseline への fallback は禁止。対象少数クラス（`fried_dish`, `stir_fry`, `other_or_exclude`）について、Challenger の Top-3 正解数が Champion の実測正解数を厳密に上回ること（`Challenger 少数クラス正解数 > Champion 実測正解数`）。Champion 未評価または評価レポート欠落時は即座に Promotion 不可（`REJECT_CHAMPION_NOT_EVALUATED`）。
 5. **非機能要件**:
-   - モデルファイルサイズ: 1MB 以上 **15MB 以下** であること。
+   - モデルファイルサイズ: 1 MiB 以上 **15 MiB (15,728,640 bytes) 以下** であること。
    - 推論レイテンシ: 評価環境（CI / ホスト）における平均推論時間が **100ms 以下** であること（※ 本 Gate は評価環境で測定した推論時間に対する品質チェックであり、Android 実機での 100ms 以下性能を直接証明・保証するものではない）。
 6. **回帰防止 (Regression Guardrail)**: 基準に満たない場合（REJECT / REJECT_INVALID_TEST_SET / REJECT_CHAMPION_NOT_EVALUATED / TIE）は本番 asset を一切変更せず既存の Champion モデルを維持すること（AGENTS.md の「変更しないことの成功定義」に準拠）。
 
@@ -68,7 +68,7 @@ flowchart TD
     B --> C["Phase 2: 少数クラスの自律データ拡張<br/>(train のみ拡張、val/test は厳格隔離)"]
     C --> D["Phase 3: 自動再学習<br/>(train-mediapipe-model.py)"]
     D --> E["Phase 4: Golden Test Set 自動定量評価<br/>(evaluate-mediapipe-model.py)"]
-    E --> F{"Promotion Gate 判定<br/>Top-3 >= 5/7 (71.4%) かつ Top-1 >= 2/7 (28.6%)<br/>+ 少数クラス改善 (> Champion) + サイズ<=15MB + 遅延<=100ms ?"}
+    E --> F{"Promotion Gate 判定<br/>Top-3 >= 5/7 (71.4%) かつ Top-1 >= 2/7 (28.6%)<br/>+ 少数クラス改善 (> Champion) + サイズ<=15 MiB (15,728,640 bytes) + 遅延<=100ms ?"}
     F -->|合格 (PROMOTE)| G["meal-input-assist.task 安全アトミック更新"]
     F -->|不合格/同等 (REJECT / TIE)| H["本番 asset 変更なし (Champion 完全維持)"]
 ```
@@ -96,7 +96,7 @@ flowchart TD
 - Top-1, Top-3, 少数クラス（`fried_dish`, `stir_fry`, `other_or_exclude`）の正解数, Class-wise Recall, 推論レイテンシ, Confusion Matrix を算出。
 
 ### Phase 5: Champion / Challenger 昇格判定
-- 既存 Champion モデルの実測値と比較し、第 1 節の成功基準（サンプル数 == 7, Top-3 >= 5/7, Top-1 >= 2/7, 少数クラス正解数 > Champion 実測正解数, サイズ <= 15MB, 評価ホスト遅延 <= 100ms）をすべて満たした場合のみ、一時ファイル検証を経てアトミックに `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換（※ 推論遅延 <= 100ms は評価実行ホスト環境上での品質ゲートであり、Android 実機での遅延性能を直接保証するものではない）。
+- 既存 Champion モデルの実測値と比較し、第 1 節の成功基準（サンプル数 == 7, Top-3 >= 5/7, Top-1 >= 2/7, 少数クラス正解数 > Champion 実測正解数, サイズ <= 15 MiB (15,728,640 bytes), 評価ホスト遅延 <= 100ms）をすべて満たした場合のみ、一時ファイル検証を経てアトミックに `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換（※ 推論遅延 <= 100ms は評価実行ホスト環境上での品質ゲートであり、Android 実機での遅延性能を直接保証するものではない）。
 - 未達（REJECT / REJECT_INVALID_TEST_SET / REJECT_CHAMPION_NOT_EVALUATED）または同等（MAINTAIN_OR_TIE）の場合は本番 asset を一切変更せず、既存の Champion モデルを完全に維持する（「No regression, no PR」の保証）。
 
 ---

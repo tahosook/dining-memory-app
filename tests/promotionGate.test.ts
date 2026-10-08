@@ -393,7 +393,11 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
     ];
 
-    function createDummyDataset(dirName: string, classes: string[], options: { includeLeakage?: boolean; extraClass?: string } = {}): {
+    function createDummyDataset(dirName: string, classes: string[], options: {
+      includeLeakage?: boolean;
+      extraClass?: string;
+      labelsContent?: string[];
+    } = {}): {
       datasetDir: string;
       goldenDir: string;
     } {
@@ -427,7 +431,8 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
         }
       }
 
-      fs.writeFileSync(path.join(datasetDir, 'labels.txt'), classes.join('\n') + '\n', 'utf-8');
+      const labelsToUse = options.labelsContent !== undefined ? options.labelsContent : classes;
+      fs.writeFileSync(path.join(datasetDir, 'labels.txt'), labelsToUse.join('\n') + '\n', 'utf-8');
       return { datasetDir, goldenDir };
     }
 
@@ -460,6 +465,47 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       const res = runValidate(datasetDir, goldenDir);
       expect(res.exitCode).toBe(0);
       expect(res.stdout).toContain('Dataset validation PASSED: 9 classes verified');
+    });
+
+    it('accepts dataset when labels.txt has valid 9 classes in exact canonical order', () => {
+      const canonicalLabels = [
+        'curry_rice', 'drink', 'fish_dish', 'fried_dish',
+        'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+      ];
+      const { datasetDir, goldenDir } = createDummyDataset('valid_labels_order_ds', REQUIRED_CLASSES, {
+        labelsContent: canonicalLabels,
+      });
+      const res = runValidate(datasetDir, goldenDir);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toContain('Dataset validation PASSED: 9 classes verified');
+    });
+
+    it('rejects dataset when labels.txt has same 9 classes but incorrect order', () => {
+      const reorderedLabels = [
+        'drink', 'curry_rice', 'fish_dish', 'fried_dish',
+        'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+      ];
+      const { datasetDir, goldenDir } = createDummyDataset('reordered_labels_ds', REQUIRED_CLASSES, {
+        labelsContent: reorderedLabels,
+      });
+      const res = runValidate(datasetDir, goldenDir);
+      expect(res.exitCode).toBe(1);
+      expect(res.stderr).toContain('labels.txt class order mismatch in dataset at index 0');
+      expect(res.stderr).toContain('Expected canonical order:');
+      expect(res.stderr).toContain('Actual labels.txt order:');
+    });
+
+    it('rejects dataset when labels.txt has line count mismatch (e.g. empty line in between)', () => {
+      const invalidLineCountLabels = [
+        'curry_rice', '', 'drink', 'fish_dish', 'fried_dish',
+        'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+      ];
+      const { datasetDir, goldenDir } = createDummyDataset('empty_line_labels_ds', REQUIRED_CLASSES, {
+        labelsContent: invalidLineCountLabels,
+      });
+      const res = runValidate(datasetDir, goldenDir);
+      expect(res.exitCode).toBe(1);
+      expect(res.stderr).toContain('labels.txt line count mismatch in dataset');
     });
 
     it('rejects dataset when a required class (e.g. noodles) is missing', () => {

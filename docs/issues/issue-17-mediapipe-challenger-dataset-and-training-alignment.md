@@ -35,7 +35,7 @@ PR #258 で導入された MediaPipe 食事分類モデルの自律改善パイ�
 | **Top-3 正解数** | **6 / 7 (85.7%)** | **6 / 7 (85.7%)** | `>= 5/7` (71.4%) | **PASS** |
 | **少数クラス Top-3** | **1 / 2 (50.0%)** | **1 / 2 (50.0%)** | `> Champion` (厳密に超過) | **FAIL** (1 <= 1) |
 | **平均推論レイテンシ** | 16.5 ms | 16.3 ms | `<= 100.0 ms` | **PASS** |
-| **モデルファイルサイズ** | 8,903,665 B (~8.5 MB) | 8,898,533 B (~8.5 MB) | 1 MB 〜 15 MB | **PASS** |
+| **モデルファイルサイズ** | 8,903,665 B (~8.5 MB) | 8,898,533 B (~8.5 MB) | 1 MiB 〜 15 MiB (15,728,640 bytes) | **PASS** |
 | **Champion 回帰防止** | — | Top-1: 4 < 5 | `Challenger >= Champion` | **FAIL** (Regression) |
 | **最終ゲート判定** | — | — | 全条件 PASS | **REJECT** |
 
@@ -162,7 +162,7 @@ PR #258 で導入された MediaPipe 食事分類モデルの自律改善パイ�
 - **Minority Top-3**: Champion 1/2 (50.0%) vs Challenger 2/2 (100.0%) (strictly better: PASS)
 - **Regression Guard**: リグレッション 0件 (PASS)
 - **Latency**: 16.2 ms <= 100 ms (PASS)
-- **Model Size**: 8,903,665 bytes (PASS)
+- **Model Size**: 8,903,665 bytes <= 15 MiB (15,728,640 bytes) (PASS)
 - **Promotion Gate 判定**: **PROMOTE**
 - **Champion Before SHA256**: `4835d93442c976dfea4c114926ccb230fdf4f7211c83755f1e72520a06669874`
 - **Champion After SHA256**: `5a8095b38041e69023366a1639f738067d39d7f44e129c27c59769fdb0549a15` (Challenger と完全一致、アトミック置換完了)
@@ -173,10 +173,10 @@ PR #258 で導入された MediaPipe 食事分類モデルの自律改善パイ�
 
 - [x] デフォルトデータセットが正規の 256枚・9クラスデータセット（`zip2-batch250`）に更新されていること。
 - [x] CLI 引数および環境変数からデータセットパスをオーバーライド可能であること。
-- [x] 学習開始前に 9 クラス網羅性、未知クラス排除、Golden Test Set との SHA256 リークゼロが機械的に検証されること。
+- [x] 学習開始前に 9 クラス網羅性、未知クラス排除、labels.txt 厳密順序検証、Golden Test Set との SHA256 リークゼロが機械的に検証されること。
 - [x] Promotion Gate 前に Champion と Challenger のクラス互換性（9クラス一致）が機械的に検証されること。
-- [x] Promotion Gate の条件（Top-1、Top-3、少数クラス改善、回帰ガード、遅延、サイズ）が一切緩和されていないこと。
-- [x] `tests/promotionGate.test.ts` にデータセット検証とクラス互換性のテストが追加され、全テスト（26件）が PASS すること。
-- [x] リポジトリ全体回帰テスト（`npm test` 594件）がすべて PASS すること。
+- [x] Promotion Gate の条件（Top-1、Top-3、少数クラス改善、回帰ガード、遅延、サイズ 15 MiB）が一切緩和されていないこと。
+- [x] `tests/promotionGate.test.ts` にデータセット検証とクラス互換性のテストが追加され、全テスト（29件）が PASS すること。
+- [x] リポジトリ全体回帰テスト（`npm test` 597件）がすべて PASS すること。
 - [x] パイプライン E2E 実走により Challenger が Promotion Gate を正当に通過し、本番アセットがアトミック置換されること。
 
