@@ -14,13 +14,14 @@
 
 ### 成功基準 (Gate Acceptance Criteria)
 固定された **Golden Test Set（7枚の不変テストデータ）** において、以下の基準を満たす新モデル（Challenger）の生成および Android assets への安全デプロイを達成すること：
-1. **Top-3 候補提示精度**: 正解サンプル数 **>= 5/7 (71.4%以上)** を達成すること（Champion 実績: 4/7 = 57.1%）。
-2. **Top-1 完全一致精度**: 正解サンプル数 **>= 2/7 (28.6%以上)** を維持・向上すること（Champion 実績: 2/7 = 28.6%）。
-3. **少数クラスの改善**: Champion において Golden Test Set 上で Top-3 正解数が 0 件だった少数クラス（`fried_dish`, `stir_fry`, `other_or_exclude`）について、Challenger の Top-3 正解数が Champion を上回ること（`Challenger 少数クラス正解数 > Champion 正解数 (0)`）。
-4. **非機能要件**:
+1. **Golden Test Set 厳格検証**: 評価対象テストセットのサンプル数が厳格に **7件** であること（7件以外は Gate Failure とし Promotion 不可）。
+2. **Top-3 候補提示精度**: 正解サンプル数 **>= 5/7 (71.4%以上)** を達成すること（初期 Champion 実績: 4/7 = 57.1%）。
+3. **Top-1 完全一致精度**: 正解サンプル数 **>= 2/7 (28.6%以上)** を維持・向上すること（初期 Champion 実績: 2/7 = 28.6%）。
+4. **少数クラスの改善 (Champion 実測比較)**: 現在の本番 Champion モデル（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）を同一 Golden Test Set で実測評価し、対象少数クラス（`fried_dish`, `stir_fry`, `other_or_exclude`）について、Challenger の Top-3 正解数が Champion の実測正解数を厳密に上回ること（`Challenger 少数クラス正解数 > Champion 実測正解数`）。
+5. **非機能要件**:
    - モデルファイルサイズ: 1MB 以上 **15MB 以下** であること。
    - 推論レイテンシ: 評価環境（CI / ホスト）における平均推論時間が **100ms 以下** であること（※ 本 Gate は評価環境で測定した推論時間に対する品質チェックであり、Android 実機での 100ms 以下性能を直接証明・保証するものではない）。
-5. **回帰防止 (Regression Guardrail)**: 基準に満たない場合（REJECT / TIE）は本番 asset を一切変更せず既存の Champion モデルを維持すること（AGENTS.md の「変更しないことの成功定義」に準拠）。
+6. **回帰防止 (Regression Guardrail)**: 基準に満たない場合（REJECT / TIE / テスト件数不一致）は本番 asset を一切変更せず既存の Champion モデルを維持すること（AGENTS.md の「変更しないことの成功定義」に準拠）。
 
 ---
 
@@ -91,11 +92,12 @@ flowchart TD
 
 ### Phase 4: Golden Test Set による自動評価 (Autonomous Benchmarking)
 - [`scripts/evaluate-mediapipe-model.py`](../../scripts/evaluate-mediapipe-model.py) を実行。
-- Golden Test Set に対する Top-1, Top-3, Class-wise Recall, 推論レイテンシ, Confusion Matrix を算出。
+- 本番 Champion モデル（存在する場合）および Challenger モデルを同一の Golden Test Set（厳格に 7 サンプル）に対して評価。
+- Top-1, Top-3, 少数クラス（`fried_dish`, `stir_fry`, `other_or_exclude`）の正解数, Class-wise Recall, 推論レイテンシ, Confusion Matrix を算出。
 
 ### Phase 5: Champion / Challenger 昇格判定
-- 既存モデル（Champion: Top-1 2/7 = 28.57%, Top-3 4/7 = 57.14%, 少数クラス正解数 0）と比較し、第 1 節の成功基準（Top-3 >= 5/7, Top-1 >= 2/7, 少数クラス正解数 > 0, サイズ <= 15MB, 評価ホスト遅延 <= 100ms）をすべて満たした場合のみ、一時ファイル検証を経てアトミックに `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換（※ 推論遅延 <= 100ms は評価実行ホスト環境上での品質ゲートであり、Android 実機での遅延性能を直接保証するものではない）。
-- 未達（REJECT）または同等（TIE）の場合は本番 asset を一切変更せず、既存の Champion モデルを完全に維持する（「No regression, no PR」の保証）。
+- 既存 Champion モデルの実測値と比較し、第 1 節の成功基準（サンプル数 == 7, Top-3 >= 5/7, Top-1 >= 2/7, 少数クラス正解数 > Champion 実測正解数, サイズ <= 15MB, 評価ホスト遅延 <= 100ms）をすべて満たした場合のみ、一時ファイル検証を経てアトミックに `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換（※ 推論遅延 <= 100ms は評価実行ホスト環境上での品質ゲートであり、Android 実機での遅延性能を直接保証するものではない）。
+- 未達（REJECT / REJECT_INVALID_TEST_SET）または同等（MAINTAIN_OR_TIE）の場合は本番 asset を一切変更せず、既存の Champion モデルを完全に維持する（「No regression, no PR」の保証）。
 
 ---
 
