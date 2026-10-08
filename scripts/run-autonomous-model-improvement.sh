@@ -49,19 +49,27 @@ if (!fs.existsSync(challengerPath)) {
   process.exit(0);
 }
 
-const challengerData = JSON.parse(fs.readFileSync(challengerPath, 'utf8'));
-const challengerTest = (challengerData.test && challengerData.test.metrics) ? challengerData.test.metrics : {};
-const challengerDetails = (challengerData.test && challengerData.test.details) ? challengerData.test.details : [];
+let challengerData;
+try {
+  challengerData = JSON.parse(fs.readFileSync(challengerPath, 'utf8'));
+} catch (err) {
+  console.error('❌ CRITICAL GATE FAILURE: Failed to parse Challenger report JSON: ' + err.message);
+  process.stdout.write('REJECT_INVALID_TEST_SET');
+  process.exit(0);
+}
 
-const challengerTotal = challengerTest.total || 0;
-const challengerTop1Correct = challengerTest.top1_correct || 0;
-const challengerTop3Correct = challengerTest.top3_correct || 0;
-const challengerLatency = challengerTest.avg_latency_ms || 0;
+const challengerTest = (challengerData && challengerData.test && challengerData.test.metrics) ? challengerData.test.metrics : null;
+const challengerDetails = (challengerData && challengerData.test && challengerData.test.details) ? challengerData.test.details : null;
 
-// Golden Test Set MUST be exactly REQUIRED_TEST_SET_SIZE (7 samples)
+const challengerTotal = challengerTest ? (challengerTest.total || 0) : 0;
+const challengerTop1Correct = challengerTest ? (challengerTest.top1_correct || 0) : 0;
+const challengerTop3Correct = challengerTest ? (challengerTest.top3_correct || 0) : 0;
+const challengerLatency = challengerTest ? (challengerTest.avg_latency_ms || 0) : 0;
+
+// Golden Test Set MUST be exactly REQUIRED_TEST_SET_SIZE (7 samples) in both metrics.total and details Array
 const requiredSize = parseInt(process.env.REQUIRED_TEST_SET_SIZE || '7', 10);
-if (challengerTotal !== requiredSize) {
-  console.error('❌ CRITICAL GATE FAILURE: Challenger test set count mismatch! Expected ' + requiredSize + ', got ' + challengerTotal + '. Gate failure.');
+if (!challengerTest || challengerTotal !== requiredSize || !Array.isArray(challengerDetails) || challengerDetails.length !== requiredSize) {
+  console.error('❌ CRITICAL GATE FAILURE: Challenger test set count or details mismatch! Expected total=' + requiredSize + ' and details.length=' + requiredSize + ', got total=' + challengerTotal + ', details=' + (Array.isArray(challengerDetails) ? challengerDetails.length : 'not_array') + '. Gate failure.');
   process.stdout.write('REJECT_INVALID_TEST_SET');
   process.exit(0);
 }
@@ -84,17 +92,12 @@ try {
 
 const championTest = (championData && championData.test && championData.test.metrics) ? championData.test.metrics : null;
 const championDetails = (championData && championData.test && championData.test.details) ? championData.test.details : null;
+const championTotal = championTest ? (championTest.total || 0) : 0;
 
-if (!championTest || !championDetails) {
-  console.error('❌ CRITICAL GATE FAILURE: Champion test metrics or details missing. Promotion prohibited.');
+// Champion MUST have valid test metrics total === 7 and details Array with length === 7
+if (!championTest || championTotal !== requiredSize || !Array.isArray(championDetails) || championDetails.length !== requiredSize) {
+  console.error('❌ CRITICAL GATE FAILURE: Champion test metrics or details invalid/insufficient. Expected total=' + requiredSize + ' and details.length=' + requiredSize + ', got total=' + championTotal + ', details=' + (Array.isArray(championDetails) ? championDetails.length : 'not_array') + '. Promotion prohibited.');
   process.stdout.write('REJECT_CHAMPION_NOT_EVALUATED');
-  process.exit(0);
-}
-
-const championTotal = championTest.total || 0;
-if (championTotal !== requiredSize) {
-  console.error('❌ CRITICAL GATE FAILURE: Champion test set count mismatch! Expected ' + requiredSize + ', got ' + championTotal + '. Gate failure.');
-  process.stdout.write('REJECT_INVALID_TEST_SET');
   process.exit(0);
 }
 
@@ -119,25 +122,31 @@ const challengerMinorityTop3Correct = challengerDetails.filter(item =>
 const minorityImproved = challengerMinorityTop3Correct > championMinorityTop3Correct;
 
 console.error('--- Evaluation Metrics vs Gates (Integer Sample Basis on N=' + challengerTotal + ') ---');
-console.error('Champion Baseline:       Top-1 = ' + championTop1Correct + '/' + requiredSize + ', Top-3 = ' + championTop3Correct + '/' + requiredSize + ', Minority Top-3 = ' + championMinorityTop3Correct + ' (measured on Golden Test Set)');
-console.error('Challenger Test Metrics: Top-1 = ' + challengerTop1Correct + '/' + challengerTotal + ' (' + (challengerTop1Correct/challengerTotal*100).toFixed(1) + '%), Top-3 = ' + challengerTop3Correct + '/' + challengerTotal + ' (' + (challengerTop3Correct/challengerTotal*100).toFixed(1) + '%), Latency = ' + challengerLatency.toFixed(1) + 'ms');
+console.error('Champion Baseline:       Top-1 = ' + championTop1Correct + '/' + requiredSize + ', Top-3 = ' + championTop3Correct + '/' + requiredSize + ', Minority Top-3 = ' + championMinorityTop3Correct + ' (measured on Golden Test Set, details N=' + championDetails.length + ')');
+console.error('Challenger Test Metrics: Top-1 = ' + challengerTop1Correct + '/' + challengerTotal + ' (' + (challengerTop1Correct/challengerTotal*100).toFixed(1) + '%), Top-3 = ' + challengerTop3Correct + '/' + challengerTotal + ' (' + (challengerTop3Correct/challengerTotal*100).toFixed(1) + '%), Latency = ' + challengerLatency.toFixed(1) + 'ms (details N=' + challengerDetails.length + ')');
 console.error('Minority Top-3 Coverage: Challenger = ' + challengerMinorityTop3Correct + ' vs Champion = ' + championMinorityTop3Correct);
 console.error('Promotion Requirements:  Test Samples == ' + requiredSize + ', Top-3 >= ' + gateMinTop3Correct + '/' + requiredSize + ' (>= 71.4%), Top-1 >= ' + gateMinTop1Correct + '/' + requiredSize + ' (>= 28.6%), Latency <= ' + gateMaxLatency + 'ms (eval host), Minority Coverage > ' + championMinorityTop3Correct);
 console.error('Actual Gate Checks:');
-console.error('  - Champion Evaluated (Golden Test): PASS');
-console.error('  - Golden Test Set Size (==' + requiredSize + '):  PASS (' + challengerTotal + '/' + requiredSize + ')');
+console.error('  - Champion Evaluated (Golden Test details N==' + requiredSize + '): PASS');
+console.error('  - Challenger Golden Test Set Size (details N==' + requiredSize + '):  PASS (' + challengerTotal + '/' + requiredSize + ')');
 console.error('  - Top-3 Check (>=' + gateMinTop3Correct + '/' + requiredSize + '):          ' + (challengerTop3Correct >= gateMinTop3Correct ? 'PASS' : 'FAIL'));
 console.error('  - Top-1 Check (>=' + gateMinTop1Correct + '/' + requiredSize + '):          ' + (challengerTop1Correct >= gateMinTop1Correct ? 'PASS' : 'FAIL'));
 console.error('  - Latency Check (<=' + gateMaxLatency + 'ms):        ' + (challengerLatency <= gateMaxLatency ? 'PASS' : 'FAIL') + ' (Note: measured on eval host, does not guarantee device latency)');
 console.error('  - Minority Improvement Check:  ' + (minorityImproved ? 'PASS (improved from ' + championMinorityTop3Correct + ' to ' + challengerMinorityTop3Correct + ')' : 'FAIL (' + challengerMinorityTop3Correct + ' <= ' + championMinorityTop3Correct + ')'));
 
 const passPromotion = (challengerTotal === requiredSize) &&
+                      (challengerDetails.length === requiredSize) &&
+                      (championTotal === requiredSize) &&
+                      (championDetails.length === requiredSize) &&
                       (challengerTop3Correct >= gateMinTop3Correct) &&
                       (challengerTop1Correct >= gateMinTop1Correct) &&
                       (challengerLatency <= gateMaxLatency) &&
                       minorityImproved;
 
 const passRegressionGuard = (challengerTotal === requiredSize) &&
+                            (challengerDetails.length === requiredSize) &&
+                            (championTotal === requiredSize) &&
+                            (championDetails.length === requiredSize) &&
                             (challengerTop3Correct >= championTop3Correct) &&
                             (challengerTop1Correct >= championTop1Correct);
 

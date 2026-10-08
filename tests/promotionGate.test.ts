@@ -22,6 +22,7 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
     top3_correct?: number;
     avg_latency_ms?: number;
     minorityTop3Count?: number;
+    detailsCount?: number;
   }
 
   function createEvaluationReport(fileName: string, options: MetricOptions = {}): string {
@@ -30,12 +31,13 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
     const top3Correct = options.top3_correct !== undefined ? options.top3_correct : 5;
     const latency = options.avg_latency_ms !== undefined ? options.avg_latency_ms : 50.0;
     const minorityTop3 = options.minorityTop3Count !== undefined ? options.minorityTop3Count : 1;
+    const detailsTargetCount = options.detailsCount !== undefined ? options.detailsCount : total;
 
     const details: Array<{ ground_truth: string; is_top1: boolean; is_top3: boolean }> = [];
 
     // Minority classes: fried_dish, stir_fry, other_or_exclude
     const minorityClasses = ['fried_dish', 'stir_fry', 'other_or_exclude'];
-    for (let i = 0; i < minorityTop3; i++) {
+    for (let i = 0; i < minorityTop3 && details.length < detailsTargetCount; i++) {
       details.push({
         ground_truth: minorityClasses[i % minorityClasses.length],
         is_top1: false,
@@ -43,8 +45,8 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       });
     }
 
-    // Fill remaining up to total
-    while (details.length < total) {
+    // Fill remaining up to detailsTargetCount
+    while (details.length < detailsTargetCount) {
       details.push({
         ground_truth: 'drink',
         is_top1: details.length < top1Correct,
@@ -294,6 +296,24 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
         top1_correct: 2,
         minorityTop3Count: 0,
       });
+      expect(runGate(challenger, champion)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
+    });
+
+    it('blocks gate when Challenger details count is 6 while metrics.total is 7', () => {
+      const challenger = createEvaluationReport('chal_details_6.json', {
+        total: 7,
+        detailsCount: 6,
+        top3_correct: 5,
+        top1_correct: 2,
+        minorityTop3Count: 1,
+      });
+      const champion = createEvaluationReport('champ_valid_details.json', {
+        total: 7,
+        detailsCount: 7,
+        top3_correct: 4,
+        top1_correct: 2,
+        minorityTop3Count: 0,
+      });
       expect(runGate(challenger, champion)).toBe('REJECT_INVALID_TEST_SET');
     });
   });
@@ -330,6 +350,40 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       const malformedChampion = path.join(tempDir, 'malformed_champion.json');
       fs.writeFileSync(malformedChampion, JSON.stringify({ invalid: true }), 'utf-8');
       expect(runGate(challenger, malformedChampion)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
+    });
+
+    it('blocks promotion when Champion has metrics.total=7 but details is empty array (REJECT_CHAMPION_NOT_EVALUATED)', () => {
+      const challenger = createEvaluationReport('chal_valid_for_empty_champ.json', {
+        total: 7,
+        top3_correct: 5,
+        top1_correct: 2,
+        minorityTop3Count: 1,
+      });
+      const champion = createEvaluationReport('champ_empty_details.json', {
+        total: 7,
+        detailsCount: 0,
+        top3_correct: 4,
+        top1_correct: 2,
+        minorityTop3Count: 0,
+      });
+      expect(runGate(challenger, champion)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
+    });
+
+    it('blocks promotion when Champion has metrics.total=7 but details has only 6 items (REJECT_CHAMPION_NOT_EVALUATED)', () => {
+      const challenger = createEvaluationReport('chal_valid_for_champ_6.json', {
+        total: 7,
+        top3_correct: 5,
+        top1_correct: 2,
+        minorityTop3Count: 1,
+      });
+      const champion = createEvaluationReport('champ_details_6.json', {
+        total: 7,
+        detailsCount: 6,
+        top3_correct: 4,
+        top1_correct: 2,
+        minorityTop3Count: 0,
+      });
+      expect(runGate(challenger, champion)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
     });
   });
 });
