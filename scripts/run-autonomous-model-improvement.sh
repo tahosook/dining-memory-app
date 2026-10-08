@@ -13,14 +13,21 @@ set -euo pipefail
 #    and Golden Test Set contains exactly 7 samples.
 # -----------------------------------------------------------------------------
 
-SOURCE_DATASET="state/mediapipe_labeling_runs/zip2-even48-20260423/exported_dataset"
+CANONICAL_DEFAULT_DATASET="state/mediapipe_labeling_runs/zip2-batch250/exported_dataset"
+DEFAULT_GOLDEN_TEST_DIR="state/mediapipe_labeling_runs/zip2-even48-20260423/exported_dataset/test"
+
+# CLI / Environment variable priority resolution
+CLI_DATASET=""
+CLI_GOLDEN_TEST=""
+
 AUGMENTED_DATASET="state/mediapipe-dataset/augmented"
 OUTPUT_DIR="state/mediapipe_models/challenger_run"
 ASSET_TASK="android/app/src/main/assets/mediapipe/meal-input-assist.task"
 BENCHMARK_REPORT="state/mediapipe_models/challenger_evaluation.json"
 CHAMPION_REPORT="state/mediapipe_models/champion_evaluation.json"
+GOLDEN_EVAL_DIR="state/mediapipe-dataset/golden_eval"
 
-TARGET_PER_CLASS="${TARGET_PER_CLASS:-15}"
+TARGET_PER_CLASS="${TARGET_PER_CLASS:-25}"
 EPOCHS="${EPOCHS:-25}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 
@@ -32,6 +39,152 @@ export GATE_MIN_TOP1_CORRECT="2"          # >= 2/7 (28.6%)
 export GATE_MAX_MODEL_SIZE_BYTES=15728640 # <= 15MB
 export GATE_MIN_MODEL_SIZE_BYTES=1048576  # >= 1MB
 export GATE_MAX_LATENCY_MS="100.0"        # <= 100ms (eval host benchmark gate; does not guarantee on-device latency)
+
+validate_dataset() {
+  local dataset_dir="$1"
+  local golden_test_dir="$2"
+
+  node -e "
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const datasetDir = path.resolve(process.argv[1]);
+const goldenTestDir = path.resolve(process.argv[2]);
+
+const REQUIRED_CLASSES = [
+  'curry_rice', 'drink', 'fish_dish', 'fried_dish',
+  'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+].sort();
+
+function sha256(filePath) {
+  const data = fs.readFileSync(filePath);
+  return crypto.createHash('sha256').update(data).digest('hex');
+}
+
+function getImageFiles(dir) {
+  const results = [];
+  function walk(current) {
+    if (!fs.existsSync(current)) return;
+    for (const item of fs.readdirSync(current)) {
+      if (item.startsWith('.')) continue;
+      const full = path.join(current, item);
+      if (fs.statSync(full).isDirectory()) {
+        walk(full);
+      } else if (/\\.(jpg|jpeg|png|webp)$/i.test(item)) {
+        results.push(full);
+      }
+    }
+  }
+  walk(dir);
+  return results;
+}
+
+// 1. Structure validation
+if (!fs.existsSync(datasetDir)) {
+  console.error('❌ Error: Dataset directory not found: ' + datasetDir);
+  process.exit(1);
+}
+for (const split of ['train', 'val', 'test']) {
+  const p = path.join(datasetDir, split);
+  if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) {
+    console.error('❌ Error: Missing split directory in dataset: ' + p);
+    process.exit(1);
+  }
+}
+
+// 2. Class validation
+const trainDir = path.join(datasetDir, 'train');
+const trainClasses = fs.readdirSync(trainDir).filter(f => {
+  try { return fs.statSync(path.join(trainDir, f)).isDirectory(); } catch (e) { return false; }
+}).sort();
+
+const missing = REQUIRED_CLASSES.filter(c => !trainClasses.includes(c));
+const unknown = trainClasses.filter(c => !REQUIRED_CLASSES.includes(c));
+
+if (missing.length > 0) {
+  console.error('❌ Error: Missing required class(es) in dataset: ' + missing.join(', '));
+  process.exit(1);
+}
+if (unknown.length > 0) {
+  console.error('❌ Error: Unknown unexpected class(es) in dataset: ' + unknown.join(', '));
+  process.exit(1);
+}
+
+// Check labels.txt if present
+const labelsFile = path.join(datasetDir, 'labels.txt');
+if (fs.existsSync(labelsFile)) {
+  const fileClasses = fs.readFileSync(labelsFile, 'utf8').split(/\\r?\\n/).map(s => s.trim()).filter(Boolean).sort();
+  const missingL = REQUIRED_CLASSES.filter(c => !fileClasses.includes(c));
+  const unknownL = fileClasses.filter(c => !REQUIRED_CLASSES.includes(c));
+  if (missingL.length > 0 || unknownL.length > 0) {
+    console.error('❌ Error: labels.txt class mismatch in dataset (missing: [' + missingL.join(', ') + '], unknown: [' + unknownL.join(', ') + '])');
+    process.exit(1);
+  }
+}
+
+// 3. Golden Test Presence & Leakage Check
+if (!fs.existsSync(goldenTestDir)) {
+  console.error('❌ Error: Golden Test Set directory not found: ' + goldenTestDir);
+  process.exit(1);
+}
+
+const goldenFiles = getImageFiles(goldenTestDir);
+if (goldenFiles.length !== 7) {
+  console.error('❌ Error: Golden Test Set file count mismatch! Expected 7, found ' + goldenFiles.length);
+  process.exit(1);
+}
+
+const goldenHashes = new Map();
+for (const gf of goldenFiles) {
+  goldenHashes.set(sha256(gf), gf);
+}
+
+for (const split of ['train', 'val']) {
+  const splitFiles = getImageFiles(path.join(datasetDir, split));
+  for (const sf of splitFiles) {
+    const h = sha256(sf);
+    if (goldenHashes.has(h)) {
+      console.error('❌ CRITICAL ERROR: Data leakage detected! Image ' + sf + ' matches Golden Test image ' + goldenHashes.get(h));
+      process.exit(1);
+    }
+  }
+}
+
+console.log('✓ Dataset validation PASSED: 9 classes verified, 0 data leakage with Golden Test Set (' + goldenFiles.length + ' samples).');
+" "$dataset_dir" "$golden_test_dir"
+}
+
+check_class_compatibility() {
+  local challenger_json="$1"
+  local champion_json="$2"
+
+  node -e "
+const fs = require('fs');
+const challengerPath = process.argv[1];
+const championPath = process.argv[2];
+
+if (!fs.existsSync(challengerPath) || !fs.existsSync(championPath)) {
+  console.error('❌ Error: Report file not found for class compatibility check');
+  process.exit(1);
+}
+
+const chalData = JSON.parse(fs.readFileSync(challengerPath, 'utf8'));
+const champData = JSON.parse(fs.readFileSync(championPath, 'utf8'));
+
+const chalClasses = Array.isArray(chalData.labels) ? chalData.labels : [];
+const champClasses = Array.isArray(champData.labels) ? champData.labels : [];
+
+const EXPECTED_COUNT = 9;
+
+if (chalClasses.length !== champClasses.length || chalClasses.length !== EXPECTED_COUNT) {
+  console.error('❌ CRITICAL GATE FAILURE: Class compatibility mismatch! Challenger has ' + chalClasses.length + ' classes, Champion has ' + champClasses.length + ' classes (Expected: ' + EXPECTED_COUNT + '). Promotion prohibited.');
+  process.exit(1);
+}
+
+console.log('✓ Class compatibility verified: Champion (' + champClasses.length + ' classes) === Challenger (' + chalClasses.length + ' classes) === ' + EXPECTED_COUNT);
+" "$challenger_json" "$champion_json"
+}
 
 evaluate_gate() {
   local challenger_json="$1"
@@ -160,7 +313,7 @@ if (passPromotion) {
 " "$challenger_json" "$champion_json"
 }
 
-# Standalone Gate Evaluation mode for automated tests / CLI invocation:
+# Standalone execution modes for automated tests / CLI invocation:
 if [ "${1:-}" = "--evaluate-gate" ]; then
   CHALLENGER_ARG="${2:-}"
   CHAMPION_ARG="${3:-}"
@@ -172,10 +325,64 @@ if [ "${1:-}" = "--evaluate-gate" ]; then
   exit 0
 fi
 
+if [ "${1:-}" = "--validate-dataset" ]; then
+  DATASET_ARG="${2:-}"
+  GOLDEN_ARG="${3:-$DEFAULT_GOLDEN_TEST_DIR}"
+  if [ -z "$DATASET_ARG" ]; then
+    echo "Usage: $0 --validate-dataset <dataset_dir> [golden_test_dir]" >&2
+    exit 1
+  fi
+  validate_dataset "$DATASET_ARG" "$GOLDEN_ARG"
+  exit 0
+fi
+
+if [ "${1:-}" = "--check-class-compatibility" ]; then
+  CHALLENGER_ARG="${2:-}"
+  CHAMPION_ARG="${3:-}"
+  if [ -z "$CHALLENGER_ARG" ] || [ -z "$CHAMPION_ARG" ]; then
+    echo "Usage: $0 --check-class-compatibility <challenger_report.json> <champion_report.json>" >&2
+    exit 1
+  fi
+  check_class_compatibility "$CHALLENGER_ARG" "$CHAMPION_ARG"
+  exit 0
+fi
+
+# Parse options for autonomous loop execution
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dataset-dir)
+      CLI_DATASET="${2:-}"
+      shift 2
+      ;;
+    --dataset-dir=*)
+      CLI_DATASET="${1#*=}"
+      shift 1
+      ;;
+    --golden-test-dir)
+      CLI_GOLDEN_TEST="${2:-}"
+      shift 2
+      ;;
+    --golden-test-dir=*)
+      CLI_GOLDEN_TEST="${1#*=}"
+      shift 1
+      ;;
+    *)
+      if [ -z "$CLI_DATASET" ] && [ -d "$1" ]; then
+        CLI_DATASET="$1"
+      fi
+      shift 1
+      ;;
+  esac
+done
+
+SOURCE_DATASET="${CLI_DATASET:-${SOURCE_DATASET:-$CANONICAL_DEFAULT_DATASET}}"
+GOLDEN_TEST_DIR="${CLI_GOLDEN_TEST:-${GOLDEN_TEST_DIR:-$DEFAULT_GOLDEN_TEST_DIR}}"
+
 echo "========================================================"
 echo "🚀 Starting Autonomous MediaPipe Model Improvement Loop"
 echo "========================================================"
 echo "Source dataset:       $SOURCE_DATASET"
+echo "Golden Test Set:      $GOLDEN_TEST_DIR"
 echo "Augmented dataset:    $AUGMENTED_DATASET"
 echo "Target per class:     $TARGET_PER_CLASS"
 echo "Epochs:               $EPOCHS (batch size: $BATCH_SIZE)"
@@ -186,12 +393,10 @@ echo "                      + Model size <= 15MB AND Eval Latency <= 100ms"
 echo "                      (Latency gate evaluates CI/host execution; does not prove device latency)"
 echo "========================================================"
 
-# Pre-check: Verify Golden Test Set presence
-if [ ! -d "$SOURCE_DATASET/test" ]; then
-  echo "❌ Error: Golden Test Set not found at $SOURCE_DATASET/test"
-  exit 1
-fi
-INITIAL_TEST_FILE_COUNT=$(find "$SOURCE_DATASET/test" -type f | wc -l | tr -d ' ')
+# Pre-check: Validate source dataset structure, 9 classes, and Golden Test isolation
+echo "Verifying input dataset and Golden Test Set isolation..."
+validate_dataset "$SOURCE_DATASET" "$GOLDEN_TEST_DIR"
+INITIAL_TEST_FILE_COUNT=$(find "$GOLDEN_TEST_DIR" -type f | wc -l | tr -d ' ')
 echo "Verified Golden Test Set: $INITIAL_TEST_FILE_COUNT files present."
 
 # Step 1: Data Augmentation (train only, val and test strictly preserved)
@@ -202,7 +407,7 @@ uv run --python .venv_mediapipe python scripts/augment-mediapipe-dataset.py \
   --target-per-class "$TARGET_PER_CLASS"
 
 # Post-augmentation check: Ensure Golden Test Set was not altered
-CURRENT_TEST_FILE_COUNT=$(find "$SOURCE_DATASET/test" -type f | wc -l | tr -d ' ')
+CURRENT_TEST_FILE_COUNT=$(find "$GOLDEN_TEST_DIR" -type f | wc -l | tr -d ' ')
 if [ "$INITIAL_TEST_FILE_COUNT" != "$CURRENT_TEST_FILE_COUNT" ]; then
   echo "❌ CRITICAL: Golden Test Set file count changed during augmentation! Aborting."
   exit 1
@@ -238,6 +443,14 @@ echo "✓ Challenger model size verified: $(( MODEL_SIZE / 1024 / 1024 )) MB ($M
 # Step 3: Autonomous Evaluation on Golden Test Set
 echo -e "\n📊 [Step 3/4] Evaluating models against Golden Test Set..."
 
+# Stage Golden Test Set with 9-class labels metadata for fair evaluation
+rm -rf "$GOLDEN_EVAL_DIR"
+mkdir -p "$GOLDEN_EVAL_DIR/test"
+cp -r "$GOLDEN_TEST_DIR"/* "$GOLDEN_EVAL_DIR/test/"
+if [ -f "$SOURCE_DATASET/labels.txt" ]; then
+  cp "$SOURCE_DATASET/labels.txt" "$GOLDEN_EVAL_DIR/labels.txt"
+fi
+
 # Step 3a: Mandatory Production Champion evaluation
 if [ ! -f "$ASSET_TASK" ]; then
   echo "❌ Error: Production Champion model asset not found at $ASSET_TASK. Promotion prohibited."
@@ -247,7 +460,7 @@ fi
 echo "Evaluating Production Champion model ($ASSET_TASK)..."
 uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
   --model-path "$ASSET_TASK" \
-  --dataset-dir "$SOURCE_DATASET" \
+  --dataset-dir "$GOLDEN_EVAL_DIR" \
   --output-json "$CHAMPION_REPORT" \
   --output-md "$OUTPUT_DIR/champion_evaluation_summary.md" \
   --split test
@@ -262,13 +475,17 @@ fi
 echo "Evaluating Challenger model ($CHALLENGER_MODEL)..."
 uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
   --model-path "$CHALLENGER_MODEL" \
-  --dataset-dir "$SOURCE_DATASET" \
+  --dataset-dir "$GOLDEN_EVAL_DIR" \
   --output-json "$BENCHMARK_REPORT" \
   --output-md "$OUTPUT_DIR/evaluation_summary.md" \
   --split test
 
 # Step 4: Champion / Challenger Gate
 echo -e "\n⚖️  [Step 4/4] Evaluating Champion / Challenger Promotion Gate..."
+
+# Verify class compatibility between Champion and Challenger before Promotion Gate
+check_class_compatibility "$BENCHMARK_REPORT" "$CHAMPION_REPORT"
+
 GATE_RESULT=$(evaluate_gate "$BENCHMARK_REPORT" "$CHAMPION_REPORT")
 
 if [ "$GATE_RESULT" = "PROMOTE" ]; then

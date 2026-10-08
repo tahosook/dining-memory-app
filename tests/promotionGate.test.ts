@@ -386,4 +386,124 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       expect(runGate(challenger, champion)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
     });
   });
+
+  describe('Dataset Validation and Class Compatibility (run-autonomous-model-improvement.sh)', () => {
+    const REQUIRED_CLASSES = [
+      'curry_rice', 'drink', 'fish_dish', 'fried_dish',
+      'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+    ];
+
+    function createDummyDataset(dirName: string, classes: string[], options: { includeLeakage?: boolean; extraClass?: string } = {}): {
+      datasetDir: string;
+      goldenDir: string;
+    } {
+      const baseDir = path.join(tempDir, dirName);
+      const datasetDir = path.join(baseDir, 'exported_dataset');
+      const goldenDir = path.join(baseDir, 'golden_test');
+      fs.mkdirSync(goldenDir, { recursive: true });
+
+      // Create Golden Test with 7 distinct files
+      const goldenHashes: string[] = [];
+      for (let i = 0; i < 7; i++) {
+        const filePath = path.join(goldenDir, `golden_sample_${i}.jpg`);
+        const content = `dummy_golden_image_content_${i}`;
+        fs.writeFileSync(filePath, content, 'utf-8');
+        goldenHashes.push(content);
+      }
+
+      for (const split of ['train', 'val', 'test']) {
+        const splitDir = path.join(datasetDir, split);
+        const splitClasses = [...classes];
+        if (options.extraClass && split === 'train') {
+          splitClasses.push(options.extraClass);
+        }
+        for (const cls of splitClasses) {
+          const clsDir = path.join(splitDir, cls);
+          fs.mkdirSync(clsDir, { recursive: true });
+          const imgContent = options.includeLeakage && split === 'train' && cls === splitClasses[0]
+            ? goldenHashes[0] // Intentionally leak first golden sample
+            : `unique_${split}_${cls}_image_content`;
+          fs.writeFileSync(path.join(clsDir, 'sample.jpg'), imgContent, 'utf-8');
+        }
+      }
+
+      fs.writeFileSync(path.join(datasetDir, 'labels.txt'), classes.join('\n') + '\n', 'utf-8');
+      return { datasetDir, goldenDir };
+    }
+
+    function runValidate(datasetDir: string, goldenDir: string) {
+      const result = spawnSync('bash', [scriptPath, '--validate-dataset', datasetDir, goldenDir], {
+        cwd: path.resolve(__dirname, '..'),
+        encoding: 'utf-8',
+      });
+      return {
+        exitCode: result.status,
+        stdout: result.stdout.trim(),
+        stderr: result.stderr.trim(),
+      };
+    }
+
+    function runCheckCompatibility(chalFile: string, champFile: string) {
+      const result = spawnSync('bash', [scriptPath, '--check-class-compatibility', chalFile, champFile], {
+        cwd: path.resolve(__dirname, '..'),
+        encoding: 'utf-8',
+      });
+      return {
+        exitCode: result.status,
+        stdout: result.stdout.trim(),
+        stderr: result.stderr.trim(),
+      };
+    }
+
+    it('accepts valid 9-class dataset without data leakage', () => {
+      const { datasetDir, goldenDir } = createDummyDataset('valid_ds', REQUIRED_CLASSES);
+      const res = runValidate(datasetDir, goldenDir);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toContain('Dataset validation PASSED: 9 classes verified');
+    });
+
+    it('rejects dataset when a required class (e.g. noodles) is missing', () => {
+      const missingClasses = REQUIRED_CLASSES.filter(c => c !== 'noodles');
+      const { datasetDir, goldenDir } = createDummyDataset('missing_noodles_ds', missingClasses);
+      const res = runValidate(datasetDir, goldenDir);
+      expect(res.exitCode).toBe(1);
+      expect(res.stderr).toContain('Missing required class(es) in dataset: noodles');
+    });
+
+    it('rejects dataset when unexpected unknown class is present', () => {
+      const { datasetDir, goldenDir } = createDummyDataset('unknown_class_ds', REQUIRED_CLASSES, { extraClass: 'ramen' });
+      const res = runValidate(datasetDir, goldenDir);
+      expect(res.exitCode).toBe(1);
+      expect(res.stderr).toContain('Unknown unexpected class(es) in dataset: ramen');
+    });
+
+    it('rejects dataset when Golden Test sample is leaked into training split (SHA256 match)', () => {
+      const { datasetDir, goldenDir } = createDummyDataset('leakage_ds', REQUIRED_CLASSES, { includeLeakage: true });
+      const res = runValidate(datasetDir, goldenDir);
+      expect(res.exitCode).toBe(1);
+      expect(res.stderr).toContain('Data leakage detected! Image');
+    });
+
+    it('verifies class compatibility passes when both models have 9 classes', () => {
+      const chalFile = path.join(tempDir, 'chal_9_classes.json');
+      const champFile = path.join(tempDir, 'champ_9_classes.json');
+      fs.writeFileSync(chalFile, JSON.stringify({ labels: REQUIRED_CLASSES }));
+      fs.writeFileSync(champFile, JSON.stringify({ labels: REQUIRED_CLASSES }));
+
+      const res = runCheckCompatibility(chalFile, champFile);
+      expect(res.exitCode).toBe(0);
+      expect(res.stdout).toContain('Class compatibility verified: Champion (9 classes) === Challenger (9 classes) === 9');
+    });
+
+    it('verifies class compatibility fails when class counts differ (e.g. Challenger has 8 classes, Champion has 9)', () => {
+      const chalFile = path.join(tempDir, 'chal_8_classes.json');
+      const champFile = path.join(tempDir, 'champ_9_classes_diff.json');
+      fs.writeFileSync(chalFile, JSON.stringify({ labels: REQUIRED_CLASSES.slice(0, 8) }));
+      fs.writeFileSync(champFile, JSON.stringify({ labels: REQUIRED_CLASSES }));
+
+      const res = runCheckCompatibility(chalFile, champFile);
+      expect(res.exitCode).toBe(1);
+      expect(res.stderr).toContain('Class compatibility mismatch! Challenger has 8 classes, Champion has 9 classes');
+    });
+  });
 });
