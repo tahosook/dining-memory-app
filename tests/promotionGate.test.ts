@@ -297,4 +297,39 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       expect(runGate(challenger, champion)).toBe('REJECT_INVALID_TEST_SET');
     });
   });
+
+  describe('Mandatory Champion Evaluation Verification', () => {
+    it('blocks promotion when Champion report is missing (REJECT_CHAMPION_NOT_EVALUATED)', () => {
+      const challenger = createEvaluationReport('chal_no_champ.json', {
+        total: 7,
+        top3_correct: 5,
+        top1_correct: 2,
+        minorityTop3Count: 1,
+      });
+      expect(runGate(challenger, undefined)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
+    });
+
+    it('blocks promotion when Champion report file does not exist (REJECT_CHAMPION_NOT_EVALUATED)', () => {
+      const challenger = createEvaluationReport('chal_missing_champ_file.json', {
+        total: 7,
+        top3_correct: 5,
+        top1_correct: 2,
+        minorityTop3Count: 1,
+      });
+      const nonExistentFile = path.join(tempDir, 'non_existent_champion.json');
+      expect(runGate(challenger, nonExistentFile)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
+    });
+
+    it('blocks promotion when Champion report JSON is invalid or missing test metrics', () => {
+      const challenger = createEvaluationReport('chal_valid_metrics.json', {
+        total: 7,
+        top3_correct: 5,
+        top1_correct: 2,
+        minorityTop3Count: 1,
+      });
+      const malformedChampion = path.join(tempDir, 'malformed_champion.json');
+      fs.writeFileSync(malformedChampion, JSON.stringify({ invalid: true }), 'utf-8');
+      expect(runGate(challenger, malformedChampion)).toBe('REJECT_CHAMPION_NOT_EVALUATED');
+    });
+  });
 });

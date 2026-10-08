@@ -33,11 +33,6 @@ export GATE_MAX_MODEL_SIZE_BYTES=15728640 # <= 15MB
 export GATE_MIN_MODEL_SIZE_BYTES=1048576  # >= 1MB
 export GATE_MAX_LATENCY_MS="100.0"        # <= 100ms (eval host benchmark gate; does not guarantee on-device latency)
 
-# Baseline fallback thresholds if Champion model asset is absent
-export CHAMPION_TOP1_CORRECT="2"
-export CHAMPION_TOP3_CORRECT="4"
-export CHAMPION_MINORITY_TOP3_CORRECT="0"
-
 evaluate_gate() {
   local challenger_json="$1"
   local champion_json="${2:-}"
@@ -71,40 +66,51 @@ if (challengerTotal !== requiredSize) {
   process.exit(0);
 }
 
-// Evaluate Champion metrics: prioritize measured evaluation, fallback to environment baseline
-let championTop1Correct = parseInt(process.env.CHAMPION_TOP1_CORRECT || '2', 10);
-let championTop3Correct = parseInt(process.env.CHAMPION_TOP3_CORRECT || '4', 10);
-let championMinorityTop3Correct = parseInt(process.env.CHAMPION_MINORITY_TOP3_CORRECT || '0', 10);
-let hasMeasuredChampion = false;
-
-if (championPath && fs.existsSync(championPath)) {
-  const championData = JSON.parse(fs.readFileSync(championPath, 'utf8'));
-  const championTest = (championData.test && championData.test.metrics) ? championData.test.metrics : {};
-  const championDetails = (championData.test && championData.test.details) ? championData.test.details : [];
-  const championTotal = championTest.total || 0;
-
-  if (championTotal !== requiredSize) {
-    console.error('❌ CRITICAL GATE FAILURE: Champion test set count mismatch! Expected ' + requiredSize + ', got ' + championTotal + '. Gate failure.');
-    process.stdout.write('REJECT_INVALID_TEST_SET');
-    process.exit(0);
-  }
-
-  championTop1Correct = championTest.top1_correct || 0;
-  championTop3Correct = championTest.top3_correct || 0;
-
-  const minorityClasses = ['fried_dish', 'stir_fry', 'other_or_exclude'];
-  championMinorityTop3Correct = championDetails.filter(item =>
-    minorityClasses.includes(item.ground_truth) && item.is_top3
-  ).length;
-  hasMeasuredChampion = true;
+// Production Champion evaluation is MANDATORY. Fallback to hardcoded baselines is prohibited.
+if (!championPath || !fs.existsSync(championPath)) {
+  console.error('❌ CRITICAL GATE FAILURE: Production Champion report file not found (' + championPath + '). Promotion prohibited.');
+  process.stdout.write('REJECT_CHAMPION_NOT_EVALUATED');
+  process.exit(0);
 }
+
+let championData;
+try {
+  championData = JSON.parse(fs.readFileSync(championPath, 'utf8'));
+} catch (err) {
+  console.error('❌ CRITICAL GATE FAILURE: Failed to parse Champion report JSON: ' + err.message);
+  process.stdout.write('REJECT_CHAMPION_NOT_EVALUATED');
+  process.exit(0);
+}
+
+const championTest = (championData && championData.test && championData.test.metrics) ? championData.test.metrics : null;
+const championDetails = (championData && championData.test && championData.test.details) ? championData.test.details : null;
+
+if (!championTest || !championDetails) {
+  console.error('❌ CRITICAL GATE FAILURE: Champion test metrics or details missing. Promotion prohibited.');
+  process.stdout.write('REJECT_CHAMPION_NOT_EVALUATED');
+  process.exit(0);
+}
+
+const championTotal = championTest.total || 0;
+if (championTotal !== requiredSize) {
+  console.error('❌ CRITICAL GATE FAILURE: Champion test set count mismatch! Expected ' + requiredSize + ', got ' + championTotal + '. Gate failure.');
+  process.stdout.write('REJECT_INVALID_TEST_SET');
+  process.exit(0);
+}
+
+const championTop1Correct = championTest.top1_correct || 0;
+const championTop3Correct = championTest.top3_correct || 0;
+
+const minorityClasses = ['fried_dish', 'stir_fry', 'other_or_exclude'];
+const championMinorityTop3Correct = championDetails.filter(item =>
+  minorityClasses.includes(item.ground_truth) && item.is_top3
+).length;
 
 const gateMinTop3Correct = parseInt(process.env.GATE_MIN_TOP3_CORRECT || '5', 10);
 const gateMinTop1Correct = parseInt(process.env.GATE_MIN_TOP1_CORRECT || '2', 10);
 const gateMaxLatency = parseFloat(process.env.GATE_MAX_LATENCY_MS || '100.0');
 
 // Minority classes evaluated on Golden Test Set:
-const minorityClasses = ['fried_dish', 'stir_fry', 'other_or_exclude'];
 const challengerMinorityTop3Correct = challengerDetails.filter(item =>
   minorityClasses.includes(item.ground_truth) && item.is_top3
 ).length;
@@ -113,11 +119,12 @@ const challengerMinorityTop3Correct = challengerDetails.filter(item =>
 const minorityImproved = challengerMinorityTop3Correct > championMinorityTop3Correct;
 
 console.error('--- Evaluation Metrics vs Gates (Integer Sample Basis on N=' + challengerTotal + ') ---');
-console.error('Champion Baseline:       Top-1 = ' + championTop1Correct + '/' + requiredSize + ', Top-3 = ' + championTop3Correct + '/' + requiredSize + ', Minority Top-3 = ' + championMinorityTop3Correct + (hasMeasuredChampion ? ' (measured)' : ' (fallback baseline)'));
+console.error('Champion Baseline:       Top-1 = ' + championTop1Correct + '/' + requiredSize + ', Top-3 = ' + championTop3Correct + '/' + requiredSize + ', Minority Top-3 = ' + championMinorityTop3Correct + ' (measured on Golden Test Set)');
 console.error('Challenger Test Metrics: Top-1 = ' + challengerTop1Correct + '/' + challengerTotal + ' (' + (challengerTop1Correct/challengerTotal*100).toFixed(1) + '%), Top-3 = ' + challengerTop3Correct + '/' + challengerTotal + ' (' + (challengerTop3Correct/challengerTotal*100).toFixed(1) + '%), Latency = ' + challengerLatency.toFixed(1) + 'ms');
 console.error('Minority Top-3 Coverage: Challenger = ' + challengerMinorityTop3Correct + ' vs Champion = ' + championMinorityTop3Correct);
 console.error('Promotion Requirements:  Test Samples == ' + requiredSize + ', Top-3 >= ' + gateMinTop3Correct + '/' + requiredSize + ' (>= 71.4%), Top-1 >= ' + gateMinTop1Correct + '/' + requiredSize + ' (>= 28.6%), Latency <= ' + gateMaxLatency + 'ms (eval host), Minority Coverage > ' + championMinorityTop3Correct);
 console.error('Actual Gate Checks:');
+console.error('  - Champion Evaluated (Golden Test): PASS');
 console.error('  - Golden Test Set Size (==' + requiredSize + '):  PASS (' + challengerTotal + '/' + requiredSize + ')');
 console.error('  - Top-3 Check (>=' + gateMinTop3Correct + '/' + requiredSize + '):          ' + (challengerTop3Correct >= gateMinTop3Correct ? 'PASS' : 'FAIL'));
 console.error('  - Top-1 Check (>=' + gateMinTop1Correct + '/' + requiredSize + '):          ' + (challengerTop1Correct >= gateMinTop1Correct ? 'PASS' : 'FAIL'));
@@ -222,15 +229,26 @@ echo "✓ Challenger model size verified: $(( MODEL_SIZE / 1024 / 1024 )) MB ($M
 # Step 3: Autonomous Evaluation on Golden Test Set
 echo -e "\n📊 [Step 3/4] Evaluating models against Golden Test Set..."
 
-if [ -f "$ASSET_TASK" ]; then
-  echo "Evaluating existing Champion model ($ASSET_TASK)..."
-  uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
-    --model-path "$ASSET_TASK" \
-    --dataset-dir "$SOURCE_DATASET" \
-    --output-json "$CHAMPION_REPORT" \
-    --output-md "$OUTPUT_DIR/champion_evaluation_summary.md" \
-    --split test
+# Step 3a: Mandatory Production Champion evaluation
+if [ ! -f "$ASSET_TASK" ]; then
+  echo "❌ Error: Production Champion model asset not found at $ASSET_TASK. Promotion prohibited."
+  exit 1
 fi
+
+echo "Evaluating Production Champion model ($ASSET_TASK)..."
+uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
+  --model-path "$ASSET_TASK" \
+  --dataset-dir "$SOURCE_DATASET" \
+  --output-json "$CHAMPION_REPORT" \
+  --output-md "$OUTPUT_DIR/champion_evaluation_summary.md" \
+  --split test
+
+if [ ! -f "$CHAMPION_REPORT" ]; then
+  echo "❌ Error: Champion evaluation report was not generated at $CHAMPION_REPORT. Promotion prohibited."
+  exit 1
+fi
+
+# Step 3b: Challenger evaluation
 
 echo "Evaluating Challenger model ($CHALLENGER_MODEL)..."
 uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \

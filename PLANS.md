@@ -237,8 +237,8 @@ MediaPipe static-image classifier の `.task` model を Android build で利用�
 ### Suggested Steps
 - Phase 1: `scripts/augment-mediapipe-dataset.py` で少数クラス（揚げ物・炒め物等）を自動拡張（train のみ。Golden Test Set は完全保護）。
 - Phase 2: `scripts/train-mediapipe-model.py` で MobileNetV2 転移学習（Challenger モデル生成）。
-- Phase 3: `scripts/evaluate-mediapipe-model.py` で Golden Test Set に対する Champion および Challenger の Top-1 / Top-3 精度および混同行列を実測評価。
-- Phase 4: `scripts/run-autonomous-model-improvement.sh` の昇格ゲート（Golden Test サンプル数 == 7, Top-3 >= 5/7 (71.4%) かつ Top-1 >= 2/7 (28.6%)、少数クラス Top-3 正解数が Champion 実測値を厳密に上回ること、サイズ <= 15MB、評価ホスト遅延 <= 100ms）判定を経て、合格時のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を安全にアトミック置換。
+- Phase 3: `scripts/evaluate-mediapipe-model.py` で Golden Test Set に対する本番 Champion（必須実測、fallback 禁止）および Challenger の Top-1 / Top-3 精度および混同行列を実測評価。
+- Phase 4: `scripts/run-autonomous-model-improvement.sh` の昇格ゲート（Golden Test サンプル数 == 7, Top-3 >= 5/7 (71.4%) かつ Top-1 >= 2/7 (28.6%)、少数クラス Top-3 正解数が Champion 実測値を厳密に上回ること、Champion 未評価時は REJECT_CHAMPION_NOT_EVALUATED、サイズ <= 15MB、評価ホスト遅延 <= 100ms）判定を経て、合格時のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を安全にアトミック置換。
 
 ### Read First
 - [docs/engineering/mediapipe-model-autonomous-improvement-plan.md](docs/engineering/mediapipe-model-autonomous-improvement-plan.md)
