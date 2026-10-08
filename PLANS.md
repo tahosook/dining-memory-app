@@ -232,13 +232,13 @@ MediaPipe static-image classifier の `.task` model を Android build で利用�
 - アプリ本体の保存契約や DB スキーマ、UX コンポーネントを変更しない（MediaPipe は Android native hidden asset）。
 - テストデータ（Golden Test Set: 7枚）は完全固定・不変とし、データ拡張や学習に漏洩（Leaking）させない。
 - 回帰したモデル（Champion 基準未達）はデプロイせず、既存モデルを完全維持する（「変更しないことの成功定義」）。
-- モデルサイズは 25MB 以下を維持する。
+- モデルサイズは 15MB 以下、推論レイテンシは 100ms 以下を維持する。
 
 ### Suggested Steps
 - Phase 1: `scripts/augment-mediapipe-dataset.py` で少数クラス（揚げ物・炒め物等）を自動拡張（train のみ。Golden Test Set は完全保護）。
 - Phase 2: `scripts/train-mediapipe-model.py` で MobileNetV2 転移学習（Challenger モデル生成）。
 - Phase 3: `scripts/evaluate-mediapipe-model.py` で Golden Test Set に対する Top-1 / Top-3 精度および混同行列を評価。
-- Phase 4: `scripts/run-autonomous-model-improvement.sh` の昇格ゲート（Top-3 > 57.14% かつ Top-1 >= 28.57%）判定を経て、合格時のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換。
+- Phase 4: `scripts/run-autonomous-model-improvement.sh` の昇格ゲート（Top-3 >= 71.4% かつ Top-1 >= 28.6%、少数クラス改善、サイズ <= 15MB、レイテンシ <= 100ms）判定を経て、合格時のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を安全にアトミック置換。
 
 ### Read First
 - [docs/engineering/mediapipe-model-autonomous-improvement-plan.md](docs/engineering/mediapipe-model-autonomous-improvement-plan.md)

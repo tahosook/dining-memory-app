@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -114,7 +115,10 @@ def evaluate_split(classifier: Any, split_dir: Path) -> list[dict[str, Any]]:
                 continue
 
             mp_image = mp.Image.create_from_file(str(img_path))
+            t0 = time.perf_counter()
             classification_result = classifier.classify(mp_image)
+            t1 = time.perf_counter()
+            latency_ms = (t1 - t0) * 1000.0
 
             top_categories = []
             if classification_result.classifications:
@@ -135,6 +139,7 @@ def evaluate_split(classifier: Any, split_dir: Path) -> list[dict[str, Any]]:
                 "top1_score": round(top1_score, 4),
                 "is_top1": is_top1,
                 "is_top3": is_top3,
+                "latency_ms": round(latency_ms, 2),
                 "top_predictions": [
                     {"label": c.category_name, "score": round(float(c.score), 4)}
                     for c in top_categories[:3]
@@ -152,6 +157,7 @@ def compute_metrics(results: list[dict[str, Any]], labels: list[str]) -> dict[st
             "top3_correct": 0,
             "top3_accuracy": 0.0,
             "avg_confidence": 0.0,
+            "avg_latency_ms": 0.0,
             "macro_f1": 0.0,
             "class_metrics": {},
             "confusion_matrix": {},
@@ -161,6 +167,7 @@ def compute_metrics(results: list[dict[str, Any]], labels: list[str]) -> dict[st
     top1_correct = sum(1 for r in results if r["is_top1"])
     top3_correct = sum(1 for r in results if r["is_top3"])
     avg_conf = sum(r["top1_score"] for r in results) / total
+    avg_latency_ms = sum(r.get("latency_ms", 0.0) for r in results) / total
 
     class_stats = defaultdict(lambda: {"gt": 0, "pred": 0, "tp": 0})
     for r in results:
@@ -210,6 +217,7 @@ def compute_metrics(results: list[dict[str, Any]], labels: list[str]) -> dict[st
         "top3_correct": top3_correct,
         "top3_accuracy": round(top3_correct / total, 4),
         "avg_confidence": round(avg_conf, 4),
+        "avg_latency_ms": round(avg_latency_ms, 2),
         "macro_f1": round(macro_f1, 4),
         "evaluation_classes": all_classes,
         "class_metrics": class_metrics,
@@ -221,8 +229,8 @@ def generate_markdown_report(data: dict[str, Any]) -> str:
     lines = []
     lines.append("# MediaPipe Model Evaluation Report\n")
     lines.append("## 1. Overall Performance\n")
-    lines.append("| Split | Samples | Top-1 Accuracy | Top-3 Accuracy | Avg Confidence |")
-    lines.append("|:---|:---:|:---:|:---:|:---:|")
+    lines.append("| Split | Samples | Top-1 Accuracy | Top-3 Accuracy | Avg Confidence | Avg Latency |")
+    lines.append("|:---|:---:|:---:|:---:|:---:|:---:|")
 
     for split_name in ["test", "val", "train", "overall"]:
         if split_name in data and "metrics" in data[split_name] and data[split_name]["metrics"]:
@@ -233,10 +241,11 @@ def generate_markdown_report(data: dict[str, Any]) -> str:
                     f"| **{split_name.capitalize()}** | {tot} | "
                     f"{m['top1_accuracy']*100:.1f}% ({m['top1_correct']}/{tot}) | "
                     f"{m['top3_accuracy']*100:.1f}% ({m['top3_correct']}/{tot}) | "
-                    f"{m['avg_confidence']*100:.1f}% |"
+                    f"{m['avg_confidence']*100:.1f}% | "
+                    f"{m.get('avg_latency_ms', 0.0):.1f}ms |"
                 )
             else:
-                lines.append(f"| **{split_name.capitalize()}** | 0 | 0.0% (0/0) | 0.0% (0/0) | 0.0% |")
+                lines.append(f"| **{split_name.capitalize()}** | 0 | 0.0% (0/0) | 0.0% (0/0) | 0.0% | 0.0ms |")
     lines.append("")
 
     if "overall" in data and "metrics" in data["overall"] and data["overall"]["metrics"].get("total", 0) > 0:
@@ -320,6 +329,7 @@ def main() -> None:
                 f"[{s.upper():<5}] Top-1: {metrics['top1_accuracy']*100:>5.1f}% | "
                 f"Top-3: {metrics['top3_accuracy']*100:>5.1f}% | "
                 f"Avg Conf: {metrics['avg_confidence']*100:>5.1f}% | "
+                f"Latency: {metrics.get('avg_latency_ms', 0.0):>4.1f}ms | "
                 f"Total: {metrics['total']}"
             )
 

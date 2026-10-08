@@ -65,8 +65,8 @@ flowchart TD
     B --> C["Phase 2: 少数クラスの自律データ拡張<br/>(train のみ拡張、val/test は厳格隔離)"]
     C --> D["Phase 3: 自動再学習<br/>(train-mediapipe-model.py)"]
     D --> E["Phase 4: Golden Test Set 自動定量評価<br/>(evaluate-mediapipe-model.py)"]
-    E --> F{"Promotion Gate 判定<br/>Top-3 > 57.14% かつ Top-1 >= 28.57% ?"}
-    F -->|合格 (PROMOTE)| G["meal-input-assist.task 更新 (本番 asset 反映)"]
+    E --> F{"Promotion Gate 判定<br/>Top-3 >= 71.4% かつ Top-1 >= 28.6%<br/>+ 少数クラス改善 + サイズ<=15MB + 遅延<=100ms ?"}
+    F -->|合格 (PROMOTE)| G["meal-input-assist.task 安全アトミック更新"]
     F -->|不合格/同等 (REJECT / TIE)| H["本番 asset 変更なし (Champion 完全維持)"]
 ```
 
@@ -85,14 +85,14 @@ flowchart TD
 
 ### Phase 3: 自動再学習 (Autonomous Retraining)
 - [`scripts/train-mediapipe-model.py`](../../scripts/train-mediapipe-model.py) を使用。
-- Challenger モデルは作業用ディレクトリ（`OUTPUT_DIR`）にのみ出力し、本番 asset は Gate 評価前には一切変更しない。
+- Challenger モデル（`model.task`）は作業用ディレクトリ（`OUTPUT_DIR`）にのみ出力し、本番 asset は Gate 評価前には一切変更しない。
 
 ### Phase 4: Golden Test Set による自動評価 (Autonomous Benchmarking)
 - [`scripts/evaluate-mediapipe-model.py`](../../scripts/evaluate-mediapipe-model.py) を実行。
-- Golden Test Set に対する Top-1, Top-3, Class-wise Recall, Confusion Matrix を算出。
+- Golden Test Set に対する Top-1, Top-3, Class-wise Recall, 推論レイテンシ, Confusion Matrix を算出。
 
 ### Phase 5: Champion / Challenger 昇格判定
-- 既存モデル（Champion: Top-1 28.57%, Top-3 57.14%）と比較し、昇格基準（Top-3 > 57.14% かつ Top-1 >= 28.57%）を満たした場合のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換。
+- 既存モデル（Champion: Top-1 28.57%, Top-3 57.14%）と比較し、第 1 節の成功基準（Top-3 >= 71.4%, Top-1 >= 28.6%, 少数クラス改善, サイズ <= 15MB, レイテンシ <= 100ms）をすべて満たした場合のみ、一時ファイル検証を経てアトミックに `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換。
 - 未達（REJECT）または同等（TIE）の場合は本番 asset を一切変更せず、既存の Champion モデルを完全に維持する（「No regression, no PR」の保証）。
 
 ---

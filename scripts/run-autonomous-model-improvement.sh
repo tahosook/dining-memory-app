@@ -21,10 +21,17 @@ TARGET_PER_CLASS="${TARGET_PER_CLASS:-15}"
 EPOCHS="${EPOCHS:-25}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 
-# Baseline thresholds from Champion model (current deployed model)
-# Golden Test Set (7 samples): Top-1 = 28.57% (2/7), Top-3 = 57.14% (4/7)
-export CHAMPION_TOP1="0.2857"
-export CHAMPION_TOP3="0.5714"
+# Baseline thresholds from Champion model (current deployed model on Golden Test Set: 7 samples)
+# Test: Top-1 = 28.57% (2/7), Top-3 = 57.14% (4/7)
+export CHAMPION_TOP1="0.285"
+export CHAMPION_TOP3="0.571"
+
+# Canonical Promotion Gate Thresholds (from mediapipe-model-autonomous-improvement-plan.md)
+export GATE_MIN_TOP3="0.714"              # >= 71.4% (5/7 samples)
+export GATE_MIN_TOP1="0.285"              # >= 28.6% (2/7 samples)
+export GATE_MAX_MODEL_SIZE_BYTES=15728640 # <= 15MB
+export GATE_MIN_MODEL_SIZE_BYTES=1048576  # >= 1MB
+export GATE_MAX_LATENCY_MS="100.0"        # <= 100ms
 
 echo "========================================================"
 echo "🚀 Starting Autonomous MediaPipe Model Improvement Loop"
@@ -33,8 +40,10 @@ echo "Source dataset:       $SOURCE_DATASET"
 echo "Augmented dataset:    $AUGMENTED_DATASET"
 echo "Target per class:     $TARGET_PER_CLASS"
 echo "Epochs:               $EPOCHS (batch size: $BATCH_SIZE)"
-echo "Champion baseline:    Top-1 >= 28.57%, Top-3 >= 57.14%"
-echo "Promotion criterion:  Top-3 > 57.14% AND Top-1 >= 28.57%"
+echo "Champion baseline:    Top-1 = 28.57% (2/7), Top-3 = 57.14% (4/7)"
+echo "Promotion criteria:   Top-3 >= 71.4% (5/7) AND Top-1 >= 28.6% (2/7)"
+echo "                      + Minority class improvement"
+echo "                      + Model size <= 15MB AND Latency <= 100ms"
 echo "========================================================"
 
 # Pre-check: Verify Golden Test Set presence
@@ -74,22 +83,17 @@ uv run --python .venv_mediapipe python scripts/train-mediapipe-model.py \
 
 CHALLENGER_MODEL="$OUTPUT_DIR/model.task"
 if [ ! -f "$CHALLENGER_MODEL" ]; then
-  # Fallback check if saved as .tflite
-  if [ -f "$OUTPUT_DIR/model.tflite" ]; then
-    CHALLENGER_MODEL="$OUTPUT_DIR/model.tflite"
-  else
-    echo "❌ Error: Challenger model not generated at $CHALLENGER_MODEL"
-    exit 1
-  fi
-fi
-
-# Model sanity check: size between 1MB and 20MB
-MODEL_SIZE=$(wc -c < "$CHALLENGER_MODEL" | tr -d ' ')
-if [ "$MODEL_SIZE" -lt 1000000 ] || [ "$MODEL_SIZE" -gt 25000000 ]; then
-  echo "❌ Error: Model size abnormal ($MODEL_SIZE bytes). Rejecting model."
+  echo "❌ Error: Challenger model not generated at $CHALLENGER_MODEL"
   exit 1
 fi
-echo "✓ Challenger model size verified: $(( MODEL_SIZE / 1024 / 1024 )) MB ($MODEL_SIZE bytes)"
+
+# Model size validation check: <= 15MB and >= 1MB
+MODEL_SIZE=$(wc -c < "$CHALLENGER_MODEL" | tr -d ' ')
+if [ "$MODEL_SIZE" -lt "$GATE_MIN_MODEL_SIZE_BYTES" ] || [ "$MODEL_SIZE" -gt "$GATE_MAX_MODEL_SIZE_BYTES" ]; then
+  echo "❌ Error: Model size ($MODEL_SIZE bytes) exceeds canonical gate bounds [1MB, 15MB]. Rejecting model."
+  exit 1
+fi
+echo "✓ Challenger model size verified: $(( MODEL_SIZE / 1024 / 1024 )) MB ($MODEL_SIZE bytes <= 15MB)"
 
 # Step 3: Autonomous Evaluation on Golden Test Set
 echo -e "\n📊 [Step 3/4] Evaluating Challenger against Golden Test Set..."
@@ -108,21 +112,36 @@ const data = JSON.parse(fs.readFileSync('$BENCHMARK_REPORT', 'utf8'));
 const testMetrics = data.test && data.test.metrics ? data.test.metrics : {};
 const top1 = testMetrics.top1_accuracy || 0;
 const top3 = testMetrics.top3_accuracy || 0;
+const latency = testMetrics.avg_latency_ms || 0;
 
 const championTop1 = parseFloat(process.env.CHAMPION_TOP1 || '0.2857');
 const championTop3 = parseFloat(process.env.CHAMPION_TOP3 || '0.5714');
+const gateMinTop3 = parseFloat(process.env.GATE_MIN_TOP3 || '0.7142');
+const gateMinTop1 = parseFloat(process.env.GATE_MIN_TOP1 || '0.2857');
+const gateMaxLatency = parseFloat(process.env.GATE_MAX_LATENCY_MS || '100.0');
 
-console.error('Challenger Test Metrics: Top-1 = ' + (top1*100).toFixed(1) + '%, Top-3 = ' + (top3*100).toFixed(1) + '%');
-console.error('Champion Baseline:       Top-1 >= ' + (championTop1*100).toFixed(1) + '%, Top-3 >= ' + (championTop3*100).toFixed(1) + '%');
-console.error('Promotion Threshold:     Top-3 > ' + (championTop3*100).toFixed(1) + '% AND Top-1 >= ' + (championTop1*100).toFixed(1) + '%');
+// Minority classes that previously had 0 correct coverage on Golden Test:
+const minorityClasses = ['fried_dish', 'stir_fry', 'other_or_exclude'];
+const testDetails = (data.test && data.test.details) ? data.test.details : [];
+const minorityImproved = testDetails.some(item =>
+  minorityClasses.includes(item.ground_truth) && item.is_top3
+);
 
-// Promotion criterion: Top-3 must strictly improve (> championTop3) AND Top-1 must not regress (>= championTop1)
-const passTop1 = top1 >= championTop1;
-const strictlyImprovedTop3 = top3 > championTop3;
+console.error('--- Evaluation Metrics vs Gates ---');
+console.error('Challenger Test Metrics: Top-1 = ' + (top1*100).toFixed(1) + '%, Top-3 = ' + (top3*100).toFixed(1) + '%, Latency = ' + latency.toFixed(1) + 'ms');
+console.error('Promotion Requirements:  Top-3 >= ' + (gateMinTop3*100).toFixed(1) + '% (5/7), Top-1 >= ' + (gateMinTop1*100).toFixed(1) + '% (2/7), Latency <= ' + gateMaxLatency + 'ms, Minority Improved = true');
+console.error('Actual Gate Checks:');
+console.error('  - Top-3 Check (>= 71.4%):      ' + (top3 >= gateMinTop3 ? 'PASS' : 'FAIL'));
+console.error('  - Top-1 Check (>= 28.6%):      ' + (top1 >= gateMinTop1 ? 'PASS' : 'FAIL'));
+console.error('  - Latency Check (<= 100ms):    ' + (latency <= gateMaxLatency ? 'PASS' : 'FAIL'));
+console.error('  - Minority Coverage Check:     ' + (minorityImproved ? 'PASS' : 'FAIL'));
 
-if (strictlyImprovedTop3 && passTop1) {
+const passPromotion = (top3 >= gateMinTop3) && (top1 >= gateMinTop1) && (latency <= gateMaxLatency) && minorityImproved;
+const passRegressionGuard = (top3 >= championTop3) && (top1 >= championTop1);
+
+if (passPromotion) {
   process.stdout.write('PROMOTE');
-} else if (top3 >= championTop3 && top1 >= championTop1) {
+} else if (passRegressionGuard) {
   process.stdout.write('MAINTAIN_OR_TIE');
 } else {
   process.stdout.write('REJECT');
@@ -130,18 +149,39 @@ if (strictlyImprovedTop3 && passTop1) {
 ")
 
 if [ "$GATE_RESULT" = "PROMOTE" ]; then
-  echo "🎉 [GATE PASSED] Challenger model outperformed Champion!"
-  echo "Promoting Challenger model to $ASSET_TASK..."
-  mkdir -p "$(dirname "$ASSET_TASK")"
-  cp "$CHALLENGER_MODEL" "$ASSET_TASK"
-  echo "✅ Model successfully updated in Android assets: $ASSET_TASK"
+  echo "🎉 [GATE PASSED] Challenger model met all canonical promotion criteria!"
+  echo "Promoting Challenger model to $ASSET_TASK atomically..."
+
+  # Safe atomic promotion: copy to temp file, verify, then atomic move
+  ASSET_DIR="$(dirname "$ASSET_TASK")"
+  mkdir -p "$ASSET_DIR"
+  TEMP_ASSET="${ASSET_TASK}.tmp.$$"
+
+  cp "$CHALLENGER_MODEL" "$TEMP_ASSET"
+
+  if [ ! -f "$TEMP_ASSET" ] || [ ! -s "$TEMP_ASSET" ]; then
+    echo "❌ Error: Failed to stage model asset at $TEMP_ASSET"
+    rm -f "$TEMP_ASSET"
+    exit 1
+  fi
+
+  SRC_SIZE=$(wc -c < "$CHALLENGER_MODEL" | tr -d ' ')
+  TMP_SIZE=$(wc -c < "$TEMP_ASSET" | tr -d ' ')
+  if [ "$SRC_SIZE" != "$TMP_SIZE" ]; then
+    echo "❌ Error: Staged asset size mismatch ($SRC_SIZE != $TMP_SIZE). Aborting promotion."
+    rm -f "$TEMP_ASSET"
+    exit 1
+  fi
+
+  mv -f "$TEMP_ASSET" "$ASSET_TASK"
+  echo "✅ Model successfully and atomically deployed to Android assets: $ASSET_TASK"
   echo "Done! You can now commit the new model asset and benchmark results."
 elif [ "$GATE_RESULT" = "MAINTAIN_OR_TIE" ]; then
-  echo "ℹ️  [GATE TIE] Challenger matched Champion performance without regression."
+  echo "ℹ️  [GATE TIE] Challenger maintained baseline without regression, but did not satisfy full promotion requirements."
   echo "Production asset kept intact ($ASSET_TASK untouched)."
   echo "Candidate model preserved at $OUTPUT_DIR/ for review."
 else
-  echo "⚠️  [GATE BLOCKED] Challenger model did not meet promotion criteria."
+  echo "⚠️  [GATE BLOCKED] Challenger model did not meet promotion criteria or regressed."
   echo "Core Principle: 'No regression, no PR'. Production asset kept intact ($ASSET_TASK untouched)."
   echo "Challenger results logged at $OUTPUT_DIR/."
 fi
