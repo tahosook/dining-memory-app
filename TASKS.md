@@ -8,6 +8,7 @@
 
 ## Now
 ### Investigation / evaluation candidates（調査・評価候補）
+- MediaPipe モデル自律改善パイプラインの実行（zip2 データ活用）: 進行中。少数クラスのデータ拡張、自動再学習、固定 Golden Test Set（7枚）での定量評価、および Champion / Challenger 昇格判定による Top-3 精度改善ループ（[docs/engineering/mediapipe-model-autonomous-improvement-plan.md](docs/engineering/mediapipe-model-autonomous-improvement-plan.md)）。
 - AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
 - AIメモ下書きの面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、下書きの実用性と表現を改善する。
 

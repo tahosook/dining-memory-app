@@ -223,6 +223,31 @@ MediaPipe static-image classifier の `.task` model を Android build で利用�
 - RecordsScreen は nested FlatList を SectionList に置き換えてリスト仮想化を回復。
 - useCameraCapture は captureReviewRef で BackHandler の再登録を入力中から分離。
 
+## MediaPipe 食事分類モデルの自律改善パイプライン
+
+### Goal
+`zip2` データセット（48枚）を基盤に、人手によるアノテーション修正を介さず自律的（Human-free）にデータ拡張・自動再学習・定量評価・昇格判定を実行し、入力補助モデル（`meal-input-assist.task`）の Top-3 精度（現行 57.1%）と少数クラス Recall を改善する。
+
+### Constraints
+- アプリ本体の保存契約や DB スキーマ、UX コンポーネントを変更しない（MediaPipe は Android native hidden asset）。
+- テストデータ（Golden Test Set: 7枚）は完全固定・不変とし、データ拡張や学習に漏洩（Leaking）させない。
+- 回帰したモデル（Champion 基準未達）はデプロイせず、自動ロールバックする（「変更しないことの成功定義」）。
+- モデルサイズは 15MB 以下、推論時間は 100ms 以下を維持する。
+
+### Suggested Steps
+- Phase 1: `scripts/augment-mediapipe-dataset.py` で少数クラス（揚げ物・炒め物等）を自動拡張（各クラス最低 15枚）。
+- Phase 2: `scripts/train-mediapipe-model.py` で MobileNetV2 転移学習（Challenger モデル生成）。
+- Phase 3: `scripts/evaluate-mediapipe-model.py` で Golden Test Set に対する Top-1 / Top-3 精度および混同行列を評価。
+- Phase 4: `scripts/run-autonomous-model-improvement.sh` の昇格ゲート（Top-3 > 57.1%）判定を経て、合格時のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換・コミット。
+
+### Read First
+- [docs/engineering/mediapipe-model-autonomous-improvement-plan.md](docs/engineering/mediapipe-model-autonomous-improvement-plan.md)
+- [docs/engineering/mediapipe-labeling-workflow.md](docs/engineering/mediapipe-labeling-workflow.md)
+- `scripts/run-autonomous-model-improvement.sh`
+- `scripts/evaluate-mediapipe-model.py`
+- `scripts/train-mediapipe-model.py`
+
 ## Historical Notes
 - 以前の MVP completion plan は current plan ではない。
 - Search / Stats / Records の基本改善は現在の canonical docs と `src/` 実装を source of truth とする。
+
