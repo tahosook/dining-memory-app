@@ -103,6 +103,19 @@ python scripts/export-mediapipe-dataset.py \
 
 review correction がある場合は AI の `primary_dish_key` より `corrected_training_class` または `corrected_primary_dish_key` を優先する。`human_judgment` は `ok`、`wrong_primary`、`exclude_non_food`、`exclude_menu_or_text`、`exclude_packaged` を使う。出力は `train/`、`val/`、`test/`、`excluded/excluded_manifest.jsonl`、`label_map.json`、`labels.txt`、`dataset_summary.json`、`dataset_summary.md` で確認する。
 
+### MediaPipe モデル学習 実行例
+`scripts/train-mediapipe-model.py` はエクスポートされた class-directory dataset（`train/`, `val/`, `test/`）から、MediaPipe Model Maker（MobileNetV2 ベース）を用いて画像分類モデル（`.task` / `model.tflite`）を学習・エクスポートする。
+
+```bash
+uv run --python .venv_mediapipe python scripts/train-mediapipe-model.py \
+  --dataset-dir state/mediapipe-dataset/latest \
+  --output-dir state/mediapipe_models \
+  --epochs 20 \
+  --batch-size 4
+```
+
+※ 本番 asset（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）への直接コピーは、手動配置時のみ `--export-task-path` を明示して実行する。指定しない場合は `--output-dir` にのみ安全に出力され、Gate 判定前の不用意な上書きを防止する。
+
 ## Next Steps or Open Questions
 - loop が `no_change` / `regressed` を出したときにどこまで自動 rollback するかは、必要になった時点で別途判断する。
 - 次フェーズは LLM 自動分類改善を続けるより、priority bucket に沿った人手 review と教師データ export を進める。
