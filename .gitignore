@@ -59,3 +59,8 @@ coverage/
 state/labeling/
 state/mediapipe-dataset/
 state/mediapipe_labeling_runs/
+state/mediapipe_models/
+*.task
+
+# Python virtual environment
+.venv*
