@@ -22,16 +22,18 @@ EPOCHS="${EPOCHS:-25}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 
 # Baseline thresholds from Champion model (current deployed model on Golden Test Set: 7 samples)
-# Test: Top-1 = 28.57% (2/7), Top-3 = 57.14% (4/7)
-export CHAMPION_TOP1="0.285"
-export CHAMPION_TOP3="0.571"
+# Test: Top-1 = 2/7 (28.6%), Top-3 = 4/7 (57.1%), Minority classes Top-3 correct = 0
+export CHAMPION_TOP1_CORRECT="2"
+export CHAMPION_TOP3_CORRECT="4"
+export CHAMPION_MINORITY_TOP3_CORRECT="0"
 
 # Canonical Promotion Gate Thresholds (from mediapipe-model-autonomous-improvement-plan.md)
-export GATE_MIN_TOP3="0.714"              # >= 71.4% (5/7 samples)
-export GATE_MIN_TOP1="0.285"              # >= 28.6% (2/7 samples)
+# Evaluated strictly on integer correct counts over 7 Golden Test samples
+export GATE_MIN_TOP3_CORRECT="5"          # >= 5/7 (71.4%)
+export GATE_MIN_TOP1_CORRECT="2"          # >= 2/7 (28.6%)
 export GATE_MAX_MODEL_SIZE_BYTES=15728640 # <= 15MB
 export GATE_MIN_MODEL_SIZE_BYTES=1048576  # >= 1MB
-export GATE_MAX_LATENCY_MS="100.0"        # <= 100ms
+export GATE_MAX_LATENCY_MS="100.0"        # <= 100ms (eval host benchmark gate; does not guarantee on-device latency)
 
 echo "========================================================"
 echo "🚀 Starting Autonomous MediaPipe Model Improvement Loop"
@@ -40,10 +42,11 @@ echo "Source dataset:       $SOURCE_DATASET"
 echo "Augmented dataset:    $AUGMENTED_DATASET"
 echo "Target per class:     $TARGET_PER_CLASS"
 echo "Epochs:               $EPOCHS (batch size: $BATCH_SIZE)"
-echo "Champion baseline:    Top-1 = 28.57% (2/7), Top-3 = 57.14% (4/7)"
-echo "Promotion criteria:   Top-3 >= 71.4% (5/7) AND Top-1 >= 28.6% (2/7)"
-echo "                      + Minority class improvement"
-echo "                      + Model size <= 15MB AND Latency <= 100ms"
+echo "Champion baseline:    Top-1 = 2/7, Top-3 = 4/7, Minority Top-3 = 0"
+echo "Promotion criteria:   Top-3 >= 5/7 (71.4%) AND Top-1 >= 2/7 (28.6%)"
+echo "                      + Minority class improvement (> Champion baseline)"
+echo "                      + Model size <= 15MB AND Eval Latency <= 100ms"
+echo "                      (Latency gate evaluates CI/host execution; does not prove device latency)"
 echo "========================================================"
 
 # Pre-check: Verify Golden Test Set presence
@@ -110,34 +113,46 @@ GATE_RESULT=$(node -e "
 const fs = require('fs');
 const data = JSON.parse(fs.readFileSync('$BENCHMARK_REPORT', 'utf8'));
 const testMetrics = data.test && data.test.metrics ? data.test.metrics : {};
-const top1 = testMetrics.top1_accuracy || 0;
-const top3 = testMetrics.top3_accuracy || 0;
+const total = testMetrics.total || 0;
+const top1Correct = testMetrics.top1_correct || 0;
+const top3Correct = testMetrics.top3_correct || 0;
 const latency = testMetrics.avg_latency_ms || 0;
 
-const championTop1 = parseFloat(process.env.CHAMPION_TOP1 || '0.2857');
-const championTop3 = parseFloat(process.env.CHAMPION_TOP3 || '0.5714');
-const gateMinTop3 = parseFloat(process.env.GATE_MIN_TOP3 || '0.7142');
-const gateMinTop1 = parseFloat(process.env.GATE_MIN_TOP1 || '0.2857');
+const championTop1Correct = parseInt(process.env.CHAMPION_TOP1_CORRECT || '2', 10);
+const championTop3Correct = parseInt(process.env.CHAMPION_TOP3_CORRECT || '4', 10);
+const championMinorityTop3Correct = parseInt(process.env.CHAMPION_MINORITY_TOP3_CORRECT || '0', 10);
+
+const gateMinTop3Correct = parseInt(process.env.GATE_MIN_TOP3_CORRECT || '5', 10);
+const gateMinTop1Correct = parseInt(process.env.GATE_MIN_TOP1_CORRECT || '2', 10);
 const gateMaxLatency = parseFloat(process.env.GATE_MAX_LATENCY_MS || '100.0');
 
-// Minority classes that previously had 0 correct coverage on Golden Test:
+// Minority classes evaluated on Golden Test Set:
 const minorityClasses = ['fried_dish', 'stir_fry', 'other_or_exclude'];
 const testDetails = (data.test && data.test.details) ? data.test.details : [];
-const minorityImproved = testDetails.some(item =>
+const challengerMinorityTop3Correct = testDetails.filter(item =>
   minorityClasses.includes(item.ground_truth) && item.is_top3
-);
+).length;
 
-console.error('--- Evaluation Metrics vs Gates ---');
-console.error('Challenger Test Metrics: Top-1 = ' + (top1*100).toFixed(1) + '%, Top-3 = ' + (top3*100).toFixed(1) + '%, Latency = ' + latency.toFixed(1) + 'ms');
-console.error('Promotion Requirements:  Top-3 >= ' + (gateMinTop3*100).toFixed(1) + '% (5/7), Top-1 >= ' + (gateMinTop1*100).toFixed(1) + '% (2/7), Latency <= ' + gateMaxLatency + 'ms, Minority Improved = true');
+// Minority coverage must strictly improve relative to Champion baseline:
+const minorityImproved = challengerMinorityTop3Correct > championMinorityTop3Correct;
+
+console.error('--- Evaluation Metrics vs Gates (Integer Sample Basis on N=' + total + ') ---');
+console.error('Challenger Test Metrics: Top-1 = ' + top1Correct + '/' + total + ' (' + (top1Correct/total*100).toFixed(1) + '%), Top-3 = ' + top3Correct + '/' + total + ' (' + (top3Correct/total*100).toFixed(1) + '%), Latency = ' + latency.toFixed(1) + 'ms');
+console.error('Minority Top-3 Coverage: Challenger = ' + challengerMinorityTop3Correct + ' vs Champion = ' + championMinorityTop3Correct);
+console.error('Promotion Requirements:  Top-3 >= ' + gateMinTop3Correct + '/' + total + ' (>= 71.4%), Top-1 >= ' + gateMinTop1Correct + '/' + total + ' (>= 28.6%), Latency <= ' + gateMaxLatency + 'ms (eval host), Minority Coverage > ' + championMinorityTop3Correct);
 console.error('Actual Gate Checks:');
-console.error('  - Top-3 Check (>= 71.4%):      ' + (top3 >= gateMinTop3 ? 'PASS' : 'FAIL'));
-console.error('  - Top-1 Check (>= 28.6%):      ' + (top1 >= gateMinTop1 ? 'PASS' : 'FAIL'));
-console.error('  - Latency Check (<= 100ms):    ' + (latency <= gateMaxLatency ? 'PASS' : 'FAIL'));
-console.error('  - Minority Coverage Check:     ' + (minorityImproved ? 'PASS' : 'FAIL'));
+console.error('  - Top-3 Check (>=' + gateMinTop3Correct + '/' + total + '):          ' + (top3Correct >= gateMinTop3Correct ? 'PASS' : 'FAIL'));
+console.error('  - Top-1 Check (>=' + gateMinTop1Correct + '/' + total + '):          ' + (top1Correct >= gateMinTop1Correct ? 'PASS' : 'FAIL'));
+console.error('  - Latency Check (<=' + gateMaxLatency + 'ms):        ' + (latency <= gateMaxLatency ? 'PASS' : 'FAIL') + ' (Note: measured on eval host, does not guarantee device latency)');
+console.error('  - Minority Improvement Check:  ' + (minorityImproved ? 'PASS (improved from ' + championMinorityTop3Correct + ' to ' + challengerMinorityTop3Correct + ')' : 'FAIL (' + challengerMinorityTop3Correct + ' <= ' + championMinorityTop3Correct + ')'));
 
-const passPromotion = (top3 >= gateMinTop3) && (top1 >= gateMinTop1) && (latency <= gateMaxLatency) && minorityImproved;
-const passRegressionGuard = (top3 >= championTop3) && (top1 >= championTop1);
+const passPromotion = (top3Correct >= gateMinTop3Correct) &&
+                      (top1Correct >= gateMinTop1Correct) &&
+                      (latency <= gateMaxLatency) &&
+                      minorityImproved;
+
+const passRegressionGuard = (top3Correct >= championTop3Correct) &&
+                            (top1Correct >= championTop1Correct);
 
 if (passPromotion) {
   process.stdout.write('PROMOTE');
