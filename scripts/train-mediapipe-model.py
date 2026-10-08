@@ -37,10 +37,16 @@ def parse_args() -> argparse.Namespace:
         help="Directory to save training checkpoints and exported model",
     )
     parser.add_argument(
+        "--model-name",
+        type=str,
+        default="model.task",
+        help="Filename for the exported model (default: model.task)",
+    )
+    parser.add_argument(
         "--export-task-path",
         type=str,
-        default="android/app/src/main/assets/mediapipe/meal-input-assist.task",
-        help="Optional path to copy the generated .task file",
+        default=None,
+        help="Optional path to copy the exported model after successful validation (default: None)",
     )
     parser.add_argument(
         "--epochs",
@@ -74,6 +80,29 @@ def check_dependencies() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+
+
+def validate_exported_model(model_path: Path) -> None:
+    """Validate that the exported model is a valid TFLite FlatBuffer with MediaPipe metadata."""
+    if not model_path.is_file() or model_path.stat().st_size == 0:
+        raise ValueError(f"Exported model file is missing or empty: {model_path}")
+
+    with open(model_path, "rb") as f:
+        header = f.read(16)
+    if len(header) < 8 or header[4:8] != b"TFL3":
+        raise ValueError(f"Exported model does not have valid TFLite header: {model_path}")
+
+    import zipfile
+
+    if not zipfile.is_zipfile(model_path):
+        raise ValueError(f"Exported model does not contain packed metadata zip archive: {model_path}")
+
+    with zipfile.ZipFile(model_path, "r") as z:
+        namelist = z.namelist()
+        if "labels.txt" not in namelist:
+            raise ValueError(f"Exported model metadata is missing 'labels.txt': {namelist}")
+
+    print(f"✓ Validated exported model format ({model_path.stat().st_size} bytes, labels metadata present)")
 
 
 def main() -> None:
@@ -131,22 +160,18 @@ def main() -> None:
         loss, acc = model.evaluate(test_data)
         print(f"Test Loss: {loss:.4f}, Test Accuracy: {acc:.4f}")
 
-    print("\nExporting model (.task)...")
-    model.export_model()
+    print(f"\nExporting model as '{args.model_name}'...")
+    model.export_model(model_name=args.model_name)
 
-    exported_model_files = list(output_dir.glob("*.task")) + list(output_dir.glob("*.tflite"))
-    if not exported_model_files:
-        model_file = output_dir / "model.tflite"
-    else:
-        model_file = exported_model_files[0]
-
+    model_file = output_dir / args.model_name
+    validate_exported_model(model_file)
     print(f"Exported model: {model_file}")
 
     if args.export_task_path:
         dest_path = Path(args.export_task_path).resolve()
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(model_file, dest_path)
-        print(f"Copied .task model to target asset path: {dest_path}")
+        print(f"Copied validated model to target asset path: {dest_path}")
 
     print("\nTraining complete!")
 

@@ -110,12 +110,11 @@ review correction がある場合は AI の `primary_dish_key` より `corrected
 uv run --python .venv_mediapipe python scripts/train-mediapipe-model.py \
   --dataset-dir state/mediapipe-dataset/latest \
   --output-dir state/mediapipe_models \
-  --export-task-path android/app/src/main/assets/mediapipe/meal-input-assist.task \
   --epochs 20 \
   --batch-size 4
 ```
 
-出力された `.task` モデルは Android のアセットパスへ自動配置され、ネイティブ画像分類ブリッジ（`MediaPipeMealInputAssistModule`）から利用可能になる。
+※ 本番 asset（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）への直接コピーは、手動配置時のみ `--export-task-path` を明示して実行する。指定しない場合は `--output-dir` にのみ安全に出力され、Gate 判定前の不用意な上書きを防止する。
 
 ## Next Steps or Open Questions
 - loop が `no_change` / `regressed` を出したときにどこまで自動 rollback するかは、必要になった時点で別途判断する。

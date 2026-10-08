@@ -145,7 +145,18 @@ def evaluate_split(classifier: Any, split_dir: Path) -> list[dict[str, Any]]:
 
 def compute_metrics(results: list[dict[str, Any]], labels: list[str]) -> dict[str, Any]:
     if not results:
-        return {}
+        return {
+            "total": 0,
+            "top1_correct": 0,
+            "top1_accuracy": 0.0,
+            "top3_correct": 0,
+            "top3_accuracy": 0.0,
+            "avg_confidence": 0.0,
+            "macro_f1": 0.0,
+            "class_metrics": {},
+            "confusion_matrix": {},
+        }
+
     total = len(results)
     top1_correct = sum(1 for r in results if r["is_top1"])
     top3_correct = sum(1 for r in results if r["is_top3"])
@@ -160,8 +171,15 @@ def compute_metrics(results: list[dict[str, Any]], labels: list[str]) -> dict[st
         if gt == pred:
             class_stats[gt]["tp"] += 1
 
+    # Include any labels present in ground_truth or prediction even if not in label list
+    extra_labels = sorted(
+        (set(class_stats.keys()) - set(labels))
+    )
+    all_classes = list(labels) + extra_labels
+
     class_metrics = {}
-    for lbl in labels:
+    f1_list_with_gt = []
+    for lbl in all_classes:
         stat = class_stats[lbl]
         gt_cnt = stat["gt"]
         pred_cnt = stat["pred"]
@@ -176,6 +194,10 @@ def compute_metrics(results: list[dict[str, Any]], labels: list[str]) -> dict[st
             "recall": round(recall, 4),
             "f1": round(f1, 4),
         }
+        if gt_cnt > 0:
+            f1_list_with_gt.append(f1)
+
+    macro_f1 = (sum(f1_list_with_gt) / len(f1_list_with_gt)) if f1_list_with_gt else 0.0
 
     conf_matrix = defaultdict(lambda: defaultdict(int))
     for r in results:
@@ -188,6 +210,8 @@ def compute_metrics(results: list[dict[str, Any]], labels: list[str]) -> dict[st
         "top3_correct": top3_correct,
         "top3_accuracy": round(top3_correct / total, 4),
         "avg_confidence": round(avg_conf, 4),
+        "macro_f1": round(macro_f1, 4),
+        "evaluation_classes": all_classes,
         "class_metrics": class_metrics,
         "confusion_matrix": {gt: dict(preds) for gt, preds in conf_matrix.items()},
     }
@@ -203,19 +227,23 @@ def generate_markdown_report(data: dict[str, Any]) -> str:
     for split_name in ["test", "val", "train", "overall"]:
         if split_name in data and "metrics" in data[split_name] and data[split_name]["metrics"]:
             m = data[split_name]["metrics"]
-            lines.append(
-                f"| **{split_name.capitalize()}** | {m['total']} | "
-                f"{m['top1_accuracy']*100:.1f}% ({m['top1_correct']}/{m['total']}) | "
-                f"{m['top3_accuracy']*100:.1f}% ({m['top3_correct']}/{m['total']}) | "
-                f"{m['avg_confidence']*100:.1f}% |"
-            )
+            tot = m.get("total", 0)
+            if tot > 0:
+                lines.append(
+                    f"| **{split_name.capitalize()}** | {tot} | "
+                    f"{m['top1_accuracy']*100:.1f}% ({m['top1_correct']}/{tot}) | "
+                    f"{m['top3_accuracy']*100:.1f}% ({m['top3_correct']}/{tot}) | "
+                    f"{m['avg_confidence']*100:.1f}% |"
+                )
+            else:
+                lines.append(f"| **{split_name.capitalize()}** | 0 | 0.0% (0/0) | 0.0% (0/0) | 0.0% |")
     lines.append("")
 
-    if "overall" in data and "metrics" in data["overall"]:
+    if "overall" in data and "metrics" in data["overall"] and data["overall"]["metrics"].get("total", 0) > 0:
         lines.append("## 2. Class Metrics (Overall)\n")
         lines.append("| Class | Samples | Correct (TP) | Precision | Recall | F1-Score |")
         lines.append("|:---|:---:|:---:|:---:|:---:|:---:|")
-        cm = data["overall"]["metrics"]["class_metrics"]
+        cm = data["overall"]["metrics"].get("class_metrics", {})
         for cls_name, stat in cm.items():
             lines.append(
                 f"| `{cls_name}` | {stat['samples']} | {stat['tp']} | "
@@ -224,19 +252,19 @@ def generate_markdown_report(data: dict[str, Any]) -> str:
         lines.append("")
 
         lines.append("## 3. Confusion Matrix (Row: True, Col: Pred)\n")
-        labels = data["labels"]
-        short_labels = [l[:5] for l in labels]
+        eval_classes = data["overall"]["metrics"].get("evaluation_classes", data.get("labels", []))
+        short_labels = [l[:5] for l in eval_classes]
         header = "| True \\ Pred | " + " | ".join(short_labels) + " |"
         sep = "|:---|" + "|".join([":---:" for _ in short_labels]) + "|"
         lines.append(header)
         lines.append(sep)
-        conf_mat = data["overall"]["metrics"]["confusion_matrix"]
-        for true_l in labels:
-            row_vals = [str(conf_mat.get(true_l, {}).get(pred_l, 0)) for pred_l in labels]
+        conf_mat = data["overall"]["metrics"].get("confusion_matrix", {})
+        for true_l in eval_classes:
+            row_vals = [str(conf_mat.get(true_l, {}).get(pred_l, 0)) for pred_l in eval_classes]
             lines.append(f"| `{true_l}` | " + " | ".join(row_vals) + " |")
         lines.append("")
 
-    if "test" in data and "details" in data["test"]:
+    if "test" in data and "details" in data["test"] and data["test"]["details"]:
         lines.append("## 4. Test Set Predictions\n")
         lines.append("| Image | Ground Truth | Top-1 Pred | Match | Top-3 Candidates |")
         lines.append("|:---|:---|:---|:---:|:---|")

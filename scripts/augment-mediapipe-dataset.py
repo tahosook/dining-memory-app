@@ -15,6 +15,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import random
 import shutil
 import sys
@@ -99,6 +100,70 @@ def augment_image(img: Image.Image, op_idx: int) -> Image.Image:
     return res
 
 
+def file_sha256(path: Path) -> str:
+    """Calculate SHA256 hash of a file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def validate_split_integrity(src_dir: Path, dst_dir: Path) -> None:
+    """
+    Ensure test and val splits in dst_dir are 100% bit-for-bit identical to src_dir,
+    and verify no files from test or val appear in train (prevent data leakage).
+    """
+    for split in ["test", "val"]:
+        src_split = src_dir / split
+        dst_split = dst_dir / split
+        if not src_split.exists():
+            continue
+
+        src_files = sorted(
+            [f for f in src_split.rglob("*.*") if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]]
+        )
+        dst_files = sorted(
+            [f for f in dst_split.rglob("*.*") if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]]
+        )
+
+        if len(src_files) != len(dst_files):
+            raise ValueError(
+                f"Integrity check failed: '{split}' file count mismatch: src={len(src_files)}, dst={len(dst_files)}"
+            )
+
+        for sf, df in zip(src_files, dst_files):
+            rel_s = sf.relative_to(src_split)
+            rel_d = df.relative_to(dst_split)
+            if rel_s != rel_d:
+                raise ValueError(f"Integrity check failed: relative path mismatch {rel_s} != {rel_d}")
+            if file_sha256(sf) != file_sha256(df):
+                raise ValueError(f"Integrity check failed: SHA256 mismatch for {sf.name}")
+
+        print(f"  ✓ Integrity verified for '{split}': {len(src_files)} files identical to source.")
+
+    # Data leakage check: train must not share any files with test or val
+    train_dir = dst_dir / "train"
+    train_files = list(train_dir.rglob("*.*"))
+    test_and_val_hashes = set()
+    for split in ["test", "val"]:
+        s_dir = src_dir / split
+        if s_dir.exists():
+            for f in s_dir.rglob("*.*"):
+                if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+                    test_and_val_hashes.add(file_sha256(f))
+
+    for tf in train_files:
+        if tf.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+            # Check original name vs test
+            thash = file_sha256(tf)
+            if thash in test_and_val_hashes:
+                raise ValueError(
+                    f"CRITICAL: Data leakage detected! Train image {tf.name} matches a hash in test/val split."
+                )
+    print("  ✓ Data leakage check passed: No overlap between train and test/val splits.")
+
+
 def main() -> None:
     args = parse_args()
     check_dependencies()
@@ -132,7 +197,7 @@ def main() -> None:
             shutil.copytree(src_split, dst_split)
             print(f"✓ Preserved '{fixed_split}' split exactly as Golden Reference ({len(list(dst_split.rglob('*.*')))} files)")
 
-    # 3. Augment train split
+    # 3. Augment train split only
     src_train = src_dir / "train"
     dst_train = dst_dir / "train"
     dst_train.mkdir(parents=True, exist_ok=True)
@@ -148,28 +213,38 @@ def main() -> None:
         original_images = sorted(
             [f for f in cls_dir.glob("*.*") if f.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]]
         )
-        orig_count = len(original_images)
 
-        # Copy original images
+        # Validate images for corruptions
+        valid_images: list[Path] = []
         for orig in original_images:
-            shutil.copy2(orig, dst_cls_dir / orig.name)
+            try:
+                with Image.open(orig) as img:
+                    img.verify()
+                valid_images.append(orig)
+                shutil.copy2(orig, dst_cls_dir / orig.name)
+            except Exception as e:
+                print(f"    Warning: Corrupt or unreadable image skipped: {orig.name} ({e})")
 
+        orig_count = len(valid_images)
         if orig_count == 0:
-            print(f"  - `{cls_name}`: 0 images (skipping)")
+            print(f"  - `{cls_name}`: 0 valid images (skipping augmentation)")
             continue
 
         needed = max(0, args.target_per_class - orig_count)
-        generated_count = 0
+        # Avoid extreme overfitting if a class only has 1 or 2 images (limit max multiplier to 4x)
+        max_allowed_augmented = min(needed, orig_count * 4)
+        target_augmented = min(needed, max_allowed_augmented)
 
+        generated_count = 0
         op_cycle = 0
-        max_op_cycles = 50
-        while generated_count < needed and op_cycle < max_op_cycles:
-            for orig in original_images:
-                if generated_count >= needed:
+        max_op_cycles = 30
+
+        while generated_count < target_augmented and op_cycle < max_op_cycles:
+            for orig in valid_images:
+                if generated_count >= target_augmented:
                     break
                 try:
                     with Image.open(orig) as img:
-                        # Ensure RGB
                         rgb_img = img.convert("RGB")
                         aug = augment_image(rgb_img, op_cycle % 9)
                         out_name = f"{orig.stem}__aug{op_cycle:02d}_{generated_count:03d}.jpg"
@@ -177,12 +252,14 @@ def main() -> None:
                         generated_count += 1
                 except Exception as e:
                     print(f"    Warning: Failed to augment {orig.name}: {e}")
-                    # Count to prevent infinite loops on corrupt images
-                    generated_count += 1
+                    # Do not increment generated_count on failure
             op_cycle += 1
 
         total_cls = orig_count + generated_count
         print(f"  - `{cls_name:<16}`: {orig_count:>2} orig + {generated_count:>2} augmented -> {total_cls:>2} total")
+
+    print("\n🔍 Verifying dataset split integrity and absence of data leakage...")
+    validate_split_integrity(src_dir, dst_dir)
 
     print("\nDataset augmentation completed successfully!")
     print(f"Augmented dataset ready at: {dst_dir}")

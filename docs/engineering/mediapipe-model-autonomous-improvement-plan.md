@@ -62,37 +62,38 @@
 ```mermaid
 flowchart TD
     A["zip2 データセット<br/>(Train: 34枚 / Val: 7枚 / Test: 7枚)"] --> B["Phase 1: 不変 Golden Test Set の固定<br/>(テストデータの漏洩防止)"]
-    B --> C["Phase 2: 少数クラスの自律データ拡張<br/>(Rotation / Flip / Color Jitter)"]
-    C --> D["Phase 3: 自動ハイパーパラメータ探索 & 再学習<br/>(train-mediapipe-model.py)"]
+    B --> C["Phase 2: 少数クラスの自律データ拡張<br/>(train のみ拡張、val/test は厳格隔離)"]
+    C --> D["Phase 3: 自動再学習<br/>(train-mediapipe-model.py)"]
     D --> E["Phase 4: Golden Test Set 自動定量評価<br/>(evaluate-mediapipe-model.py)"]
-    E --> F{"Champion / Challenger 昇格判定<br/>Top-3 >= 71.4% かつ Top-1 >= 28.6% ?"}
-    F -->|合格 (PASS)| G["meal-input-assist.task 更新 & Git Commit"]
-    F -->|不合格 (FAIL)| H["自動ロールバック (安全停止 & ログ出力)"]
+    E --> F{"Promotion Gate 判定<br/>Top-3 > 57.14% かつ Top-1 >= 28.57% ?"}
+    F -->|合格 (PROMOTE)| G["meal-input-assist.task 更新 (本番 asset 反映)"]
+    F -->|不合格/同等 (REJECT / TIE)| H["本番 asset 変更なし (Champion 完全維持)"]
 ```
 
 ### Phase 1: 不変 Golden Test Set の固定
 - `state/mediapipe_labeling_runs/zip2-even48-20260423/exported_dataset/test/` の 7 枚は、一切の拡張や学習に含めず、純粋な最終評価用として完全隔離・固定する。
+- スクリプト実行時に入出力の件数・SHA256ハッシュを自動照合し、データの変質や train への漏洩（Data Leakage）を機械的に防止する。
 
 ### Phase 2: 少数クラスの自律データ拡張 (Autonomous Data Augmentation)
-- 課題となっている少数クラス（特に枚数が 5 枚未満のクラス）を自動検出。
-- 以下の変換を自動合成し、各クラス最低 15〜20 枚程度までバランスを底上げする：
+- 課題となっている少数クラス（特に枚数が少ないクラス）を対象に、`train` スプリットのみを増強。`test` および `val` は一切変更しない。
+- 以下の変換を自動合成し、各クラス目標枚数（15枚程度）までバランスを底上げする：
   1. 水平反転 (Horizontal Flip)
-  2. 微小回転 (Rotation: ±10°, ±20°)
+  2. 微小回転 (Rotation: ±8°, ±10°)
   3. 明るさ・コントラスト微調整 (Brightness/Contrast Jitter: ±15%)
-  4. 微小ズーム・クロップ (Center Crop & Resize)
-- 出力先: `state/mediapipe-dataset/augmented_run/`
+  4. クロップ＆リサイズ (Subtle Crop & Resize)
+- 出力先: `state/mediapipe-dataset/augmented/`
 
 ### Phase 3: 自動再学習 (Autonomous Retraining)
 - [`scripts/train-mediapipe-model.py`](../../scripts/train-mediapipe-model.py) を使用。
-- エポック数（20〜30 epochs）、バッチサイズ（4〜8）、学習率（0.0005〜0.001）を調整して新モデル（Challenger）を生成。
+- Challenger モデルは作業用ディレクトリ（`OUTPUT_DIR`）にのみ出力し、本番 asset は Gate 評価前には一切変更しない。
 
 ### Phase 4: Golden Test Set による自動評価 (Autonomous Benchmarking)
 - [`scripts/evaluate-mediapipe-model.py`](../../scripts/evaluate-mediapipe-model.py) を実行。
 - Golden Test Set に対する Top-1, Top-3, Class-wise Recall, Confusion Matrix を算出。
 
 ### Phase 5: Champion / Challenger 昇格判定
-- 既存モデル（Champion: Top-3 57.1%）と比較し、昇格基準を満たした場合のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換。
-- 満たない場合は新モデルを破棄し、原因（過学習、特定クラスの悪化等）をレポート。
+- 既存モデル（Champion: Top-1 28.57%, Top-3 57.14%）と比較し、昇格基準（Top-3 > 57.14% かつ Top-1 >= 28.57%）を満たした場合のみ `android/app/src/main/assets/mediapipe/meal-input-assist.task` を置換。
+- 未達（REJECT）または同等（TIE）の場合は本番 asset を一切変更せず、既存の Champion モデルを完全に維持する（「No regression, no PR」の保証）。
 
 ---
 
