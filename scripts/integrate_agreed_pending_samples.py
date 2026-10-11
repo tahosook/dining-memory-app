@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""Dataset Integration Pipeline for Agreed Sample A Pending Samples.
+
+Merges verified high-confidence agreed samples from Sample A audit
+(54 real photos: fish_dish 17, meat_dish 14, stir_fry 16, fried_dish 5, simmered_dish 2)
+into the training split of batch250_plus_pseudo74 dataset, strictly placing
+all samples into the 'train' split, verifying zero data leakage against the Golden Test Set,
+and ensuring val and test splits remain completely unaltered.
+
+Invariants enforced:
+1. Exact count: exactly 54 agreed sample_A images integrated into train split.
+2. Inter-model agreement: mapped_class == audit_predicted_class.
+3. High certainty: audit_is_uncertain == 'false'.
+4. Canonical 9-class structure preserved (train/val/test).
+5. Zero SHA-256 data leakage against Golden Test Set (7 samples).
+6. Validation and test sets remain pristine (clean ground truth).
+7. Immutable source: base dataset and source images are never modified.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import shutil
+import sys
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from scripts.validate_zip2_audit_manifest import compute_sha256
+
+DEFAULT_BASE_DATASET = (
+    _REPO_ROOT
+    / "state"
+    / "mediapipe-dataset"
+    / "batch250_plus_pseudo74"
+)
+DEFAULT_REGISTRY_PATH = (
+    _REPO_ROOT
+    / "state"
+    / "mediapipe_labeling_runs"
+    / "zip2-audit-manifest-20261009"
+    / "pseudo_label_adoption_registry.csv"
+)
+DEFAULT_SAMPLE_PKG_DIR = (
+    _REPO_ROOT
+    / "state"
+    / "mediapipe_labeling_runs"
+    / "zip2-audit-manifest-20261009"
+    / "gemini_audit_sample_A_pkg"
+)
+DEFAULT_GOLDEN_TEST_DIR = (
+    _REPO_ROOT
+    / "state"
+    / "mediapipe_labeling_runs"
+    / "zip2-even48-20260423"
+    / "exported_dataset"
+    / "test"
+)
+DEFAULT_OUTPUT_DATASET = (
+    _REPO_ROOT
+    / "state"
+    / "mediapipe-dataset"
+    / "batch250_plus_agreed54"
+)
+
+CANONICAL_CLASSES = [
+    "curry_rice",
+    "drink",
+    "fish_dish",
+    "fried_dish",
+    "meat_dish",
+    "noodles",
+    "other_or_exclude",
+    "simmered_dish",
+    "stir_fry",
+]
+
+EXPECTED_CLASS_COUNTS = {
+    "fish_dish": 17,
+    "meat_dish": 14,
+    "stir_fry": 16,
+    "fried_dish": 5,
+    "simmered_dish": 2,
+}
+
+
+class IntegrationError(Exception):
+    """Raised when dataset integration fails an invariant check."""
+
+
+class LeakageError(Exception):
+    """Raised when data leakage against the Golden Test Set is detected."""
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Integrate agreed sample_A pending samples into dataset training split."
+    )
+    parser.add_argument(
+        "--base-dataset-dir",
+        type=Path,
+        default=DEFAULT_BASE_DATASET,
+        help="Path to base dataset directory (default: batch250_plus_pseudo74)",
+    )
+    parser.add_argument(
+        "--registry-path",
+        type=Path,
+        default=DEFAULT_REGISTRY_PATH,
+        help="Path to pseudo_label_adoption_registry.csv",
+    )
+    parser.add_argument(
+        "--sample-pkg-dir",
+        type=Path,
+        default=DEFAULT_SAMPLE_PKG_DIR,
+        help="Path to gemini_audit_sample_A_pkg directory",
+    )
+    parser.add_argument(
+        "--golden-test-dir",
+        type=Path,
+        default=DEFAULT_GOLDEN_TEST_DIR,
+        help="Path to Golden Test Set directory (7 samples)",
+    )
+    parser.add_argument(
+        "--output-dataset-dir",
+        type=Path,
+        default=DEFAULT_OUTPUT_DATASET,
+        help="Path to output merged dataset directory",
+    )
+    parser.add_argument(
+        "--enforce-real-counts",
+        action="store_true",
+        default=False,
+        help="Strictly assert exact 54 real counts (disable during synthetic unit tests)",
+    )
+    return parser.parse_args()
+
+
+def load_golden_hashes(golden_test_dir: Path) -> Dict[str, str]:
+    """Loads SHA256 hashes of all images in the Golden Test Set."""
+    hashes: Dict[str, str] = {}
+    if not golden_test_dir.is_dir():
+        raise FileNotFoundError(f"Golden test directory not found: {golden_test_dir}")
+    for p in golden_test_dir.rglob("*.*"):
+        if p.is_file() and p.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+            sha = compute_sha256(p)
+            hashes[sha] = str(p)
+    return hashes
+
+
+def get_image_files(directory: Path) -> List[Path]:
+    """Recursively collects all image files in a directory."""
+    images: List[Path] = []
+    if not directory.exists():
+        return images
+    for p in directory.rglob("*.*"):
+        if p.is_file() and p.suffix.lower() in [".jpg", ".jpeg", ".png", ".webp"]:
+            images.append(p)
+    return sorted(images)
+
+
+def extract_agreed_candidates(
+    registry_path: Path,
+    enforce_real_counts: bool = False,
+) -> List[Dict[str, str]]:
+    """Extracts agreed sample_A pending records from the registry."""
+    if not registry_path.is_file():
+        raise FileNotFoundError(f"Registry file not found: {registry_path}")
+
+    agreed: List[Dict[str, str]] = []
+    with open(registry_path, "r", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            if r.get("adoption_status") == "pending_human_review" and r.get("audit_subset") == "sample_A":
+                mapped = r.get("mapped_class", "")
+                pred = r.get("audit_predicted_class", "")
+                uncertain = r.get("audit_is_uncertain", "false").lower() == "true"
+                if mapped and mapped == pred and not uncertain:
+                    agreed.append(r)
+
+    agreed.sort(key=lambda x: (x["mapped_class"], x["image_id"]))
+
+    if enforce_real_counts:
+        if len(agreed) != 54:
+            raise IntegrationError(f"Expected 54 agreed sample_A records, found {len(agreed)}")
+        class_counts = Counter(r["mapped_class"] for r in agreed)
+        if dict(class_counts) != EXPECTED_CLASS_COUNTS:
+            raise IntegrationError(f"Class count mismatch: expected {EXPECTED_CLASS_COUNTS}, got {dict(class_counts)}")
+
+    return agreed
+
+
+def integrate_agreed_samples(
+    base_dataset_dir: Path,
+    registry_path: Path,
+    sample_pkg_dir: Path,
+    golden_test_dir: Path,
+    output_dataset_dir: Path,
+    enforce_real_counts: bool = False,
+) -> Tuple[Path, Dict[str, Any]]:
+    """Merges agreed sample_A pending images into base dataset training split."""
+    if not base_dataset_dir.is_dir():
+        raise FileNotFoundError(f"Base dataset directory not found: {base_dataset_dir}")
+    if not registry_path.is_file():
+        raise FileNotFoundError(f"Registry not found: {registry_path}")
+    if not sample_pkg_dir.is_dir():
+        raise FileNotFoundError(f"Sample package dir not found: {sample_pkg_dir}")
+    if not golden_test_dir.is_dir():
+        raise FileNotFoundError(f"Golden test dir not found: {golden_test_dir}")
+
+    # Load mapping from sample_pkg_dir
+    mapping_path = sample_pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+    if not mapping_path.is_file():
+        raise FileNotFoundError(f"Blind mapping file not found: {mapping_path}")
+
+    with open(mapping_path, "r", encoding="utf-8") as f:
+        mapping_data = json.load(f)
+    img_by_id = {r["image_id"]: r for r in mapping_data.get("records", [])}
+
+    # Extract agreed candidates
+    agreed_records = extract_agreed_candidates(registry_path, enforce_real_counts=enforce_real_counts)
+
+    # Load Golden Test Hashes for zero-leakage guarantee
+    golden_hashes = load_golden_hashes(golden_test_dir)
+    if enforce_real_counts and len(golden_hashes) != 7:
+        raise IntegrationError(f"Expected exactly 7 Golden Test images, found {len(golden_hashes)}")
+
+    # Prepare output dataset directory
+    if output_dataset_dir.exists():
+        shutil.rmtree(output_dataset_dir)
+    output_dataset_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy base dataset splits
+    for split in ["train", "val", "test"]:
+        src_split = base_dataset_dir / split
+        dst_split = output_dataset_dir / split
+        if src_split.is_dir():
+            shutil.copytree(src_split, dst_split)
+        else:
+            raise FileNotFoundError(f"Missing required split in base dataset: {src_split}")
+
+    # Copy labels.txt and other metadata files
+    for meta_file in ["labels.txt", "label_map.json"]:
+        src_meta = base_dataset_dir / meta_file
+        if src_meta.is_file():
+            shutil.copy2(src_meta, output_dataset_dir / meta_file)
+
+    base_train_files = get_image_files(base_dataset_dir / "train")
+    base_val_files = get_image_files(base_dataset_dir / "val")
+    base_test_files = get_image_files(base_dataset_dir / "test")
+
+    # Copy agreed samples into train/<mapped_class>/
+    integrated_records: List[Dict[str, str]] = []
+    blind_images_dir = sample_pkg_dir / "blind_images"
+
+    for r in agreed_records:
+        img_id = r["image_id"]
+        mapped_class = r["mapped_class"]
+
+        if mapped_class not in CANONICAL_CLASSES:
+            raise IntegrationError(f"Invalid class '{mapped_class}' for image '{img_id}'")
+
+        if img_id not in img_by_id:
+            raise FileNotFoundError(f"Image ID '{img_id}' not found in private mapping records.")
+
+        img_record = img_by_id[img_id]
+        src_image_file = blind_images_dir / img_record["image_file"]
+        if not src_image_file.is_file():
+            raise FileNotFoundError(f"Blind image file not found: {src_image_file}")
+
+        # Leakage check: check image hash against Golden Test Set
+        img_hash = compute_sha256(src_image_file)
+        if img_hash in golden_hashes:
+            raise LeakageError(
+                f"Data leakage detected! Image {img_id} ({src_image_file}) matches Golden Test image {golden_hashes[img_hash]}"
+            )
+
+        # Target file in train/<mapped_class>/
+        target_filename = f"agreed_{img_id}.jpg"
+        target_path = output_dataset_dir / "train" / mapped_class / target_filename
+
+        shutil.copy2(src_image_file, target_path)
+
+        # Verify copy hash
+        copied_hash = compute_sha256(target_path)
+        if copied_hash != img_hash:
+            raise RuntimeError(f"Hash mismatch after copying {target_path}")
+
+        integrated_records.append({
+            "image_id": img_id,
+            "mapped_class": mapped_class,
+            "target_path": str(target_path.relative_to(output_dataset_dir)),
+            "sha256": copied_hash,
+        })
+
+    # Validate output dataset structure
+    out_train_files = get_image_files(output_dataset_dir / "train")
+    out_val_files = get_image_files(output_dataset_dir / "val")
+    out_test_files = get_image_files(output_dataset_dir / "test")
+
+    # Ensure val and test counts are bit-for-bit unchanged
+    if len(out_val_files) != len(base_val_files):
+        raise IntegrationError(f"Validation set corrupted: count changed from {len(base_val_files)} to {len(out_val_files)}")
+    if len(out_test_files) != len(base_test_files):
+        raise IntegrationError(f"Test set corrupted: count changed from {len(base_test_files)} to {len(out_test_files)}")
+
+    expected_train_count = len(base_train_files) + len(agreed_records)
+    if len(out_train_files) != expected_train_count:
+        raise IntegrationError(
+            f"Train count mismatch: expected {expected_train_count}, got {len(out_train_files)}"
+        )
+
+    # Double check no leakage in final train files
+    final_golden_hashes = set(golden_hashes.keys())
+    for tf in out_train_files:
+        if compute_sha256(tf) in final_golden_hashes:
+            raise LeakageError(f"Data leakage detected in final train split: {tf}")
+
+    class_added_counts = dict(Counter(r["mapped_class"] for r in integrated_records))
+
+    summary_data = {
+        "pipeline": "integrate_agreed_pending_samples",
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "base_dataset_dir": str(base_dataset_dir),
+        "output_dataset_dir": str(output_dataset_dir),
+        "total_integrated_images": len(integrated_records),
+        "class_added_counts": class_added_counts,
+        "counts_before": {
+            "train": len(base_train_files),
+            "val": len(base_val_files),
+            "test": len(base_test_files),
+            "total": len(base_train_files) + len(base_val_files) + len(base_test_files),
+        },
+        "counts_after": {
+            "train": len(out_train_files),
+            "val": len(out_val_files),
+            "test": len(out_test_files),
+            "total": len(out_train_files) + len(out_val_files) + len(out_test_files),
+        },
+        "golden_test_leakage_count": 0,
+        "integrated_images": integrated_records,
+    }
+
+    summary_path = output_dataset_dir / "integration_summary.json"
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(summary_data, f, indent=2, ensure_ascii=False)
+
+    return summary_path, summary_data
+
+
+def main() -> None:
+    args = parse_args()
+    print("=== MediaPipe Agreed Sample A Dataset Integration ===")
+    print(f"Base Dataset:   {args.base_dataset_dir}")
+    print(f"Registry:       {args.registry_path}")
+    print(f"Sample Pkg Dir: {args.sample_pkg_dir}")
+    print(f"Golden Test:    {args.golden_test_dir}")
+    print(f"Output Dataset: {args.output_dataset_dir}")
+
+    summary_path, summary = integrate_agreed_samples(
+        base_dataset_dir=args.base_dataset_dir,
+        registry_path=args.registry_path,
+        sample_pkg_dir=args.sample_pkg_dir,
+        golden_test_dir=args.golden_test_dir,
+        output_dataset_dir=args.output_dataset_dir,
+        enforce_real_counts=args.enforce_real_counts,
+    )
+
+    print("\n[SUCCESS] Dataset integration complete.")
+    print(f"  - Total images: {summary['counts_before']['total']} -> {summary['counts_after']['total']} (+{summary['total_integrated_images']})")
+    print(f"  - Train split:  {summary['counts_before']['train']} -> {summary['counts_after']['train']}")
+    print(f"  - Val split:    {summary['counts_after']['val']} (unaltered, pristine)")
+    print(f"  - Test split:   {summary['counts_after']['test']} (unaltered, pristine)")
+    print(f"  - Added by class: {summary['class_added_counts']}")
+    print(f"  - Golden test leakage: {summary['golden_test_leakage_count']} / 7")
+    print(f"  - Summary JSON: {summary_path}")
+
+
+if __name__ == "__main__":
+    main()

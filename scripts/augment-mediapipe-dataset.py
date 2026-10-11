@@ -62,6 +62,12 @@ def parse_args() -> argparse.Namespace:
         help="Target minimum number of training images per class (default: 15)",
     )
     parser.add_argument(
+        "--max-multiplier",
+        type=int,
+        default=10,
+        help="Maximum augmentation multiplier per original image (default: 10)",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -231,13 +237,13 @@ def main() -> None:
             continue
 
         needed = max(0, args.target_per_class - orig_count)
-        # Avoid extreme overfitting if a class only has 1 or 2 images (limit max multiplier to 4x)
-        max_allowed_augmented = min(needed, orig_count * 4)
+        # Avoid extreme overfitting if a class only has 1 or 2 images (limit max multiplier to args.max_multiplier)
+        max_allowed_augmented = min(needed, orig_count * args.max_multiplier)
         target_augmented = min(needed, max_allowed_augmented)
 
         generated_count = 0
         op_cycle = 0
-        max_op_cycles = 30
+        max_op_cycles = max(30, (target_augmented // orig_count + 5) if orig_count > 0 else 30)
 
         while generated_count < target_augmented and op_cycle < max_op_cycles:
             for orig in valid_images:
