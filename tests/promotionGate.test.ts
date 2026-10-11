@@ -200,6 +200,34 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       });
       expect(runGate(challenger, champion)).toBe('MAINTAIN_OR_TIE');
     });
+
+    it('PASS when Champion has 2 and Challenger has 2 (perfect minority maintained) and Challenger improves Top-1 (3 > 2)', () => {
+      const challenger = createEvaluationReport('chal_min_2_top1_3.json', {
+        top3_correct: 5,
+        top1_correct: 3,
+        minorityTop3Count: 2,
+      });
+      const champion = createEvaluationReport('champ_min_2_top1_2.json', {
+        top3_correct: 4,
+        top1_correct: 2,
+        minorityTop3Count: 2,
+      });
+      expect(runGate(challenger, champion)).toBe('PROMOTE');
+    });
+
+    it('FAIL when Champion has 2 and Challenger has 2 (perfect minority maintained) but Top-1 does not improve (2 <= 2)', () => {
+      const challenger = createEvaluationReport('chal_min_2_top1_2.json', {
+        top3_correct: 5,
+        top1_correct: 2,
+        minorityTop3Count: 2,
+      });
+      const champion = createEvaluationReport('champ_min_2_top1_2.json', {
+        top3_correct: 4,
+        top1_correct: 2,
+        minorityTop3Count: 2,
+      });
+      expect(runGate(challenger, champion)).toBe('MAINTAIN_OR_TIE');
+    });
   });
 
   describe('Latency Check (CI/Host Eval Gate <= 100.0ms)', () => {

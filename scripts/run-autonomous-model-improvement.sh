@@ -13,7 +13,10 @@ set -euo pipefail
 #    and Golden Test Set contains exactly 7 samples.
 # -----------------------------------------------------------------------------
 
-CANONICAL_DEFAULT_DATASET="state/mediapipe_labeling_runs/zip2-batch250/exported_dataset"
+CANONICAL_DEFAULT_DATASET="state/mediapipe-dataset/batch250_plus_agreed54"
+if [ ! -d "$CANONICAL_DEFAULT_DATASET" ]; then
+  CANONICAL_DEFAULT_DATASET="state/mediapipe_labeling_runs/zip2-batch250/exported_dataset"
+fi
 DEFAULT_GOLDEN_TEST_DIR="state/mediapipe_labeling_runs/zip2-even48-20260423/exported_dataset/test"
 
 # CLI / Environment variable priority resolution
@@ -27,9 +30,10 @@ BENCHMARK_REPORT="state/mediapipe_models/challenger_evaluation.json"
 CHAMPION_REPORT="state/mediapipe_models/champion_evaluation.json"
 GOLDEN_EVAL_DIR="state/mediapipe-dataset/golden_eval"
 
-TARGET_PER_CLASS="${TARGET_PER_CLASS:-25}"
-EPOCHS="${EPOCHS:-25}"
-BATCH_SIZE="${BATCH_SIZE:-4}"
+TARGET_PER_CLASS="${TARGET_PER_CLASS:-45}"
+MAX_MULTIPLIER="${MAX_MULTIPLIER:-3}"
+EPOCHS="${EPOCHS:-20}"
+BATCH_SIZE="${BATCH_SIZE:-8}"
 
 # Canonical Promotion Gate Thresholds (from mediapipe-model-autonomous-improvement-plan.md)
 # Evaluated strictly on integer correct counts over 7 Golden Test samples
@@ -297,12 +301,22 @@ const gateMinTop1Correct = parseInt(process.env.GATE_MIN_TOP1_CORRECT || '2', 10
 const gateMaxLatency = parseFloat(process.env.GATE_MAX_LATENCY_MS || '100.0');
 
 // Minority classes evaluated on Golden Test Set:
+const minoritySamplesInTestSet = challengerDetails.filter(item =>
+  minorityClasses.includes(item.ground_truth)
+).length;
+
 const challengerMinorityTop3Correct = challengerDetails.filter(item =>
   minorityClasses.includes(item.ground_truth) && item.is_top3
 ).length;
 
-// Minority coverage must strictly improve relative to Champion baseline (Challenger > Champion):
-const minorityImproved = challengerMinorityTop3Correct > championMinorityTop3Correct;
+// If Champion already achieved perfect coverage on all minority samples in the Golden Test Set,
+// Challenger must maintain perfect coverage (no regression) and strictly improve overall accuracy (Top-1 > Champion).
+// Otherwise, Challenger must strictly improve minority coverage over Champion baseline (Challenger > Champion).
+const championHasPerfectMinority = (championMinorityTop3Correct >= minoritySamplesInTestSet) && (minoritySamplesInTestSet > 0);
+
+const minorityImproved = championHasPerfectMinority
+  ? (challengerMinorityTop3Correct >= championMinorityTop3Correct && challengerTop1Correct > championTop1Correct)
+  : (challengerMinorityTop3Correct > championMinorityTop3Correct);
 
 console.error('--- Evaluation Metrics vs Gates (Integer Sample Basis on N=' + challengerTotal + ') ---');
 console.error('Champion Baseline:       Top-1 = ' + championTop1Correct + '/' + requiredSize + ', Top-3 = ' + championTop3Correct + '/' + requiredSize + ', Minority Top-3 = ' + championMinorityTop3Correct + ' (measured on Golden Test Set, details N=' + championDetails.length + ')');
@@ -396,6 +410,38 @@ while [ $# -gt 0 ]; do
       CLI_GOLDEN_TEST="${1#*=}"
       shift 1
       ;;
+    --target-per-class)
+      TARGET_PER_CLASS="${2:-}"
+      shift 2
+      ;;
+    --target-per-class=*)
+      TARGET_PER_CLASS="${1#*=}"
+      shift 1
+      ;;
+    --max-multiplier)
+      MAX_MULTIPLIER="${2:-}"
+      shift 2
+      ;;
+    --max-multiplier=*)
+      MAX_MULTIPLIER="${1#*=}"
+      shift 1
+      ;;
+    --epochs)
+      EPOCHS="${2:-}"
+      shift 2
+      ;;
+    --epochs=*)
+      EPOCHS="${1#*=}"
+      shift 1
+      ;;
+    --batch-size)
+      BATCH_SIZE="${2:-}"
+      shift 2
+      ;;
+    --batch-size=*)
+      BATCH_SIZE="${1#*=}"
+      shift 1
+      ;;
     *)
       if [ -z "$CLI_DATASET" ] && [ -d "$1" ]; then
         CLI_DATASET="$1"
@@ -414,11 +460,11 @@ echo "========================================================"
 echo "Source dataset:       $SOURCE_DATASET"
 echo "Golden Test Set:      $GOLDEN_TEST_DIR"
 echo "Augmented dataset:    $AUGMENTED_DATASET"
-echo "Target per class:     $TARGET_PER_CLASS"
+echo "Target per class:     $TARGET_PER_CLASS (max multiplier: $MAX_MULTIPLIER)"
 echo "Epochs:               $EPOCHS (batch size: $BATCH_SIZE)"
 echo "Promotion criteria:   Golden Test Samples == $REQUIRED_TEST_SET_SIZE"
 echo "                      Top-3 >= $GATE_MIN_TOP3_CORRECT/$REQUIRED_TEST_SET_SIZE (71.4%) AND Top-1 >= $GATE_MIN_TOP1_CORRECT/$REQUIRED_TEST_SET_SIZE (28.6%)"
-echo "                      + Minority class improvement (> Champion measured baseline)"
+echo "                      + Minority class improvement (> Champion measured baseline, or maintain perfect minority + Top-1 improvement)"
 echo "                      + Model size <= 15 MiB (15,728,640 bytes) AND Eval Latency <= 100ms"
 echo "                      (Latency gate evaluates CI/host execution; does not prove device latency)"
 echo "========================================================"
@@ -434,7 +480,8 @@ echo -e "\n📦 [Step 1/4] Augmenting training samples for minority classes..."
 uv run --python .venv_mediapipe python scripts/augment-mediapipe-dataset.py \
   --source-dataset-dir "$SOURCE_DATASET" \
   --output-dataset-dir "$AUGMENTED_DATASET" \
-  --target-per-class "$TARGET_PER_CLASS"
+  --target-per-class "$TARGET_PER_CLASS" \
+  --max-multiplier "$MAX_MULTIPLIER"
 
 # Post-augmentation check: Ensure Golden Test Set was not altered
 CURRENT_TEST_FILE_COUNT=$(find "$GOLDEN_TEST_DIR" -type f | wc -l | tr -d ' ')
