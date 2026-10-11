@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import re
+import struct
+import tempfile
 import unittest
 from pathlib import Path
 from typing import Any, Dict, List
@@ -57,7 +59,7 @@ def validate_audit_prediction_record(rec: Dict[str, Any]) -> None:
         raise ValueError(f"Record keys mismatch: expected {required_keys}, got {set(rec.keys())}")
 
     blind_id = rec["blind_id"]
-    if not isinstance(blind_id, str) or not re.match(r"^blind_\d{3}$", blind_id):
+    if not isinstance(blind_id, str) or not re.match(r"^(blind|blind_A|sampleA)_\d{3}$", blind_id):
         raise ValueError(f"Invalid blind_id format: {blind_id}")
 
     predicted_class = rec["predicted_class"]
@@ -218,10 +220,79 @@ def compute_audit_agreement_metrics(
     }
 
 
+def _create_synthetic_audit_fixtures(target_dir: Path) -> None:
+    """Create a minimal, valid synthetic 70-sample blind audit package for clean checkouts."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    blind_images_dir = target_dir / "blind_images"
+    blind_images_dir.mkdir(parents=True, exist_ok=True)
+
+    # Minimal valid JPEG without any APP or COM markers: SOI, SOF0, EOI
+    sof0 = (
+        b"\xff\xc0"
+        + struct.pack(">H", 17)
+        + bytes([8])
+        + struct.pack(">HH", 640, 480)
+        + bytes([3, 1, 0x11, 0, 2, 0x11, 1, 3, 0x11, 1])
+    )
+    dummy_jpeg = b"\xff\xd8" + sof0 + b"\xff\xd9"
+
+    classes = [
+        "curry_rice",
+        "drink",
+        "fish_dish",
+        "fried_dish",
+        "meat_dish",
+        "simmered_dish",
+        "stir_fry",
+    ]
+
+    blind_inputs_lines = []
+    mapping_records = []
+
+    for idx in range(1, 71):
+        b_id = f"blind_{idx:03d}"
+        img_name = f"{b_id}.jpg"
+        (blind_images_dir / img_name).write_bytes(dummy_jpeg)
+
+        blind_inputs_lines.append(json.dumps({"blind_id": b_id, "image_file": img_name}))
+
+        cls_name = classes[(idx - 1) % len(classes)]
+        mapping_records.append({
+            "blind_id": b_id,
+            "blind_image_file": img_name,
+            "mapped_class": cls_name,
+            "origin_image_id": f"img_{idx:03d}",
+            "origin_path": f"dummy/path/{idx:03d}.jpg",
+        })
+
+    blind_inputs_path = target_dir / "blind_request_inputs.jsonl"
+    blind_inputs_path.write_text("\n".join(blind_inputs_lines) + "\n", encoding="utf-8")
+
+    mapping_path = target_dir / "blind_id_mapping.private.json"
+    mapping_path.write_text(json.dumps({"records": mapping_records}, indent=2), encoding="utf-8")
+
+
 class TestGeminiAuditBlindContract(unittest.TestCase):
+    _temp_dir: tempfile.TemporaryDirectory | None = None
+    target_sample_dir: Path = SAMPLE_DIR
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not SAMPLE_DIR.exists() or not (SAMPLE_DIR / "blind_request_inputs.jsonl").exists():
+            cls._temp_dir = tempfile.TemporaryDirectory()
+            cls.target_sample_dir = Path(cls._temp_dir.name)
+            _create_synthetic_audit_fixtures(cls.target_sample_dir)
+        else:
+            cls.target_sample_dir = SAMPLE_DIR
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if cls._temp_dir is not None:
+            cls._temp_dir.cleanup()
+
     def test_real_blind_request_inputs_has_no_labels_or_mappings(self) -> None:
-        """Verify that real blind_request_inputs.jsonl contains ZERO label or origin information."""
-        blind_inputs_path = SAMPLE_DIR / "blind_request_inputs.jsonl"
+        """Verify that blind_request_inputs.jsonl contains ZERO label or origin information."""
+        blind_inputs_path = self.target_sample_dir / "blind_request_inputs.jsonl"
         self.assertTrue(blind_inputs_path.is_file(), f"Missing {blind_inputs_path}")
 
         raw_text = blind_inputs_path.read_text(encoding="utf-8")
@@ -253,8 +324,8 @@ class TestGeminiAuditBlindContract(unittest.TestCase):
             self.assertEqual(rec["image_file"], f"blind_{idx:03d}.jpg")
 
     def test_real_blind_images_metadata_free(self) -> None:
-        """Verify that all 70 real blind images exist and have zero EXIF DateTime metadata."""
-        blind_images_dir = SAMPLE_DIR / "blind_images"
+        """Verify that all 70 blind images exist and have zero EXIF DateTime metadata."""
+        blind_images_dir = self.target_sample_dir / "blind_images"
         self.assertTrue(blind_images_dir.is_dir(), f"Missing {blind_images_dir}")
 
         for idx in range(1, 71):
@@ -271,12 +342,14 @@ class TestGeminiAuditBlindContract(unittest.TestCase):
             "is_uncertain": False,
             "reason_code": "clear_single_dish",
         }
-        # Should not raise
-        validate_audit_prediction_record(valid_rec)
+        # Should not raise for valid ID formats (Pilot blind_XXX, Sample A blind_A_XXX or sampleA_XXX)
+        for valid_id in ["blind_001", "blind_A_001", "sampleA_001"]:
+            validate_audit_prediction_record({**valid_rec, "blind_id": valid_id})
 
         # Invalid blind_id
-        with self.assertRaises(ValueError):
-            validate_audit_prediction_record({**valid_rec, "blind_id": "image_123"})
+        for invalid_id in ["image_123", "blind_01", "blindA001", "sample_001", "other_001"]:
+            with self.assertRaises(ValueError):
+                validate_audit_prediction_record({**valid_rec, "blind_id": invalid_id})
 
         # Invalid predicted_class
         with self.assertRaises(ValueError):
@@ -374,8 +447,8 @@ class TestGeminiAuditBlindContract(unittest.TestCase):
                 validate_audit_prediction_record(rec)
 
     def test_real_blind_images_all_app_and_com_markers_removed(self) -> None:
-        """Verify binary scan of all 70 real blind images confirms zero APP1..APP15 or COM markers."""
-        blind_images_dir = SAMPLE_DIR / "blind_images"
+        """Verify binary scan of all 70 blind images confirms zero APP1..APP15 or COM markers."""
+        blind_images_dir = self.target_sample_dir / "blind_images"
         self.assertTrue(blind_images_dir.is_dir(), f"Missing {blind_images_dir}")
 
         for idx in range(1, 71):
@@ -390,7 +463,7 @@ class TestGeminiAuditBlindContract(unittest.TestCase):
 
     def test_local_reconciliation_logic(self) -> None:
         """Verify that local agreement, confusion matrix, and stratified weighted rate calculate accurately."""
-        mapping_path = SAMPLE_DIR / "blind_id_mapping.private.json"
+        mapping_path = self.target_sample_dir / "blind_id_mapping.private.json"
         self.assertTrue(mapping_path.is_file(), f"Missing {mapping_path}")
 
         mapping_data = json.loads(mapping_path.read_text(encoding="utf-8"))
@@ -411,7 +484,8 @@ class TestGeminiAuditBlindContract(unittest.TestCase):
                 r_code = "not_in_class_set"
                 is_unc = False
             else:
-                pred_cls = "fried_dish"
+                # Deliberately disagree: choose a different class from true_cls
+                pred_cls = "fried_dish" if true_cls != "fried_dish" else "meat_dish"
                 r_code = "ambiguous_cooking_method"
                 is_unc = True
 

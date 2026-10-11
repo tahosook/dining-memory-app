@@ -118,8 +118,8 @@ Geminiからのレスポンスは以下のJSONスキーマに厳格に準拠さ�
   "properties": {
     "blind_id": {
       "type": "string",
-      "pattern": "^blind_[0-9]{3}$",
-      "description": "The unique blind sample identifier (e.g. blind_001)."
+      "pattern": "^(blind|blind_A|sampleA)_[0-9]{3}$",
+      "description": "The unique blind sample identifier (e.g. blind_001 for Pilot 70, blind_A_001 / sampleA_001 for Sample A)."
     },
     "predicted_class": {
       "type": "string",
@@ -155,6 +155,12 @@ Geminiからのレスポンスは以下のJSONスキーマに厳格に準拠さ�
   }
 }
 ```
+
+#### 4.1.1 `blind_id` 命名規則とバッチ識別子
+
+複数バッチや段階的監査におけるID衝突（Collision）を物理的に防ぎ、データ追跡性を担保するため、以下のプレフィックス命名を正式にサポートする：
+- **パイロット70枚 (Pilot 70)**: `blind_001` 〜 `blind_070` (`^blind_[0-9]{3}$`)
+- **追加監査サンプルA (Sample A: 280枚)**: 配布パッケージおよび予測識別子 `blind_A_001` 〜 `blind_A_280` (`^blind_A_[0-9]{3}$`)、および抽出時中間ID `sampleA_001` 〜 `sampleA_280` (`^sampleA_[0-9]{3}$`)
 
 ### 4.2 各 `reason_code` の意味と `is_uncertain` の定義
 
