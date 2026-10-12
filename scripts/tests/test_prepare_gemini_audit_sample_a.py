@@ -127,6 +127,8 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
             manifest_csv=self.manifest_path,
             pilot_manifest_csv=self.pilot_manifest_path,
             image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
             expected_manifest_sha256=self.manifest_sha256,
             samples_per_class=40,
             seed=20261012,
@@ -140,6 +142,8 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
             manifest_csv=self.manifest_path,
             pilot_manifest_csv=self.pilot_manifest_path,
             image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
             expected_manifest_sha256=self.manifest_sha256,
             samples_per_class=40,
             seed=20261012,
@@ -158,6 +162,8 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
             manifest_csv=self.manifest_path,
             pilot_manifest_csv=self.pilot_manifest_path,
             image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
             expected_manifest_sha256=self.manifest_sha256,
             samples_per_class=40,
             seed=20261012,
@@ -199,6 +205,8 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
             manifest_csv=self.manifest_path,
             pilot_manifest_csv=self.pilot_manifest_path,
             image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
             expected_manifest_sha256=self.manifest_sha256,
             samples_per_class=40,
             seed=20261012,
@@ -233,6 +241,8 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
             manifest_csv=self.manifest_path,
             pilot_manifest_csv=self.pilot_manifest_path,
             image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
             expected_manifest_sha256=self.manifest_sha256,
             expected_remaining_population=bad_expected,
             samples_per_class=40,
@@ -255,6 +265,67 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             sampler.sample()
         self.assertIn("Manifest SHA-256 mismatch", str(ctx.exception))
+
+    def test_golden_eval_dir_missing_or_empty_fails_closed(self) -> None:
+        """Verify fail-closed error when golden_eval_dir is missing or contains zero images."""
+        empty_eval_dir = self.root / "empty_eval"
+        empty_eval_dir.mkdir()
+        sampler = GeminiAuditSampleASampler(
+            manifest_csv=self.manifest_path,
+            pilot_manifest_csv=self.pilot_manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=empty_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            sampler.sample(require_leak_check=True)
+        self.assertIn("Golden evaluation dataset missing or empty", str(ctx.exception))
+
+    def test_batch250_dir_missing_or_empty_fails_closed(self) -> None:
+        """Verify fail-closed error when batch250_dir is missing or contains zero images."""
+        empty_batch_dir = self.root / "empty_batch"
+        empty_batch_dir.mkdir()
+        sampler = GeminiAuditSampleASampler(
+            manifest_csv=self.manifest_path,
+            pilot_manifest_csv=self.pilot_manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=empty_batch_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            sampler.sample(require_leak_check=True)
+        self.assertIn("Baseline dataset missing or empty", str(ctx.exception))
+
+    def test_image_dir_missing_fails_closed(self) -> None:
+        """Verify fail-closed error when image_dir is missing."""
+        missing_image_dir = self.root / "nonexistent_images"
+        sampler = GeminiAuditSampleASampler(
+            manifest_csv=self.manifest_path,
+            pilot_manifest_csv=self.pilot_manifest_path,
+            image_dir=missing_image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+        )
+        with self.assertRaises(FileNotFoundError) as ctx:
+            sampler.sample(require_leak_check=True)
+        self.assertIn("Candidate image directory missing", str(ctx.exception))
+
+    def test_unverified_leak_check_reports_false_when_skipped(self) -> None:
+        """Verify that when leak check is skipped without images, metadata does NOT claim passed."""
+        out_dir = self.root / "unverified_out"
+        sampler = GeminiAuditSampleASampler(
+            manifest_csv=self.manifest_path,
+            pilot_manifest_csv=self.pilot_manifest_path,
+            image_dir=self.root / "nonexistent_images",
+            expected_manifest_sha256=self.manifest_sha256,
+        )
+        res = sampler.export(output_dir=out_dir, strip_images=False, require_leak_check=False)
+        meta = json.loads((out_dir / "provenance_metadata.json").read_text(encoding="utf-8"))
+        self.assertFalse(meta["safety_verification"]["eval_leak_check_passed"])
+        self.assertFalse(meta["safety_verification"]["baseline_leak_check_passed"])
 
 
 if __name__ == "__main__":

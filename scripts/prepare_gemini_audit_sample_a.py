@@ -166,7 +166,7 @@ class GeminiAuditSampleASampler:
         self.samples_per_class = samples_per_class
         self.seed = seed
 
-    def sample(self) -> dict[str, Any]:
+    def sample(self, require_leak_check: bool = True) -> dict[str, Any]:
         """Perform verified deterministic stratified sampling for Sample A."""
         # 1. Verify manifest existence and SHA-256
         if not self.manifest_csv.is_file():
@@ -207,6 +207,23 @@ class GeminiAuditSampleASampler:
                 eval_hashes.add(compute_sha256(p))
             for p in (self.batch250_dir / "train").glob("*/*.jpg"):
                 baseline_train_hashes.add(compute_sha256(p))
+
+        if require_leak_check:
+            if not self.golden_eval_dir or not self.golden_eval_dir.is_dir() or len(eval_hashes) == 0:
+                raise RuntimeError(
+                    f"Golden evaluation dataset missing or empty: {self.golden_eval_dir}. "
+                    "Fail-closed: cannot verify anti-leak protection without valid evaluation images."
+                )
+            if not self.batch250_dir or not self.batch250_dir.is_dir() or len(baseline_train_hashes) == 0:
+                raise RuntimeError(
+                    f"Baseline dataset missing or empty: {self.batch250_dir}. "
+                    "Fail-closed: cannot verify anti-leak protection without baseline images."
+                )
+            if not self.image_dir or not self.image_dir.is_dir():
+                raise FileNotFoundError(
+                    f"Candidate image directory missing or inaccessible: {self.image_dir}. "
+                    "Fail-closed: real image verification requires valid image directory."
+                )
 
         # 4. Read manifest and apply strict candidate filtering
         with open(self.manifest_csv, "r", encoding="utf-8") as f:
@@ -287,28 +304,29 @@ class GeminiAuditSampleASampler:
         if overlap_ids:
             raise AssertionError(f"Critical overlap: {len(overlap_ids)} samples were already in pilot 70!")
 
-        # Anti-leak verification against real image files if image_dir exists and is accessible
+        # Anti-leak verification against real image files
         sampled_hashes: dict[str, str] = {}
-        if self.image_dir:
-            try:
-                if self.image_dir.is_dir():
-                    for r in sampled_rows:
-                        sp = r["source_path"]
-                        img_path = self.image_dir / sp
-                        if img_path.is_file():
-                            h = compute_sha256(img_path)
-                            sampled_hashes[sp] = h
-                            if h in eval_hashes:
-                                raise RuntimeError(
-                                    f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches protected evaluation dataset!"
-                                )
-                            if h in baseline_train_hashes:
-                                raise RuntimeError(
-                                    f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches baseline train dataset!"
-                                )
-            except PermissionError:
-                # When running inside sandboxed environments without external filesystem access
-                pass
+        leak_check_performed = False
+
+        if self.image_dir and self.image_dir.is_dir():
+            for r in sampled_rows:
+                sp = r["source_path"]
+                img_path = self.image_dir / sp
+                if not img_path.is_file():
+                    if require_leak_check:
+                        raise FileNotFoundError(f"Required candidate image missing: {img_path}")
+                    continue
+                h = compute_sha256(img_path)
+                sampled_hashes[sp] = h
+                if len(eval_hashes) > 0 and h in eval_hashes:
+                    raise RuntimeError(
+                        f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches protected evaluation dataset!"
+                    )
+                if len(baseline_train_hashes) > 0 and h in baseline_train_hashes:
+                    raise RuntimeError(
+                        f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches baseline train dataset!"
+                    )
+            leak_check_performed = (len(sampled_hashes) == len(sampled_rows)) and (len(eval_hashes) > 0)
 
         # 8. Assign deterministic Sample A blind IDs: sampleA_001 .. sampleA_280
         for idx, r in enumerate(sampled_rows, 1):
@@ -326,6 +344,7 @@ class GeminiAuditSampleASampler:
             "pilot_excluded_count": len(pilot_image_ids),
             "git_commit": git_commit,
             "is_git_dirty": is_git_dirty,
+            "leak_check_performed": leak_check_performed,
         }
 
     def export(
@@ -334,6 +353,7 @@ class GeminiAuditSampleASampler:
         strip_images: bool = True,
         force: bool = False,
         generated_at: str | None = None,
+        require_leak_check: bool = True,
     ) -> dict[str, Any]:
         """Sample and export CSV, JSONL, metadata, blind inputs, and optional stripped images."""
         if output_dir.exists() and any(output_dir.iterdir()) and not force:
@@ -344,7 +364,7 @@ class GeminiAuditSampleASampler:
         output_dir.mkdir(parents=True, exist_ok=True)
         now_iso = generated_at or (datetime.utcnow().isoformat() + "Z")
 
-        sample_res = self.sample()
+        sample_res = self.sample(require_leak_check=require_leak_check)
         sampled_rows = sample_res["sampled_rows"]
         fieldnames = sample_res["fieldnames"]
 
@@ -418,39 +438,41 @@ class GeminiAuditSampleASampler:
         blind_images_count = 0
         blind_images_sha256_manifest: dict[str, str] = {}
 
-        if strip_images and self.image_dir:
-            try:
-                if self.image_dir.is_dir():
-                    stripped_dir = output_dir / "stripped_images"
-                    stripped_dir.mkdir(parents=True, exist_ok=True)
+        if strip_images:
+            if not self.image_dir or not self.image_dir.is_dir():
+                if require_leak_check:
+                    raise FileNotFoundError(f"Image directory missing for stripping: {self.image_dir}")
+            else:
+                stripped_dir = output_dir / "stripped_images"
+                stripped_dir.mkdir(parents=True, exist_ok=True)
 
-                    blind_dir = output_dir / "blind_images"
-                    blind_dir.mkdir(parents=True, exist_ok=True)
+                blind_dir = output_dir / "blind_images"
+                blind_dir.mkdir(parents=True, exist_ok=True)
 
-                    for r in sampled_rows:
-                        sp = r["source_path"]
-                        src_img = self.image_dir / sp
-                        if src_img.is_file():
-                            dst_img = stripped_dir / f"{r['image_id']}.jpg"
-                            strip_jpeg_metadata(src_img, dst_img)
+                for r in sampled_rows:
+                    sp = r["source_path"]
+                    src_img = self.image_dir / sp
+                    if not src_img.is_file():
+                        if require_leak_check:
+                            raise FileNotFoundError(f"Image file missing for stripping: {src_img}")
+                        continue
+                    dst_img = stripped_dir / f"{r['image_id']}.jpg"
+                    strip_jpeg_metadata(src_img, dst_img)
 
-                            # Verify EXIF date stripping
-                            exif_dates = extract_exif_dates(dst_img)
-                            if exif_dates:
-                                raise RuntimeError(
-                                    f"Failed to completely strip metadata from {dst_img}: remaining EXIF: {exif_dates}"
-                                )
-                            stripped_count += 1
+                    # Verify EXIF date stripping
+                    exif_dates = extract_exif_dates(dst_img)
+                    if exif_dates:
+                        raise RuntimeError(
+                            f"Failed to completely strip metadata from {dst_img}: remaining EXIF: {exif_dates}"
+                        )
+                    stripped_count += 1
 
-                            # Copy to blind image
-                            blind_dst_img = blind_dir / r["blind_image_file"]
-                            blind_dst_img.write_bytes(dst_img.read_bytes())
-                            blind_h = compute_sha256(blind_dst_img)
-                            blind_images_sha256_manifest[r["blind_id"]] = blind_h
-                            blind_images_count += 1
-            except PermissionError:
-                # Outside sandbox or unreadable external directory
-                pass
+                    # Copy to blind image
+                    blind_dst_img = blind_dir / r["blind_image_file"]
+                    blind_dst_img.write_bytes(dst_img.read_bytes())
+                    blind_h = compute_sha256(blind_dst_img)
+                    blind_images_sha256_manifest[r["blind_id"]] = blind_h
+                    blind_images_count += 1
 
         # 6. Output provenance_metadata.json
         meta = {
@@ -492,9 +514,9 @@ class GeminiAuditSampleASampler:
             },
             "safety_verification": {
                 "pilot_overlap_check_passed": True,
-                "eval_leak_check_passed": True,
-                "baseline_leak_check_passed": True,
-                "exif_stripping_verified": bool(strip_images and stripped_count > 0),
+                "eval_leak_check_passed": bool(sample_res.get("leak_check_performed", False)),
+                "baseline_leak_check_passed": bool(sample_res.get("leak_check_performed", False)),
+                "exif_stripping_verified": bool(strip_images and stripped_count == len(sampled_rows) and stripped_count > 0),
                 "blind_separation_verified": True,
             },
         }

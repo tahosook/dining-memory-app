@@ -28,6 +28,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.dataset_safety_guards import assert_no_path_collision
 from scripts.prepare_gemini_audit_sample_a import (
     get_git_info,
     strip_jpeg_metadata,
@@ -101,6 +102,8 @@ class SampleAAuditPackageBuilder:
 
         if not self.image_dir.is_dir():
             raise FileNotFoundError(f"Image directory not found or inaccessible: {self.image_dir}")
+
+        assert_no_path_collision([self.sample_manifest_csv, self.image_dir], self.output_dir)
 
         now_iso = generated_at or (datetime.utcnow().isoformat() + "Z")
 

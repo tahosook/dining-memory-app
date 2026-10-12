@@ -217,6 +217,81 @@ class TestIntegrateAgreedPendingSamples(unittest.TestCase):
         class_counts = {c["mapped_class"] for c in candidates}
         self.assertEqual(class_counts, {"fish_dish", "meat_dish", "stir_fry", "fried_dish", "simmered_dish"})
 
+    def test_path_collision_detection(self) -> None:
+        """Verify that output_dataset_dir colliding with input paths raises ValueError."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, _ = self._create_synthetic_environment(tmp_path)
+
+            with self.assertRaises(ValueError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=base_ds,  # Collision!
+                )
+            self.assertIn("Path collision detected", str(ctx.exception))
+
+    def test_raw_sha256_leakage_detection(self) -> None:
+        """Verify that leakage is caught via raw_image_sha256 even if stripped bytes differ."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            from scripts.validate_zip2_audit_manifest import compute_sha256
+            golden_img_0 = list(golden_dir.rglob("*.*"))[0]
+            golden_raw_hash = compute_sha256(golden_img_0)
+
+            mapping_file = pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["raw_image_sha256"] = golden_raw_hash
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(LeakageError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("CRITICAL LEAKAGE DETECTED", str(ctx.exception))
+
+    def test_failure_preserves_existing_dataset(self) -> None:
+        """Verify that failure during integration does not delete or corrupt existing output dataset."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            # 1st successful integration
+            integrate_agreed_samples(
+                base_dataset_dir=base_ds,
+                registry_path=reg_path,
+                sample_pkg_dir=pkg_dir,
+                golden_test_dir=golden_dir,
+                output_dataset_dir=out_ds,
+            )
+            summary_before = (out_ds / "integration_summary.json").read_text()
+
+            # Create a 2nd environment that simulates leakage
+            _, leak_reg, leak_pkg, _, _ = self._create_synthetic_environment(
+                tmp_path / "leak_env", simulate_leakage=True
+            )
+
+            with self.assertRaises(LeakageError):
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=leak_reg,
+                    sample_pkg_dir=leak_pkg,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+
+            # Prior output must remain intact!
+            self.assertTrue(out_ds.exists())
+            self.assertEqual((out_ds / "integration_summary.json").read_text(), summary_before)
+
 
 if __name__ == "__main__":
     unittest.main()

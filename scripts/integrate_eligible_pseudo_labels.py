@@ -21,6 +21,7 @@ import csv
 import json
 import shutil
 import sys
+import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,13 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.dataset_safety_guards import (
+    LeakageError,
+    assert_no_path_collision,
+    atomic_directory_swap,
+    check_dual_image_leakage,
+    collect_golden_hashes_dual,
+)
 from scripts.validate_zip2_audit_manifest import compute_sha256
 
 DEFAULT_BASE_DATASET = (
@@ -82,10 +90,6 @@ CANONICAL_CLASSES = [
 ]
 
 
-class LeakageError(RuntimeError):
-    """Raised when an integrated sample matches any image in the Golden Test Set."""
-
-
 class IntegrationError(RuntimeError):
     """Raised when integration fails invariant or structure checks."""
 
@@ -132,6 +136,9 @@ def integrate_pseudo_labels(
     if not golden_test_dir.is_dir():
         raise FileNotFoundError(f"Golden test dir not found: {golden_test_dir}")
 
+    input_paths = [base_dataset_dir, eligible_manifest_path, sample_pkg_dir, golden_test_dir]
+    assert_no_path_collision(input_paths, output_dataset_dir)
+
     # Load mapping from sample_pkg_dir
     mapping_path = sample_pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
     if not mapping_path.is_file():
@@ -150,145 +157,169 @@ def integrate_pseudo_labels(
     if enforce_real_counts and len(eligible_rows) != 74:
         raise IntegrationError(f"Expected 74 eligible records, found {len(eligible_rows)}")
 
-    # Load Golden Test Hashes for zero-leakage guarantee
-    golden_hashes = load_golden_hashes(golden_test_dir)
-    if len(golden_hashes) != 7:
-        raise IntegrationError(f"Expected exactly 7 Golden Test images, found {len(golden_hashes)}")
+    # Load Golden Test Hashes with dual check for zero-leakage guarantee
+    golden_files = get_image_files(golden_test_dir)
+    if len(golden_files) != 7:
+        raise IntegrationError(f"Expected exactly 7 Golden Test images, found {len(golden_files)}")
+    golden_hashes_dual = collect_golden_hashes_dual(golden_test_dir)
 
-    # Prepare output dataset directory
-    if output_dataset_dir.exists():
-        shutil.rmtree(output_dataset_dir)
-    output_dataset_dir.mkdir(parents=True, exist_ok=True)
+    output_dataset_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = output_dataset_dir.parent / f".tmp_{output_dataset_dir.name}_{uuid.uuid4().hex[:8]}"
+    staging_dir.mkdir(parents=True, exist_ok=False)
 
-    # Copy base dataset splits
-    for split in ["train", "val", "test"]:
-        src_split = base_dataset_dir / split
-        dst_split = output_dataset_dir / split
-        if src_split.is_dir():
-            shutil.copytree(src_split, dst_split)
-        else:
-            raise FileNotFoundError(f"Missing required split in base dataset: {src_split}")
+    try:
+        # Copy base dataset splits to staging
+        for split in ["train", "val", "test"]:
+            src_split = base_dataset_dir / split
+            dst_split = staging_dir / split
+            if src_split.is_dir():
+                shutil.copytree(src_split, dst_split)
+            else:
+                raise FileNotFoundError(f"Missing required split in base dataset: {src_split}")
 
-    # Copy labels.txt and other metadata files
-    for meta_file in ["labels.txt", "label_map.json"]:
-        src_meta = base_dataset_dir / meta_file
-        if src_meta.is_file():
-            shutil.copy2(src_meta, output_dataset_dir / meta_file)
+        # Copy labels.txt and other metadata files
+        for meta_file in ["labels.txt", "label_map.json"]:
+            src_meta = base_dataset_dir / meta_file
+            if src_meta.is_file():
+                shutil.copy2(src_meta, staging_dir / meta_file)
 
-    # Check baseline training files before integration
-    base_train_files = get_image_files(base_dataset_dir / "train")
-    base_val_files = get_image_files(base_dataset_dir / "val")
-    base_test_files = get_image_files(base_dataset_dir / "test")
-    base_total = len(base_train_files) + len(base_val_files) + len(base_test_files)
+        # Check baseline training files before integration
+        base_train_files = get_image_files(base_dataset_dir / "train")
+        base_val_files = get_image_files(base_dataset_dir / "val")
+        base_test_files = get_image_files(base_dataset_dir / "test")
+        base_total = len(base_train_files) + len(base_val_files) + len(base_test_files)
 
-    # Copy pseudo-labels into train/<mapped_class>/
-    integrated_records: List[Dict[str, str]] = []
-    blind_images_dir = sample_pkg_dir / "blind_images"
+        # Copy pseudo-labels into staging train/<mapped_class>/
+        integrated_records: List[Dict[str, str]] = []
+        blind_images_dir = sample_pkg_dir / "blind_images"
 
-    for r in eligible_rows:
-        img_id = r["image_id"]
-        mapped_class = r["mapped_class"]
+        for r in eligible_rows:
+            img_id = r["image_id"]
+            mapped_class = r["mapped_class"]
 
-        if mapped_class not in CANONICAL_CLASSES:
-            raise IntegrationError(f"Invalid class '{mapped_class}' for image '{img_id}'")
+            if mapped_class not in CANONICAL_CLASSES:
+                raise IntegrationError(f"Invalid class '{mapped_class}' for image '{img_id}'")
 
-        if img_id not in img_by_id:
-            raise FileNotFoundError(f"Image ID '{img_id}' not found in private mapping records.")
+            if img_id not in img_by_id:
+                raise FileNotFoundError(f"Image ID '{img_id}' not found in private mapping records.")
 
-        img_record = img_by_id[img_id]
-        src_image_file = blind_images_dir / img_record["image_file"]
-        if not src_image_file.is_file():
-            raise FileNotFoundError(f"Blind image file not found: {src_image_file}")
+            img_record = img_by_id[img_id]
+            if img_record.get("mapped_class") != mapped_class:
+                raise IntegrationError(
+                    f"Class mismatch between manifest ('{mapped_class}') and mapping ('{img_record.get('mapped_class')}') for {img_id}"
+                )
 
-        # Leakage check: check image hash against Golden Test Set
-        img_hash = compute_sha256(src_image_file)
-        if img_hash in golden_hashes:
-            raise LeakageError(
-                f"Data leakage detected! Eligible image {img_id} ({src_image_file}) matches Golden Test image {golden_hashes[img_hash]}"
+            src_image_file = blind_images_dir / img_record["image_file"]
+            if not src_image_file.is_file():
+                raise FileNotFoundError(f"Blind image file not found: {src_image_file}")
+
+            raw_sha = img_record.get("raw_image_sha256")
+            stripped_sha = img_record.get("stripped_image_sha256")
+            actual_stripped_sha = compute_sha256(src_image_file)
+
+            if stripped_sha and actual_stripped_sha != stripped_sha:
+                raise RuntimeError(
+                    f"Stripped image SHA-256 mismatch for {img_id}: expected {stripped_sha}, got {actual_stripped_sha}"
+                )
+
+            # Dual leakage check against Golden Test Set
+            check_dual_image_leakage(
+                golden_hashes=golden_hashes_dual,
+                image_id=img_id,
+                raw_sha256=raw_sha,
+                stripped_sha256=stripped_sha,
+                image_path=src_image_file,
             )
 
-        # Target file in train/<mapped_class>/
-        target_filename = f"pseudo_{img_id}.jpg"
-        target_path = output_dataset_dir / "train" / mapped_class / target_filename
+            # Target file in staging / train / <mapped_class> / <filename>
+            target_filename = f"pseudo_{img_id}.jpg"
+            target_path = staging_dir / "train" / mapped_class / target_filename
 
-        shutil.copy2(src_image_file, target_path)
+            shutil.copy2(src_image_file, target_path)
 
-        # Verify copy hash
-        copied_hash = compute_sha256(target_path)
-        if copied_hash != img_hash:
-            raise RuntimeError(f"Hash mismatch after copying {target_path}")
+            # Verify copy hash
+            copied_hash = compute_sha256(target_path)
+            if copied_hash != actual_stripped_sha:
+                raise RuntimeError(f"Hash mismatch after copying {target_path}")
 
-        integrated_records.append({
-            "image_id": img_id,
-            "mapped_class": mapped_class,
-            "target_path": str(target_path.relative_to(output_dataset_dir)),
-            "sha256": copied_hash,
-        })
+            integrated_records.append({
+                "image_id": img_id,
+                "mapped_class": mapped_class,
+                "target_path": str(target_path.relative_to(staging_dir)),
+                "sha256": copied_hash,
+            })
 
-    # Validate output dataset structure
-    out_train_files = get_image_files(output_dataset_dir / "train")
-    out_val_files = get_image_files(output_dataset_dir / "val")
-    out_test_files = get_image_files(output_dataset_dir / "test")
-    out_total = len(out_train_files) + len(out_val_files) + len(out_test_files)
+        # Validate output dataset structure in staging
+        out_train_files = get_image_files(staging_dir / "train")
+        out_val_files = get_image_files(staging_dir / "val")
+        out_test_files = get_image_files(staging_dir / "test")
+        out_total = len(out_train_files) + len(out_val_files) + len(out_test_files)
 
-    expected_integrated_count = len(eligible_rows)
-    if len(out_train_files) != len(base_train_files) + expected_integrated_count:
-        raise IntegrationError(
-            f"Train split count mismatch: base {len(base_train_files)} + added {expected_integrated_count} != actual {len(out_train_files)}"
-        )
-    if len(out_val_files) != len(base_val_files):
-        raise IntegrationError("Validation split count mutated during integration!")
-    if len(out_test_files) != len(base_test_files):
-        raise IntegrationError("Test split count mutated during integration!")
+        expected_integrated_count = len(eligible_rows)
+        if len(out_train_files) != len(base_train_files) + expected_integrated_count:
+            raise IntegrationError(
+                f"Train split count mismatch: base {len(base_train_files)} + added {expected_integrated_count} != actual {len(out_train_files)}"
+            )
+        if len(out_val_files) != len(base_val_files):
+            raise IntegrationError("Validation split count mutated during integration!")
+        if len(out_test_files) != len(base_test_files):
+            raise IntegrationError("Test split count mutated during integration!")
 
-    # Verify 9 classes present in train
-    train_class_dirs = [d.name for d in (output_dataset_dir / "train").iterdir() if d.is_dir()]
-    missing_classes = set(CANONICAL_CLASSES) - set(train_class_dirs)
-    if missing_classes:
-        raise IntegrationError(f"Missing classes in output train split: {missing_classes}")
+        # Verify 9 classes present in train
+        train_class_dirs = [d.name for d in (staging_dir / "train").iterdir() if d.is_dir()]
+        missing_classes = set(CANONICAL_CLASSES) - set(train_class_dirs)
+        if missing_classes:
+            raise IntegrationError(f"Missing classes in output train split: {missing_classes}")
 
-    # Compute updated class distribution
-    class_distribution = Counter()
-    for f in out_train_files + out_val_files + out_test_files:
-        class_distribution[f.parent.name] += 1
+        # Compute updated class distribution
+        class_distribution = Counter()
+        for f in out_train_files + out_val_files + out_test_files:
+            class_distribution[f.parent.name] += 1
 
-    added_by_class = Counter(r["mapped_class"] for r in integrated_records)
+        added_by_class = Counter(r["mapped_class"] for r in integrated_records)
 
-    summary_data = {
-        "status": "success",
-        "integrated_at": datetime.now(timezone.utc).isoformat(),
-        "base_dataset_dir": str(base_dataset_dir),
-        "output_dataset_dir": str(output_dataset_dir),
-        "golden_test_dir": str(golden_test_dir),
-        "counts": {
-            "base_total": base_total,
-            "base_train": len(base_train_files),
-            "base_val": len(base_val_files),
-            "base_test": len(base_test_files),
-            "pseudo_labels_added": len(integrated_records),
-            "output_total": out_total,
-            "output_train": len(out_train_files),
-            "output_val": len(out_val_files),
-            "output_test": len(out_test_files),
-        },
-        "added_by_class": dict(added_by_class),
-        "overall_class_distribution": dict(class_distribution),
-        "golden_test_leakage_count": 0,
-        "golden_test_samples_checked": len(golden_hashes),
-        "invariants_verified": [
-            "all_pseudo_labels_placed_in_train_split",
-            "val_and_test_splits_unaltered",
-            "canonical_9_classes_verified",
-            "zero_leakage_against_golden_test_set",
-            "sha256_copy_integrity_verified",
-        ],
-    }
+        summary_data = {
+            "status": "success",
+            "integrated_at": datetime.now(timezone.utc).isoformat(),
+            "base_dataset_dir": str(base_dataset_dir),
+            "output_dataset_dir": str(output_dataset_dir),
+            "golden_test_dir": str(golden_test_dir),
+            "counts": {
+                "base_total": base_total,
+                "base_train": len(base_train_files),
+                "base_val": len(base_val_files),
+                "base_test": len(base_test_files),
+                "pseudo_labels_added": len(integrated_records),
+                "output_total": out_total,
+                "output_train": len(out_train_files),
+                "output_val": len(out_val_files),
+                "output_test": len(out_test_files),
+            },
+            "added_by_class": dict(added_by_class),
+            "overall_class_distribution": dict(class_distribution),
+            "golden_test_leakage_count": 0,
+            "golden_test_samples_checked": len(golden_files),
+            "invariants_verified": [
+                "all_pseudo_labels_placed_in_train_split",
+                "val_and_test_splits_unaltered",
+                "canonical_9_classes_verified",
+                "zero_leakage_against_golden_test_set_dual_check",
+                "sha256_copy_integrity_verified",
+            ],
+        }
 
-    summary_json_path = output_dataset_dir / "dataset_summary.json"
-    with open(summary_json_path, "w", encoding="utf-8") as f:
-        json.dump(summary_data, f, indent=2, ensure_ascii=False)
+        summary_json_path = staging_dir / "dataset_summary.json"
+        with open(summary_json_path, "w", encoding="utf-8") as f:
+            json.dump(summary_data, f, indent=2, ensure_ascii=False)
 
-    return summary_json_path, summary_data
+        # Atomic swap to output directory
+        atomic_directory_swap(staging_dir, output_dataset_dir)
+    finally:
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+    final_summary_json = output_dataset_dir / "dataset_summary.json"
+    return final_summary_json, summary_data
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:

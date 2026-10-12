@@ -236,6 +236,84 @@ class TestIntegrateEligiblePseudoLabels(unittest.TestCase):
             self.assertEqual(summary["golden_test_leakage_count"], 0)
             self.assertEqual(summary["golden_test_samples_checked"], 7)
 
+    def test_path_collision_detection(self) -> None:
+        """Verify that output_dataset_dir colliding with input paths raises ValueError."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, _ = self._create_synthetic_environment(tmp)
+
+            with self.assertRaises(ValueError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=base_ds,  # Collision!
+                )
+            self.assertIn("Path collision detected", str(ctx.exception))
+
+    def test_raw_sha256_leakage_detection(self) -> None:
+        """Verify that leakage is caught via raw_image_sha256 even if stripped bytes differ."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Get hash of golden image 0
+            from scripts.validate_zip2_audit_manifest import compute_sha256
+            golden_img_0 = list(golden.rglob("*.jpg"))[0]
+            golden_raw_hash = compute_sha256(golden_img_0)
+
+            # Inject golden_raw_hash as raw_image_sha256 in private mapping
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["raw_image_sha256"] = golden_raw_hash
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(LeakageError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("CRITICAL LEAKAGE DETECTED", str(ctx.exception))
+
+    def test_failure_preserves_existing_dataset(self) -> None:
+        """Verify that failure during integration does not delete or corrupt existing output dataset."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # 1st successful integration
+            integrate_pseudo_labels(
+                base_dataset_dir=base_ds,
+                eligible_manifest_path=manifest,
+                sample_pkg_dir=pkg,
+                golden_test_dir=golden,
+                output_dataset_dir=out_ds,
+            )
+            summary_before = (out_ds / "dataset_summary.json").read_text()
+
+            # Create a 2nd environment that simulates leakage
+            _, leak_manifest, leak_pkg, _, _ = self._create_synthetic_environment(
+                tmp / "leak_env", simulate_leakage=True
+            )
+
+            # Run with leak -> must fail
+            with self.assertRaises(LeakageError):
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=leak_manifest,
+                    sample_pkg_dir=leak_pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+
+            # Prior output must remain intact!
+            self.assertTrue(out_ds.exists())
+            self.assertEqual((out_ds / "dataset_summary.json").read_text(), summary_before)
+
 
 if __name__ == "__main__":
     unittest.main()
