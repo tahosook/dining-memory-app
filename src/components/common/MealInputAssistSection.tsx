@@ -92,8 +92,7 @@ export const MealInputAssistSection: React.FC<MealInputAssistSectionProps> = ({
       : status === 'error'
         ? (errorMessage ?? '候補を取得できませんでした。もう一度お試しください。')
         : status === 'running'
-          ? (progress?.message ??
-            '写真をもとに候補を整理しています。保存はいつでも行えます。')
+          ? (progress?.message ?? '写真をもとに候補を整理しています。保存はいつでも行えます。')
           : status === 'success' && !hasAnySuggestions
             ? '候補が見つかりませんでした。手入力のまま保存できます。'
             : '作成した候補は、ボタンやチップを押したときだけ反映されます。';
