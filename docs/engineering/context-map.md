@@ -61,19 +61,26 @@
 - Preserve: AI is optional, user-triggered, local-first, and tap-to-apply only.
 
 ### Food Labeling / Classification / MediaPipe
-- Highest priority: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md)
-- Read also: [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md), [docs/notes/ai-input-assist-mediapipe-static-image-groundwork.md](../notes/ai-input-assist-mediapipe-static-image-groundwork.md)
-- Script source: `scripts/explore-food-labels.py`, `scripts/analyze-food-labels.py`, `scripts/build-review-gallery.py`, `scripts/compare_labeling_reports.py`, `scripts/mediapipe_labeling_loop.py`, `scripts/mediapipe_labeling_common.py`
-- App source: `src/ai/mealInputAssist/mediapipe*`, `android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssist*`, `android/app/src/main/assets/mediapipe/README.md`
-- Config / prompts: `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`
-- Common tests: `scripts/tests/test_*food_labels*.py`, `scripts/tests/test_*mediapipe*.py`, `tests/mealInputAssistRuntime.test.ts`, `tests/mealInputAssistNormalizer.test.ts`
+- Overview & Entry Point: [docs/engineering/mediapipe-overview.md](mediapipe-overview.md) (全体像・正本リンク・Runbook はまずここを参照)
+- Script Catalog: [scripts/README.md](../../scripts/README.md) (全22スクリプトの入出力・対応テスト一覧)
+- Task-specific entry points:
+  - **App Inference & UI**: `mediapipe-overview.md`, `src/ai/mealInputAssist/mediapipe*`, `android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssist*`
+  - **Model Training & Promotion Gate**: `mediapipe-overview.md`, `scripts/train-mediapipe-model.py`, `scripts/evaluate-mediapipe-model.py`, `scripts/run-autonomous-model-improvement.sh`
+  - **Dataset Audit & Adoption Registry**: `mediapipe-overview.md`, [docs/engineering/mediapipe-gemini-audit-spec.md](mediapipe-gemini-audit-spec.md), `scripts/*audit*.py`, `scripts/*eligible*.py`
+  - **Golden Test Benchmarking**: `mediapipe-overview.md`, [docs/engineering/golden-test-set-v2-specification.md](golden-test-set-v2-specification.md), `scripts/verify-golden-dataset-v2.py`
+  - **Exploration & Labeling Loop (Historical/Auxiliary)**: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md), `scripts/explore-food-labels.py`, `scripts/analyze-food-labels.py`
+- Reading boundaries:
+  - `state/` 配下の全件走査（`find state/` や `grep -r state/`）は禁止。必要な場合はマニフェストファイルや README から対象ファイルを特定してピンポイントで参照する。
+  - 完了済み Issue（`docs/issues/issue-17`〜`22` 等）は初期調査では一律に読まない。仕様決定の経緯や未解決事項を深掘りする場合に限定して該当 Issue を参照する。
+  - このファイル自体にはステータス数値を書かず、案内に徹する。
+- Common tests: `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`, `npm test -- --testPathPattern=mediapipe`
 - Preserve: MediaPipe path stays separate unless a task explicitly changes runtime selection.
 
 ### Local LLM / Ollama / Batch Labeling
 - Read first: [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md), [docs/notes/local-ai-provider-spike.md](../notes/local-ai-provider-spike.md)
 - Common source: `scripts/mediapipe_labeling_loop.py`, `scripts/mediapipe_labeling_common.py`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`
 - Generated / state files: `state/mediapipe_labeling_state.json`, `state/mediapipe_labeling_runs/`
-- Do not edit generated state unless the task explicitly asks for workflow state maintenance.
+- Reading boundaries: `state/` 配下の全件走査は行わず、対象の run や state ファイルのみを参照する。タスクで明示されない限り generated state は編集しない。
 
 ### Expo / Android / Build
 - Read first: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md)
@@ -100,7 +107,7 @@ When source changes, check the smallest matching canonical docs before finishing
 - `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/product/progress.md](../product/progress.md)
 - `src/screens/StatsScreen/`, stats aggregation in `src/database/services/MealService.ts`: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/domain/database-design.md](../domain/database-design.md)
 - `src/database/services/`, `src/domain/meals/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
-- `scripts/*food-labels.py`, `scripts/mediapipe_*`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md)
+- `scripts/*.py`, `scripts/*.sh`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/mediapipe-overview.md](mediapipe-overview.md), [scripts/README.md](../../scripts/README.md), [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/golden-test-set-v2-specification.md](golden-test-set-v2-specification.md)
 - `app.json`, `eas.json`, `.github/workflows/ci.yml`, `.github/workflows/sync-github-status.yml`, `.github/dependabot.yml`, `scripts/generate_github_status.py`, `android/app/build.gradle`, dependency or runtime files: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/development-workflow.md](development-workflow.md), [docs/engineering/dependency-policy.md](dependency-policy.md), [docs/engineering/github-security-settings.md](github-security-settings.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md)
 
 Run `npm run check:docs` when a change touches current behavior docs, AI input assist, MediaPipe, storage, runtime, or UX descriptions.
