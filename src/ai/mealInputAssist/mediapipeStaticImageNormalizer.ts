@@ -53,6 +53,34 @@ const LABEL_MAPPING: Record<string, LabelMapping> = {
     mealName: '弁当',
     cuisineType: '和食',
   },
+  fish_dish: {
+    mealName: '魚料理',
+    cuisineType: '和食',
+  },
+  fried_dish: {
+    mealName: '揚げ物',
+    cuisineType: 'その他',
+  },
+  meat_dish: {
+    mealName: '肉料理',
+    cuisineType: 'その他',
+  },
+  noodles: {
+    mealName: '麺類',
+    cuisineType: 'その他',
+  },
+  simmered_dish: {
+    mealName: '煮物',
+    cuisineType: '和食',
+  },
+  stir_fry: {
+    mealName: '炒め物',
+    cuisineType: '中華',
+  },
+  other_or_exclude: {
+    mealName: 'その他',
+    cuisineType: 'その他',
+  },
 };
 
 function normalizeScore(score: number | null | undefined) {

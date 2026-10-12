@@ -1,8 +1,11 @@
 package com.tahosook.diningmemory
 
+import java.io.ByteArrayInputStream
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MediaPipeMealInputAssistSupportTest {
@@ -126,5 +129,41 @@ class MediaPipeMealInputAssistSupportTest {
       ),
       sanitized,
     )
+  }
+
+  @Test
+  fun `copies asset stream to target file atomically and creates parent directories`() {
+    val tempDir = File.createTempFile("mp-test-dir", "")
+    tempDir.delete()
+    val targetFile = File(tempDir, "sub/dir/meal-input-assist.task")
+
+    try {
+      val content = "dummy-model-data".toByteArray(Charsets.UTF_8)
+      val stream = ByteArrayInputStream(content)
+      val success = MediaPipeMealInputAssistSupport.copyAssetStreamToTargetFile(stream, targetFile)
+
+      assertTrue(success)
+      assertTrue(targetFile.exists())
+      assertEquals("dummy-model-data", targetFile.readText(Charsets.UTF_8))
+    } finally {
+      tempDir.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `returns false and does not create corrupt file for empty stream`() {
+    val tempDir = File.createTempFile("mp-test-empty", "")
+    tempDir.delete()
+    val targetFile = File(tempDir, "sub/dir/empty-model.task")
+
+    try {
+      val emptyStream = ByteArrayInputStream(ByteArray(0))
+      val success = MediaPipeMealInputAssistSupport.copyAssetStreamToTargetFile(emptyStream, targetFile)
+
+      assertFalse(success)
+      assertFalse(targetFile.exists())
+    } finally {
+      tempDir.deleteRecursively()
+    }
   }
 }
