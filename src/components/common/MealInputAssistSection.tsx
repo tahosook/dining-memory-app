@@ -85,17 +85,16 @@ export const MealInputAssistSection: React.FC<MealInputAssistSectionProps> = ({
   const hasAnySuggestions = Boolean(noteDraft) || mealNames.length > 0 || cuisineTypes.length > 0;
   const actionDisabled = status === 'running' || status === 'disabled';
   const actionLabel =
-    status === 'running' ? '解析中...' : status === 'error' ? 'もう一度作成する' : 'AIでメモを作成';
+    status === 'running' ? '解析中...' : status === 'error' ? 'もう一度作成する' : 'AIで提案を作成';
   const helperMessage =
     status === 'disabled'
       ? (disabledReason ?? 'この端末では AI 入力補助を利用できません。')
       : status === 'error'
-        ? (errorMessage ?? 'メモ下書きを取得できませんでした。もう一度お試しください。')
+        ? (errorMessage ?? '候補を取得できませんでした。もう一度お試しください。')
         : status === 'running'
-          ? (progress?.message ??
-            '写真をもとにメモ下書きを整理しています。保存はいつでも行えます。')
+          ? (progress?.message ?? '写真をもとに候補を整理しています。保存はいつでも行えます。')
           : status === 'success' && !hasAnySuggestions
-            ? 'メモ下書きが見つかりませんでした。手入力のまま保存できます。'
+            ? '候補が見つかりませんでした。手入力のまま保存できます。'
             : '作成した候補は、ボタンやチップを押したときだけ反映されます。';
   const progressLabel =
     typeof progress?.progress === 'number' ? `${Math.round(progress.progress * 100)}%` : null;

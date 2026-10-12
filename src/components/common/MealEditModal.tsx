@@ -14,6 +14,7 @@ import { Colors } from '../../constants/Colors';
 import { CuisineTypeSelector } from './CuisineTypeSelector';
 import { MealInputAssistSection } from './MealInputAssistSection';
 import type {
+  MealInputAssistCuisineSuggestion,
   MealInputAssistProgress,
   MealInputAssistStatus,
   MealInputAssistSuggestions,
@@ -49,6 +50,8 @@ export type MealEditModalProps = {
   aiAssistDisabledReason?: string | null;
   onRequestAiSuggestions?: () => Promise<void>;
   onApplyNoteDraftSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
+  onApplyMealNameSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
+  onApplyCuisineSuggestion?: (suggestion: MealInputAssistCuisineSuggestion) => void;
 };
 
 export function MealEditModal({
@@ -69,6 +72,8 @@ export function MealEditModal({
   aiAssistDisabledReason = null,
   onRequestAiSuggestions,
   onApplyNoteDraftSuggestion,
+  onApplyMealNameSuggestion,
+  onApplyCuisineSuggestion,
 }: MealEditModalProps) {
   const updateDraft = <Key extends keyof MealEditDraft>(key: Key, value: MealEditDraft[Key]) => {
     onChange({ ...draft, [key]: value });
@@ -161,6 +166,8 @@ export function MealEditModal({
                 disabledReason={aiAssistDisabledReason}
                 onRequestSuggestions={onRequestAiSuggestions}
                 onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
+                onApplyMealNameSuggestion={onApplyMealNameSuggestion}
+                onApplyCuisineSuggestion={onApplyCuisineSuggestion}
                 variant="light"
                 testIDs={{
                   section: `${testIDPrefix}-ai-input-assist-section`,
