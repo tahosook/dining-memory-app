@@ -1,0 +1,30 @@
+# MediaPipe Image Classification & Pipeline Dependencies
+# Python requirement: 3.11.x (MediaPipe Model Maker requires Python <= 3.11)
+#
+# NOTE: Unit tests under scripts/tests/ (233 tests across 19 files) do NOT require
+# any external packages and run using Python's standard library alone.
+#
+# Environment Setup (recommended with uv):
+#   uv venv --python 3.11 .venv_mediapipe
+#   source .venv_mediapipe/bin/activate
+#   uv pip install -r requirements-mediapipe.txt
+#
+# Runtime Environment Variables (macOS Apple Silicon & Linux):
+#   export TF_USE_LEGACY_KERAS=1
+#   export MPLCONFIGDIR=/tmp
+
+# Core ML Training & Model Export
+mediapipe-model-maker==0.2.1.3
+mediapipe==0.10.20
+tensorflow==2.16.2
+tf-keras==2.16.0
+
+# Image Processing & Numerical Computations
+numpy==1.26.4
+pillow==12.3.0
+opencv-python==4.11.0.86
+
+# Evaluation, Data Exploration & CLI Tooling
+matplotlib==3.11.2
+tabulate==0.10.0
+tqdm==4.70.1

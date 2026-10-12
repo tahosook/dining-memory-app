@@ -12,8 +12,9 @@ const MAX_MEAL_NAME_SUGGESTIONS = 3;
 const MAX_CUISINE_SUGGESTIONS = 1;
 
 type LabelMapping = {
-  mealName: string;
-  cuisineType: CuisineTypeOption;
+  mealName?: string;
+  cuisineType?: CuisineTypeOption;
+  excludeFromSuggestions?: boolean;
 };
 
 const LABEL_MAPPING: Record<string, LabelMapping> = {
@@ -78,8 +79,7 @@ const LABEL_MAPPING: Record<string, LabelMapping> = {
     cuisineType: '中華',
   },
   other_or_exclude: {
-    mealName: 'その他',
-    cuisineType: 'その他',
+    excludeFromSuggestions: true,
   },
 };
 
@@ -153,7 +153,15 @@ export function normalizeMediaPipeStaticImageResult(
 
     matchedCategoryCount += 1;
 
-    if (mealNames.length < MAX_MEAL_NAME_SUGGESTIONS && !seenMealNames.has(mapping.mealName)) {
+    if (mapping.excludeFromSuggestions) {
+      return;
+    }
+
+    if (
+      mapping.mealName &&
+      mealNames.length < MAX_MEAL_NAME_SUGGESTIONS &&
+      !seenMealNames.has(mapping.mealName)
+    ) {
       seenMealNames.add(mapping.mealName);
       mealNames.push({
         value: mapping.mealName,
@@ -162,6 +170,7 @@ export function normalizeMediaPipeStaticImageResult(
     }
 
     if (
+      mapping.cuisineType &&
       cuisineTypes.length < MAX_CUISINE_SUGGESTIONS &&
       !seenCuisineTypes.has(mapping.cuisineType)
     ) {
