@@ -82,30 +82,48 @@ internal object MediaPipeMealInputAssistSupport {
 
   fun copyAssetStreamToTargetFile(input: InputStream, targetFile: File): Boolean {
     val parent = targetFile.parentFile ?: return false
-    parent.mkdirs()
-    val tempFile = File(parent, "${targetFile.name}.asset-copy-${System.currentTimeMillis()}")
+    if (!parent.exists() && !parent.mkdirs()) {
+      return false
+    }
+    val tempFile = File(parent, "${targetFile.name}.asset-copy-${System.nanoTime()}")
+    var success = false
     return try {
       tempFile.outputStream().use { output ->
         input.copyTo(output)
       }
       if (tempFile.exists() && tempFile.length() > 0L) {
-        if (targetFile.exists()) {
-          targetFile.delete()
-        }
-        if (tempFile.renameTo(targetFile)) {
+        success = try {
+          java.nio.file.Files.move(
+            tempFile.toPath(),
+            targetFile.toPath(),
+            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+          )
           true
-        } else {
-          tempFile.copyTo(targetFile, overwrite = true)
-          tempFile.delete()
-          true
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+          try {
+            java.nio.file.Files.move(
+              tempFile.toPath(),
+              targetFile.toPath(),
+              java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+            )
+            true
+          } catch (_: Exception) {
+            false
+          }
+        } catch (_: Exception) {
+          false
         }
+        success
       } else {
-        tempFile.delete()
         false
       }
     } catch (_: Exception) {
-      tempFile.delete()
       false
+    } finally {
+      if (!success && tempFile.exists()) {
+        tempFile.delete()
+      }
     }
   }
 
