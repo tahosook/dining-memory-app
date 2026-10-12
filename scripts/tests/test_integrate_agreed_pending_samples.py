@@ -9,6 +9,7 @@ prevents data leakage into the Golden Test Set, and ensures clean checkout test 
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -84,14 +85,22 @@ class TestIntegrateAgreedPendingSamples(unittest.TestCase):
 
         for img_id, mapped_cls, filename, content in synthetic_samples:
             img_file = blind_images_dir / filename
-            img_file.write_bytes(content.encode("utf-8"))
+            img_bytes = content.encode("utf-8")
+            img_file.write_bytes(img_bytes)
+            sha = hashlib.sha256(img_bytes).hexdigest()
+
             mapping_records.append({
                 "image_id": img_id,
                 "image_file": filename,
+                "mapped_class": mapped_cls,
+                "source_path": f"{img_id}.jpg",
+                "raw_image_sha256": sha,
+                "stripped_image_sha256": sha,
             })
             registry_rows.append({
                 "image_id": img_id,
                 "mapped_class": mapped_cls,
+                "source_path": f"{img_id}.jpg",
                 "adoption_status": "pending_human_review",
                 "audit_subset": "sample_A",
                 "audit_predicted_class": mapped_cls,
@@ -120,7 +129,7 @@ class TestIntegrateAgreedPendingSamples(unittest.TestCase):
             json.dump({"records": mapping_records}, f)
 
         fieldnames = [
-            "image_id", "mapped_class", "adoption_status",
+            "image_id", "mapped_class", "source_path", "adoption_status",
             "audit_subset", "audit_predicted_class", "audit_is_uncertain",
         ]
         with open(registry_path, "w", encoding="utf-8", newline="") as f:
@@ -143,6 +152,84 @@ class TestIntegrateAgreedPendingSamples(unittest.TestCase):
             self.assertIn("meshi_synth_03", extracted_ids)
             self.assertNotIn("meshi_unaudited", extracted_ids)
             self.assertNotIn("meshi_disagree", extracted_ids)
+
+    def test_extract_agreed_candidates_audit_is_uncertain_validation(self) -> None:
+        """Verify fail-closed validation of audit_is_uncertain flag in extract_agreed_candidates."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            reg_path = tmp / "test_registry.csv"
+
+            fieldnames = [
+                "image_id", "mapped_class", "source_path", "adoption_status",
+                "audit_subset", "audit_predicted_class", "audit_is_uncertain",
+            ]
+
+            def write_registry(rows: list[dict[str, Any]], custom_fieldnames=None) -> None:
+                with open(reg_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=custom_fieldnames or fieldnames)
+                    writer.writeheader()
+                    writer.writerows(rows)
+
+            base_row = {
+                "image_id": "test_img_001",
+                "mapped_class": "fish_dish",
+                "source_path": "fish_001.jpg",
+                "adoption_status": "pending_human_review",
+                "audit_subset": "sample_A",
+                "audit_predicted_class": "fish_dish",
+            }
+
+            # 1. 'false' (including 'False', 'FALSE', and with whitespace) is accepted
+            for f_val in ["false", "False", "FALSE", " false "]:
+                row = dict(base_row, audit_is_uncertain=f_val)
+                write_registry([row])
+                candidates = extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertEqual(len(candidates), 1)
+                self.assertEqual(candidates[0]["image_id"], "test_img_001")
+
+            # 2. 'true' (including 'True', 'TRUE') is NOT extracted (excluded as uncertain)
+            for t_val in ["true", "True", "TRUE", " true "]:
+                row = dict(base_row, audit_is_uncertain=t_val)
+                write_registry([row])
+                candidates = extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertEqual(len(candidates), 0)
+
+            # 3. Missing column in CSV causes IntegrationError with line number and image_id
+            row_no_col = dict(base_row)
+            fn_no_col = [f for f in fieldnames if f != "audit_is_uncertain"]
+            write_registry([row_no_col], custom_fieldnames=fn_no_col)
+            content_before = reg_path.read_text(encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                extract_agreed_candidates(reg_path, enforce_real_counts=False)
+            self.assertIn("missing required 'audit_is_uncertain' field", str(ctx.exception))
+            self.assertIn("Line 2", str(ctx.exception))
+            self.assertIn("test_img_001", str(ctx.exception))
+            # 6. Verify input file not altered
+            self.assertEqual(reg_path.read_text(encoding="utf-8"), content_before)
+
+            # 4. Empty string or whitespace-only is rejected
+            for empty_val in ["", "   ", "\t"]:
+                row_empty = dict(base_row, audit_is_uncertain=empty_val)
+                write_registry([row_empty])
+                content_before = reg_path.read_text(encoding="utf-8")
+                with self.assertRaises(IntegrationError) as ctx:
+                    extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertIn("invalid 'audit_is_uncertain' value", str(ctx.exception))
+                self.assertIn("Line 2", str(ctx.exception))
+                self.assertIn("test_img_001", str(ctx.exception))
+                self.assertEqual(reg_path.read_text(encoding="utf-8"), content_before)
+
+            # 5. Invalid values ('unknown', '1', 'null', 'yes') are rejected
+            for bad_val in ["unknown", "1", "null", "yes", "no", "maybe"]:
+                row_bad = dict(base_row, audit_is_uncertain=bad_val)
+                write_registry([row_bad])
+                content_before = reg_path.read_text(encoding="utf-8")
+                with self.assertRaises(IntegrationError) as ctx:
+                    extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertIn("invalid 'audit_is_uncertain' value", str(ctx.exception))
+                self.assertIn("Line 2", str(ctx.exception))
+                self.assertIn("test_img_001", str(ctx.exception))
+                self.assertEqual(reg_path.read_text(encoding="utf-8"), content_before)
 
     def test_integration_synthetic_success(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -216,6 +303,216 @@ class TestIntegrateAgreedPendingSamples(unittest.TestCase):
         self.assertEqual(len(candidates), 54)
         class_counts = {c["mapped_class"] for c in candidates}
         self.assertEqual(class_counts, {"fish_dish", "meat_dish", "stir_fry", "fried_dish", "simmered_dish"})
+
+    def test_path_collision_detection(self) -> None:
+        """Verify that output_dataset_dir colliding with input paths raises ValueError."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, _ = self._create_synthetic_environment(tmp_path)
+
+            with self.assertRaises(ValueError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=base_ds,  # Collision!
+                )
+            self.assertIn("Path collision detected", str(ctx.exception))
+
+    def test_raw_sha256_leakage_detection(self) -> None:
+        """Verify that leakage is caught via raw_image_sha256 even if stripped bytes differ."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            from scripts.validate_zip2_audit_manifest import compute_sha256
+            golden_img_0 = list(golden_dir.rglob("*.*"))[0]
+            golden_raw_hash = compute_sha256(golden_img_0)
+
+            mapping_file = pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["raw_image_sha256"] = golden_raw_hash
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(LeakageError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("CRITICAL LEAKAGE DETECTED", str(ctx.exception))
+
+    def test_failure_preserves_existing_dataset(self) -> None:
+        """Verify that failure during integration does not delete or corrupt existing output dataset."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            # 1st successful integration
+            integrate_agreed_samples(
+                base_dataset_dir=base_ds,
+                registry_path=reg_path,
+                sample_pkg_dir=pkg_dir,
+                golden_test_dir=golden_dir,
+                output_dataset_dir=out_ds,
+            )
+            summary_before = (out_ds / "integration_summary.json").read_text()
+
+            # Create a 2nd environment that simulates leakage
+            _, leak_reg, leak_pkg, _, _ = self._create_synthetic_environment(
+                tmp_path / "leak_env", simulate_leakage=True
+            )
+
+            with self.assertRaises(LeakageError):
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=leak_reg,
+                    sample_pkg_dir=leak_pkg,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+
+            # Prior output must remain intact!
+            self.assertTrue(out_ds.exists())
+            self.assertEqual((out_ds / "integration_summary.json").read_text(), summary_before)
+
+    def test_duplicate_image_id_rejected(self) -> None:
+        """Verify duplicate image_id in agreed records is rejected."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            # Append a duplicate agreed record to registry
+            with open(reg_path, "a", encoding="utf-8") as f:
+                f.write("meshi_synth_01,fish_dish,meshi_synth_01.jpg,pending_human_review,sample_A,fish_dish,false\n")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Duplicate image_id 'meshi_synth_01'", str(ctx.exception))
+
+    def test_source_path_mismatch_rejected(self) -> None:
+        """Verify source_path mismatch between registry and mapping is rejected."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            mapping_file = pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["source_path"] = "different_source_path.jpg"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("source_path mismatch", str(ctx.exception))
+
+    def test_path_traversal_rejected(self) -> None:
+        """Verify path traversal in agreed mapping is rejected."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            mapping_file = pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["image_file"] = "../outside.jpg"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+    def test_missing_or_invalid_hash_rejected(self) -> None:
+        """Verify missing or invalid hash format is rejected."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            mapping_file = pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+
+            # Missing raw hash
+            mapping_data["records"][0]["raw_image_sha256"] = ""
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Missing required 'raw_image_sha256'", str(ctx.exception))
+
+            # Invalid hash format
+            mapping_data["records"][0]["raw_image_sha256"] = "UPPERCASE_HASH"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Invalid SHA-256 format", str(ctx.exception))
+
+    def test_mapping_missing_or_duplicate_id_rejected(self) -> None:
+        """Issue 2: Verify mapping with missing or duplicate ID is rejected before dictionary creation in agreed samples integration."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            mapping_file = pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+
+            # 1. Duplicate ID in mapping
+            dup_record = dict(mapping_data["records"][0])
+            mapping_data["records"].append(dup_record)
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            from scripts.dataset_safety_guards import SafetyError
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Duplicate image_id", str(ctx.exception))
+
+            # 2. Missing ID in mapping
+            mapping_data["records"][0]["image_id"] = ""
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("missing 'image_id'", str(ctx.exception))
 
 
 if __name__ == "__main__":

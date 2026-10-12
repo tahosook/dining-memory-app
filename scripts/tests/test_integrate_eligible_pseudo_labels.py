@@ -9,6 +9,7 @@ into the Golden Test Set, and ensures clean checkout test compatibility.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -90,11 +91,15 @@ class TestIntegrateEligiblePseudoLabels(unittest.TestCase):
         for img_id, mapped_cls, fname, content in test_samples:
             img_file = blind_images_dir / fname
             img_file.write_bytes(content)
+            sha = hashlib.sha256(content).hexdigest()
 
             mapping_records.append({
                 "image_id": img_id,
                 "image_file": fname,
                 "mapped_class": mapped_cls,
+                "source_path": f"{img_id}.jpg",
+                "raw_image_sha256": sha,
+                "stripped_image_sha256": sha,
             })
             manifest_rows.append({
                 "image_id": img_id,
@@ -235,6 +240,221 @@ class TestIntegrateEligiblePseudoLabels(unittest.TestCase):
             self.assertEqual(summary["added_by_class"], {"curry_rice": 34, "drink": 40})
             self.assertEqual(summary["golden_test_leakage_count"], 0)
             self.assertEqual(summary["golden_test_samples_checked"], 7)
+
+    def test_path_collision_detection(self) -> None:
+        """Verify that output_dataset_dir colliding with input paths raises ValueError."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, _ = self._create_synthetic_environment(tmp)
+
+            with self.assertRaises(ValueError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=base_ds,  # Collision!
+                )
+            self.assertIn("Path collision detected", str(ctx.exception))
+
+    def test_raw_sha256_leakage_detection(self) -> None:
+        """Verify that leakage is caught via raw_image_sha256 even if stripped bytes differ."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Get hash of golden image 0
+            from scripts.validate_zip2_audit_manifest import compute_sha256
+            golden_img_0 = list(golden.rglob("*.jpg"))[0]
+            golden_raw_hash = compute_sha256(golden_img_0)
+
+            # Inject golden_raw_hash as raw_image_sha256 in private mapping
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["raw_image_sha256"] = golden_raw_hash
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(LeakageError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("CRITICAL LEAKAGE DETECTED", str(ctx.exception))
+
+    def test_failure_preserves_existing_dataset(self) -> None:
+        """Verify that failure during integration does not delete or corrupt existing output dataset."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # 1st successful integration
+            integrate_pseudo_labels(
+                base_dataset_dir=base_ds,
+                eligible_manifest_path=manifest,
+                sample_pkg_dir=pkg,
+                golden_test_dir=golden,
+                output_dataset_dir=out_ds,
+            )
+            summary_before = (out_ds / "dataset_summary.json").read_text()
+
+            # Create a 2nd environment that simulates leakage
+            _, leak_manifest, leak_pkg, _, _ = self._create_synthetic_environment(
+                tmp / "leak_env", simulate_leakage=True
+            )
+
+            # Run with leak -> must fail
+            with self.assertRaises(LeakageError):
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=leak_manifest,
+                    sample_pkg_dir=leak_pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+
+            # Prior output must remain intact!
+            self.assertTrue(out_ds.exists())
+            self.assertEqual((out_ds / "dataset_summary.json").read_text(), summary_before)
+
+    def test_duplicate_image_id_rejected(self) -> None:
+        """Regression test 9: Verify duplicate image_id in manifest is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Append a duplicate row to manifest
+            with open(manifest, "a", encoding="utf-8") as f:
+                f.write("meshi_curry_01,curry_rice,meshi_curry_01.jpg\n")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Duplicate image_id 'meshi_curry_01'", str(ctx.exception))
+
+    def test_source_path_mismatch_rejected(self) -> None:
+        """Regression test 10: Verify source_path mismatch between manifest and mapping is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Mutate mapping source_path for meshi_curry_01
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["source_path"] = "different_source_path.jpg"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("source_path mismatch", str(ctx.exception))
+
+    def test_path_traversal_rejected(self) -> None:
+        """Regression test 11: Verify path traversal in image_file is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Mutate mapping image_file to include traversal ../
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["image_file"] = "../outside.jpg"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+    def test_missing_or_invalid_hash_rejected(self) -> None:
+        """Regression test 12: Verify missing or invalid hash format is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+
+            # 1. Missing raw_image_sha256
+            mapping_data["records"][0]["raw_image_sha256"] = ""
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Missing required 'raw_image_sha256'", str(ctx.exception))
+
+            # 2. Invalid hash format (uppercase or bad length)
+            mapping_data["records"][0]["raw_image_sha256"] = "INVALID_HASH_UPPERCASE"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Invalid SHA-256 format", str(ctx.exception))
+
+    def test_mapping_missing_or_duplicate_id_rejected(self) -> None:
+        """Issue 2: Verify mapping with missing or duplicate ID is rejected before dictionary creation."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+
+            # 1. Duplicate ID in mapping
+            dup_record = dict(mapping_data["records"][0])
+            mapping_data["records"].append(dup_record)
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            from scripts.dataset_safety_guards import SafetyError
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Duplicate image_id", str(ctx.exception))
+
+            # 2. Missing ID in mapping
+            mapping_data["records"][0]["image_id"] = ""
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("missing 'image_id'", str(ctx.exception))
 
 
 if __name__ == "__main__":

@@ -13,7 +13,10 @@ import csv
 import json
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
+
+from scripts.dataset_safety_guards import SafetyError
 
 from scripts.export_eligible_pseudo_labels import (
     ALLOWED_PASSED_CLASSES,
@@ -458,6 +461,218 @@ class TestExportEligiblePseudoLabels(unittest.TestCase):
                     copy_images=True,
                 )
             self.assertIn("Image file not found", str(ctx.exception))
+
+    def test_rerun_eliminates_orphan_images(self) -> None:
+        """Verify rerun completely replaces directory, ensuring orphan images from prior runs are eliminated."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            registry_path, manifest_path = self._create_synthetic_registry_and_manifest(tmp)
+            images_dir = tmp / "raw_images"
+            images_dir.mkdir()
+            (images_dir / "curry_001.jpg").write_bytes(b"dummy curry bytes")
+            (images_dir / "drink_001.jpg").write_bytes(b"dummy drink bytes")
+            output_dir = tmp / "export_output"
+
+            # 1st run
+            export_eligible_pseudo_labels(
+                registry_path=registry_path,
+                manifest_path=manifest_path,
+                output_dir=output_dir,
+                images_dir=images_dir,
+                copy_images=True,
+            )
+            # Inject orphan image into existing output
+            orphan_img = output_dir / "images" / "orphan_ghost_sample.jpg"
+            orphan_img.write_bytes(b"ghost data")
+            self.assertTrue(orphan_img.exists())
+
+            # 2nd run
+            export_eligible_pseudo_labels(
+                registry_path=registry_path,
+                manifest_path=manifest_path,
+                output_dir=output_dir,
+                images_dir=images_dir,
+                copy_images=True,
+            )
+            # Verify orphan image is cleanly eliminated
+            self.assertFalse(orphan_img.exists())
+            images_in_output = sorted(p.name for p in (output_dir / "images").glob("*.jpg"))
+            self.assertEqual(images_in_output, ["img_curry_001.jpg", "img_drink_001.jpg"])
+
+    def test_failure_preserves_existing_output(self) -> None:
+        """Verify that mid-run failures do not destroy or corrupt existing output directory."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            registry_path, manifest_path = self._create_synthetic_registry_and_manifest(tmp)
+            images_dir = tmp / "raw_images"
+            images_dir.mkdir()
+            curry_file = images_dir / "curry_001.jpg"
+            drink_file = images_dir / "drink_001.jpg"
+            curry_file.write_bytes(b"curry bytes")
+            drink_file.write_bytes(b"drink bytes")
+            output_dir = tmp / "export_output"
+
+            # 1st run successfully creates output
+            export_eligible_pseudo_labels(
+                registry_path=registry_path,
+                manifest_path=manifest_path,
+                output_dir=output_dir,
+                images_dir=images_dir,
+                copy_images=True,
+            )
+            manifest_before = (output_dir / "eligible_pseudo_labels_manifest.csv").read_text()
+
+            # Now delete drink_file to induce mid-run FileNotFoundError on 2nd run
+            drink_file.unlink()
+
+            with self.assertRaises(FileNotFoundError):
+                export_eligible_pseudo_labels(
+                    registry_path=registry_path,
+                    manifest_path=manifest_path,
+                    output_dir=output_dir,
+                    images_dir=images_dir,
+                    copy_images=True,
+                )
+
+            # Prior output must remain intact!
+            self.assertTrue(output_dir.exists())
+            self.assertEqual(
+                (output_dir / "eligible_pseudo_labels_manifest.csv").read_text(),
+                manifest_before,
+            )
+            self.assertTrue((output_dir / "images" / "img_curry_001.jpg").exists())
+            self.assertTrue((output_dir / "images" / "img_drink_001.jpg").exists())
+
+    def test_path_collision_detection(self) -> None:
+        """Verify that output_dir colliding with input paths raises ValueError."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            registry_path, manifest_path = self._create_synthetic_registry_and_manifest(tmp)
+            images_dir = tmp / "raw_images"
+            images_dir.mkdir()
+
+            # output_dir identical to images_dir
+            with self.assertRaises(ValueError) as ctx:
+                export_eligible_pseudo_labels(
+                    registry_path=registry_path,
+                    manifest_path=manifest_path,
+                    output_dir=images_dir,
+                    images_dir=images_dir,
+                    copy_images=True,
+                )
+            self.assertIn("Path collision detected", str(ctx.exception))
+
+    def test_export_images_path_traversal_prevention(self) -> None:
+        """Verify ../ traversal, absolute paths outside images_dir, and escaping symlinks are rejected during export."""
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            images_dir = tmp / "src_images"
+            images_dir.mkdir()
+            outside_dir = tmp / "outside_dir"
+            outside_dir.mkdir()
+            outside_file = outside_dir / "secret.jpg"
+            outside_file.write_bytes(b"outside sensitive image bytes")
+
+            # Normal image for drink
+            (images_dir / "drink_001.jpg").write_bytes(b"\xff\xd8\xff\xe0drink\xff\xd9")
+
+            def run_export_with_curry_source(source_path_val: str, curry_id: str = "img_curry_001"):
+                out_dir = tmp / f"out_{uuid.uuid4().hex[:6]}"
+                reg_path = tmp / f"reg_{uuid.uuid4().hex[:6]}.csv"
+                man_path = tmp / f"man_{uuid.uuid4().hex[:6]}.csv"
+
+                rows = [
+                    {
+                        "image_id": curry_id,
+                        "source_path": source_path_val,
+                        "mapped_class": "curry_rice",
+                        "audit_subset": "sample_A",
+                        "audit_predicted_class": "curry_rice",
+                        "audit_is_uncertain": "false",
+                        "audit_reason_code": "dominant_main_dish_clear",
+                        "class_gate_status": "passed",
+                        "adoption_status": "candidate_eligible",
+                        "rejection_reason": "class_gate_passed_inter_model_agreed_confident",
+                        "evaluated_at": "2026-10-11T00:00:00Z",
+                        "spec_version": "v2",
+                    },
+                    {
+                        "image_id": "img_drink_001",
+                        "source_path": "drink_001.jpg",
+                        "mapped_class": "drink",
+                        "audit_subset": "sample_A",
+                        "audit_predicted_class": "drink",
+                        "audit_is_uncertain": "false",
+                        "audit_reason_code": "dominant_main_dish_clear",
+                        "class_gate_status": "passed",
+                        "adoption_status": "candidate_eligible",
+                        "rejection_reason": "class_gate_passed_inter_model_agreed_confident",
+                        "evaluated_at": "2026-10-11T00:00:00Z",
+                        "spec_version": "v2",
+                    },
+                ]
+                with open(reg_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                    writer.writeheader()
+                    writer.writerows(rows)
+                with open(man_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=["image_id", "source_path", "mapped_class", "assigned_role"])
+                    writer.writeheader()
+                    writer.writerow({"image_id": curry_id, "source_path": source_path_val, "mapped_class": "curry_rice", "assigned_role": "pseudo_label_candidate"})
+                    writer.writerow({"image_id": "img_drink_001", "source_path": "drink_001.jpg", "mapped_class": "drink", "assigned_role": "pseudo_label_candidate"})
+
+                return export_eligible_pseudo_labels(
+                    registry_path=reg_path,
+                    manifest_path=man_path,
+                    output_dir=out_dir,
+                    images_dir=images_dir,
+                    copy_images=True,
+                ), out_dir
+
+            # 1. Normal relative path succeeds
+            (images_dir / "curry_normal.jpg").write_bytes(b"\xff\xd8\xff\xe0curry\xff\xd9")
+            (_, _, exp_img_dir), out_1 = run_export_with_curry_source("curry_normal.jpg")
+            self.assertTrue((out_1 / "images" / "img_curry_001.jpg").is_file())
+            self.assertEqual((out_1 / "images" / "img_curry_001.jpg").read_bytes(), b"\xff\xd8\xff\xe0curry\xff\xd9")
+
+            # 2. Relative traversal ../ is rejected and outside file is not copied
+            with self.assertRaises(SafetyError) as ctx:
+                run_export_with_curry_source("../outside_dir/secret.jpg")
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 3. Absolute path outside images_dir is rejected and outside file is not copied
+            with self.assertRaises(SafetyError) as ctx:
+                run_export_with_curry_source(str(outside_file.resolve()))
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 4. Symlink escaping images_dir is rejected
+            symlink_in_images = images_dir / "symlink_escaping.jpg"
+            try:
+                os.symlink(outside_file, symlink_in_images)
+                has_symlink = True
+            except (OSError, NotImplementedError):
+                has_symlink = False
+
+            if has_symlink:
+                with self.assertRaises(SafetyError) as ctx:
+                    run_export_with_curry_source("symlink_escaping.jpg")
+                self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 5. Fallback alternate search with escaping symlink is rejected
+            alt_symlink_curry = images_dir / "img_curry_alt.jpg"
+            if has_symlink:
+                try:
+                    os.symlink(outside_file, alt_symlink_curry)
+                    has_alt_symlink = True
+                except (OSError, NotImplementedError):
+                    has_alt_symlink = False
+
+                if has_alt_symlink:
+                    with self.assertRaises(SafetyError) as ctx:
+                        run_export_with_curry_source("nonexistent.jpg", curry_id="img_curry_alt")
+                    self.assertIn("Path traversal detected", str(ctx.exception))
 
 
 if __name__ == "__main__":

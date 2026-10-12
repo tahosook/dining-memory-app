@@ -23,6 +23,7 @@ import csv
 import json
 import shutil
 import sys
+import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +33,17 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.dataset_safety_guards import (
+    LeakageError,
+    assert_no_path_collision,
+    assert_path_within_directory,
+    atomic_directory_swap,
+    check_dual_image_leakage,
+    collect_golden_hashes_dual,
+    load_and_validate_mapping,
+    validate_sha256_format,
+    verify_candidate_record_integrity,
+)
 from scripts.validate_zip2_audit_manifest import compute_sha256
 
 DEFAULT_BASE_DATASET = (
@@ -92,10 +104,6 @@ EXPECTED_CLASS_COUNTS = {
 
 class IntegrationError(Exception):
     """Raised when dataset integration fails an invariant check."""
-
-
-class LeakageError(Exception):
-    """Raised when data leakage against the Golden Test Set is detected."""
 
 
 def parse_args() -> argparse.Namespace:
@@ -175,13 +183,25 @@ def extract_agreed_candidates(
     agreed: List[Dict[str, str]] = []
     with open(registry_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for r in reader:
+        for line_idx, r in enumerate(reader, start=2):
             if r.get("adoption_status") == "pending_human_review" and r.get("audit_subset") == "sample_A":
-                mapped = r.get("mapped_class", "")
-                pred = r.get("audit_predicted_class", "")
-                uncertain = r.get("audit_is_uncertain", "false").lower() == "true"
-                if mapped and mapped == pred and not uncertain:
-                    agreed.append(r)
+                img_id = r.get("image_id", "") or f"line_{line_idx}"
+                raw_uncertain = r.get("audit_is_uncertain")
+                if raw_uncertain is None:
+                    raise IntegrationError(
+                        f"Line {line_idx} ({img_id}): missing required 'audit_is_uncertain' field"
+                    )
+                val = raw_uncertain.strip().lower()
+                if val not in ("true", "false"):
+                    raise IntegrationError(
+                        f"Line {line_idx} ({img_id}): invalid 'audit_is_uncertain' value '{raw_uncertain}' "
+                        f"(expected 'true' or 'false')"
+                    )
+                if val == "false":
+                    mapped = r.get("mapped_class", "")
+                    pred = r.get("audit_predicted_class", "")
+                    if mapped and mapped == pred:
+                        agreed.append(r)
 
     agreed.sort(key=lambda x: (x["mapped_class"], x["image_id"]))
 
@@ -213,144 +233,197 @@ def integrate_agreed_samples(
     if not golden_test_dir.is_dir():
         raise FileNotFoundError(f"Golden test dir not found: {golden_test_dir}")
 
-    # Load mapping from sample_pkg_dir
-    mapping_path = sample_pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
-    if not mapping_path.is_file():
-        raise FileNotFoundError(f"Blind mapping file not found: {mapping_path}")
+    input_paths = [base_dataset_dir, registry_path, sample_pkg_dir, golden_test_dir]
+    assert_no_path_collision(input_paths, output_dataset_dir)
 
-    with open(mapping_path, "r", encoding="utf-8") as f:
-        mapping_data = json.load(f)
-    img_by_id = {r["image_id"]: r for r in mapping_data.get("records", [])}
+    # Load and validate mapping from sample_pkg_dir
+    mapping_path = sample_pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+    img_by_id = load_and_validate_mapping(mapping_path)
 
     # Extract agreed candidates
     agreed_records = extract_agreed_candidates(registry_path, enforce_real_counts=enforce_real_counts)
 
-    # Load Golden Test Hashes for zero-leakage guarantee
-    golden_hashes = load_golden_hashes(golden_test_dir)
-    if enforce_real_counts and len(golden_hashes) != 7:
-        raise IntegrationError(f"Expected exactly 7 Golden Test images, found {len(golden_hashes)}")
+    # Load Golden Test Hashes for zero-leakage guarantee with dual check
+    golden_files = get_image_files(golden_test_dir)
+    if enforce_real_counts and len(golden_files) != 7:
+        raise IntegrationError(f"Expected exactly 7 Golden Test images, found {len(golden_files)}")
+    golden_hashes_dual = collect_golden_hashes_dual(golden_test_dir)
 
-    # Prepare output dataset directory
-    if output_dataset_dir.exists():
-        shutil.rmtree(output_dataset_dir)
-    output_dataset_dir.mkdir(parents=True, exist_ok=True)
+    output_dataset_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = output_dataset_dir.parent / f".tmp_{output_dataset_dir.name}_{uuid.uuid4().hex[:8]}"
+    staging_dir.mkdir(parents=True, exist_ok=False)
 
-    # Copy base dataset splits
-    for split in ["train", "val", "test"]:
-        src_split = base_dataset_dir / split
-        dst_split = output_dataset_dir / split
-        if src_split.is_dir():
-            shutil.copytree(src_split, dst_split)
-        else:
-            raise FileNotFoundError(f"Missing required split in base dataset: {src_split}")
+    try:
+        # Copy base dataset splits to staging
+        for split in ["train", "val", "test"]:
+            src_split = base_dataset_dir / split
+            dst_split = staging_dir / split
+            if src_split.is_dir():
+                shutil.copytree(src_split, dst_split)
+            else:
+                raise FileNotFoundError(f"Missing required split in base dataset: {src_split}")
 
-    # Copy labels.txt and other metadata files
-    for meta_file in ["labels.txt", "label_map.json"]:
-        src_meta = base_dataset_dir / meta_file
-        if src_meta.is_file():
-            shutil.copy2(src_meta, output_dataset_dir / meta_file)
+        # Copy labels.txt and other metadata files
+        for meta_file in ["labels.txt", "label_map.json"]:
+            src_meta = base_dataset_dir / meta_file
+            if src_meta.is_file():
+                shutil.copy2(src_meta, staging_dir / meta_file)
 
-    base_train_files = get_image_files(base_dataset_dir / "train")
-    base_val_files = get_image_files(base_dataset_dir / "val")
-    base_test_files = get_image_files(base_dataset_dir / "test")
+        base_train_files = get_image_files(base_dataset_dir / "train")
+        base_val_files = get_image_files(base_dataset_dir / "val")
+        base_test_files = get_image_files(base_dataset_dir / "test")
 
-    # Copy agreed samples into train/<mapped_class>/
-    integrated_records: List[Dict[str, str]] = []
-    blind_images_dir = sample_pkg_dir / "blind_images"
+        # Copy agreed samples into staging train/<mapped_class>/
+        integrated_records: List[Dict[str, str]] = []
+        blind_images_dir = sample_pkg_dir / "blind_images"
 
-    for r in agreed_records:
-        img_id = r["image_id"]
-        mapped_class = r["mapped_class"]
+        seen_image_ids: Set[str] = set()
+        for r in agreed_records:
+            img_id = r.get("image_id", "").strip()
+            if not img_id:
+                raise IntegrationError("Agreed record is missing required 'image_id'")
+            if img_id in seen_image_ids:
+                raise IntegrationError(f"Duplicate image_id '{img_id}' detected in agreed records")
+            seen_image_ids.add(img_id)
 
-        if mapped_class not in CANONICAL_CLASSES:
-            raise IntegrationError(f"Invalid class '{mapped_class}' for image '{img_id}'")
+            mapped_class = r.get("mapped_class", "").strip()
+            if mapped_class not in CANONICAL_CLASSES:
+                raise IntegrationError(f"Invalid class '{mapped_class}' for image '{img_id}'")
 
-        if img_id not in img_by_id:
-            raise FileNotFoundError(f"Image ID '{img_id}' not found in private mapping records.")
+            if img_id not in img_by_id:
+                raise FileNotFoundError(f"Image ID '{img_id}' not found in private mapping records.")
 
-        img_record = img_by_id[img_id]
-        src_image_file = blind_images_dir / img_record["image_file"]
-        if not src_image_file.is_file():
-            raise FileNotFoundError(f"Blind image file not found: {src_image_file}")
+            img_record = img_by_id[img_id]
+            try:
+                verify_candidate_record_integrity(r, img_record, allowed_classes=set(CANONICAL_CLASSES))
+            except Exception as e:
+                raise IntegrationError(f"Integrity check failed for image '{img_id}': {e}") from e
 
-        # Leakage check: check image hash against Golden Test Set
-        img_hash = compute_sha256(src_image_file)
-        if img_hash in golden_hashes:
-            raise LeakageError(
-                f"Data leakage detected! Image {img_id} ({src_image_file}) matches Golden Test image {golden_hashes[img_hash]}"
+            image_file_name = img_record.get("image_file", "").strip()
+            if not image_file_name:
+                raise IntegrationError(f"Mapping record for '{img_id}' missing 'image_file'")
+
+            src_image_file = blind_images_dir / image_file_name
+            try:
+                assert_path_within_directory(src_image_file, blind_images_dir)
+            except Exception as e:
+                raise IntegrationError(f"Path traversal detected in blind image path for '{img_id}': {e}") from e
+
+            if not src_image_file.is_file():
+                raise FileNotFoundError(f"Blind image file not found: {src_image_file}")
+
+            raw_sha = img_record.get("raw_image_sha256", "").strip()
+            stripped_sha = img_record.get("stripped_image_sha256", "").strip()
+            if not raw_sha:
+                raise IntegrationError(f"Missing required 'raw_image_sha256' for image '{img_id}'")
+            if not stripped_sha:
+                raise IntegrationError(f"Missing required 'stripped_image_sha256' for image '{img_id}'")
+
+            try:
+                validate_sha256_format(raw_sha, "raw_image_sha256")
+                validate_sha256_format(stripped_sha, "stripped_image_sha256")
+            except Exception as e:
+                raise IntegrationError(f"Invalid SHA-256 hash for '{img_id}': {e}") from e
+
+            actual_stripped_sha = compute_sha256(src_image_file)
+            if actual_stripped_sha != stripped_sha:
+                raise RuntimeError(
+                    f"Stripped image SHA-256 mismatch for {img_id}: expected {stripped_sha}, got {actual_stripped_sha}"
+                )
+
+            # Dual leakage check against Golden Test Set
+            check_dual_image_leakage(
+                golden_hashes=golden_hashes_dual,
+                image_id=img_id,
+                raw_sha256=raw_sha,
+                stripped_sha256=stripped_sha,
+                image_path=src_image_file,
             )
 
-        # Target file in train/<mapped_class>/
-        target_filename = f"agreed_{img_id}.jpg"
-        target_path = output_dataset_dir / "train" / mapped_class / target_filename
+            # Target file in staging / train / <mapped_class> / <filename>
+            target_filename = f"agreed_{img_id}.jpg"
+            target_class_dir = staging_dir / "train" / mapped_class
+            assert_path_within_directory(target_class_dir, staging_dir / "train")
+            target_path = target_class_dir / target_filename
+            assert_path_within_directory(target_path, staging_dir / "train")
 
-        shutil.copy2(src_image_file, target_path)
+            shutil.copy2(src_image_file, target_path)
 
-        # Verify copy hash
-        copied_hash = compute_sha256(target_path)
-        if copied_hash != img_hash:
-            raise RuntimeError(f"Hash mismatch after copying {target_path}")
+            # Verify copy hash
+            copied_hash = compute_sha256(target_path)
+            if copied_hash != actual_stripped_sha:
+                raise RuntimeError(f"Hash mismatch after copying {target_path}")
 
-        integrated_records.append({
-            "image_id": img_id,
-            "mapped_class": mapped_class,
-            "target_path": str(target_path.relative_to(output_dataset_dir)),
-            "sha256": copied_hash,
-        })
+            integrated_records.append({
+                "image_id": img_id,
+                "mapped_class": mapped_class,
+                "target_path": str(target_path.relative_to(staging_dir)),
+                "sha256": copied_hash,
+            })
 
-    # Validate output dataset structure
-    out_train_files = get_image_files(output_dataset_dir / "train")
-    out_val_files = get_image_files(output_dataset_dir / "val")
-    out_test_files = get_image_files(output_dataset_dir / "test")
+        # Validate output dataset structure in staging
+        out_train_files = get_image_files(staging_dir / "train")
+        out_val_files = get_image_files(staging_dir / "val")
+        out_test_files = get_image_files(staging_dir / "test")
 
-    # Ensure val and test counts are bit-for-bit unchanged
-    if len(out_val_files) != len(base_val_files):
-        raise IntegrationError(f"Validation set corrupted: count changed from {len(base_val_files)} to {len(out_val_files)}")
-    if len(out_test_files) != len(base_test_files):
-        raise IntegrationError(f"Test set corrupted: count changed from {len(base_test_files)} to {len(out_test_files)}")
+        # Ensure val and test counts are bit-for-bit unchanged
+        if len(out_val_files) != len(base_val_files):
+            raise IntegrationError(f"Validation set corrupted: count changed from {len(base_val_files)} to {len(out_val_files)}")
+        if len(out_test_files) != len(base_test_files):
+            raise IntegrationError(f"Test set corrupted: count changed from {len(base_test_files)} to {len(out_test_files)}")
 
-    expected_train_count = len(base_train_files) + len(agreed_records)
-    if len(out_train_files) != expected_train_count:
-        raise IntegrationError(
-            f"Train count mismatch: expected {expected_train_count}, got {len(out_train_files)}"
-        )
+        expected_train_count = len(base_train_files) + len(agreed_records)
+        if len(out_train_files) != expected_train_count:
+            raise IntegrationError(
+                f"Train count mismatch: expected {expected_train_count}, got {len(out_train_files)}"
+            )
 
-    # Double check no leakage in final train files
-    final_golden_hashes = set(golden_hashes.keys())
-    for tf in out_train_files:
-        if compute_sha256(tf) in final_golden_hashes:
-            raise LeakageError(f"Data leakage detected in final train split: {tf}")
+        # Final check on all train files against dual golden hashes
+        for tf in out_train_files:
+            check_dual_image_leakage(
+                golden_hashes=golden_hashes_dual,
+                image_id=tf.name,
+                image_path=tf,
+            )
 
-    class_added_counts = dict(Counter(r["mapped_class"] for r in integrated_records))
+        class_added_counts = dict(Counter(r["mapped_class"] for r in integrated_records))
 
-    summary_data = {
-        "pipeline": "integrate_agreed_pending_samples",
-        "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "base_dataset_dir": str(base_dataset_dir),
-        "output_dataset_dir": str(output_dataset_dir),
-        "total_integrated_images": len(integrated_records),
-        "class_added_counts": class_added_counts,
-        "counts_before": {
-            "train": len(base_train_files),
-            "val": len(base_val_files),
-            "test": len(base_test_files),
-            "total": len(base_train_files) + len(base_val_files) + len(base_test_files),
-        },
-        "counts_after": {
-            "train": len(out_train_files),
-            "val": len(out_val_files),
-            "test": len(out_test_files),
-            "total": len(out_train_files) + len(out_val_files) + len(out_test_files),
-        },
-        "golden_test_leakage_count": 0,
-        "integrated_images": integrated_records,
-    }
+        summary_data = {
+            "pipeline": "integrate_agreed_pending_samples",
+            "created_at_utc": datetime.now(timezone.utc).isoformat(),
+            "base_dataset_dir": str(base_dataset_dir),
+            "output_dataset_dir": str(output_dataset_dir),
+            "total_integrated_images": len(integrated_records),
+            "class_added_counts": class_added_counts,
+            "counts_before": {
+                "train": len(base_train_files),
+                "val": len(base_val_files),
+                "test": len(base_test_files),
+                "total": len(base_train_files) + len(base_val_files) + len(base_test_files),
+            },
+            "counts_after": {
+                "train": len(out_train_files),
+                "val": len(out_val_files),
+                "test": len(out_test_files),
+                "total": len(out_train_files) + len(out_val_files) + len(out_test_files),
+            },
+            "golden_test_leakage_count": 0,
+            "golden_test_samples_checked": len(golden_files),
+            "integrated_images": integrated_records,
+        }
 
-    summary_path = output_dataset_dir / "integration_summary.json"
-    with open(summary_path, "w", encoding="utf-8") as f:
-        json.dump(summary_data, f, indent=2, ensure_ascii=False)
+        summary_path = staging_dir / "integration_summary.json"
+        with open(summary_path, "w", encoding="utf-8") as f:
+            json.dump(summary_data, f, indent=2, ensure_ascii=False)
 
-    return summary_path, summary_data
+        # Atomic swap to output directory
+        atomic_directory_swap(staging_dir, output_dataset_dir)
+    finally:
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+    final_summary_path = output_dataset_dir / "integration_summary.json"
+    return final_summary_path, summary_data
 
 
 def main() -> None:

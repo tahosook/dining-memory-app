@@ -23,7 +23,12 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.dataset_safety_guards import assert_path_within_directory
 from scripts.validate_zip2_audit_manifest import compute_sha256
+
+EXPECTED_REMEDIATED_MANIFEST_SHA256 = (
+    "ef66c8df690ba558d3f7cf08e75746a155608af0cff643a480df85aa3482cc30"
+)
 
 EXPECTED_SAMPLE_A_PREDICTIONS_SHA256 = (
     "c258d3edaa0a79e6548f36f66a05f257511799501fc765580df585f687054275"
@@ -115,28 +120,53 @@ def reconcile_audit(
     mapping_path: Path,
     pilot_mapping_path: Optional[Path] = None,
     verify_predictions_sha256: bool = True,
+    verify_manifest_sha256: bool = True,
+    expected_manifest_sha256: Optional[str] = EXPECTED_REMEDIATED_MANIFEST_SHA256,
+    images_dir: Optional[Path] = None,
+    verify_images: bool = False,
 ) -> Dict[str, Any]:
     """Reconcile blind predictions with private mapping and candidate manifest."""
-    # 1. Verify predictions file SHA-256 if requested
+    # 0. Check file existence
+    if not manifest_path.exists():
+        raise FileNotFoundError(f"Manifest not found: {manifest_path}")
+    if not predictions_path.exists():
+        raise FileNotFoundError(f"Predictions not found: {predictions_path}")
+    if not mapping_path.exists():
+        raise FileNotFoundError(f"Mapping not found: {mapping_path}")
+
+    # 1. Verify manifest SHA-256 if requested
+    if verify_manifest_sha256:
+        actual_manifest_sha256 = compute_sha256(manifest_path)
+        if expected_manifest_sha256 and actual_manifest_sha256 != expected_manifest_sha256:
+            raise ValueError(
+                f"Manifest SHA-256 mismatch: expected {expected_manifest_sha256}, got {actual_manifest_sha256}"
+            )
+
+    # 2. Verify predictions file SHA-256 if requested
     actual_pred_sha256 = compute_sha256(predictions_path)
     if verify_predictions_sha256 and actual_pred_sha256 != EXPECTED_SAMPLE_A_PREDICTIONS_SHA256:
         raise ValueError(
             f"Predictions SHA-256 mismatch: expected {EXPECTED_SAMPLE_A_PREDICTIONS_SHA256}, got {actual_pred_sha256}"
         )
 
-    # 2. Load predictions
+    # 3. Load predictions
     predictions: Dict[str, Dict[str, Any]] = {}
     with open(predictions_path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
                 rec = json.loads(line)
-                predictions[rec["blind_id"]] = rec
+                b_id = rec.get("blind_id")
+                if not b_id:
+                    raise ValueError(f"Prediction missing blind_id: {rec}")
+                if b_id in predictions:
+                    raise ValueError(f"Duplicate blind_id in predictions: {b_id}")
+                predictions[b_id] = rec
 
     if len(predictions) != 280:
         raise ValueError(f"Expected 280 predictions, got {len(predictions)}")
 
-    # 3. Load private reconciliation mapping
+    # 4. Load private reconciliation mapping
     with open(mapping_path, "r", encoding="utf-8") as f:
         mapping_data = json.load(f)
     mapping_records = {r["blind_id"]: r for r in mapping_data["records"]}
@@ -147,25 +177,82 @@ def reconcile_audit(
     if set(predictions.keys()) != set(mapping_records.keys()):
         raise ValueError("Mismatch between prediction blind_ids and mapping blind_ids")
 
-    # 4. Load pilot 70 image IDs
+    # Optional package images verification
+    if verify_images or images_dir is not None:
+        target_images_dir = images_dir or (mapping_path.parent.parent / "blind_images")
+        if not target_images_dir.exists():
+            raise FileNotFoundError(f"Package images directory not found: {target_images_dir}")
+        for b_id, m_rec in mapping_records.items():
+            img_file_name = m_rec.get("image_file", f"{b_id}.jpg")
+            img_file_path = target_images_dir / img_file_name
+            assert_path_within_directory(img_file_path, target_images_dir)
+            if not img_file_path.exists():
+                raise FileNotFoundError(f"Package image missing: {img_file_path}")
+            expected_sha = m_rec.get("stripped_image_sha256")
+            if not expected_sha or not isinstance(expected_sha, str) or not expected_sha.strip():
+                raise ValueError(
+                    f"Package image record {b_id} missing required stripped_image_sha256: '{expected_sha}'"
+                )
+            expected_sha_clean = expected_sha.strip()
+            if len(expected_sha_clean) != 64 or not all(c in "0123456789abcdefABCDEF" for c in expected_sha_clean):
+                raise ValueError(
+                    f"Invalid stripped_image_sha256 format for {b_id}: expected 64 hex characters, got '{expected_sha}'"
+                )
+            actual_sha = compute_sha256(img_file_path)
+            if actual_sha.lower() != expected_sha_clean.lower():
+                raise ValueError(
+                    f"Package image SHA-256 mismatch for {b_id}: expected {expected_sha}, got {actual_sha}"
+                )
+
+    # 5. Load pilot 70 image IDs
     pilot_image_ids = set()
     if pilot_mapping_path and pilot_mapping_path.exists():
         with open(pilot_mapping_path, "r", encoding="utf-8") as f:
             pilot_data = json.load(f)
             pilot_image_ids = {r["image_id"] for r in pilot_data.get("records", [])}
 
-    # 5. Load original remediated manifest for pseudo_label_candidates
+    # 6. Load original remediated manifest for pseudo_label_candidates
     candidates_manifest: List[Dict[str, str]] = []
+    candidates_by_id: Dict[str, Dict[str, str]] = {}
     with open(manifest_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             if row.get("assigned_role") == "pseudo_label_candidate":
+                img_id = row.get("image_id", "")
+                if not img_id:
+                    raise ValueError(f"Candidate row missing image_id: {row}")
+                if img_id in candidates_by_id:
+                    raise ValueError(f"Duplicate image_id in candidate manifest: {img_id}")
                 candidates_manifest.append(row)
+                candidates_by_id[img_id] = row
 
     if len(candidates_manifest) != 831:
         raise ValueError(f"Expected 831 pseudo_label_candidates, got {len(candidates_manifest)}")
 
-    # 6. Reconcile Sample A (280)
+    # Cross-verify mapping records against candidate manifest
+    mapping_image_ids = set()
+    for b_id, m_rec in mapping_records.items():
+        img_id = m_rec.get("image_id", "")
+        if not img_id:
+            raise ValueError(f"Mapping record {b_id} missing image_id")
+        if img_id in mapping_image_ids:
+            raise ValueError(f"Duplicate image_id in mapping: {img_id}")
+        mapping_image_ids.add(img_id)
+
+        if img_id not in candidates_by_id:
+            raise ValueError(f"Mapping image_id {img_id} not found in pseudo_label_candidates manifest")
+
+        c_row = candidates_by_id[img_id]
+        if m_rec.get("source_path") != c_row.get("source_path"):
+            raise ValueError(
+                f"source_path mismatch for {img_id}: mapping='{m_rec.get('source_path')}', manifest='{c_row.get('source_path')}'"
+            )
+        if m_rec.get("mapped_class") != c_row.get("mapped_class"):
+            raise ValueError(
+                f"mapped_class mismatch for {img_id}: mapping='{m_rec.get('mapped_class')}', manifest='{c_row.get('mapped_class')}'"
+            )
+
+    # 7. Reconcile Sample A (280)
     class_totals: Counter[str] = Counter()
     class_agreed: Counter[str] = Counter()
     class_uncertain: Counter[str] = Counter()
@@ -202,7 +289,17 @@ def reconcile_audit(
             "is_agreed": is_agreed,
         })
 
-    # 7. Evaluate Class Gate
+    # Verify each target class has exactly 40 samples in Sample A
+    for cls in TARGET_CLASSES:
+        if class_totals[cls] != 40:
+            raise ValueError(
+                f"Sample A class count mismatch for '{cls}': expected exactly 40, got {class_totals[cls]}"
+            )
+    extra_classes = set(class_totals.keys()) - set(TARGET_CLASSES)
+    if extra_classes:
+        raise ValueError(f"Unexpected classes found in Sample A: {extra_classes}")
+
+    # 8. Evaluate Class Gate
     class_gate_results: Dict[str, Dict[str, Any]] = {}
     passed_classes: set[str] = set()
 
@@ -575,6 +672,22 @@ def main() -> None:
         action="store_true",
         help="Skip strict SHA-256 verification of predictions file (for test fixtures)",
     )
+    parser.add_argument(
+        "--skip-manifest-sha-check",
+        action="store_true",
+        help="Skip strict SHA-256 verification of remediated manifest (for test fixtures)",
+    )
+    parser.add_argument(
+        "--verify-images",
+        action="store_true",
+        help="Verify package blind images against stripped_image_sha256",
+    )
+    parser.add_argument(
+        "--images-dir",
+        type=Path,
+        default=None,
+        help="Optional path to package blind_images directory for image verification",
+    )
 
     args = parser.parse_args()
 
@@ -584,6 +697,9 @@ def main() -> None:
         mapping_path=args.mapping,
         pilot_mapping_path=args.pilot_mapping,
         verify_predictions_sha256=not args.skip_sha_check,
+        verify_manifest_sha256=not args.skip_manifest_sha_check,
+        images_dir=args.images_dir,
+        verify_images=args.verify_images,
     )
 
     reg_path, rep_path, met_path = write_reconciliation_outputs(

@@ -318,7 +318,8 @@ const minorityImproved = championHasPerfectMinority
   ? (challengerMinorityTop3Correct >= championMinorityTop3Correct && challengerTop1Correct > championTop1Correct)
   : (challengerMinorityTop3Correct > championMinorityTop3Correct);
 
-console.error('--- Evaluation Metrics vs Gates (Integer Sample Basis on N=' + challengerTotal + ') ---');
+console.error('--- Evaluation Metrics vs Gates (7-sample Regression Guard Check on N=' + challengerTotal + ') ---');
+console.error('Note: 7-sample evaluation serves as a regression guard check, not a statistical benchmark of general accuracy.');
 console.error('Champion Baseline:       Top-1 = ' + championTop1Correct + '/' + requiredSize + ', Top-3 = ' + championTop3Correct + '/' + requiredSize + ', Minority Top-3 = ' + championMinorityTop3Correct + ' (measured on Golden Test Set, details N=' + championDetails.length + ')');
 console.error('Challenger Test Metrics: Top-1 = ' + challengerTop1Correct + '/' + challengerTotal + ' (' + (challengerTop1Correct/challengerTotal*100).toFixed(1) + '%), Top-3 = ' + challengerTop3Correct + '/' + challengerTotal + ' (' + (challengerTop3Correct/challengerTotal*100).toFixed(1) + '%), Latency = ' + challengerLatency.toFixed(1) + 'ms (details N=' + challengerDetails.length + ')');
 console.error('Minority Top-3 Coverage: Challenger = ' + challengerMinorityTop3Correct + ' vs Champion = ' + championMinorityTop3Correct);
@@ -558,7 +559,7 @@ uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
   --split test
 
 # Step 4: Champion / Challenger Gate
-echo -e "\n⚖️  [Step 4/4] Evaluating Champion / Challenger Promotion Gate..."
+echo -e "\n⚖️  [Step 4/4] Evaluating Champion / Challenger Promotion Gate (7-sample regression guard check)..."
 
 # Verify class compatibility between Champion and Challenger before Promotion Gate
 check_class_compatibility "$BENCHMARK_REPORT" "$CHAMPION_REPORT"
@@ -566,7 +567,7 @@ check_class_compatibility "$BENCHMARK_REPORT" "$CHAMPION_REPORT"
 GATE_RESULT=$(evaluate_gate "$BENCHMARK_REPORT" "$CHAMPION_REPORT")
 
 if [ "$GATE_RESULT" = "PROMOTE" ]; then
-  echo "🎉 [GATE PASSED] Challenger model met all canonical promotion criteria!"
+  echo "🎉 [GATE PASSED] Challenger model passed 7-sample regression check and met all canonical promotion criteria!"
   echo "Promoting Challenger model to $ASSET_TASK atomically..."
 
   # Safe atomic promotion: copy to temp file, verify, then atomic move
