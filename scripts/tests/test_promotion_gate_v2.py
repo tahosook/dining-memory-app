@@ -25,6 +25,73 @@ class TestPromotionGateV2(unittest.TestCase):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.root = Path(self.temp_dir.name)
         self.script_path = Path(__file__).resolve().parent.parent / "run-autonomous-model-improvement.sh"
+        self.eval_log_path = self.root / "mock_eval_invocations.log"
+        self.mock_eval_path = self.root / "mock_evaluate.py"
+        self._create_mock_eval_script()
+
+    def _create_mock_eval_script(self) -> None:
+        script_code = '''#!/usr/bin/env python3
+import sys
+import os
+import shutil
+from pathlib import Path
+
+log_file = os.environ.get("MOCK_EVAL_LOG")
+if log_file:
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(" ".join(sys.argv) + "\\n")
+
+fail_champ = os.environ.get("MOCK_EVAL_FAIL_CHAMP") == "1"
+fail_chal = os.environ.get("MOCK_EVAL_FAIL_CHAL") == "1"
+
+output_json = None
+output_md = None
+model_path = None
+i = 1
+while i < len(sys.argv):
+    if sys.argv[i] == "--output-json" and i + 1 < len(sys.argv):
+        output_json = sys.argv[i + 1]
+        i += 2
+    elif sys.argv[i] == "--output-md" and i + 1 < len(sys.argv):
+        output_md = sys.argv[i + 1]
+        i += 2
+    elif sys.argv[i] == "--model-path" and i + 1 < len(sys.argv):
+        model_path = sys.argv[i + 1]
+        i += 2
+    else:
+        i += 1
+
+champ_model = os.environ.get("MOCK_CHAMP_MODEL", "")
+chal_model = os.environ.get("MOCK_CHAL_MODEL", "")
+
+is_champion = False
+if champ_model and model_path == champ_model:
+    is_champion = True
+elif chal_model and model_path == chal_model:
+    is_champion = False
+elif model_path and ("meal-input-assist" in model_path or "champion" in model_path.lower()):
+    is_champion = True
+
+if is_champion and fail_champ:
+    sys.stderr.write("Mock evaluate command failed for Champion\\n")
+    sys.exit(1)
+if not is_champion and fail_chal:
+    sys.stderr.write("Mock evaluate command failed for Challenger\\n")
+    sys.exit(1)
+
+src = os.environ.get("MOCK_CHAMP_REPORT") if is_champion else os.environ.get("MOCK_CHAL_REPORT")
+if src and os.path.exists(src) and output_json:
+    shutil.copyfile(src, output_json)
+elif output_json:
+    pass
+
+if output_md:
+    Path(output_md).write_text("# Mock Summary\\n", encoding="utf-8")
+
+sys.exit(0)
+'''
+        self.mock_eval_path.write_text(script_code, encoding="utf-8")
+        self.mock_eval_path.chmod(0o755)
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -120,6 +187,10 @@ class TestPromotionGateV2(unittest.TestCase):
         golden_v2_dir: Path | str = "",
         chal_v2_report: Path | str = "",
         champ_v2_report: Path | str = "",
+        output_dir: Path | str = "",
+        fail_champion: bool = False,
+        fail_challenger: bool = False,
+        custom_env: dict | None = None,
     ) -> tuple[int, str, str]:
         cmd = [
             str(self.script_path),
@@ -132,7 +203,24 @@ class TestPromotionGateV2(unittest.TestCase):
             str(chal_v2_report),
             str(champ_v2_report),
         ]
-        res = subprocess.run(cmd, capture_output=True, text=True)
+        if output_dir:
+            cmd.append(str(output_dir))
+
+        env = os.environ.copy()
+        env["EVALUATE_MODEL_CMD"] = f"python3 {self.mock_eval_path}"
+        env["MOCK_CHAMP_MODEL"] = str(asset_task)
+        env["MOCK_CHAL_MODEL"] = str(challenger_model)
+        env["MOCK_CHAMP_REPORT"] = str(champ_v2_report) if champ_v2_report else ""
+        env["MOCK_CHAL_REPORT"] = str(chal_v2_report) if chal_v2_report else ""
+        env["MOCK_EVAL_LOG"] = str(self.eval_log_path)
+        if fail_champion:
+            env["MOCK_EVAL_FAIL_CHAMP"] = "1"
+        if fail_challenger:
+            env["MOCK_EVAL_FAIL_CHAL"] = "1"
+        if custom_env:
+            env.update(custom_env)
+
+        res = subprocess.run(cmd, capture_output=True, text=True, env=env)
         return res.returncode, res.stdout.strip(), res.stderr
 
     # -------------------------------------------------------------------------
@@ -256,6 +344,78 @@ class TestPromotionGateV2(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(out, "V2_INVALID_METRICS")
 
+    def test_v2_gate_fail_when_champion_details_missing(self) -> None:
+        """Champion test.details missing: FAIL (V2_INVALID_METRICS)."""
+        champ = self._create_v2_report("champ_no_details.json", total=106, with_details=False)
+        chal = self._create_v2_report("chal_valid.json", total=106)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_INVALID_METRICS")
+        self.assertIn("Champion.test.details is required", err)
+
+    def test_v2_gate_fail_when_challenger_details_missing(self) -> None:
+        """Challenger test.details missing: FAIL (V2_INVALID_METRICS)."""
+        champ = self._create_v2_report("champ_valid.json", total=106)
+        chal = self._create_v2_report("chal_no_details.json", total=106, with_details=False)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_INVALID_METRICS")
+        self.assertIn("Challenger.test.details is required", err)
+
+    def test_v2_gate_fail_when_champion_details_empty_array(self) -> None:
+        """Champion test.details is empty array (0 items): FAIL (V2_SAMPLE_COUNT_MISMATCH)."""
+        champ = self._create_v2_report("champ_empty_details.json", total=106, details_count=0)
+        chal = self._create_v2_report("chal_valid.json", total=106)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_SAMPLE_COUNT_MISMATCH")
+        self.assertIn("Champion.test.details length must be exactly 106", err)
+
+    def test_v2_gate_fail_when_challenger_details_empty_array(self) -> None:
+        """Challenger test.details is empty array (0 items): FAIL (V2_SAMPLE_COUNT_MISMATCH)."""
+        champ = self._create_v2_report("champ_valid.json", total=106)
+        chal = self._create_v2_report("chal_empty_details.json", total=106, details_count=0)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_SAMPLE_COUNT_MISMATCH")
+        self.assertIn("Challenger.test.details length must be exactly 106", err)
+
+    def test_v2_gate_fail_when_champion_details_105_items(self) -> None:
+        """Champion test.details has 105 items: FAIL (V2_SAMPLE_COUNT_MISMATCH)."""
+        champ = self._create_v2_report("champ_105.json", total=106, details_count=105)
+        chal = self._create_v2_report("chal_valid.json", total=106)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_SAMPLE_COUNT_MISMATCH")
+        self.assertIn("Champion.test.details length must be exactly 106", err)
+
+    def test_v2_gate_fail_when_challenger_details_105_items(self) -> None:
+        """Challenger test.details has 105 items: FAIL (V2_SAMPLE_COUNT_MISMATCH)."""
+        champ = self._create_v2_report("champ_valid.json", total=106)
+        chal = self._create_v2_report("chal_105.json", total=106, details_count=105)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_SAMPLE_COUNT_MISMATCH")
+        self.assertIn("Challenger.test.details length must be exactly 106", err)
+
+    def test_v2_gate_fail_when_champion_details_107_items(self) -> None:
+        """Champion test.details has 107 items: FAIL (V2_SAMPLE_COUNT_MISMATCH)."""
+        champ = self._create_v2_report("champ_107.json", total=106, details_count=107)
+        chal = self._create_v2_report("chal_valid.json", total=106)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_SAMPLE_COUNT_MISMATCH")
+        self.assertIn("Champion.test.details length must be exactly 106", err)
+
+    def test_v2_gate_fail_when_challenger_details_107_items(self) -> None:
+        """Challenger test.details has 107 items: FAIL (V2_SAMPLE_COUNT_MISMATCH)."""
+        champ = self._create_v2_report("champ_valid.json", total=106)
+        chal = self._create_v2_report("chal_107.json", total=106, details_count=107)
+        code, out, err = self._run_eval_golden_v2(chal, champ)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "V2_SAMPLE_COUNT_MISMATCH")
+        self.assertIn("Challenger.test.details length must be exactly 106", err)
+
     # -------------------------------------------------------------------------
     # 2. End-to-end Two-Tier Promotion Gate execution tests
     # -------------------------------------------------------------------------
@@ -367,6 +527,136 @@ class TestPromotionGateV2(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual(asset_task.read_bytes(), b"ORIGINAL_CHAMPION_BYTES")
         self.assertIn("Status: V2_SAMPLE_COUNT_MISMATCH", err)
+
+    def test_two_tier_gate_executes_fresh_evaluation_even_if_old_reports_exist(self) -> None:
+        """Freshness Guarantee: Evaluation is run afresh even if old reports exist at destination paths."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES_FRESH")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        v2_dir = self.root / "golden_v2"
+        (v2_dir / "test").mkdir(parents=True)
+
+        # Existing old reports on disk
+        chal_v2 = self._create_v2_report("chal_v2.json", total=106, top1_correct=85, top3_correct=98)
+        champ_v2 = self._create_v2_report("champ_v2.json", total=106, top1_correct=80, top3_correct=95)
+
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, v2_dir, chal_v2, champ_v2
+        )
+        self.assertEqual(code, 0, f"Expected 0, stderr: {err}")
+        self.assertEqual(asset_task.read_bytes(), b"CHALLENGER_MODEL_BYTES_FRESH")
+
+        # Verify that mock evaluator was actually called freshly 2 times (Champion + Challenger)
+        self.assertTrue(self.eval_log_path.exists())
+        eval_logs = self.eval_log_path.read_text(encoding="utf-8").strip().splitlines()
+        self.assertEqual(len(eval_logs), 2, f"Expected 2 fresh eval invocations, got: {eval_logs}")
+        self.assertIn(str(asset_task), eval_logs[0])
+        self.assertIn(str(chal_model), eval_logs[1])
+
+    def test_two_tier_gate_blocks_promotion_when_current_eval_fails_even_if_old_reports_pass(self) -> None:
+        """Freshness Guarantee: If current eval fails, old passing reports are NOT reused and promotion is blocked."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        v2_dir = self.root / "golden_v2"
+        (v2_dir / "test").mkdir(parents=True)
+
+        # Existing reports that would have passed
+        chal_v2 = self._create_v2_report("chal_v2.json", total=106, top1_correct=90, top3_correct=100)
+        champ_v2 = self._create_v2_report("champ_v2.json", total=106, top1_correct=80, top3_correct=95)
+
+        # Current evaluation command fails for Champion
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, v2_dir, chal_v2, champ_v2, fail_champion=True
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(asset_task.read_bytes(), b"ORIGINAL_CHAMPION_BYTES")
+        self.assertIn("Tier 2 evaluation command failed for Champion model", err)
+        self.assertIn("Status: V2_EVAL_FAILED", err)
+        self.assertIn("Promotion prohibited", err)
+
+    def test_two_tier_gate_blocks_promotion_when_challenger_eval_fails_even_if_old_reports_pass(self) -> None:
+        """Freshness Guarantee: If Challenger eval fails, old passing reports are NOT reused."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        v2_dir = self.root / "golden_v2"
+        (v2_dir / "test").mkdir(parents=True)
+
+        chal_v2 = self._create_v2_report("chal_v2.json", total=106, top1_correct=90, top3_correct=100)
+        champ_v2 = self._create_v2_report("champ_v2.json", total=106, top1_correct=80, top3_correct=95)
+
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, v2_dir, chal_v2, champ_v2, fail_challenger=True
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(asset_task.read_bytes(), b"ORIGINAL_CHAMPION_BYTES")
+        self.assertIn("Tier 2 evaluation command failed for Challenger model", err)
+        self.assertIn("Status: V2_EVAL_FAILED", err)
+        self.assertIn("Promotion prohibited", err)
+
+    def test_two_tier_gate_blocks_promotion_when_champion_details_missing(self) -> None:
+        """Fail-Closed: Missing test.details in fresh Champion evaluation blocks promotion."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        v2_dir = self.root / "golden_v2"
+        (v2_dir / "test").mkdir(parents=True)
+
+        chal_v2 = self._create_v2_report("chal_v2.json", total=106, top1_correct=85, top3_correct=98)
+        champ_v2 = self._create_v2_report("champ_v2.json", total=106, with_details=False)
+
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, v2_dir, chal_v2, champ_v2
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(asset_task.read_bytes(), b"ORIGINAL_CHAMPION_BYTES")
+        self.assertIn("Status: V2_INVALID_METRICS", err)
+        self.assertIn("Promotion prohibited", err)
+
+    def test_two_tier_gate_blocks_promotion_when_challenger_details_missing(self) -> None:
+        """Fail-Closed: Missing test.details in fresh Challenger evaluation blocks promotion."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        v2_dir = self.root / "golden_v2"
+        (v2_dir / "test").mkdir(parents=True)
+
+        chal_v2 = self._create_v2_report("chal_v2.json", total=106, with_details=False)
+        champ_v2 = self._create_v2_report("champ_v2.json", total=106, top1_correct=80, top3_correct=95)
+
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, v2_dir, chal_v2, champ_v2
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(asset_task.read_bytes(), b"ORIGINAL_CHAMPION_BYTES")
+        self.assertIn("Status: V2_INVALID_METRICS", err)
+        self.assertIn("Promotion prohibited", err)
 
 
 if __name__ == "__main__":

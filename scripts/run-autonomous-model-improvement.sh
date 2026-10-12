@@ -47,6 +47,12 @@ export GATE_MAX_MODEL_SIZE_BYTES=15728640 # <= 15 MiB (15,728,640 bytes)
 export GATE_MIN_MODEL_SIZE_BYTES=1048576  # >= 1 MiB (1,048,576 bytes)
 export GATE_MAX_LATENCY_MS="100.0"        # <= 100ms (eval host benchmark gate; does not guarantee on-device latency)
 
+EVALUATE_MODEL_CMD="${EVALUATE_MODEL_CMD:-uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py}"
+
+run_evaluate_model() {
+  eval "$EVALUATE_MODEL_CMD \"\$@\""
+}
+
 validate_dataset() {
   local dataset_dir="$1"
   local golden_test_dir="$2"
@@ -413,49 +419,65 @@ if (!chalTest || !champTest) {
 
 const REQUIRED_V2_SIZE = 106;
 
-function validateMetrics(metrics, name) {
+function validateReport(data, name) {
   const errors = [];
-  if (typeof metrics.total !== 'number' || !Number.isInteger(metrics.total)) {
-    errors.push(name + '.metrics.total must be an integer');
-  } else if (metrics.total !== REQUIRED_V2_SIZE) {
-    errors.push(name + '.metrics.total must be exactly ' + REQUIRED_V2_SIZE + ', got ' + metrics.total);
+  if (!data || !data.test) {
+    errors.push(name + '.test is missing');
+    return errors;
   }
 
-  for (const field of ['top1_correct', 'top3_correct']) {
-    const val = metrics[field];
-    if (typeof val !== 'number' || !Number.isInteger(val)) {
-      errors.push(name + '.metrics.' + field + ' must be an integer');
-    } else if (val < 0 || (typeof metrics.total === 'number' && val > metrics.total)) {
-      errors.push(name + '.metrics.' + field + ' out of range [0, total]: ' + val);
+  // 1. Validate test.metrics
+  const metrics = data.test.metrics;
+  if (!metrics || typeof metrics !== 'object') {
+    errors.push(name + '.test.metrics must be an object');
+  } else {
+    if (typeof metrics.total !== 'number' || !Number.isInteger(metrics.total)) {
+      errors.push(name + '.metrics.total must be an integer');
+    } else if (metrics.total !== REQUIRED_V2_SIZE) {
+      errors.push(name + '.metrics.total must be exactly ' + REQUIRED_V2_SIZE + ', got ' + metrics.total);
     }
-  }
 
-  for (const field of ['top1_accuracy', 'top3_accuracy']) {
-    if (metrics[field] !== undefined) {
+    for (const field of ['top1_correct', 'top3_correct']) {
       const val = metrics[field];
-      if (typeof val !== 'number' || isNaN(val) || val < 0.0 || val > 1.0) {
-        errors.push(name + '.metrics.' + field + ' must be a float in [0.0, 1.0]');
+      if (typeof val !== 'number' || !Number.isInteger(val)) {
+        errors.push(name + '.metrics.' + field + ' must be an integer');
+      } else if (val < 0 || (typeof metrics.total === 'number' && val > metrics.total)) {
+        errors.push(name + '.metrics.' + field + ' out of range [0, total]: ' + val);
       }
     }
+
+    for (const field of ['top1_accuracy', 'top3_accuracy']) {
+      if (metrics[field] !== undefined) {
+        const val = metrics[field];
+        if (typeof val !== 'number' || isNaN(val) || val < 0.0 || val > 1.0) {
+          errors.push(name + '.metrics.' + field + ' must be a float in [0.0, 1.0]');
+        }
+      }
+    }
+  }
+
+  // 2. Validate mandatory test.details
+  if (!('details' in data.test) || data.test.details === undefined || data.test.details === null) {
+    errors.push(name + '.test.details is required');
+  } else if (!Array.isArray(data.test.details)) {
+    errors.push(name + '.test.details must be an array');
+  } else if (data.test.details.length !== REQUIRED_V2_SIZE) {
+    errors.push(name + '.test.details length must be exactly ' + REQUIRED_V2_SIZE + ', got ' + data.test.details.length);
   }
 
   return errors;
 }
 
-const chalErrors = validateMetrics(chalTest, 'Challenger');
-const champErrors = validateMetrics(champTest, 'Champion');
-
-if (chalData.test.details && (!Array.isArray(chalData.test.details) || chalData.test.details.length !== REQUIRED_V2_SIZE)) {
-  chalErrors.push('Challenger.test.details length must be exactly ' + REQUIRED_V2_SIZE);
-}
-if (champData.test.details && (!Array.isArray(champData.test.details) || champData.test.details.length !== REQUIRED_V2_SIZE)) {
-  champErrors.push('Champion.test.details length must be exactly ' + REQUIRED_V2_SIZE);
-}
+const chalErrors = validateReport(chalData, 'Challenger');
+const champErrors = validateReport(champData, 'Champion');
 
 if (chalErrors.length > 0 || champErrors.length > 0) {
   const allErrors = chalErrors.concat(champErrors);
   console.error('❌ Error: Golden Set v2 metric validation failed:\n  ' + allErrors.join('\n  '));
-  const isCountMismatch = allErrors.some(e => e.includes('must be exactly ' + REQUIRED_V2_SIZE) || e.includes('length must be exactly ' + REQUIRED_V2_SIZE));
+  const isCountMismatch = allErrors.some(e =>
+    e.includes('must be exactly ' + REQUIRED_V2_SIZE) ||
+    e.includes('length must be exactly ' + REQUIRED_V2_SIZE)
+  );
   if (isCountMismatch) {
     process.stdout.write('V2_SAMPLE_COUNT_MISMATCH');
   } else {
@@ -498,26 +520,33 @@ execute_two_tier_promotion_gate() {
     v2_gate_result="V2_EVAL_FAILED"
     echo -e "\n📊 [Step 3c/4] Running Tier 2 Comprehensive Benchmark against Golden Test Set v2 (106 samples)..."
 
+    # Freshness Guarantee: Always execute fresh evaluations in a dedicated run directory.
+    # Never reuse past reports from previous runs.
+    local run_v2_dir="${output_dir}/v2_eval_fresh_$$"
+    mkdir -p "$run_v2_dir"
+    local fresh_champ_report="${run_v2_dir}/champion_v2_fresh.json"
+    local fresh_chal_report="${run_v2_dir}/challenger_v2_fresh.json"
+
+    rm -f "$fresh_champ_report" "$fresh_chal_report"
+
     local eval_success=true
-    if [ ! -f "$champion_v2_report" ]; then
-      echo "Evaluating Production Champion on Golden Test Set v2..."
-      if ! uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
-        --model-path "$asset_task" \
-        --dataset-dir "$golden_v2_dir" \
-        --output-json "$champion_v2_report" \
-        --output-md "$output_dir/champion_v2_evaluation_summary.md" \
-        --split test; then
-        echo "❌ Error: Tier 2 evaluation command failed for Champion model" >&2
-        eval_success=false
-      fi
+    echo "Evaluating Production Champion on Golden Test Set v2..."
+    if ! run_evaluate_model \
+      --model-path "$asset_task" \
+      --dataset-dir "$golden_v2_dir" \
+      --output-json "$fresh_champ_report" \
+      --output-md "$output_dir/champion_v2_evaluation_summary.md" \
+      --split test; then
+      echo "❌ Error: Tier 2 evaluation command failed for Champion model" >&2
+      eval_success=false
     fi
 
-    if [ "$eval_success" = true ] && [ ! -f "$challenger_v2_report" ]; then
+    if [ "$eval_success" = true ]; then
       echo "Evaluating Challenger on Golden Test Set v2..."
-      if ! uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
+      if ! run_evaluate_model \
         --model-path "$challenger_model" \
         --dataset-dir "$golden_v2_dir" \
-        --output-json "$challenger_v2_report" \
+        --output-json "$fresh_chal_report" \
         --output-md "$output_dir/challenger_v2_evaluation_summary.md" \
         --split test; then
         echo "❌ Error: Tier 2 evaluation command failed for Challenger model" >&2
@@ -525,8 +554,15 @@ execute_two_tier_promotion_gate() {
       fi
     fi
 
-    if [ "$eval_success" = true ] && [ -f "$challenger_v2_report" ] && [ -f "$champion_v2_report" ]; then
-      v2_gate_result=$(evaluate_golden_v2_gate "$challenger_v2_report" "$champion_v2_report")
+    if [ "$eval_success" = true ] && [ -f "$fresh_chal_report" ] && [ -f "$fresh_champ_report" ]; then
+      v2_gate_result=$(evaluate_golden_v2_gate "$fresh_chal_report" "$fresh_champ_report")
+      # On success, sync the fresh verified reports to destination paths if requested
+      if [ -n "$champion_v2_report" ]; then
+        cp -f "$fresh_champ_report" "$champion_v2_report"
+      fi
+      if [ -n "$challenger_v2_report" ]; then
+        cp -f "$fresh_chal_report" "$challenger_v2_report"
+      fi
     else
       if [ "$eval_success" = true ]; then
         echo "❌ Error: Tier 2 evaluation report(s) not generated" >&2
@@ -535,6 +571,8 @@ execute_two_tier_promotion_gate() {
         v2_gate_result="V2_EVAL_FAILED"
       fi
     fi
+
+    rm -rf "$run_v2_dir"
   fi
 
   # Step 4: Champion / Challenger Gate

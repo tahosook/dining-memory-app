@@ -582,14 +582,25 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
   });
 
   describe('Two-Tier Golden Test Set v2 Promotion Gate (Tier 2 & Fail-Closed)', () => {
-    function createV2Report(fileName: string, total = 106, top1 = 80, top3 = 95, custom: Record<string, unknown> = {}) {
-      const details = Array.from({ length: total }, (_, i) => ({
-        image_name: `img_${i}.jpg`,
-        ground_truth: 'curry_rice',
-        is_top1: i < top1,
-        is_top3: i < top3,
-      }));
-      const report = {
+    function createV2Report(
+      fileName: string,
+      total = 106,
+      top1 = 80,
+      top3 = 95,
+      custom: Record<string, unknown> = {},
+      includeDetails = true,
+      detailsCount?: number
+    ) {
+      const count = detailsCount !== undefined ? detailsCount : total;
+      const details = includeDetails
+        ? Array.from({ length: count }, (_, i) => ({
+            image_name: `img_${i}.jpg`,
+            ground_truth: 'curry_rice',
+            is_top1: i < top1,
+            is_top3: i < top3,
+          }))
+        : undefined;
+      const report: Record<string, unknown> = {
         test: {
           metrics: {
             total,
@@ -601,7 +612,7 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
             avg_latency_ms: 45.0,
             ...custom,
           },
-          details,
+          ...(details !== undefined ? { details } : {}),
         },
       };
       const filePath = path.join(tempDir, fileName);
@@ -650,6 +661,38 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
       const res = runEvalGoldenV2(path.join(tempDir, 'nonexistent.json'), champ);
       expect(res.exitCode).toBe(1);
       expect(res.stdout).toBe('V2_REPORT_NOT_FOUND');
+    });
+
+    it('fails Tier 2 gate when Challenger test.details is missing', () => {
+      const champ = createV2Report('champ_v2_valid.json', 106, 80, 95);
+      const chal = createV2Report('chal_v2_no_details.json', 106, 80, 95, {}, false);
+      const res = runEvalGoldenV2(chal, champ);
+      expect(res.exitCode).toBe(1);
+      expect(res.stdout).toBe('V2_INVALID_METRICS');
+    });
+
+    it('fails Tier 2 gate when Champion test.details is missing', () => {
+      const champ = createV2Report('champ_v2_no_details.json', 106, 80, 95, {}, false);
+      const chal = createV2Report('chal_v2_valid.json', 106, 80, 95);
+      const res = runEvalGoldenV2(chal, champ);
+      expect(res.exitCode).toBe(1);
+      expect(res.stdout).toBe('V2_INVALID_METRICS');
+    });
+
+    it('fails Tier 2 gate when test.details is empty array', () => {
+      const champ = createV2Report('champ_v2_empty_det.json', 106, 80, 95, {}, true, 0);
+      const chal = createV2Report('chal_v2_valid_for_empty.json', 106, 80, 95);
+      const res = runEvalGoldenV2(chal, champ);
+      expect(res.exitCode).toBe(1);
+      expect(res.stdout).toBe('V2_SAMPLE_COUNT_MISMATCH');
+    });
+
+    it('fails Tier 2 gate when test.details length is 107', () => {
+      const champ = createV2Report('champ_v2_valid_for_107.json', 106, 80, 95);
+      const chal = createV2Report('chal_v2_107_det.json', 106, 80, 95, {}, true, 107);
+      const res = runEvalGoldenV2(chal, champ);
+      expect(res.exitCode).toBe(1);
+      expect(res.stdout).toBe('V2_SAMPLE_COUNT_MISMATCH');
     });
   });
 });
