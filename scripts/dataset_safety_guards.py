@@ -458,7 +458,7 @@ def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> Dict[str, Any]
             import sys
             print(
                 f"WARNING: Swap succeeded for '{target_dir}', but failed to remove backup directory '{backup_dir}': {cleanup_err}. "
-                f"Backup directory preserved at: {backup_dir}",
+                f"Residual backup directory left at: {backup_dir} (note: data within backup may be partially deleted)",
                 file=sys.stderr,
             )
 

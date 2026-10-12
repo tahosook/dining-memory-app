@@ -445,6 +445,67 @@ class TestDatasetSafetyGuards(unittest.TestCase):
         self.assertTrue((backup_path / "old.txt").is_file())
         self.assertEqual((backup_path / "old.txt").read_text(encoding="utf-8"), "old_data")
 
+    def test_atomic_directory_swap_handles_partial_backup_deletion_failure(self) -> None:
+        """Verify atomic_directory_swap behavior when backup cleanup fails mid-deletion (partial deletion)."""
+        import io
+        import unittest.mock as mock
+
+        target_dir = self.root / "existing_target_partial_del"
+        target_dir.mkdir()
+        (target_dir / "file1.txt").write_text("old_file1", encoding="utf-8")
+        (target_dir / "file2.txt").write_text("old_file2", encoding="utf-8")
+
+        staging_dir = self.root / "staging_partial_del"
+        staging_dir.mkdir()
+        (staging_dir / "new.txt").write_text("new_data", encoding="utf-8")
+
+        original_rmtree = shutil.rmtree
+
+        def simulate_partial_rmtree_failure(path: Any, **kwargs):
+            p = Path(path)
+            if ".backup_" in str(path):
+                # 1. Partially delete: remove file1.txt from backup
+                f1 = p / "file1.txt"
+                if f1.exists():
+                    f1.unlink()
+                # 2. Raise exception mid-cleanup
+                raise OSError(f"Simulated mid-cleanup failure on backup: {path}")
+            return original_rmtree(path, **kwargs)
+
+        with mock.patch("shutil.rmtree", side_effect=simulate_partial_rmtree_failure), \
+             mock.patch("sys.stderr", new_callable=io.StringIO) as mock_stderr:
+            result = atomic_directory_swap(staging_dir, target_dir)
+
+        # 1. New output directory swap succeeded
+        self.assertTrue(target_dir.is_dir())
+        self.assertTrue((target_dir / "new.txt").is_file())
+        self.assertEqual((target_dir / "new.txt").read_text(encoding="utf-8"), "new_data")
+
+        # 2. Swap result contracts
+        self.assertIsNotNone(result)
+        self.assertTrue(result["swap_success"])
+        self.assertFalse(result["backup_cleaned"])
+
+        # 3. backup_path identifies the residual directory
+        self.assertIsNotNone(result["backup_path"])
+        residual_backup = Path(result["backup_path"])
+        self.assertTrue(residual_backup.is_dir())
+
+        # 4. cleanup_error contains error info
+        self.assertIsNotNone(result["cleanup_error"])
+        self.assertIn("Simulated mid-cleanup failure on backup", result["cleanup_error"])
+
+        # 5. stderr logs cleanup failure and backup path
+        stderr_log = mock_stderr.getvalue()
+        self.assertIn("failed to remove backup directory", stderr_log)
+        self.assertIn(str(residual_backup), stderr_log)
+        self.assertIn("(note: data within backup may be partially deleted)", stderr_log)
+
+        # 6 & 7. Verify partial state: file1.txt was deleted, file2.txt remains
+        self.assertFalse((residual_backup / "file1.txt").exists())
+        self.assertTrue((residual_backup / "file2.txt").is_file())
+        self.assertEqual((residual_backup / "file2.txt").read_text(encoding="utf-8"), "old_file2")
+
 
 if __name__ == "__main__":
     unittest.main()
