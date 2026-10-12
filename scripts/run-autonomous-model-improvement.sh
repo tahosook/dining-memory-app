@@ -371,39 +371,230 @@ const fs = require('fs');
 const challengerPath = process.argv[1];
 const championPath = process.argv[2];
 
-if (!fs.existsSync(challengerPath) || !fs.existsSync(championPath)) {
-  console.error('Error: Golden Set v2 report file(s) not found');
+if (!challengerPath || !championPath) {
+  console.error('❌ Error: Missing challenger or champion report path');
   process.stdout.write('V2_REPORT_NOT_FOUND');
   process.exit(0);
 }
 
-const chalData = JSON.parse(fs.readFileSync(challengerPath, 'utf8'));
-const champData = JSON.parse(fs.readFileSync(championPath, 'utf8'));
-
-const chalTest = (chalData && chalData.test && chalData.test.metrics) ? chalData.test.metrics : {};
-const champTest = (champData && champData.test && champData.test.metrics) ? champData.test.metrics : {};
-
-const chalTotal = chalTest.total || 0;
-const champTotal = champTest.total || 0;
-const requiredV2Size = 106;
-
-if (chalTotal !== requiredV2Size || champTotal !== requiredV2Size) {
-  console.error('⚠️  Warning: Golden Set v2 evaluation sample count mismatch (Expected: ' + requiredV2Size + ', Challenger: ' + chalTotal + ', Champion: ' + champTotal + ')');
+if (!fs.existsSync(challengerPath) || !fs.existsSync(championPath)) {
+  console.error('❌ Error: Golden Set v2 report file(s) not found: ' +
+    (!fs.existsSync(challengerPath) ? challengerPath + ' ' : '') +
+    (!fs.existsSync(championPath) ? championPath : ''));
+  process.stdout.write('V2_REPORT_NOT_FOUND');
+  process.exit(0);
 }
 
-console.error('--- Tier 2: Golden Test Set v2 Comprehensive Benchmark Metrics (N=' + chalTotal + ') ---');
-console.error('Champion V2:   Top-1 = ' + (champTest.top1_correct || 0) + '/' + champTotal + ' (' + ((champTest.top1_accuracy || 0) * 100).toFixed(1) + '%), Top-3 = ' + (champTest.top3_correct || 0) + '/' + champTotal + ' (' + ((champTest.top3_accuracy || 0) * 100).toFixed(1) + '%)');
-console.error('Challenger V2: Top-1 = ' + (chalTest.top1_correct || 0) + '/' + chalTotal + ' (' + ((chalTest.top1_accuracy || 0) * 100).toFixed(1) + '%), Top-3 = ' + (chalTest.top3_correct || 0) + '/' + chalTotal + ' (' + ((chalTest.top3_accuracy || 0) * 100).toFixed(1) + '%)');
+let chalData, champData;
+try {
+  chalData = JSON.parse(fs.readFileSync(challengerPath, 'utf8'));
+} catch (err) {
+  console.error('❌ Error: Failed to parse Challenger Golden v2 report JSON: ' + err.message);
+  process.stdout.write('V2_INVALID_REPORT');
+  process.exit(0);
+}
 
-const v2Pass = ((chalTest.top3_correct || 0) >= (champTest.top3_correct || 0)) && ((chalTest.top1_correct || 0) >= (champTest.top1_correct || 0));
+try {
+  champData = JSON.parse(fs.readFileSync(championPath, 'utf8'));
+} catch (err) {
+  console.error('❌ Error: Failed to parse Champion Golden v2 report JSON: ' + err.message);
+  process.stdout.write('V2_INVALID_REPORT');
+  process.exit(0);
+}
+
+const chalTest = (chalData && chalData.test && chalData.test.metrics) ? chalData.test.metrics : null;
+const champTest = (champData && champData.test && champData.test.metrics) ? champData.test.metrics : null;
+
+if (!chalTest || !champTest) {
+  console.error('❌ Error: Missing test.metrics in Golden Set v2 evaluation report(s)');
+  process.stdout.write('V2_INVALID_METRICS');
+  process.exit(0);
+}
+
+const REQUIRED_V2_SIZE = 106;
+
+function validateMetrics(metrics, name) {
+  const errors = [];
+  if (typeof metrics.total !== 'number' || !Number.isInteger(metrics.total)) {
+    errors.push(name + '.metrics.total must be an integer');
+  } else if (metrics.total !== REQUIRED_V2_SIZE) {
+    errors.push(name + '.metrics.total must be exactly ' + REQUIRED_V2_SIZE + ', got ' + metrics.total);
+  }
+
+  for (const field of ['top1_correct', 'top3_correct']) {
+    const val = metrics[field];
+    if (typeof val !== 'number' || !Number.isInteger(val)) {
+      errors.push(name + '.metrics.' + field + ' must be an integer');
+    } else if (val < 0 || (typeof metrics.total === 'number' && val > metrics.total)) {
+      errors.push(name + '.metrics.' + field + ' out of range [0, total]: ' + val);
+    }
+  }
+
+  for (const field of ['top1_accuracy', 'top3_accuracy']) {
+    if (metrics[field] !== undefined) {
+      const val = metrics[field];
+      if (typeof val !== 'number' || isNaN(val) || val < 0.0 || val > 1.0) {
+        errors.push(name + '.metrics.' + field + ' must be a float in [0.0, 1.0]');
+      }
+    }
+  }
+
+  return errors;
+}
+
+const chalErrors = validateMetrics(chalTest, 'Challenger');
+const champErrors = validateMetrics(champTest, 'Champion');
+
+if (chalData.test.details && (!Array.isArray(chalData.test.details) || chalData.test.details.length !== REQUIRED_V2_SIZE)) {
+  chalErrors.push('Challenger.test.details length must be exactly ' + REQUIRED_V2_SIZE);
+}
+if (champData.test.details && (!Array.isArray(champData.test.details) || champData.test.details.length !== REQUIRED_V2_SIZE)) {
+  champErrors.push('Champion.test.details length must be exactly ' + REQUIRED_V2_SIZE);
+}
+
+if (chalErrors.length > 0 || champErrors.length > 0) {
+  const allErrors = chalErrors.concat(champErrors);
+  console.error('❌ Error: Golden Set v2 metric validation failed:\n  ' + allErrors.join('\n  '));
+  const isCountMismatch = allErrors.some(e => e.includes('must be exactly ' + REQUIRED_V2_SIZE) || e.includes('length must be exactly ' + REQUIRED_V2_SIZE));
+  if (isCountMismatch) {
+    process.stdout.write('V2_SAMPLE_COUNT_MISMATCH');
+  } else {
+    process.stdout.write('V2_INVALID_METRICS');
+  }
+  process.exit(0);
+}
+
+const chalTotal = chalTest.total;
+const champTotal = champTest.total;
+
+console.error('--- Tier 2: Golden Test Set v2 Comprehensive Benchmark Metrics (N=' + chalTotal + ') ---');
+console.error('Champion V2:   Top-1 = ' + champTest.top1_correct + '/' + champTotal + ' (' + (champTest.top1_correct / champTotal * 100).toFixed(1) + '%), Top-3 = ' + champTest.top3_correct + '/' + champTotal + ' (' + (champTest.top3_correct / champTotal * 100).toFixed(1) + '%)');
+console.error('Challenger V2: Top-1 = ' + chalTest.top1_correct + '/' + chalTotal + ' (' + (chalTest.top1_correct / chalTotal * 100).toFixed(1) + '%), Top-3 = ' + chalTest.top3_correct + '/' + chalTotal + ' (' + (chalTest.top3_correct / chalTotal * 100).toFixed(1) + '%)');
+
+const v2Pass = (chalTest.top3_correct >= champTest.top3_correct) && (chalTest.top1_correct >= champTest.top1_correct);
 if (v2Pass) {
   console.error('Tier 2 Benchmark Gate: PASS (Challenger preserves or exceeds Champion on Golden Set v2)');
   process.stdout.write('V2_PASS');
 } else {
-  console.error('Tier 2 Benchmark Gate: REGRESSION DETECTED on Golden Set v2');
+  console.error('❌ Tier 2 Benchmark Gate: REGRESSION DETECTED on Golden Set v2 (Challenger Top-1: ' + chalTest.top1_correct + ' vs Champion: ' + champTest.top1_correct + ', Challenger Top-3: ' + chalTest.top3_correct + ' vs Champion: ' + champTest.top3_correct + ')');
   process.stdout.write('V2_REGRESSION');
 }
 " "$challenger_json" "$champion_json"
+}
+
+execute_two_tier_promotion_gate() {
+  local challenger_model="$1"
+  local asset_task="$2"
+  local challenger_report="$3"
+  local champion_report="$4"
+  local golden_v2_dir="${5:-}"
+  local challenger_v2_report="${6:-}"
+  local champion_v2_report="${7:-}"
+  local output_dir="${8:-$(dirname "$challenger_report")}"
+
+  # Step 3c: Tier 2 Benchmark Evaluation on Golden Test Set v2 (106 samples)
+  local v2_gate_result="SKIPPED"
+  if [ -n "$golden_v2_dir" ] && [ -d "$golden_v2_dir/test" ]; then
+    v2_gate_result="V2_EVAL_FAILED"
+    echo -e "\n📊 [Step 3c/4] Running Tier 2 Comprehensive Benchmark against Golden Test Set v2 (106 samples)..."
+
+    local eval_success=true
+    if [ ! -f "$champion_v2_report" ]; then
+      echo "Evaluating Production Champion on Golden Test Set v2..."
+      if ! uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
+        --model-path "$asset_task" \
+        --dataset-dir "$golden_v2_dir" \
+        --output-json "$champion_v2_report" \
+        --output-md "$output_dir/champion_v2_evaluation_summary.md" \
+        --split test; then
+        echo "❌ Error: Tier 2 evaluation command failed for Champion model" >&2
+        eval_success=false
+      fi
+    fi
+
+    if [ "$eval_success" = true ] && [ ! -f "$challenger_v2_report" ]; then
+      echo "Evaluating Challenger on Golden Test Set v2..."
+      if ! uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
+        --model-path "$challenger_model" \
+        --dataset-dir "$golden_v2_dir" \
+        --output-json "$challenger_v2_report" \
+        --output-md "$output_dir/challenger_v2_evaluation_summary.md" \
+        --split test; then
+        echo "❌ Error: Tier 2 evaluation command failed for Challenger model" >&2
+        eval_success=false
+      fi
+    fi
+
+    if [ "$eval_success" = true ] && [ -f "$challenger_v2_report" ] && [ -f "$champion_v2_report" ]; then
+      v2_gate_result=$(evaluate_golden_v2_gate "$challenger_v2_report" "$champion_v2_report")
+    else
+      if [ "$eval_success" = true ]; then
+        echo "❌ Error: Tier 2 evaluation report(s) not generated" >&2
+        v2_gate_result="V2_REPORT_NOT_FOUND"
+      else
+        v2_gate_result="V2_EVAL_FAILED"
+      fi
+    fi
+  fi
+
+  # Step 4: Champion / Challenger Gate
+  echo -e "\n⚖️  [Step 4/4] Evaluating Champion / Challenger Promotion Gate..."
+
+  check_class_compatibility "$challenger_report" "$champion_report"
+
+  local gate_result
+  gate_result=$(evaluate_gate "$challenger_report" "$champion_report")
+
+  if [ "$gate_result" = "PROMOTE" ]; then
+    # Fail-Closed Gate: When Tier 2 was executed, ONLY "V2_PASS" allows promotion.
+    if [ "$v2_gate_result" = "V2_PASS" ] || [ "$v2_gate_result" = "SKIPPED" ]; then
+      echo "🎉 [GATE PASSED] Challenger model passed regression check and met all canonical promotion criteria!"
+      echo "Promoting Challenger model to $asset_task atomically..."
+
+      local asset_dir
+      asset_dir="$(dirname "$asset_task")"
+      mkdir -p "$asset_dir"
+      local temp_asset="${asset_task}.tmp.$$"
+
+      cp "$challenger_model" "$temp_asset"
+
+      if [ ! -f "$temp_asset" ] || [ ! -s "$temp_asset" ]; then
+        echo "❌ Error: Failed to stage model asset at $temp_asset" >&2
+        rm -f "$temp_asset"
+        return 1
+      fi
+
+      local src_size
+      src_size=$(wc -c < "$challenger_model" | tr -d ' ')
+      local tmp_size
+      tmp_size=$(wc -c < "$temp_asset" | tr -d ' ')
+      if [ "$src_size" != "$tmp_size" ]; then
+        echo "❌ Error: Staged asset size mismatch ($src_size != $tmp_size). Aborting promotion." >&2
+        rm -f "$temp_asset"
+        return 1
+      fi
+
+      mv -f "$temp_asset" "$asset_task"
+      echo "✅ Model successfully and atomically deployed to Android assets: $asset_task"
+      echo "Done! You can now commit the new model asset and benchmark results."
+      return 0
+    else
+      echo "❌ [GATE BLOCKED] Challenger passed Tier 1 regression check, but failed Tier 2 Golden Set v2 gate (Status: $v2_gate_result)." >&2
+      echo "Fail-Closed Gate: Promotion prohibited. Production asset kept intact ($asset_task untouched)." >&2
+      echo "Challenger results logged at $output_dir/." >&2
+      return 1
+    fi
+  elif [ "$gate_result" = "MAINTAIN_OR_TIE" ]; then
+    echo "ℹ️  [GATE TIE] Challenger maintained baseline without regression, but did not satisfy full promotion requirements."
+    echo "Production asset kept intact ($asset_task untouched)."
+    echo "Candidate model preserved at $output_dir/ for review."
+    return 0
+  else
+    echo "⚠️  [GATE BLOCKED] Challenger model did not meet promotion criteria, regressed, or failed test set validation ($gate_result)."
+    echo "Core Principle: 'No regression, no PR'. Production asset kept intact ($asset_task untouched)."
+    echo "Challenger results logged at $output_dir/."
+    return 1
+  fi
 }
 
 # Standalone execution modes for automated tests / CLI invocation:
@@ -425,8 +616,30 @@ if [ "${1:-}" = "--evaluate-golden-v2" ]; then
     echo "Usage: $0 --evaluate-golden-v2 <challenger_v2_report.json> <champion_v2_report.json>" >&2
     exit 1
   fi
-  evaluate_golden_v2_gate "$CHALLENGER_ARG" "$CHAMPION_ARG"
-  exit 0
+  RESULT=$(evaluate_golden_v2_gate "$CHALLENGER_ARG" "$CHAMPION_ARG")
+  echo "$RESULT"
+  if [ "$RESULT" = "V2_PASS" ]; then
+    exit 0
+  else
+    exit 1
+  fi
+fi
+
+if [ "${1:-}" = "--run-promotion-gate" ]; then
+  CHALLENGER_MODEL_ARG="${2:-}"
+  ASSET_TASK_ARG="${3:-}"
+  CHALLENGER_REPORT_ARG="${4:-}"
+  CHAMPION_REPORT_ARG="${5:-}"
+  GOLDEN_V2_DIR_ARG="${6:-}"
+  CHALLENGER_V2_REPORT_ARG="${7:-}"
+  CHAMPION_V2_REPORT_ARG="${8:-}"
+  OUTPUT_DIR_ARG="${9:-$(dirname "$CHALLENGER_REPORT_ARG")}"
+  if [ -z "$CHALLENGER_MODEL_ARG" ] || [ -z "$ASSET_TASK_ARG" ] || [ -z "$CHALLENGER_REPORT_ARG" ] || [ -z "$CHAMPION_REPORT_ARG" ]; then
+    echo "Usage: $0 --run-promotion-gate <challenger_model> <asset_task> <challenger_report> <champion_report> [golden_v2_dir] [challenger_v2_report] [champion_v2_report] [output_dir]" >&2
+    exit 1
+  fi
+  execute_two_tier_promotion_gate "$CHALLENGER_MODEL_ARG" "$ASSET_TASK_ARG" "$CHALLENGER_REPORT_ARG" "$CHAMPION_REPORT_ARG" "$GOLDEN_V2_DIR_ARG" "$CHALLENGER_V2_REPORT_ARG" "$CHAMPION_V2_REPORT_ARG" "$OUTPUT_DIR_ARG"
+  exit $?
 fi
 
 if [ "${1:-}" = "--validate-dataset" ]; then
@@ -617,77 +830,13 @@ uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
   --output-md "$OUTPUT_DIR/evaluation_summary.md" \
   --split test
 
-# Step 3c: Tier 2 Benchmark Evaluation on Golden Test Set v2 (106 samples)
-V2_GATE_RESULT="SKIPPED"
-if [ -d "$GOLDEN_V2_DIR/test" ]; then
-  echo -e "\n📊 [Step 3c/4] Running Tier 2 Comprehensive Benchmark against Golden Test Set v2 (106 samples)..."
-  echo "Evaluating Production Champion on Golden Test Set v2..."
-  uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
-    --model-path "$ASSET_TASK" \
-    --dataset-dir "$GOLDEN_V2_DIR" \
-    --output-json "$CHAMPION_V2_REPORT" \
-    --output-md "$OUTPUT_DIR/champion_v2_evaluation_summary.md" \
-    --split test
-
-  echo "Evaluating Challenger on Golden Test Set v2..."
-  uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
-    --model-path "$CHALLENGER_MODEL" \
-    --dataset-dir "$GOLDEN_V2_DIR" \
-    --output-json "$BENCHMARK_V2_REPORT" \
-    --output-md "$OUTPUT_DIR/challenger_v2_evaluation_summary.md" \
-    --split test
-
-  if [ -f "$BENCHMARK_V2_REPORT" ] && [ -f "$CHAMPION_V2_REPORT" ]; then
-    V2_GATE_RESULT=$(evaluate_golden_v2_gate "$BENCHMARK_V2_REPORT" "$CHAMPION_V2_REPORT")
-  fi
-fi
-
-# Step 4: Champion / Challenger Gate
-echo -e "\n⚖️  [Step 4/4] Evaluating Champion / Challenger Promotion Gate..."
-
-# Verify class compatibility between Champion and Challenger before Promotion Gate
-check_class_compatibility "$BENCHMARK_REPORT" "$CHAMPION_REPORT"
-
-GATE_RESULT=$(evaluate_gate "$BENCHMARK_REPORT" "$CHAMPION_REPORT")
-
-if [ "$GATE_RESULT" = "PROMOTE" ]; then
-  if [ "$V2_GATE_RESULT" = "V2_REGRESSION" ]; then
-    echo "⚠️  [GATE HELD] Challenger passed Tier 1 regression check, but experienced a regression on Golden Set v2."
-    echo "Promotion held for further inspection. Production asset kept intact ($ASSET_TASK untouched)."
-  else
-    echo "🎉 [GATE PASSED] Challenger model passed regression check and met all canonical promotion criteria!"
-    echo "Promoting Challenger model to $ASSET_TASK atomically..."
-
-  # Safe atomic promotion: copy to temp file, verify, then atomic move
-  ASSET_DIR="$(dirname "$ASSET_TASK")"
-  mkdir -p "$ASSET_DIR"
-  TEMP_ASSET="${ASSET_TASK}.tmp.$$"
-
-  cp "$CHALLENGER_MODEL" "$TEMP_ASSET"
-
-  if [ ! -f "$TEMP_ASSET" ] || [ ! -s "$TEMP_ASSET" ]; then
-    echo "❌ Error: Failed to stage model asset at $TEMP_ASSET"
-    rm -f "$TEMP_ASSET"
-    exit 1
-  fi
-
-  SRC_SIZE=$(wc -c < "$CHALLENGER_MODEL" | tr -d ' ')
-  TMP_SIZE=$(wc -c < "$TEMP_ASSET" | tr -d ' ')
-  if [ "$SRC_SIZE" != "$TMP_SIZE" ]; then
-    echo "❌ Error: Staged asset size mismatch ($SRC_SIZE != $TMP_SIZE). Aborting promotion."
-    rm -f "$TEMP_ASSET"
-    exit 1
-  fi
-
-  mv -f "$TEMP_ASSET" "$ASSET_TASK"
-  echo "✅ Model successfully and atomically deployed to Android assets: $ASSET_TASK"
-  echo "Done! You can now commit the new model asset and benchmark results."
-elif [ "$GATE_RESULT" = "MAINTAIN_OR_TIE" ]; then
-  echo "ℹ️  [GATE TIE] Challenger maintained baseline without regression, but did not satisfy full promotion requirements."
-  echo "Production asset kept intact ($ASSET_TASK untouched)."
-  echo "Candidate model preserved at $OUTPUT_DIR/ for review."
-else
-  echo "⚠️  [GATE BLOCKED] Challenger model did not meet promotion criteria, regressed, or failed test set validation ($GATE_RESULT)."
-  echo "Core Principle: 'No regression, no PR'. Production asset kept intact ($ASSET_TASK untouched)."
-  echo "Challenger results logged at $OUTPUT_DIR/."
-fi
+# Step 3c & Step 4: Tier 2 Benchmark & Two-Tier Promotion Gate
+execute_two_tier_promotion_gate \
+  "$CHALLENGER_MODEL" \
+  "$ASSET_TASK" \
+  "$BENCHMARK_REPORT" \
+  "$CHAMPION_REPORT" \
+  "$GOLDEN_V2_DIR" \
+  "$BENCHMARK_V2_REPORT" \
+  "$CHAMPION_V2_REPORT" \
+  "$OUTPUT_DIR"
