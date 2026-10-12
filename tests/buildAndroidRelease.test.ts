@@ -139,4 +139,79 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     expect(verifyRes.status).toBe(1);
     expect(verifyRes.stderr).toContain("error: APK verification failed - 'assets/mediapipe/meal-input-assist.task' is missing");
   });
+
+  test('ensure-mediapipe-model.sh skips download when valid model already exists with matching checksum', () => {
+    const ensureScript = path.resolve(__dirname, '../scripts/ensure-mediapipe-model.sh');
+    const mockModelDir = path.join(tempTestDir, 'cached-model-dir');
+    fs.mkdirSync(mockModelDir, { recursive: true });
+
+    const modelPath = path.join(mockModelDir, 'meal-input-assist.task');
+    fs.writeFileSync(modelPath, 'hello world\n');
+
+    // Correct sha256 for "hello world\n"
+    const expectedSha256 = 'a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447';
+
+    const res = spawnSync('bash', [ensureScript], {
+      env: {
+        ...process.env,
+        MEDIAPIPE_MODEL_DIR: mockModelDir,
+        MEDIAPIPE_MODEL_SHA256: expectedSha256,
+        MEDIAPIPE_MODEL_URL: 'http://127.0.0.1:9/should-not-be-called',
+      },
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('MediaPipe model asset is up to date');
+  });
+
+  test('ensure-mediapipe-model.sh fails with descriptive error and cleans up temp files on download error', () => {
+    const ensureScript = path.resolve(__dirname, '../scripts/ensure-mediapipe-model.sh');
+    const mockModelDir = path.join(tempTestDir, 'download-fail-dir');
+    fs.mkdirSync(mockModelDir, { recursive: true });
+
+    const res = spawnSync('bash', [ensureScript], {
+      env: {
+        ...process.env,
+        MEDIAPIPE_MODEL_DIR: mockModelDir,
+        MEDIAPIPE_MODEL_URL: 'file:///path/to/nonexistent-model-file-for-test.task',
+      },
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: failed to download MediaPipe model');
+
+    // Verify no temporary files remain
+    const remainingFiles = fs.readdirSync(mockModelDir);
+    expect(remainingFiles.filter((f) => f.includes('.download-'))).toHaveLength(0);
+  });
+
+  test('ensure-mediapipe-model.sh fails with descriptive error on checksum mismatch', () => {
+    const ensureScript = path.resolve(__dirname, '../scripts/ensure-mediapipe-model.sh');
+    const mockModelDir = path.join(tempTestDir, 'checksum-mismatch-dir');
+    const sourceDir = path.join(tempTestDir, 'source-dir');
+    fs.mkdirSync(mockModelDir, { recursive: true });
+    fs.mkdirSync(sourceDir, { recursive: true });
+
+    const sourceFile = path.join(sourceDir, 'source-model.task');
+    fs.writeFileSync(sourceFile, 'some-binary-data');
+
+    const res = spawnSync('bash', [ensureScript], {
+      env: {
+        ...process.env,
+        MEDIAPIPE_MODEL_DIR: mockModelDir,
+        MEDIAPIPE_MODEL_URL: `file://${sourceFile}`,
+        MEDIAPIPE_MODEL_SHA256: '0000000000000000000000000000000000000000000000000000000000000000',
+      },
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: SHA256 checksum mismatch for downloaded MediaPipe model');
+
+    // Verify no temporary files or corrupted model remain
+    const remainingFiles = fs.readdirSync(mockModelDir);
+    expect(remainingFiles).toHaveLength(0);
+  });
 });

@@ -86,6 +86,11 @@ fi
 
 if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
   if [[ ! -f "$MODEL_ASSET_PATH" || ! -s "$MODEL_ASSET_PATH" ]]; then
+    echo "Bundled MediaPipe model asset missing at $MODEL_ASSET_PATH. Fetching model..."
+    bash "$ROOT_DIR/scripts/ensure-mediapipe-model.sh"
+  fi
+
+  if [[ ! -f "$MODEL_ASSET_PATH" || ! -s "$MODEL_ASSET_PATH" ]]; then
     echo "error: MediaPipe model asset is missing or empty at $MODEL_ASSET_PATH" >&2
     echo "Release builds require the bundled model asset to be present before building." >&2
     echo "Please place the valid model file at android/app/src/main/assets/mediapipe/meal-input-assist.task before building." >&2

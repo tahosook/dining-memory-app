@@ -21,10 +21,10 @@ export const MEAL_INPUT_ASSIST_MODEL_CONFIG = {
 export const MEDIAPIPE_MODEL_DISPLAY_NAME = 'MediaPipe Meal Classifier';
 
 export const MEDIAPIPE_MODEL_CONFIG = {
-  version: 'mediapipe-food-classifier-v1',
+  version: 'mediapipe-model-v0.1.0',
   fileName: 'meal-input-assist.task',
-  url: 'https://github.com/tahosook/dining-memory-app/releases/download/v0.1.0-models/meal-input-assist.task',
-  sha256: 'placeholder-sha256-hash-for-mediapipe-task-model',
+  url: 'https://github.com/tahosook/dining-memory-app/releases/download/mediapipe-model-v0.1.0/meal-input-assist.task',
+  sha256: '3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601',
 } as const;
 
 const LOCAL_MODEL_DIRECTORY = 'ai-models';
