@@ -30,6 +30,8 @@
 - [docs/engineering/github-security-settings.md](./engineering/github-security-settings.md): GitHub security / quality settings and manual setup checklist
 - [docs/engineering/release-keystore-guidelines.md](./engineering/release-keystore-guidelines.md): Android release signing key generation, secure storage, and CI/EAS secret injection procedures
 - [docs/engineering/dependency-policy.md](./engineering/dependency-policy.md): dependency classification, Expo SDK upgrade playbook, and native compatibility gates
+- [docs/engineering/mediapipe-overview.md](./engineering/mediapipe-overview.md): MediaPipe 食事分類システム全体の鳥瞰図、正本管理、コンポーネント構成、開発者 Runbook
+- [docs/engineering/golden-test-set-v2-specification.md](./engineering/golden-test-set-v2-specification.md): MediaPipe 食事分類 Golden Test Set v2 (106枚) の仕様、選定根拠、制約事項、運用方法
 - [docs/engineering/food-labeling-guidelines.md](./engineering/food-labeling-guidelines.md): 食事画像ラベリング用スクリプトの責務、優先度、打ち止めライン
 - [docs/engineering/mediapipe-labeling-workflow.md](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の目的、guardrail、停止条件
 
@@ -58,6 +60,8 @@
 
 ### Engineering
 - [Context Map](./engineering/context-map.md): task-specific reading map for reducing unnecessary context use.
+- [MediaPipe Overview](./engineering/mediapipe-overview.md): MediaPipe 食事分類システムの全体像、アーキテクチャ図、正本リンク集、改修 Runbook.
+- [Golden Test Set v2 Specification](./engineering/golden-test-set-v2-specification.md): MediaPipe 食事分類 Golden Test Set v2 (106枚) の仕様、選定根拠、制約事項、運用方法.
 - [Coding Standards](./engineering/coding-standards.md): code-level conventions, review checks, and implementation discipline.
 - [Development Workflow](./engineering/development-workflow.md): task flow, verification, prohibited shortcuts, and definition of done.
 - [GitHub Security Settings](./engineering/github-security-settings.md): CodeQL, Dependabot, Secret scanning, branch protection, and Actions permission setup.
