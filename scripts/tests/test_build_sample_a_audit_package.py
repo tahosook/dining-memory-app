@@ -11,6 +11,7 @@ from scripts.build_sample_a_audit_package import (
     SampleAAuditPackageBuilder,
     get_jpeg_dimensions,
 )
+from scripts.dataset_safety_guards import SafetyError
 from scripts.tests.test_validate_zip2_audit_manifest import make_dummy_jpeg
 from scripts.validate_zip2_audit_manifest import extract_exif_dates
 
@@ -167,6 +168,67 @@ class TestBuildSampleAAuditPackage(unittest.TestCase):
 
         with self.assertRaises(FileNotFoundError):
             builder.build()
+
+    def test_image_path_traversal_prevention(self) -> None:
+        """Verify that ../ traversal, absolute paths outside image_dir, and symlinks escaping image_dir are rejected."""
+        import os
+
+        # Secret file outside image_dir
+        outside_dir = self.root / "outside_dir"
+        outside_dir.mkdir(parents=True, exist_ok=True)
+        secret_file = outside_dir / "secret.jpg"
+        secret_file.write_bytes(
+            make_valid_dummy_jpeg("2024:03:01 12:00:00", b"outside_secret_content", width=1024, height=768)
+        )
+
+        def run_builder_with_source_path(evil_source_path: str, out_name: str) -> Path:
+            evil_rows = [dict(r) for r in self.rows]
+            evil_rows[0]["source_path"] = evil_source_path
+
+            manifest_path = self.root / f"manifest_{out_name}.csv"
+            with open(manifest_path, "w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=list(evil_rows[0].keys()))
+                writer.writeheader()
+                writer.writerows(evil_rows)
+
+            test_out_dir = self.root / f"out_{out_name}"
+            builder = SampleAAuditPackageBuilder(
+                sample_manifest_csv=manifest_path,
+                image_dir=self.image_dir,
+                output_dir=test_out_dir,
+                shuffle_seed=20261013,
+            )
+            builder.build()
+            return test_out_dir
+
+        # 1. Normal image paths within image_dir work (verified in test_package_build_and_randomized_blind_ids)
+
+        # 2. Relative traversal ../ outside image_dir is rejected
+        with self.assertRaises(SafetyError) as ctx:
+            run_builder_with_source_path("../outside_dir/secret.jpg", "traversal")
+        self.assertIn("Path traversal detected", str(ctx.exception))
+        # Verify no output directory was populated with secret
+        self.assertFalse((self.root / "out_traversal" / "blind_images").exists())
+
+        # 3. Absolute path outside image_dir is rejected
+        with self.assertRaises(SafetyError) as ctx:
+            run_builder_with_source_path(str(secret_file.resolve()), "absolute")
+        self.assertIn("Path traversal detected", str(ctx.exception))
+        self.assertFalse((self.root / "out_absolute" / "blind_images").exists())
+
+        # 4. Symlink escaping image_dir is rejected
+        symlink_img = self.image_dir / "symlink_secret.jpg"
+        try:
+            os.symlink(secret_file, symlink_img)
+            has_symlink = True
+        except (OSError, NotImplementedError):
+            has_symlink = False
+
+        if has_symlink:
+            with self.assertRaises(SafetyError) as ctx:
+                run_builder_with_source_path("symlink_secret.jpg", "symlink")
+            self.assertIn("Path traversal detected", str(ctx.exception))
+            self.assertFalse((self.root / "out_symlink" / "blind_images").exists())
 
 
 if __name__ == "__main__":

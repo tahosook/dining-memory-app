@@ -183,13 +183,25 @@ def extract_agreed_candidates(
     agreed: List[Dict[str, str]] = []
     with open(registry_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
-        for r in reader:
+        for line_idx, r in enumerate(reader, start=2):
             if r.get("adoption_status") == "pending_human_review" and r.get("audit_subset") == "sample_A":
-                mapped = r.get("mapped_class", "")
-                pred = r.get("audit_predicted_class", "")
-                uncertain = r.get("audit_is_uncertain", "false").lower() == "true"
-                if mapped and mapped == pred and not uncertain:
-                    agreed.append(r)
+                img_id = r.get("image_id", "") or f"line_{line_idx}"
+                raw_uncertain = r.get("audit_is_uncertain")
+                if raw_uncertain is None:
+                    raise IntegrationError(
+                        f"Line {line_idx} ({img_id}): missing required 'audit_is_uncertain' field"
+                    )
+                val = raw_uncertain.strip().lower()
+                if val not in ("true", "false"):
+                    raise IntegrationError(
+                        f"Line {line_idx} ({img_id}): invalid 'audit_is_uncertain' value '{raw_uncertain}' "
+                        f"(expected 'true' or 'false')"
+                    )
+                if val == "false":
+                    mapped = r.get("mapped_class", "")
+                    pred = r.get("audit_predicted_class", "")
+                    if mapped and mapped == pred:
+                        agreed.append(r)
 
     agreed.sort(key=lambda x: (x["mapped_class"], x["image_id"]))
 

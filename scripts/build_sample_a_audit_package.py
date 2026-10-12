@@ -28,7 +28,10 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from scripts.dataset_safety_guards import assert_no_path_collision
+from scripts.dataset_safety_guards import (
+    assert_no_path_collision,
+    assert_path_within_directory,
+)
 from scripts.prepare_gemini_audit_sample_a import (
     get_git_info,
     strip_jpeg_metadata,
@@ -121,10 +124,11 @@ class SampleAAuditPackageBuilder:
         for r in rows:
             sp = r["source_path"]
             src_p = self.image_dir / sp
-            if not src_p.is_file():
-                raise FileNotFoundError(f"Raw image file missing: {src_p}")
+            src_p_resolved = assert_path_within_directory(src_p, self.image_dir)
+            if not src_p_resolved.is_file():
+                raise FileNotFoundError(f"Raw image file missing: {src_p_resolved}")
 
-            raw_bytes = src_p.read_bytes()
+            raw_bytes = src_p_resolved.read_bytes()
             if len(raw_bytes) < 4 or raw_bytes[:2] != b"\xff\xd8" or raw_bytes[-2:] != b"\xff\xd9":
                 raise ValueError(f"Corrupted JPEG file: {src_p}")
 
@@ -167,10 +171,12 @@ class SampleAAuditPackageBuilder:
         for r in shuffled_rows:
             sp = r["source_path"]
             src_p = self.image_dir / sp
+            src_p_resolved = assert_path_within_directory(src_p, self.image_dir)
             dst_p = blind_images_dir / r["package_image_file"]
+            assert_path_within_directory(dst_p, blind_images_dir)
 
             # Lossless stripping
-            strip_jpeg_metadata(src_p, dst_p)
+            strip_jpeg_metadata(src_p_resolved, dst_p)
 
             # Verify that stripped JPEG is valid and has identical dimensions
             dst_bytes = dst_p.read_bytes()

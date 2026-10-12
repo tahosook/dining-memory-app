@@ -153,6 +153,84 @@ class TestIntegrateAgreedPendingSamples(unittest.TestCase):
             self.assertNotIn("meshi_unaudited", extracted_ids)
             self.assertNotIn("meshi_disagree", extracted_ids)
 
+    def test_extract_agreed_candidates_audit_is_uncertain_validation(self) -> None:
+        """Verify fail-closed validation of audit_is_uncertain flag in extract_agreed_candidates."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            reg_path = tmp / "test_registry.csv"
+
+            fieldnames = [
+                "image_id", "mapped_class", "source_path", "adoption_status",
+                "audit_subset", "audit_predicted_class", "audit_is_uncertain",
+            ]
+
+            def write_registry(rows: list[dict[str, Any]], custom_fieldnames=None) -> None:
+                with open(reg_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=custom_fieldnames or fieldnames)
+                    writer.writeheader()
+                    writer.writerows(rows)
+
+            base_row = {
+                "image_id": "test_img_001",
+                "mapped_class": "fish_dish",
+                "source_path": "fish_001.jpg",
+                "adoption_status": "pending_human_review",
+                "audit_subset": "sample_A",
+                "audit_predicted_class": "fish_dish",
+            }
+
+            # 1. 'false' (including 'False', 'FALSE', and with whitespace) is accepted
+            for f_val in ["false", "False", "FALSE", " false "]:
+                row = dict(base_row, audit_is_uncertain=f_val)
+                write_registry([row])
+                candidates = extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertEqual(len(candidates), 1)
+                self.assertEqual(candidates[0]["image_id"], "test_img_001")
+
+            # 2. 'true' (including 'True', 'TRUE') is NOT extracted (excluded as uncertain)
+            for t_val in ["true", "True", "TRUE", " true "]:
+                row = dict(base_row, audit_is_uncertain=t_val)
+                write_registry([row])
+                candidates = extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertEqual(len(candidates), 0)
+
+            # 3. Missing column in CSV causes IntegrationError with line number and image_id
+            row_no_col = dict(base_row)
+            fn_no_col = [f for f in fieldnames if f != "audit_is_uncertain"]
+            write_registry([row_no_col], custom_fieldnames=fn_no_col)
+            content_before = reg_path.read_text(encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                extract_agreed_candidates(reg_path, enforce_real_counts=False)
+            self.assertIn("missing required 'audit_is_uncertain' field", str(ctx.exception))
+            self.assertIn("Line 2", str(ctx.exception))
+            self.assertIn("test_img_001", str(ctx.exception))
+            # 6. Verify input file not altered
+            self.assertEqual(reg_path.read_text(encoding="utf-8"), content_before)
+
+            # 4. Empty string or whitespace-only is rejected
+            for empty_val in ["", "   ", "\t"]:
+                row_empty = dict(base_row, audit_is_uncertain=empty_val)
+                write_registry([row_empty])
+                content_before = reg_path.read_text(encoding="utf-8")
+                with self.assertRaises(IntegrationError) as ctx:
+                    extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertIn("invalid 'audit_is_uncertain' value", str(ctx.exception))
+                self.assertIn("Line 2", str(ctx.exception))
+                self.assertIn("test_img_001", str(ctx.exception))
+                self.assertEqual(reg_path.read_text(encoding="utf-8"), content_before)
+
+            # 5. Invalid values ('unknown', '1', 'null', 'yes') are rejected
+            for bad_val in ["unknown", "1", "null", "yes", "no", "maybe"]:
+                row_bad = dict(base_row, audit_is_uncertain=bad_val)
+                write_registry([row_bad])
+                content_before = reg_path.read_text(encoding="utf-8")
+                with self.assertRaises(IntegrationError) as ctx:
+                    extract_agreed_candidates(reg_path, enforce_real_counts=False)
+                self.assertIn("invalid 'audit_is_uncertain' value", str(ctx.exception))
+                self.assertIn("Line 2", str(ctx.exception))
+                self.assertIn("test_img_001", str(ctx.exception))
+                self.assertEqual(reg_path.read_text(encoding="utf-8"), content_before)
+
     def test_integration_synthetic_success(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
