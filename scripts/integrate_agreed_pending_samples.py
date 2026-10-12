@@ -40,6 +40,7 @@ from scripts.dataset_safety_guards import (
     atomic_directory_swap,
     check_dual_image_leakage,
     collect_golden_hashes_dual,
+    load_and_validate_mapping,
     validate_sha256_format,
     verify_candidate_record_integrity,
 )
@@ -223,14 +224,9 @@ def integrate_agreed_samples(
     input_paths = [base_dataset_dir, registry_path, sample_pkg_dir, golden_test_dir]
     assert_no_path_collision(input_paths, output_dataset_dir)
 
-    # Load mapping from sample_pkg_dir
+    # Load and validate mapping from sample_pkg_dir
     mapping_path = sample_pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
-    if not mapping_path.is_file():
-        raise FileNotFoundError(f"Blind mapping file not found: {mapping_path}")
-
-    with open(mapping_path, "r", encoding="utf-8") as f:
-        mapping_data = json.load(f)
-    img_by_id = {r["image_id"]: r for r in mapping_data.get("records", [])}
+    img_by_id = load_and_validate_mapping(mapping_path)
 
     # Extract agreed candidates
     agreed_records = extract_agreed_candidates(registry_path, enforce_real_counts=enforce_real_counts)

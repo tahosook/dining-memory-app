@@ -520,6 +520,56 @@ class TestPrepareGeminiAuditSample(unittest.TestCase):
         res = sampler_matching.sample(require_leak_check=True)
         self.assertTrue(res["leak_check_performed"])
 
+    def test_partitioned_eval_counts_mismatch_raises(self) -> None:
+        """Issue 4: Verify partitioned checks for Golden (7), val (33), test (33)."""
+        # 1. Golden count mismatch
+        s_golden_mismatch = GeminiAuditSampler(
+            manifest_csv=self.manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+            expected_golden_count=7,  # Synthetic test only has 1
+            expected_val_count=0,
+            expected_test_count=0,
+            expected_baseline_train_count=1,
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            s_golden_mismatch.sample(require_leak_check=True)
+        self.assertIn("Golden evaluation dataset count mismatch: expected 7", str(ctx.exception))
+
+        # 2. val count mismatch
+        s_val_mismatch = GeminiAuditSampler(
+            manifest_csv=self.manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+            expected_golden_count=1,
+            expected_val_count=33,  # Synthetic test has 0
+            expected_test_count=0,
+            expected_baseline_train_count=1,
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            s_val_mismatch.sample(require_leak_check=True)
+        self.assertIn("batch250 validation dataset count mismatch: expected 33", str(ctx.exception))
+
+        # 3. test count mismatch
+        s_test_mismatch = GeminiAuditSampler(
+            manifest_csv=self.manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+            expected_golden_count=1,
+            expected_val_count=0,
+            expected_test_count=33,  # Synthetic test has 0
+            expected_baseline_train_count=1,
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            s_test_mismatch.sample(require_leak_check=True)
+        self.assertIn("batch250 test dataset count mismatch: expected 33", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

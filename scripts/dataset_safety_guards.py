@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import os
 import shutil
 import struct
@@ -299,18 +300,84 @@ def verify_candidate_record_integrity(
     if allowed_classes and manifest_class not in allowed_classes:
         raise SafetyError(f"Invalid class '{manifest_class}' for image '{manifest_id}'")
 
-    manifest_sp = manifest_row.get("source_path", "").strip()
+    # source_path is strictly required on both sides and must match exactly
+    manifest_sp = str(manifest_row.get("source_path", "")).strip()
     mapping_sp = str(mapping_record.get("source_path", "")).strip()
-    if manifest_sp and mapping_sp and manifest_sp != mapping_sp:
+    if not manifest_sp:
+        raise SafetyError(f"Missing source_path in manifest row for image '{manifest_id}'")
+    if not mapping_sp:
+        raise SafetyError(f"Missing source_path in mapping record for image '{manifest_id}'")
+    if manifest_sp != mapping_sp:
         raise SafetyError(
             f"source_path mismatch for '{manifest_id}': manifest '{manifest_sp}' vs mapping '{mapping_sp}'"
         )
 
-    for field in ["raw_image_sha256", "stripped_image_sha256"]:
-        if field in mapping_record and mapping_record[field]:
-            validate_sha256_format(mapping_record[field], f"mapping.{field}")
-        if field in manifest_row and manifest_row[field]:
-            validate_sha256_format(manifest_row[field], f"manifest.{field}")
+    # Hashes are required in mapping_record and strictly validated
+    mapping_raw = str(mapping_record.get("raw_image_sha256", "")).strip()
+    mapping_stripped = str(mapping_record.get("stripped_image_sha256", "")).strip()
+    if not mapping_raw:
+        raise SafetyError(f"Missing required 'raw_image_sha256' in mapping record for '{manifest_id}'")
+    if not mapping_stripped:
+        raise SafetyError(f"Missing required 'stripped_image_sha256' in mapping record for '{manifest_id}'")
+    validate_sha256_format(mapping_raw, f"mapping.raw_image_sha256 for '{manifest_id}'")
+    validate_sha256_format(mapping_stripped, f"mapping.stripped_image_sha256 for '{manifest_id}'")
+
+    # If manifest contains hashes, they must match mapping hashes
+    manifest_raw = str(manifest_row.get("raw_image_sha256", "")).strip()
+    if manifest_raw:
+        validate_sha256_format(manifest_raw, f"manifest.raw_image_sha256 for '{manifest_id}'")
+        if manifest_raw != mapping_raw:
+            raise SafetyError(
+                f"raw_image_sha256 mismatch for '{manifest_id}': manifest '{manifest_raw}' vs mapping '{mapping_raw}'"
+            )
+
+    manifest_stripped = str(manifest_row.get("stripped_image_sha256", "")).strip()
+    if manifest_stripped:
+        validate_sha256_format(manifest_stripped, f"manifest.stripped_image_sha256 for '{manifest_id}'")
+        if manifest_stripped != mapping_stripped:
+            raise SafetyError(
+                f"stripped_image_sha256 mismatch for '{manifest_id}': manifest '{manifest_stripped}' vs mapping '{mapping_stripped}'"
+            )
+
+
+def load_and_validate_mapping(mapping_path: Path) -> Dict[str, Dict[str, Any]]:
+    """Loads private reconciliation mapping and strictly validates against missing or duplicate IDs.
+
+    Fail-closed: raises FileNotFoundError, SafetyError, or ValueError on any irregularity.
+    """
+    if not mapping_path.is_file():
+        raise FileNotFoundError(f"Blind mapping file not found: {mapping_path}")
+
+    try:
+        with open(mapping_path, "r", encoding="utf-8") as f:
+            mapping_data = json.load(f)
+    except Exception as e:
+        raise SafetyError(f"Failed to parse mapping JSON '{mapping_path}': {e}") from e
+
+    records = mapping_data.get("records")
+    if not isinstance(records, list):
+        raise SafetyError(f"Mapping JSON '{mapping_path}' must contain a 'records' list.")
+    if len(records) == 0:
+        raise SafetyError(f"Mapping records in '{mapping_path}' is empty.")
+
+    img_by_id: Dict[str, Dict[str, Any]] = {}
+    seen_ids: Set[str] = set()
+
+    for idx, r in enumerate(records):
+        if not isinstance(r, dict):
+            raise SafetyError(f"Record at index {idx} in mapping '{mapping_path}' is not an object.")
+        img_id = r.get("image_id")
+        if not img_id or not str(img_id).strip():
+            raise SafetyError(f"Record at index {idx} in mapping '{mapping_path}' is missing 'image_id'.")
+        clean_id = str(img_id).strip()
+        if clean_id in seen_ids:
+            raise SafetyError(
+                f"Duplicate image_id '{clean_id}' detected in mapping '{mapping_path}' at index {idx}."
+            )
+        seen_ids.add(clean_id)
+        img_by_id[clean_id] = r
+
+    return img_by_id
 
 
 def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> None:
@@ -341,6 +408,18 @@ def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> None:
     except Exception as e:
         # Rollback attempt
         rollback_success = False
+        cleanup_partial_err = None
+
+        # If a partial target_dir was created during the failed move, clean it up before restoring backup
+        if target_dir.exists():
+            try:
+                if target_dir.is_dir():
+                    shutil.rmtree(target_dir)
+                else:
+                    target_dir.unlink()
+            except Exception as clean_err:
+                cleanup_partial_err = clean_err
+
         if backup_dir and backup_dir.exists() and not target_dir.exists():
             try:
                 shutil.move(str(backup_dir), str(target_dir))
@@ -358,7 +437,10 @@ def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> None:
 
         error_msg = f"Failed to atomically swap staging '{staging_dir}' to target '{target_dir}': {e}."
         if rollback_success:
-            error_msg += f" Successfully rolled back target from '{backup_dir}'."
+            error_msg += f" Successfully cleaned partial target and rolled back target from '{backup_dir}'."
         elif backup_dir and backup_dir.exists():
-            error_msg += f" Existing target data preserved at '{backup_dir}'."
+            error_msg += (
+                f" Existing target data preserved at '{backup_dir}'."
+                + (f" (Could not clean partial target: {cleanup_partial_err})" if cleanup_partial_err else "")
+            )
         raise SafetyError(error_msg) from e

@@ -418,6 +418,44 @@ class TestIntegrateEligiblePseudoLabels(unittest.TestCase):
                 )
             self.assertIn("Invalid SHA-256 format", str(ctx.exception))
 
+    def test_mapping_missing_or_duplicate_id_rejected(self) -> None:
+        """Issue 2: Verify mapping with missing or duplicate ID is rejected before dictionary creation."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+
+            # 1. Duplicate ID in mapping
+            dup_record = dict(mapping_data["records"][0])
+            mapping_data["records"].append(dup_record)
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            from scripts.dataset_safety_guards import SafetyError
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Duplicate image_id", str(ctx.exception))
+
+            # 2. Missing ID in mapping
+            mapping_data["records"][0]["image_id"] = ""
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("missing 'image_id'", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

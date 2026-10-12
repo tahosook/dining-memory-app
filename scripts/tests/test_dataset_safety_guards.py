@@ -241,6 +241,173 @@ class TestDatasetSafetyGuards(unittest.TestCase):
             self.assertIn("Backup directory preserved at:", err_msg)
             self.assertIn("Manual recovery:", err_msg)
 
+    def test_verify_candidate_record_integrity_source_path_required_and_matched(self) -> None:
+        """Issue 1: verify_candidate_record_integrity requires source_path on both sides and exact match."""
+        from scripts.dataset_safety_guards import verify_candidate_record_integrity
+
+        valid_raw = "a" * 64
+        valid_stripped = "b" * 64
+
+        # 1. Missing in manifest
+        m_row_no_sp = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "",
+        }
+        rec = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "img_01.jpg",
+            "raw_image_sha256": valid_raw,
+            "stripped_image_sha256": valid_stripped,
+        }
+        with self.assertRaises(SafetyError) as ctx:
+            verify_candidate_record_integrity(m_row_no_sp, rec)
+        self.assertIn("Missing source_path in manifest", str(ctx.exception))
+
+        # 2. Missing in mapping
+        m_row = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "img_01.jpg",
+        }
+        rec_no_sp = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "",
+            "raw_image_sha256": valid_raw,
+            "stripped_image_sha256": valid_stripped,
+        }
+        with self.assertRaises(SafetyError) as ctx:
+            verify_candidate_record_integrity(m_row, rec_no_sp)
+        self.assertIn("Missing source_path in mapping", str(ctx.exception))
+
+        # 3. Mismatched source_path
+        rec_diff_sp = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "other.jpg",
+            "raw_image_sha256": valid_raw,
+            "stripped_image_sha256": valid_stripped,
+        }
+        with self.assertRaises(SafetyError) as ctx:
+            verify_candidate_record_integrity(m_row, rec_diff_sp)
+        self.assertIn("source_path mismatch", str(ctx.exception))
+
+    def test_verify_candidate_record_integrity_hashes_required_and_matched(self) -> None:
+        """Issue 1: verify_candidate_record_integrity requires hashes and verifies cross-record equality."""
+        from scripts.dataset_safety_guards import verify_candidate_record_integrity
+
+        valid_raw = "a" * 64
+        valid_stripped = "b" * 64
+        other_hash = "c" * 64
+
+        m_row = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "img_01.jpg",
+        }
+
+        # 1. Missing raw_image_sha256 in mapping
+        rec_no_raw = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "img_01.jpg",
+            "raw_image_sha256": "",
+            "stripped_image_sha256": valid_stripped,
+        }
+        with self.assertRaises(SafetyError) as ctx:
+            verify_candidate_record_integrity(m_row, rec_no_raw)
+        self.assertIn("raw_image_sha256", str(ctx.exception))
+
+        # 2. Missing stripped_image_sha256 in mapping
+        rec_no_stripped = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "img_01.jpg",
+            "raw_image_sha256": valid_raw,
+            "stripped_image_sha256": "",
+        }
+        with self.assertRaises(SafetyError) as ctx:
+            verify_candidate_record_integrity(m_row, rec_no_stripped)
+        self.assertIn("stripped_image_sha256", str(ctx.exception))
+
+        # 3. Hash mismatch when manifest has hash
+        m_row_diff_raw = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "img_01.jpg",
+            "raw_image_sha256": other_hash,
+        }
+        rec = {
+            "image_id": "img_01",
+            "mapped_class": "curry_rice",
+            "source_path": "img_01.jpg",
+            "raw_image_sha256": valid_raw,
+            "stripped_image_sha256": valid_stripped,
+        }
+        with self.assertRaises(SafetyError) as ctx:
+            verify_candidate_record_integrity(m_row_diff_raw, rec)
+        self.assertIn("raw_image_sha256 mismatch", str(ctx.exception))
+
+    def test_load_and_validate_mapping_rejects_missing_and_duplicate_ids(self) -> None:
+        """Issue 2: load_and_validate_mapping rejects mappings with missing or duplicate IDs."""
+        import json
+        from scripts.dataset_safety_guards import load_and_validate_mapping
+
+        mapping_file = self.root / "test_mapping.json"
+
+        # Missing ID
+        bad_missing = {"records": [{"image_id": "", "image_file": "a.jpg"}]}
+        mapping_file.write_text(json.dumps(bad_missing), encoding="utf-8")
+        with self.assertRaises(SafetyError) as ctx:
+            load_and_validate_mapping(mapping_file)
+        self.assertIn("missing 'image_id'", str(ctx.exception))
+
+        # Duplicate ID
+        bad_dup = {
+            "records": [
+                {"image_id": "dup_01", "image_file": "a.jpg"},
+                {"image_id": "dup_01", "image_file": "b.jpg"},
+            ]
+        }
+        mapping_file.write_text(json.dumps(bad_dup), encoding="utf-8")
+        with self.assertRaises(SafetyError) as ctx:
+            load_and_validate_mapping(mapping_file)
+        self.assertIn("Duplicate image_id 'dup_01'", str(ctx.exception))
+
+    def test_atomic_directory_swap_recovers_when_partial_target_created(self) -> None:
+        """Issue 3: atomic_directory_swap cleans up partial target and recovers backup when move fails mid-way."""
+        target_dir = self.root / "existing_target"
+        target_dir.mkdir()
+        (target_dir / "precious.txt").write_text("original_precious_data", encoding="utf-8")
+
+        staging_dir = self.root / "staging_partial_fail"
+        staging_dir.mkdir()
+        (staging_dir / "new.txt").write_text("new_data", encoding="utf-8")
+
+        import unittest.mock as mock
+        original_move = shutil.move
+
+        def simulate_partial_move_failure(src: str, dst: str, **kwargs):
+            if str(src) == str(staging_dir):
+                # Simulate move that partially created dst (target_dir) before failing
+                Path(dst).mkdir(parents=True, exist_ok=True)
+                (Path(dst) / "corrupt_partial.txt").write_text("partial", encoding="utf-8")
+                raise OSError("Partial write failure during move")
+            return original_move(src, dst, **kwargs)
+
+        with mock.patch("shutil.move", side_effect=simulate_partial_move_failure):
+            with self.assertRaises(SafetyError) as ctx:
+                atomic_directory_swap(staging_dir, target_dir)
+            self.assertIn("Successfully cleaned partial target and rolled back target", str(ctx.exception))
+
+        # Target directory must have been cleanly restored to its original state!
+        self.assertTrue(target_dir.is_dir())
+        self.assertTrue((target_dir / "precious.txt").is_file())
+        self.assertEqual((target_dir / "precious.txt").read_text(encoding="utf-8"), "original_precious_data")
+        self.assertFalse((target_dir / "corrupt_partial.txt").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

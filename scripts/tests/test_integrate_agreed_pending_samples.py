@@ -398,6 +398,44 @@ class TestIntegrateAgreedPendingSamples(unittest.TestCase):
                 )
             self.assertIn("Invalid SHA-256 format", str(ctx.exception))
 
+    def test_mapping_missing_or_duplicate_id_rejected(self) -> None:
+        """Issue 2: Verify mapping with missing or duplicate ID is rejected before dictionary creation in agreed samples integration."""
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            base_ds, reg_path, pkg_dir, golden_dir, out_ds = self._create_synthetic_environment(tmp_path)
+
+            mapping_file = pkg_dir / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+
+            # 1. Duplicate ID in mapping
+            dup_record = dict(mapping_data["records"][0])
+            mapping_data["records"].append(dup_record)
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            from scripts.dataset_safety_guards import SafetyError
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Duplicate image_id", str(ctx.exception))
+
+            # 2. Missing ID in mapping
+            mapping_data["records"][0]["image_id"] = ""
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(SafetyError) as ctx:
+                integrate_agreed_samples(
+                    base_dataset_dir=base_ds,
+                    registry_path=reg_path,
+                    sample_pkg_dir=pkg_dir,
+                    golden_test_dir=golden_dir,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("missing 'image_id'", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

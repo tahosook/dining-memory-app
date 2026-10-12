@@ -129,6 +129,9 @@ def get_git_info() -> tuple[str | None, bool | None]:
     return commit_sha, is_dirty
 
 
+EXPECTED_GOLDEN_EVAL_COUNT = 7
+EXPECTED_BATCH250_VAL_COUNT = 33
+EXPECTED_BATCH250_TEST_COUNT = 33
 EXPECTED_PROTECTED_EVAL_COUNT = 73
 EXPECTED_BASELINE_TRAIN_COUNT = 190
 
@@ -143,6 +146,9 @@ class GeminiAuditSampler:
         batch250_dir: Path | None = None,
         golden_eval_dir: Path | None = None,
         expected_manifest_sha256: str = EXPECTED_REMEDIATED_MANIFEST_SHA256,
+        expected_golden_count: int | None = None,
+        expected_val_count: int | None = None,
+        expected_test_count: int | None = None,
         expected_eval_count: int | None = None,
         expected_baseline_train_count: int | None = None,
         samples_per_class: int = 10,
@@ -153,6 +159,9 @@ class GeminiAuditSampler:
         self.batch250_dir = batch250_dir
         self.golden_eval_dir = golden_eval_dir
         self.expected_manifest_sha256 = expected_manifest_sha256
+        self.expected_golden_count = expected_golden_count
+        self.expected_val_count = expected_val_count
+        self.expected_test_count = expected_test_count
         self.expected_eval_count = expected_eval_count
         self.expected_baseline_train_count = expected_baseline_train_count
         self.samples_per_class = samples_per_class
@@ -173,25 +182,27 @@ class GeminiAuditSampler:
             )
 
         # 2. Collect evaluation & baseline protected hashes to prevent leak
-        eval_hashes: set[str] = set()
+        golden_hashes: set[str] = set()
+        val_hashes: set[str] = set()
+        test_hashes: set[str] = set()
         baseline_train_hashes: set[str] = set()
 
         if self.golden_eval_dir and self.golden_eval_dir.is_dir():
             for p in self.golden_eval_dir.glob("test/*/*.jpg"):
                 try:
-                    eval_hashes.add(compute_sha256(p))
+                    golden_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash golden eval image {p}: {e}") from e
 
         if self.batch250_dir and self.batch250_dir.is_dir():
             for p in (self.batch250_dir / "val").glob("*/*.jpg"):
                 try:
-                    eval_hashes.add(compute_sha256(p))
+                    val_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash batch250 val image {p}: {e}") from e
             for p in (self.batch250_dir / "test").glob("*/*.jpg"):
                 try:
-                    eval_hashes.add(compute_sha256(p))
+                    test_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash batch250 test image {p}: {e}") from e
             for p in (self.batch250_dir / "train").glob("*/*.jpg"):
@@ -199,6 +210,8 @@ class GeminiAuditSampler:
                     baseline_train_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash baseline train image {p}: {e}") from e
+
+        eval_hashes = golden_hashes | val_hashes | test_hashes
 
         if require_leak_check:
             if not self.golden_eval_dir or not self.golden_eval_dir.is_dir() or len(eval_hashes) == 0:
@@ -217,6 +230,24 @@ class GeminiAuditSampler:
                     "Fail-closed: real image verification requires valid image directory."
                 )
 
+            if self.expected_golden_count is not None and len(golden_hashes) != self.expected_golden_count:
+                raise RuntimeError(
+                    f"Golden evaluation dataset count mismatch: expected {self.expected_golden_count}, "
+                    f"got {len(golden_hashes)} unique hashes. "
+                    "Fail-closed: all golden evaluation images must be present."
+                )
+            if self.expected_val_count is not None and len(val_hashes) != self.expected_val_count:
+                raise RuntimeError(
+                    f"batch250 validation dataset count mismatch: expected {self.expected_val_count}, "
+                    f"got {len(val_hashes)} unique hashes. "
+                    "Fail-closed: all batch250 validation images must be present."
+                )
+            if self.expected_test_count is not None and len(test_hashes) != self.expected_test_count:
+                raise RuntimeError(
+                    f"batch250 test dataset count mismatch: expected {self.expected_test_count}, "
+                    f"got {len(test_hashes)} unique hashes. "
+                    "Fail-closed: all batch250 test images must be present."
+                )
             if self.expected_eval_count is not None and len(eval_hashes) != self.expected_eval_count:
                 raise RuntimeError(
                     f"Protected evaluation dataset count mismatch: expected {self.expected_eval_count}, "
@@ -548,6 +579,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Skip image metadata stripping export",
     )
     parser.add_argument(
+        "--expected-golden-count",
+        type=int,
+        default=EXPECTED_GOLDEN_EVAL_COUNT,
+        help="Expected golden evaluation image count (default: 7)",
+    )
+    parser.add_argument(
+        "--expected-val-count",
+        type=int,
+        default=EXPECTED_BATCH250_VAL_COUNT,
+        help="Expected batch250 validation image count (default: 33)",
+    )
+    parser.add_argument(
+        "--expected-test-count",
+        type=int,
+        default=EXPECTED_BATCH250_TEST_COUNT,
+        help="Expected batch250 test image count (default: 33)",
+    )
+    parser.add_argument(
         "--expected-eval-count",
         type=int,
         default=EXPECTED_PROTECTED_EVAL_COUNT,
@@ -576,6 +625,9 @@ def main(argv: list[str] | None = None) -> int:
         batch250_dir=args.batch250_dir,
         golden_eval_dir=args.golden_eval_dir,
         expected_manifest_sha256=args.expected_manifest_sha256,
+        expected_golden_count=args.expected_golden_count,
+        expected_val_count=args.expected_val_count,
+        expected_test_count=args.expected_test_count,
         expected_eval_count=args.expected_eval_count,
         expected_baseline_train_count=args.expected_baseline_train_count,
         samples_per_class=args.samples_per_class,
