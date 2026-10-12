@@ -62,6 +62,7 @@ flowchart TD
 | **Champion モデルバイナリ** | `android/app/src/main/assets/mediapipe/meal-input-assist.task`<br>[docs/issues/issue-22-integrate-agreed-pending-and-promote-challenger.md](../issues/issue-22-integrate-agreed-pending-and-promote-challenger.md) | Promotion Gate を突破し本番アセットへ昇格された最新モデルバイナリとハッシュ記録。 |
 | **Golden Test Set v2** | `docs/engineering/golden-test-set-v2-specification.md`<br>`state/mediapipe-dataset/golden_eval_v2/manifest.jsonl` | 106枚・9クラスの包括的ベンチマークデータセット仕様およびマニフェスト。 |
 | **現行 Promotion Gate 回帰ガード (旧Golden 7枚)** | `state/mediapipe-dataset/golden_eval/test/`<br>`scripts/run-autonomous-model-improvement.sh` | 自律改善ループで回帰防止ガードとして参照される少数固定データセット（N=7）。 |
+| **データセット外部保管 & 復元手順** | [docs/engineering/mediapipe-dataset-recovery.md](mediapipe-dataset-recovery.md) | `.gitignore` 対象の実画像データセット構成、外部保管方針、復元手順 Runbook。 |
 | **疑似ラベル採用レジストリ** | `state/mediapipe_labeling_runs/zip2-audit-manifest-20261009/pseudo_label_adoption_registry.csv`<br>[docs/issues/issue-19-mediapipe-audit-sample-a-reconciliation.md](../issues/issue-19-mediapipe-audit-sample-a-reconciliation.md) | Sample A ブラインド監査突合結果に基づく候補母集団全831枚の個別ステータス。 |
 | **アプリランタイム設定** | `src/ai/mealInputAssist/environment.ts`<br>`src/ai/mealInputAssist/modelConfig.ts` | アプリ側のデフォルトランタイムモードおよびモデル配布設定。 |
 
@@ -148,20 +149,31 @@ flowchart TD
    python3 scripts/reconcile_sample_a_audit.py
    ```
 
+### シナリオ 5: クリーン環境で実画像データセットを復元・検証したい場合
+1. アーカイブ取得と展開（詳細は [docs/engineering/mediapipe-dataset-recovery.md](mediapipe-dataset-recovery.md) 参照）：
+   ```bash
+   mkdir -p state/mediapipe-dataset
+   tar -xzf mediapipe-dataset-golden-v2-*.tar.gz -C state/mediapipe-dataset/
+   ```
+2. 復元後の完全性検証：
+   ```bash
+   python3 scripts/verify-golden-dataset-v2.py
+   ```
+
 ---
 
 ## 5. テスト・検証コマンド集
 
-### Python ユニットテスト (全 233 件)
-`scripts/tests/` 配下の全 19 テストスイート（233 件）を実行します。標準ライブラリ `unittest` で完走します。
+### Python ユニットテスト (全 233 件 / CI 連携)
+`scripts/tests/` 配下の全 19 テストスイート（233 件）を実行します。標準ライブラリのみで完走し、GitHub Actions CI でも自動検証されます。
 ```bash
-python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+npm run test:python:fast
 ```
 
 ### TypeScript / アプリ側テスト
 MediaPipe 関連のプロバイダー、ノーマライザー、ランタイムテストを実行します。
 ```bash
-npm test -- --testPathPattern=mediapipe
+npm test -- --testPathPattern=mealInputAssist
 ```
 
 ### ドキュメント & 静的解析検証

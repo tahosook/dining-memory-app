@@ -34,6 +34,7 @@
 - [docs/engineering/golden-test-set-v2-specification.md](./engineering/golden-test-set-v2-specification.md): MediaPipe 食事分類 Golden Test Set v2 (106枚) の仕様、選定根拠、制約事項、運用方法
 - [docs/engineering/food-labeling-guidelines.md](./engineering/food-labeling-guidelines.md): 食事画像ラベリング用スクリプトの責務、優先度、打ち止めライン
 - [docs/engineering/mediapipe-labeling-workflow.md](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の目的、guardrail、停止条件
+- [docs/engineering/mediapipe-dataset-recovery.md](./engineering/mediapipe-dataset-recovery.md): Git 管理外（.gitignore 対象）の MediaPipe 食事画像データセット構成、外部保管方針、復元手順 Runbook
 
 ## Canonical Docs
 
