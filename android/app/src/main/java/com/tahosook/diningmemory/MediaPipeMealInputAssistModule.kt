@@ -1,6 +1,7 @@
 package com.tahosook.diningmemory
 
 import android.graphics.BitmapFactory
+import android.util.Log
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -222,7 +223,10 @@ class MediaPipeMealInputAssistModule(
 
     val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
     if (!modelFile.exists() || !modelFile.isFile || modelFile.length() <= 0L) {
-      MediaPipeMealInputAssistSupport.copyBundledModelAssetIfAvailable(reactApplicationContext, modelFile)
+      val seeded = MediaPipeMealInputAssistSupport.copyBundledModelAssetIfAvailable(reactApplicationContext, modelFile)
+      if (!seeded) {
+        Log.w(MODULE_NAME, "Failed to seed bundled MediaPipe model asset to ${modelFile.absolutePath}")
+      }
     }
 
     if (!modelFile.exists()) {
