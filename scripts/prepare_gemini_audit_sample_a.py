@@ -209,37 +209,47 @@ class GeminiAuditSampleASampler:
                     if r.get("source_path"):
                         pilot_source_paths.add(r["source_path"])
 
-        # 3. Collect evaluation & baseline protected hashes to prevent leak
+        # 3. Collect evaluation & baseline protected files and hashes to prevent leak
+        golden_files: list[Path] = []
+        val_files: list[Path] = []
+        test_files: list[Path] = []
+        baseline_train_files: list[Path] = []
+
         golden_hashes: set[str] = set()
         val_hashes: set[str] = set()
         test_hashes: set[str] = set()
         baseline_train_hashes: set[str] = set()
 
         if self.golden_eval_dir and self.golden_eval_dir.is_dir():
-            for p in self.golden_eval_dir.glob("test/*/*.jpg"):
+            golden_files = sorted(self.golden_eval_dir.glob("test/*/*.jpg"))
+            for p in golden_files:
                 try:
                     golden_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash golden eval image {p}: {e}") from e
 
         if self.batch250_dir and self.batch250_dir.is_dir():
-            for p in (self.batch250_dir / "val").glob("*/*.jpg"):
+            val_files = sorted((self.batch250_dir / "val").glob("*/*.jpg"))
+            for p in val_files:
                 try:
                     val_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash batch250 val image {p}: {e}") from e
-            for p in (self.batch250_dir / "test").glob("*/*.jpg"):
+            test_files = sorted((self.batch250_dir / "test").glob("*/*.jpg"))
+            for p in test_files:
                 try:
                     test_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash batch250 test image {p}: {e}") from e
-            for p in (self.batch250_dir / "train").glob("*/*.jpg"):
+            baseline_train_files = sorted((self.batch250_dir / "train").glob("*/*.jpg"))
+            for p in baseline_train_files:
                 try:
                     baseline_train_hashes.add(compute_sha256(p))
                 except Exception as e:
                     raise RuntimeError(f"Failed to read/hash baseline train image {p}: {e}") from e
 
         eval_hashes = golden_hashes | val_hashes | test_hashes
+        eval_files_count = len(golden_files) + len(val_files) + len(test_files)
 
         if require_leak_check:
             if not self.golden_eval_dir or not self.golden_eval_dir.is_dir() or len(eval_hashes) == 0:
@@ -258,36 +268,99 @@ class GeminiAuditSampleASampler:
                     "Fail-closed: real image verification requires valid image directory."
                 )
 
-            if self.expected_golden_count is not None and len(golden_hashes) != self.expected_golden_count:
-                raise RuntimeError(
-                    f"Golden evaluation dataset count mismatch: expected {self.expected_golden_count}, "
-                    f"got {len(golden_hashes)} unique hashes. "
-                    "Fail-closed: all golden evaluation images must be present."
-                )
-            if self.expected_val_count is not None and len(val_hashes) != self.expected_val_count:
-                raise RuntimeError(
-                    f"batch250 validation dataset count mismatch: expected {self.expected_val_count}, "
-                    f"got {len(val_hashes)} unique hashes. "
-                    "Fail-closed: all batch250 validation images must be present."
-                )
-            if self.expected_test_count is not None and len(test_hashes) != self.expected_test_count:
-                raise RuntimeError(
-                    f"batch250 test dataset count mismatch: expected {self.expected_test_count}, "
-                    f"got {len(test_hashes)} unique hashes. "
-                    "Fail-closed: all batch250 test images must be present."
-                )
-            if self.expected_eval_count is not None and len(eval_hashes) != self.expected_eval_count:
-                raise RuntimeError(
-                    f"Protected evaluation dataset count mismatch: expected {self.expected_eval_count}, "
-                    f"got {len(eval_hashes)} unique hashes. "
-                    "Fail-closed: all protected evaluation images must be present."
-                )
-            if self.expected_baseline_train_count is not None and len(baseline_train_hashes) != self.expected_baseline_train_count:
-                raise RuntimeError(
-                    f"Baseline training dataset count mismatch: expected {self.expected_baseline_train_count}, "
-                    f"got {len(baseline_train_hashes)} unique hashes. "
-                    "Fail-closed: all baseline training images must be present."
-                )
+            if self.expected_golden_count is not None:
+                if len(golden_files) != self.expected_golden_count:
+                    raise RuntimeError(
+                        f"Golden evaluation dataset count mismatch: expected {self.expected_golden_count}, "
+                        f"got {len(golden_files)} files (file count mismatch). "
+                        "Fail-closed: all golden evaluation images must be present without missing or extraneous files."
+                    )
+                if len(golden_hashes) != len(golden_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in Golden evaluation dataset: "
+                        f"{len(golden_files)} files found but only {len(golden_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(golden_hashes) != self.expected_golden_count:
+                    raise RuntimeError(
+                        f"Golden evaluation dataset count mismatch: expected {self.expected_golden_count}, "
+                        f"got {len(golden_hashes)} unique hashes. "
+                        "Fail-closed: all golden evaluation images must be present."
+                    )
+
+            if self.expected_val_count is not None:
+                if len(val_files) != self.expected_val_count:
+                    raise RuntimeError(
+                        f"batch250 validation dataset count mismatch: expected {self.expected_val_count}, "
+                        f"got {len(val_files)} files (file count mismatch). "
+                        "Fail-closed: all batch250 validation images must be present without missing or extraneous files."
+                    )
+                if len(val_hashes) != len(val_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in batch250 validation dataset: "
+                        f"{len(val_files)} files found but only {len(val_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(val_hashes) != self.expected_val_count:
+                    raise RuntimeError(
+                        f"batch250 validation dataset count mismatch: expected {self.expected_val_count}, "
+                        f"got {len(val_hashes)} unique hashes. "
+                        "Fail-closed: all batch250 validation images must be present."
+                    )
+
+            if self.expected_test_count is not None:
+                if len(test_files) != self.expected_test_count:
+                    raise RuntimeError(
+                        f"batch250 test dataset count mismatch: expected {self.expected_test_count}, "
+                        f"got {len(test_files)} files (file count mismatch). "
+                        "Fail-closed: all batch250 test images must be present without missing or extraneous files."
+                    )
+                if len(test_hashes) != len(test_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in batch250 test dataset: "
+                        f"{len(test_files)} files found but only {len(test_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(test_hashes) != self.expected_test_count:
+                    raise RuntimeError(
+                        f"batch250 test dataset count mismatch: expected {self.expected_test_count}, "
+                        f"got {len(test_hashes)} unique hashes. "
+                        "Fail-closed: all batch250 test images must be present."
+                    )
+
+            if self.expected_eval_count is not None:
+                if eval_files_count != self.expected_eval_count:
+                    raise RuntimeError(
+                        f"Protected evaluation dataset count mismatch: expected {self.expected_eval_count}, "
+                        f"got {eval_files_count} files (file count mismatch). "
+                        "Fail-closed: all protected evaluation images must be present."
+                    )
+                if len(eval_hashes) != self.expected_eval_count:
+                    raise RuntimeError(
+                        f"Protected evaluation dataset count mismatch: expected {self.expected_eval_count}, "
+                        f"got {len(eval_hashes)} unique hashes. "
+                        "Fail-closed: all protected evaluation images must be present."
+                    )
+
+            if self.expected_baseline_train_count is not None:
+                if len(baseline_train_files) != self.expected_baseline_train_count:
+                    raise RuntimeError(
+                        f"Baseline training dataset count mismatch: expected {self.expected_baseline_train_count}, "
+                        f"got {len(baseline_train_files)} files (file count mismatch). "
+                        "Fail-closed: all baseline training images must be present without missing or extraneous files."
+                    )
+                if len(baseline_train_hashes) != len(baseline_train_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in baseline training dataset: "
+                        f"{len(baseline_train_files)} files found but only {len(baseline_train_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(baseline_train_hashes) != self.expected_baseline_train_count:
+                    raise RuntimeError(
+                        f"Baseline training dataset count mismatch: expected {self.expected_baseline_train_count}, "
+                        f"got {len(baseline_train_hashes)} unique hashes. "
+                        "Fail-closed: all baseline training images must be present."
+                    )
 
         # 4. Read manifest and apply strict candidate filtering
         with open(self.manifest_csv, "r", encoding="utf-8") as f:

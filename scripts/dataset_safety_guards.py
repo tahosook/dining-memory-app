@@ -380,8 +380,12 @@ def load_and_validate_mapping(mapping_path: Path) -> Dict[str, Dict[str, Any]]:
     return img_by_id
 
 
-def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> None:
-    """Safely swaps staging_dir into target_dir without leaving incomplete output on failure."""
+def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> Dict[str, Any]:
+    """Safely swaps staging_dir into target_dir without leaving incomplete output on failure.
+
+    Distinguishes new output swap success from backup cleanup success.
+    Returns a dictionary reporting swap_success, backup_cleaned, and backup_path.
+    """
     if not staging_dir.is_dir():
         raise FileNotFoundError(f"Staging directory not found: {staging_dir}")
 
@@ -402,9 +406,6 @@ def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> None:
 
     try:
         shutil.move(str(staging_dir), str(target_dir))
-        # Successful move: clean up backup safely
-        if backup_dir and backup_dir.exists():
-            shutil.rmtree(backup_dir, ignore_errors=True)
     except Exception as e:
         # Rollback attempt
         rollback_success = False
@@ -444,3 +445,27 @@ def atomic_directory_swap(staging_dir: Path, target_dir: Path) -> None:
                 + (f" (Could not clean partial target: {cleanup_partial_err})" if cleanup_partial_err else "")
             )
         raise SafetyError(error_msg) from e
+
+    # Successful move of staging into target: clean up backup safely without ignoring errors
+    backup_cleaned = True
+    cleanup_error_msg: Optional[str] = None
+    if backup_dir and backup_dir.exists():
+        try:
+            shutil.rmtree(backup_dir)
+        except Exception as cleanup_err:
+            backup_cleaned = False
+            cleanup_error_msg = str(cleanup_err)
+            import sys
+            print(
+                f"WARNING: Swap succeeded for '{target_dir}', but failed to remove backup directory '{backup_dir}': {cleanup_err}. "
+                f"Backup directory preserved at: {backup_dir}",
+                file=sys.stderr,
+            )
+
+    return {
+        "swap_success": True,
+        "backup_cleaned": backup_cleaned,
+        "backup_path": str(backup_dir) if (backup_dir and not backup_cleaned) else None,
+        "target_path": str(target_dir),
+        "cleanup_error": cleanup_error_msg,
+    }

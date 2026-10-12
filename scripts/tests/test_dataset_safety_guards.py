@@ -408,6 +408,43 @@ class TestDatasetSafetyGuards(unittest.TestCase):
         self.assertEqual((target_dir / "precious.txt").read_text(encoding="utf-8"), "original_precious_data")
         self.assertFalse((target_dir / "corrupt_partial.txt").exists())
 
+    def test_atomic_directory_swap_reports_backup_cleanup_failure(self) -> None:
+        """Issue 2: atomic_directory_swap distinguishes swap success from backup cleanup failure and reports backup path."""
+        target_dir = self.root / "existing_target_cleanup_fail"
+        target_dir.mkdir()
+        (target_dir / "old.txt").write_text("old_data", encoding="utf-8")
+
+        staging_dir = self.root / "staging_cleanup_fail"
+        staging_dir.mkdir()
+        (staging_dir / "new.txt").write_text("new_data", encoding="utf-8")
+
+        import unittest.mock as mock
+        original_rmtree = shutil.rmtree
+
+        def simulate_backup_rmtree_failure(path: Any, **kwargs):
+            if ".backup_" in str(path):
+                raise PermissionError(f"Permission denied deleting backup: {path}")
+            return original_rmtree(path, **kwargs)
+
+        with mock.patch("shutil.rmtree", side_effect=simulate_backup_rmtree_failure):
+            result = atomic_directory_swap(staging_dir, target_dir)
+
+        # 1. Target directory must be swapped successfully
+        self.assertTrue(target_dir.is_dir())
+        self.assertTrue((target_dir / "new.txt").is_file())
+        self.assertEqual((target_dir / "new.txt").read_text(encoding="utf-8"), "new_data")
+
+        # 2. Swap result must distinguish swap success and backup cleanup failure
+        self.assertIsNotNone(result)
+        self.assertTrue(result["swap_success"])
+        self.assertFalse(result["backup_cleaned"])
+        self.assertIsNotNone(result["backup_path"])
+        # 3. The actual backup path must still exist on disk
+        backup_path = Path(result["backup_path"])
+        self.assertTrue(backup_path.is_dir())
+        self.assertTrue((backup_path / "old.txt").is_file())
+        self.assertEqual((backup_path / "old.txt").read_text(encoding="utf-8"), "old_data")
+
 
 if __name__ == "__main__":
     unittest.main()

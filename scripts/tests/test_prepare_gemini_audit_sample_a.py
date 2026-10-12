@@ -426,6 +426,244 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
             s_test_mismatch.sample(require_leak_check=True)
         self.assertIn("batch250 test dataset count mismatch: expected 33", str(ctx.exception))
 
+    def test_partitioned_duplicate_extraneous_missing_rejected(self) -> None:
+        """Verify that duplicate, extraneous, and missing files are rejected for Golden, val, test, and train."""
+        def populate_dir(dir_path: Path, count: int, duplicate: bool = False) -> None:
+            dir_path.mkdir(parents=True, exist_ok=True)
+            for i in range(count):
+                f = dir_path / f"img_{i:04d}.jpg"
+                if duplicate and i == count - 1 and count > 1:
+                    content = (dir_path / "img_0000.jpg").read_bytes()
+                else:
+                    content = b"\xff\xd8\xff\xe0" + f"unique_{dir_path.name}_{i:04d}".encode("utf-8") + b"\xff\xd9"
+                f.write_bytes(content)
+
+        # 1. Golden evaluation (expected 7)
+        # 1a. Missing (6 files)
+        with tempfile.TemporaryDirectory() as tmp_g:
+            g_dir = Path(tmp_g)
+            populate_dir(g_dir / "test" / "cls", 6)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=self.batch250_dir,
+                golden_eval_dir=g_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_golden_count=7,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 1b. Extraneous (8 files)
+        with tempfile.TemporaryDirectory() as tmp_g:
+            g_dir = Path(tmp_g)
+            populate_dir(g_dir / "test" / "cls", 8)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=self.batch250_dir,
+                golden_eval_dir=g_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_golden_count=7,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 1c. Duplicate (7 files, but 2 share identical hash)
+        with tempfile.TemporaryDirectory() as tmp_g:
+            g_dir = Path(tmp_g)
+            populate_dir(g_dir / "test" / "cls", 7, duplicate=True)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=self.batch250_dir,
+                golden_eval_dir=g_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_golden_count=7,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("Duplicate files detected in Golden evaluation dataset", str(ctx.exception))
+
+        # 2. batch250 validation (expected 33)
+        # 2a. Missing (32 files)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 32)
+            populate_dir(b_dir / "test" / "cls", 33)
+            populate_dir(b_dir / "train" / "cls", 190)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_val_count=33,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 2b. Extraneous (34 files)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 34)
+            populate_dir(b_dir / "test" / "cls", 33)
+            populate_dir(b_dir / "train" / "cls", 190)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_val_count=33,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 2c. Duplicate (33 files, duplicate hash)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 33, duplicate=True)
+            populate_dir(b_dir / "test" / "cls", 33)
+            populate_dir(b_dir / "train" / "cls", 190)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_val_count=33,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("Duplicate files detected in batch250 validation dataset", str(ctx.exception))
+
+        # 3. batch250 test (expected 33)
+        # 3a. Missing (32 files)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 33)
+            populate_dir(b_dir / "test" / "cls", 32)
+            populate_dir(b_dir / "train" / "cls", 190)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_test_count=33,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 3b. Extraneous (34 files)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 33)
+            populate_dir(b_dir / "test" / "cls", 34)
+            populate_dir(b_dir / "train" / "cls", 190)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_test_count=33,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 3c. Duplicate (33 files, duplicate hash)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 33)
+            populate_dir(b_dir / "test" / "cls", 33, duplicate=True)
+            populate_dir(b_dir / "train" / "cls", 190)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_test_count=33,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("Duplicate files detected in batch250 test dataset", str(ctx.exception))
+
+        # 4. baseline train (expected 190)
+        # 4a. Missing (189 files)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 33)
+            populate_dir(b_dir / "test" / "cls", 33)
+            populate_dir(b_dir / "train" / "cls", 189)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_baseline_train_count=190,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 4b. Extraneous (191 files)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 33)
+            populate_dir(b_dir / "test" / "cls", 33)
+            populate_dir(b_dir / "train" / "cls", 191)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_baseline_train_count=190,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("file count mismatch", str(ctx.exception))
+
+        # 4c. Duplicate (190 files, duplicate hash)
+        with tempfile.TemporaryDirectory() as tmp_b:
+            b_dir = Path(tmp_b)
+            populate_dir(b_dir / "val" / "cls", 33)
+            populate_dir(b_dir / "test" / "cls", 33)
+            populate_dir(b_dir / "train" / "cls", 190, duplicate=True)
+            s = GeminiAuditSampleASampler(
+                manifest_csv=self.manifest_path,
+                pilot_manifest_csv=self.pilot_manifest_path,
+                image_dir=self.image_dir,
+                batch250_dir=b_dir,
+                golden_eval_dir=self.golden_eval_dir,
+                expected_manifest_sha256=self.manifest_sha256,
+                expected_baseline_train_count=190,
+            )
+            with self.assertRaises(RuntimeError) as ctx:
+                s.sample(require_leak_check=True)
+            self.assertIn("Duplicate files detected in baseline training dataset", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
