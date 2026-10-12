@@ -191,15 +191,16 @@ val createdClassifier = ImageClassifier.createFromOptions(reactApplicationContex
 
 ## 4. Design Decisions
 
-### Decision 1: ローカルファイル読み込み方式
+### Decision 1: ローカルファイル読み込み方式と同梱モデルシード
 
 | 案 | 説明 | 判定 |
 |---|---|---|
 | A. `setModelAssetPath` にローカルパスを渡す | 最小変更。 | ❌ **動作しない。** MediaPipe SDK の `setModelAssetPath(String)` は内部で `context.assets.open()` を呼ぶため、APK 外のファイルパスを渡すと `FileNotFoundException` になる。 |
-| B. APK `assets/` にモデルを同梱する | ビルド時バンドル。 | ❌ APK サイズ肥大（+10-20MB）。モデル更新にアプリストアの再デプロイが必要。 |
-| C. `setModelAssetBuffer(MappedByteBuffer)` を使う | `FileInputStream` → `FileChannel.map()` でゼロコピー読み込み。 | ✅ ローカルストレージからの読み込みが可能。OS ページキャッシュで高速。モデル差し替えが容易。 |
+| B. APK `assets/` にモデルを同梱し直接参照する | ビルド時バンドル。 | △ リリースビルドで単体動作するが、オンデマンド更新時にアプリストアの再デプロイが必要。 |
+| C. `setModelAssetBuffer(MappedByteBuffer)` + 初回自動シード（ハイブリッド） | `FileInputStream` → `FileChannel.map()` でローカル読み込み。APK 内同梱モデル（約8.5MB）が存在する場合は初回起動時に `filesDir/ai-models/` へ自動シードコピー。 | ✅ **採用。** リリースビルド単体でも即座に動作し、将来のリモートダウンロードによるモデル更新（上書き）とも完全両立。OS ページキャッシュで高速・ゼロコピー。 |
 
 **採用: 案 C。**
+ローカルストレージ（`context.filesDir/ai-models/meal-input-assist.task`）が存在しない場合、APK 内 `assets/mediapipe/meal-input-assist.task` から一時ファイル経由で安全にシードコピーし、`MappedByteBuffer` でロードする。リモートダウンロードが配備された後は、最新モデルで当該ローカルファイルが上書き可能。
 
 ### Decision 2: AppSettings キーの管理
 
@@ -237,7 +238,7 @@ val createdClassifier = ImageClassifier.createFromOptions(reactApplicationContex
 | 7 | `simmered_dish` | nimono, stew, meat_and_potato_stew |
 | 8 | `stir_fry` | stir_fry |
 
-TS 側の `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` L19-56 の `LABEL_MAPPING` は現在 9 エントリ（ramen, udon, soba 等の個別ラベル）を持つが、モデルが出力するのは上記の coarse class であるため、Normalizer のマッピングを coarse class に合わせて更新する必要がある（別 Issue）。
+TS 側の `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` の `LABEL_MAPPING` は、上記 9 クラスに対応して `mealNames`（料理名）および `cuisineTypes`（料理ジャンル）への正規化マッピングが適用済み。UI（Review画面 / `MealInputAssistSection`）にてタップで適用可能なサジェストボタンとして提示される。
 
 ---
 

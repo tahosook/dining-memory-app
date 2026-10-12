@@ -3,6 +3,9 @@ package com.tahosook.diningmemory
 import android.content.Context
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileNotFoundException
+import java.io.IOException
+import java.io.InputStream
 import java.net.URI
 import java.net.URISyntaxException
 import java.security.MessageDigest
@@ -75,6 +78,73 @@ internal object MediaPipeMealInputAssistSupport {
 
   fun resolveDefaultModelFile(baseDir: File): File {
     return File(File(baseDir, MEDIAPIPE_DEFAULT_MODEL_DIR), MEDIAPIPE_DEFAULT_MODEL_FILE_NAME)
+  }
+
+  fun copyAssetStreamToTargetFile(input: InputStream, targetFile: File): Boolean {
+    val parent = targetFile.parentFile ?: return false
+    if (!parent.exists() && !parent.mkdirs()) {
+      return false
+    }
+    val tempFile = File(parent, "${targetFile.name}.asset-copy-${System.nanoTime()}")
+    var success = false
+    return try {
+      tempFile.outputStream().use { output ->
+        input.copyTo(output)
+      }
+      if (tempFile.exists() && tempFile.length() > 0L) {
+        success = try {
+          java.nio.file.Files.move(
+            tempFile.toPath(),
+            targetFile.toPath(),
+            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+            java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+          )
+          true
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+          try {
+            java.nio.file.Files.move(
+              tempFile.toPath(),
+              targetFile.toPath(),
+              java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+            )
+            true
+          } catch (_: Exception) {
+            false
+          }
+        } catch (_: Exception) {
+          false
+        }
+        success
+      } else {
+        false
+      }
+    } catch (_: Exception) {
+      false
+    } finally {
+      if (!success && tempFile.exists()) {
+        tempFile.delete()
+      }
+    }
+  }
+
+  fun copyBundledModelAssetIfAvailable(
+    context: Context,
+    targetFile: File,
+    assetPath: String = MEDIAPIPE_MEAL_INPUT_ASSIST_MODEL_ASSET_PATH,
+  ): Boolean {
+    if (targetFile.exists() && targetFile.isFile && targetFile.length() > 0L) {
+      return true
+    }
+
+    return try {
+      context.assets.open(assetPath).use { input ->
+        copyAssetStreamToTargetFile(input, targetFile)
+      }
+    } catch (_: FileNotFoundException) {
+      false
+    } catch (_: IOException) {
+      false
+    }
   }
 
   fun resolveLocalFilePath(pathOrUri: String?): String? {

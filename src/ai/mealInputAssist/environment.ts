@@ -14,7 +14,7 @@ export interface MealInputAssistEnvironmentLoaderDependencies {
 type MealInputAssistRuntimeModule = typeof import('./runtime');
 
 export async function loadDefaultMealInputAssistRuntimeAvailability(
-  mode: MealInputAssistProviderMode = 'local-runtime-prototype'
+  mode: MealInputAssistProviderMode = 'mediapipe-static-image'
 ) {
   const { loadMealInputAssistRuntimeAvailability } =
     require('./runtime') as MealInputAssistRuntimeModule;

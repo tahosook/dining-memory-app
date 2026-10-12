@@ -74,6 +74,26 @@ mkdir -p "$ARTIFACT_DIR"
   git -C "$ROOT_DIR" status --short --branch
 } > "$INFO_FILE"
 
+MODEL_ASSET_PATH="$ANDROID_DIR/app/src/main/assets/mediapipe/meal-input-assist.task"
+REQUIRE_BUNDLED_MODEL="${REQUIRE_BUNDLED_MODEL:-}"
+if [[ -z "$REQUIRE_BUNDLED_MODEL" ]]; then
+  if [[ "$BUILD_OUTPUT_TYPE" == "release" || "$BUILD_TASK" == *"Release"* ]]; then
+    REQUIRE_BUNDLED_MODEL="true"
+  else
+    REQUIRE_BUNDLED_MODEL="false"
+  fi
+fi
+
+if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
+  if [[ ! -f "$MODEL_ASSET_PATH" || ! -s "$MODEL_ASSET_PATH" ]]; then
+    echo "error: MediaPipe model asset is missing or empty at $MODEL_ASSET_PATH" >&2
+    echo "Release builds require the bundled model asset to be present before building." >&2
+    echo "Please place the valid model file at android/app/src/main/assets/mediapipe/meal-input-assist.task before building." >&2
+    exit 1
+  fi
+  echo "Verified bundled model asset exists: $MODEL_ASSET_PATH ($(wc -c < "$MODEL_ASSET_PATH" | tr -d ' ') bytes)"
+fi
+
 echo "Building Android $BUILD_VARIANT_LABEL APK..."
 echo "Artifacts will be stored in: $ARTIFACT_DIR"
 
@@ -85,6 +105,21 @@ echo "Artifacts will be stored in: $ARTIFACT_DIR"
 if [[ ! -f "$APK_PATH" ]]; then
   echo "error: expected APK was not created at $APK_PATH" >&2
   exit 1
+fi
+
+if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
+  echo "Verifying bundled MediaPipe model asset inside APK..."
+  APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
+  if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
+    echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
+    exit 1
+  fi
+  APK_MODEL_SIZE="$(unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" | awk -v entry="$APK_MODEL_ENTRY" '$NF == entry { print $1 }')"
+  if [[ -z "$APK_MODEL_SIZE" || "$APK_MODEL_SIZE" -le 0 ]]; then
+    echo "error: APK verification failed - '$APK_MODEL_ENTRY' is empty or invalid size ($APK_MODEL_SIZE bytes) in $APK_PATH" >&2
+    exit 1
+  fi
+  echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
 fi
 
 cp "$APK_PATH" "$ARTIFACT_DIR/$APK_NAME"
@@ -102,3 +137,4 @@ echo "Build complete."
 echo "APK: $ARTIFACT_DIR/$APK_NAME"
 echo "Log: $LOG_FILE"
 echo "Info: $INFO_FILE"
+

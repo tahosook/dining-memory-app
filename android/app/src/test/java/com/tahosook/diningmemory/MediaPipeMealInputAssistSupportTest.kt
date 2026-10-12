@@ -1,8 +1,11 @@
 package com.tahosook.diningmemory
 
+import java.io.ByteArrayInputStream
 import java.io.File
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MediaPipeMealInputAssistSupportTest {
@@ -126,5 +129,109 @@ class MediaPipeMealInputAssistSupportTest {
       ),
       sanitized,
     )
+  }
+
+  @Test
+  fun `copies asset stream to target file atomically and creates parent directories`() {
+    val tempDir = File.createTempFile("mp-test-dir", "")
+    tempDir.delete()
+    val targetFile = File(tempDir, "sub/dir/meal-input-assist.task")
+
+    try {
+      val content = "dummy-model-data".toByteArray(Charsets.UTF_8)
+      val stream = ByteArrayInputStream(content)
+      val success = MediaPipeMealInputAssistSupport.copyAssetStreamToTargetFile(stream, targetFile)
+
+      assertTrue(success)
+      assertTrue(targetFile.exists())
+      assertEquals("dummy-model-data", targetFile.readText(Charsets.UTF_8))
+
+      val parentFiles = targetFile.parentFile?.listFiles() ?: emptyArray()
+      assertEquals(1, parentFiles.size)
+      assertEquals(targetFile.name, parentFiles[0].name)
+    } finally {
+      tempDir.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `updates existing model file atomically when stream is valid`() {
+    val tempDir = File.createTempFile("mp-test-update", "")
+    tempDir.delete()
+    val targetFile = File(tempDir, "ai-models/meal-input-assist.task")
+    targetFile.parentFile?.mkdirs()
+    targetFile.writeText("old-model-version-1")
+
+    try {
+      val newStream = ByteArrayInputStream("new-model-version-2".toByteArray(Charsets.UTF_8))
+      val success = MediaPipeMealInputAssistSupport.copyAssetStreamToTargetFile(newStream, targetFile)
+
+      assertTrue(success)
+      assertTrue(targetFile.exists())
+      assertEquals("new-model-version-2", targetFile.readText(Charsets.UTF_8))
+
+      val parentFiles = targetFile.parentFile?.listFiles() ?: emptyArray()
+      assertEquals(1, parentFiles.size)
+      assertEquals(targetFile.name, parentFiles[0].name)
+    } finally {
+      tempDir.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `preserves existing model and cleans up temp files when stream write fails`() {
+    val tempDir = File.createTempFile("mp-test-fail", "")
+    tempDir.delete()
+    val targetFile = File(tempDir, "ai-models/meal-input-assist.task")
+    targetFile.parentFile?.mkdirs()
+    targetFile.writeText("existing-safe-model-data")
+
+    val failingStream = object : java.io.InputStream() {
+      private var readCount = 0
+      override fun read(): Int {
+        if (readCount++ > 5) {
+          throw java.io.IOException("Simulated I/O failure during download or copy")
+        }
+        return 'A'.code
+      }
+    }
+
+    try {
+      val success = MediaPipeMealInputAssistSupport.copyAssetStreamToTargetFile(failingStream, targetFile)
+
+      assertFalse(success)
+      assertTrue(targetFile.exists())
+      assertEquals("existing-safe-model-data", targetFile.readText(Charsets.UTF_8))
+
+      val parentFiles = targetFile.parentFile?.listFiles() ?: emptyArray()
+      assertEquals(1, parentFiles.size)
+      assertEquals(targetFile.name, parentFiles[0].name)
+    } finally {
+      tempDir.deleteRecursively()
+    }
+  }
+
+  @Test
+  fun `returns false and preserves existing target file for empty stream`() {
+    val tempDir = File.createTempFile("mp-test-empty", "")
+    tempDir.delete()
+    val targetFile = File(tempDir, "sub/dir/empty-model.task")
+    targetFile.parentFile?.mkdirs()
+    targetFile.writeText("initial-safe-data")
+
+    try {
+      val emptyStream = ByteArrayInputStream(ByteArray(0))
+      val success = MediaPipeMealInputAssistSupport.copyAssetStreamToTargetFile(emptyStream, targetFile)
+
+      assertFalse(success)
+      assertTrue(targetFile.exists())
+      assertEquals("initial-safe-data", targetFile.readText(Charsets.UTF_8))
+
+      val parentFiles = targetFile.parentFile?.listFiles() ?: emptyArray()
+      assertEquals(1, parentFiles.size)
+      assertEquals(targetFile.name, parentFiles[0].name)
+    } finally {
+      tempDir.deleteRecursively()
+    }
   }
 }

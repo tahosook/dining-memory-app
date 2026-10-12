@@ -211,3 +211,16 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 }
+
+// Verify required bundled MediaPipe model asset before packaging release builds
+tasks.register("verifyReleaseMediaPipeModelAsset") {
+    doLast {
+        def modelFile = file("src/main/assets/mediapipe/meal-input-assist.task")
+        if (!modelFile.exists() || !modelFile.isFile() || modelFile.length() <= 0) {
+            throw new GradleException("Release build failed: Bundled MediaPipe model asset is missing or empty at '${modelFile.absolutePath}'. Please place the champion model at 'android/app/src/main/assets/mediapipe/meal-input-assist.task' before building release.")
+        }
+    }
+}
+tasks.matching { it.name == "mergeReleaseAssets" }.configureEach {
+    dependsOn "verifyReleaseMediaPipeModelAsset"
+}

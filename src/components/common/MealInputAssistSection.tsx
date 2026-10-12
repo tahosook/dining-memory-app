@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
+  type MealInputAssistCuisineSuggestion,
   type MealInputAssistProgress,
   type MealInputAssistStatus,
   type MealInputAssistSuggestions,
@@ -42,6 +43,8 @@ export interface MealInputAssistSectionProps {
   disabledReason: string | null;
   onRequestSuggestions: () => Promise<void>;
   onApplyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
+  onApplyMealNameSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
+  onApplyCuisineSuggestion?: (suggestion: MealInputAssistCuisineSuggestion) => void;
   variant?: MealInputAssistSectionVariant;
   testIDs?: MealInputAssistSectionTestIDs;
 }
@@ -69,13 +72,17 @@ export const MealInputAssistSection: React.FC<MealInputAssistSectionProps> = ({
   disabledReason,
   onRequestSuggestions,
   onApplyNoteDraftSuggestion,
+  onApplyMealNameSuggestion,
+  onApplyCuisineSuggestion,
   variant = 'dark',
   testIDs,
 }) => {
   const resolvedTestIDs = { ...DEFAULT_TEST_IDS, ...testIDs };
   const isLight = variant === 'light';
   const noteDraft = suggestions.noteDraft;
-  const hasAnySuggestions = Boolean(noteDraft);
+  const mealNames = suggestions.mealNames ?? [];
+  const cuisineTypes = suggestions.cuisineTypes ?? [];
+  const hasAnySuggestions = Boolean(noteDraft) || mealNames.length > 0 || cuisineTypes.length > 0;
   const actionDisabled = status === 'running' || status === 'disabled';
   const actionLabel =
     status === 'running' ? '解析中...' : status === 'error' ? 'もう一度作成する' : 'AIでメモを作成';
@@ -89,7 +96,7 @@ export const MealInputAssistSection: React.FC<MealInputAssistSectionProps> = ({
             '写真をもとにメモ下書きを整理しています。保存はいつでも行えます。')
           : status === 'success' && !hasAnySuggestions
             ? 'メモ下書きが見つかりませんでした。手入力のまま保存できます。'
-            : '作成した下書きは、ボタンを押したときだけメモ欄へ追加されます。';
+            : '作成した候補は、ボタンやチップを押したときだけ反映されます。';
   const progressLabel =
     typeof progress?.progress === 'number' ? `${Math.round(progress.progress * 100)}%` : null;
   const elapsedLabel = formatAiAssistDuration(progress?.elapsedMs ?? null);
@@ -198,6 +205,72 @@ export const MealInputAssistSection: React.FC<MealInputAssistSectionProps> = ({
       >
         <Text style={styles.buttonText}>{actionLabel}</Text>
       </TouchableOpacity>
+
+      {mealNames.length > 0 ? (
+        <View style={styles.suggestionsGroup}>
+          <Text
+            style={[
+              styles.suggestionsGroupLabel,
+              isLight ? styles.suggestionsGroupLabelLight : styles.suggestionsGroupLabelDark,
+            ]}
+          >
+            料理名候補:
+          </Text>
+          <View style={styles.chipsContainer}>
+            {mealNames.map((item, index) => (
+              <TouchableOpacity
+                key={`mealName-${index}-${item.value}`}
+                style={[
+                  styles.chipButton,
+                  isLight ? styles.chipButtonLight : styles.chipButtonDark,
+                ]}
+                onPress={() => onApplyMealNameSuggestion?.(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`料理名を${item.value}に設定`}
+              >
+                <Text
+                  style={[styles.chipText, isLight ? styles.chipTextLight : styles.chipTextDark]}
+                >
+                  {item.value}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {cuisineTypes.length > 0 ? (
+        <View style={styles.suggestionsGroup}>
+          <Text
+            style={[
+              styles.suggestionsGroupLabel,
+              isLight ? styles.suggestionsGroupLabelLight : styles.suggestionsGroupLabelDark,
+            ]}
+          >
+            ジャンル候補:
+          </Text>
+          <View style={styles.chipsContainer}>
+            {cuisineTypes.map((item, index) => (
+              <TouchableOpacity
+                key={`cuisine-${index}-${item.value}`}
+                style={[
+                  styles.chipButton,
+                  isLight ? styles.chipButtonLight : styles.chipButtonDark,
+                ]}
+                onPress={() => onApplyCuisineSuggestion?.(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`ジャンルを${item.value}に設定`}
+              >
+                <Text
+                  style={[styles.chipText, isLight ? styles.chipTextLight : styles.chipTextDark]}
+                >
+                  {item.value}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      ) : null}
 
       {noteDraft ? (
         <View
@@ -424,5 +497,47 @@ const styles = StyleSheet.create({
   },
   noteDraftButtonTextLight: {
     color: Colors.white,
+  },
+  suggestionsGroup: {
+    gap: 6,
+  },
+  suggestionsGroupLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  suggestionsGroupLabelDark: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+  suggestionsGroupLabelLight: {
+    color: '#495057',
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chipButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  chipButtonDark: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  chipButtonLight: {
+    backgroundColor: '#e7f1ff',
+    borderColor: '#9ec5fe',
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  chipTextDark: {
+    color: Colors.white,
+  },
+  chipTextLight: {
+    color: '#0d6efd',
   },
 });
