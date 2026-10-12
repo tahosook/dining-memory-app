@@ -164,4 +164,42 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       modelVersion: null,
     });
   });
+
+  test('suppresses other_or_exclude from suggestions while recording it in metadata', () => {
+    const normalized = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/other-photo.jpg',
+      categories: [
+        { label: 'other_or_exclude', score: 0.95 },
+        { label: 'curry_rice', score: 0.40 },
+      ],
+      classifierName: 'food-classifier',
+      modelVersion: 'v2',
+    });
+    const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
+
+    expect(normalized.providerResult).toEqual({
+      source: 'mediapipe-static-image',
+      mealNames: [
+        { value: 'カレーライス', confidence: 0.40 },
+      ],
+      cuisineTypes: [
+        { value: '洋食', confidence: 0.40 },
+      ],
+    });
+    expect(normalized.metadata).toEqual({
+      categoryCount: 2,
+      matchedCategoryCount: 2,
+      droppedCategoryCount: 0,
+      topCategoryLabel: 'other_or_exclude',
+      topCategoryScore: 0.95,
+      classifierName: 'food-classifier',
+      modelVersion: 'v2',
+    });
+    expect(reviewSuggestions.mealNames.map((candidate) => candidate.value)).toEqual([
+      'カレーライス',
+    ]);
+    expect(reviewSuggestions.cuisineTypes.map((candidate) => candidate.value)).toEqual([
+      '洋食',
+    ]);
+  });
 });

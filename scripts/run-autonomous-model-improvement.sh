@@ -29,6 +29,9 @@ ASSET_TASK="android/app/src/main/assets/mediapipe/meal-input-assist.task"
 BENCHMARK_REPORT="state/mediapipe_models/challenger_evaluation.json"
 CHAMPION_REPORT="state/mediapipe_models/champion_evaluation.json"
 GOLDEN_EVAL_DIR="state/mediapipe-dataset/golden_eval"
+GOLDEN_V2_DIR="state/mediapipe-dataset/golden_eval_v2"
+CHAMPION_V2_REPORT="state/mediapipe_models/champion_golden_v2_evaluation.json"
+BENCHMARK_V2_REPORT="state/mediapipe_models/challenger_golden_v2_evaluation.json"
 
 TARGET_PER_CLASS="${TARGET_PER_CLASS:-45}"
 MAX_MULTIPLIER="${MAX_MULTIPLIER:-3}"
@@ -358,6 +361,51 @@ if (passPromotion) {
 " "$challenger_json" "$champion_json"
 }
 
+evaluate_golden_v2_gate() {
+  local challenger_json="$1"
+  local champion_json="${2:-}"
+
+  node -e "
+const fs = require('fs');
+
+const challengerPath = process.argv[1];
+const championPath = process.argv[2];
+
+if (!fs.existsSync(challengerPath) || !fs.existsSync(championPath)) {
+  console.error('Error: Golden Set v2 report file(s) not found');
+  process.stdout.write('V2_REPORT_NOT_FOUND');
+  process.exit(0);
+}
+
+const chalData = JSON.parse(fs.readFileSync(challengerPath, 'utf8'));
+const champData = JSON.parse(fs.readFileSync(championPath, 'utf8'));
+
+const chalTest = (chalData && chalData.test && chalData.test.metrics) ? chalData.test.metrics : {};
+const champTest = (champData && champData.test && champData.test.metrics) ? champData.test.metrics : {};
+
+const chalTotal = chalTest.total || 0;
+const champTotal = champTest.total || 0;
+const requiredV2Size = 106;
+
+if (chalTotal !== requiredV2Size || champTotal !== requiredV2Size) {
+  console.error('⚠️  Warning: Golden Set v2 evaluation sample count mismatch (Expected: ' + requiredV2Size + ', Challenger: ' + chalTotal + ', Champion: ' + champTotal + ')');
+}
+
+console.error('--- Tier 2: Golden Test Set v2 Comprehensive Benchmark Metrics (N=' + chalTotal + ') ---');
+console.error('Champion V2:   Top-1 = ' + (champTest.top1_correct || 0) + '/' + champTotal + ' (' + ((champTest.top1_accuracy || 0) * 100).toFixed(1) + '%), Top-3 = ' + (champTest.top3_correct || 0) + '/' + champTotal + ' (' + ((champTest.top3_accuracy || 0) * 100).toFixed(1) + '%)');
+console.error('Challenger V2: Top-1 = ' + (chalTest.top1_correct || 0) + '/' + chalTotal + ' (' + ((chalTest.top1_accuracy || 0) * 100).toFixed(1) + '%), Top-3 = ' + (chalTest.top3_correct || 0) + '/' + chalTotal + ' (' + ((chalTest.top3_accuracy || 0) * 100).toFixed(1) + '%)');
+
+const v2Pass = ((chalTest.top3_correct || 0) >= (champTest.top3_correct || 0)) && ((chalTest.top1_correct || 0) >= (champTest.top1_correct || 0));
+if (v2Pass) {
+  console.error('Tier 2 Benchmark Gate: PASS (Challenger preserves or exceeds Champion on Golden Set v2)');
+  process.stdout.write('V2_PASS');
+} else {
+  console.error('Tier 2 Benchmark Gate: REGRESSION DETECTED on Golden Set v2');
+  process.stdout.write('V2_REGRESSION');
+}
+" "$challenger_json" "$champion_json"
+}
+
 # Standalone execution modes for automated tests / CLI invocation:
 if [ "${1:-}" = "--evaluate-gate" ]; then
   CHALLENGER_ARG="${2:-}"
@@ -367,6 +415,17 @@ if [ "${1:-}" = "--evaluate-gate" ]; then
     exit 1
   fi
   evaluate_gate "$CHALLENGER_ARG" "$CHAMPION_ARG"
+  exit 0
+fi
+
+if [ "${1:-}" = "--evaluate-golden-v2" ]; then
+  CHALLENGER_ARG="${2:-}"
+  CHAMPION_ARG="${3:-}"
+  if [ -z "$CHALLENGER_ARG" ] || [ -z "$CHAMPION_ARG" ]; then
+    echo "Usage: $0 --evaluate-golden-v2 <challenger_v2_report.json> <champion_v2_report.json>" >&2
+    exit 1
+  fi
+  evaluate_golden_v2_gate "$CHALLENGER_ARG" "$CHAMPION_ARG"
   exit 0
 fi
 
@@ -558,8 +617,33 @@ uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
   --output-md "$OUTPUT_DIR/evaluation_summary.md" \
   --split test
 
+# Step 3c: Tier 2 Benchmark Evaluation on Golden Test Set v2 (106 samples)
+V2_GATE_RESULT="SKIPPED"
+if [ -d "$GOLDEN_V2_DIR/test" ]; then
+  echo -e "\n📊 [Step 3c/4] Running Tier 2 Comprehensive Benchmark against Golden Test Set v2 (106 samples)..."
+  echo "Evaluating Production Champion on Golden Test Set v2..."
+  uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
+    --model-path "$ASSET_TASK" \
+    --dataset-dir "$GOLDEN_V2_DIR" \
+    --output-json "$CHAMPION_V2_REPORT" \
+    --output-md "$OUTPUT_DIR/champion_v2_evaluation_summary.md" \
+    --split test
+
+  echo "Evaluating Challenger on Golden Test Set v2..."
+  uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py \
+    --model-path "$CHALLENGER_MODEL" \
+    --dataset-dir "$GOLDEN_V2_DIR" \
+    --output-json "$BENCHMARK_V2_REPORT" \
+    --output-md "$OUTPUT_DIR/challenger_v2_evaluation_summary.md" \
+    --split test
+
+  if [ -f "$BENCHMARK_V2_REPORT" ] && [ -f "$CHAMPION_V2_REPORT" ]; then
+    V2_GATE_RESULT=$(evaluate_golden_v2_gate "$BENCHMARK_V2_REPORT" "$CHAMPION_V2_REPORT")
+  fi
+fi
+
 # Step 4: Champion / Challenger Gate
-echo -e "\n⚖️  [Step 4/4] Evaluating Champion / Challenger Promotion Gate (7-sample regression guard check)..."
+echo -e "\n⚖️  [Step 4/4] Evaluating Champion / Challenger Promotion Gate..."
 
 # Verify class compatibility between Champion and Challenger before Promotion Gate
 check_class_compatibility "$BENCHMARK_REPORT" "$CHAMPION_REPORT"
@@ -567,8 +651,12 @@ check_class_compatibility "$BENCHMARK_REPORT" "$CHAMPION_REPORT"
 GATE_RESULT=$(evaluate_gate "$BENCHMARK_REPORT" "$CHAMPION_REPORT")
 
 if [ "$GATE_RESULT" = "PROMOTE" ]; then
-  echo "🎉 [GATE PASSED] Challenger model passed 7-sample regression check and met all canonical promotion criteria!"
-  echo "Promoting Challenger model to $ASSET_TASK atomically..."
+  if [ "$V2_GATE_RESULT" = "V2_REGRESSION" ]; then
+    echo "⚠️  [GATE HELD] Challenger passed Tier 1 regression check, but experienced a regression on Golden Set v2."
+    echo "Promotion held for further inspection. Production asset kept intact ($ASSET_TASK untouched)."
+  else
+    echo "🎉 [GATE PASSED] Challenger model passed regression check and met all canonical promotion criteria!"
+    echo "Promoting Challenger model to $ASSET_TASK atomically..."
 
   # Safe atomic promotion: copy to temp file, verify, then atomic move
   ASSET_DIR="$(dirname "$ASSET_TASK")"
