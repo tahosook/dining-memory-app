@@ -479,7 +479,7 @@ describe('CameraScreen', () => {
       expect(await findByTestId('ai-input-assist-section')).toBeTruthy();
       expect((await findByTestId('ai-input-assist-status')).props.children).toBe('未実行');
       expect(await findByTestId('ai-input-assist-button')).toBeTruthy();
-      expect(await findByText('AIでメモを作成')).toBeTruthy();
+      expect(await findByText('AIで提案を作成')).toBeTruthy();
       expect(mealNameInput.props.placeholder).toBe('料理名（入力しない場合は自動で名前が付きます）');
       expect(await findByTestId('capture-review-cuisine-和食')).toBeTruthy();
       expect(await findByText('自炊')).toBeTruthy();

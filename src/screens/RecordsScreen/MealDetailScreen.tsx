@@ -537,6 +537,8 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         aiAssistDisabledReason={editMealInputAssist.disabledReason}
         onRequestAiSuggestions={editMealInputAssist.requestSuggestions}
         onApplyNoteDraftSuggestion={editMealInputAssist.applyNoteDraftSuggestion}
+        onApplyMealNameSuggestion={editMealInputAssist.applyMealNameSuggestion}
+        onApplyCuisineSuggestion={editMealInputAssist.applyCuisineSuggestion}
       />
 
       {photoViewerVisible ? (

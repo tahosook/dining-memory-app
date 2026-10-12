@@ -16,6 +16,10 @@ import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssis
 import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
 import { requestMealThumbnail } from '../src/media/mealThumbnail';
 import * as MealShareModule from '../src/media/mealShare';
+import type {
+  MealInputAssistCuisineSuggestion,
+  MealInputAssistTextSuggestion,
+} from '../src/ai/mealInputAssist';
 
 jest.mock('../src/media/mealThumbnail', () => ({
   requestMealThumbnail: jest.fn(),
@@ -123,17 +127,17 @@ type MockAiAssistState = {
   status: 'idle' | 'running' | 'success' | 'error' | 'disabled';
   suggestions: {
     source: string;
-    noteDraft: { value: string; label: string; confidence?: number; source: string } | null;
-    mealNames: Array<{ value: string; label: string; confidence?: number; source: string }>;
-    cuisineTypes: Array<{ value: string; label: string; confidence?: number; source: string }>;
+    noteDraft: MealInputAssistTextSuggestion | null;
+    mealNames: MealInputAssistTextSuggestion[];
+    cuisineTypes: MealInputAssistCuisineSuggestion[];
   };
   errorMessage: string | null;
   progress: null;
   disabledReason: string | null;
   requestSuggestions: jest.Mock;
-  applyNoteDraftSuggestion:
-    | jest.Mock
-    | ((suggestion: { value: string; label: string; confidence?: number; source: string }) => void);
+  applyNoteDraftSuggestion: jest.Mock | ((suggestion: MealInputAssistTextSuggestion) => void);
+  applyMealNameSuggestion?: jest.Mock | ((suggestion: MealInputAssistTextSuggestion) => void);
+  applyCuisineSuggestion?: jest.Mock | ((suggestion: MealInputAssistCuisineSuggestion) => void);
 };
 
 function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAiAssistState {
@@ -150,6 +154,8 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
     disabledReason: null,
     requestSuggestions: jest.fn().mockResolvedValue(undefined),
     applyNoteDraftSuggestion: jest.fn(),
+    applyMealNameSuggestion: jest.fn(),
+    applyCuisineSuggestion: jest.fn(),
     ...overrides,
   };
 }
@@ -517,7 +523,7 @@ describe('MealDetailScreen', () => {
     fireEvent.press(getByTestId('meal-detail-edit-button'));
 
     expect(getByTestId('detail-edit-ai-input-assist-section')).toBeTruthy();
-    expect(getByText('AIでメモを作成')).toBeTruthy();
+    expect(getByText('AIで提案を作成')).toBeTruthy();
 
     fireEvent.press(getByTestId('detail-edit-ai-input-assist-button'));
 
@@ -586,6 +592,90 @@ describe('MealDetailScreen', () => {
           notes: expectedNotes,
         })
       );
+    });
+  });
+
+  test('applies an AI meal name suggestion to edit meal name', async () => {
+    const mealNameSuggestion: MealInputAssistTextSuggestion = {
+      value: 'ラーメン',
+      label: 'ラーメン',
+      confidence: 0.95,
+      source: 'mediapipe-static-image',
+    };
+    const applyMealNameSuggestion = jest.fn();
+    (useMealInputAssist as jest.Mock).mockImplementation(
+      ({
+        onCaptureReviewChange,
+      }: {
+        onCaptureReviewChange: (field: string, value: string) => void;
+      }) =>
+        createAiAssistState({
+          status: 'success',
+          suggestions: {
+            source: 'mediapipe-static-image',
+            noteDraft: null,
+            mealNames: [mealNameSuggestion],
+            cuisineTypes: [],
+          },
+          applyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => {
+            applyMealNameSuggestion(suggestion);
+            onCaptureReviewChange('mealName', suggestion.value);
+          },
+        })
+    );
+
+    const { getByTestId, getByLabelText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+
+    expect(getByLabelText('料理名をラーメンに設定')).toBeTruthy();
+    fireEvent.press(getByLabelText('料理名をラーメンに設定'));
+
+    await waitFor(() => {
+      expect(getByTestId('detail-edit-meal-name-input').props.value).toBe('ラーメン');
+    });
+
+    expect(applyMealNameSuggestion).toHaveBeenCalledWith(mealNameSuggestion);
+  });
+
+  test('applies an AI cuisine suggestion to edit cuisine type', async () => {
+    const cuisineSuggestion: MealInputAssistCuisineSuggestion = {
+      value: '中華',
+      label: '中華',
+      confidence: 0.92,
+      source: 'mediapipe-static-image',
+    };
+    const applyCuisineSuggestion = jest.fn();
+    (useMealInputAssist as jest.Mock).mockImplementation(
+      ({
+        onCaptureReviewChange,
+      }: {
+        onCaptureReviewChange: (field: string, value: string) => void;
+      }) =>
+        createAiAssistState({
+          status: 'success',
+          suggestions: {
+            source: 'mediapipe-static-image',
+            noteDraft: null,
+            mealNames: [],
+            cuisineTypes: [cuisineSuggestion],
+          },
+          applyCuisineSuggestion: (suggestion: MealInputAssistCuisineSuggestion) => {
+            applyCuisineSuggestion(suggestion);
+            onCaptureReviewChange('cuisineType', suggestion.value);
+          },
+        })
+    );
+
+    const { getByTestId, getByLabelText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+
+    expect(getByLabelText('ジャンルを中華に設定')).toBeTruthy();
+    fireEvent.press(getByLabelText('ジャンルを中華に設定'));
+
+    await waitFor(() => {
+      expect(applyCuisineSuggestion).toHaveBeenCalledWith(cuisineSuggestion);
     });
   });
 
