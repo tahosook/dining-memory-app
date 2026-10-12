@@ -165,8 +165,8 @@ flowchart TD
 
 ## 5. テスト・検証コマンド集
 
-### Python ユニットテスト (全 250 件 / CI 連携)
-`scripts/tests/` 配下の全 20 テストスイート（250 件）を実行します。標準ライブラリのみで完走し、GitHub Actions CI でも自動検証されます。
+### Python ユニットテスト (全 266 件 / CI 連携)
+`scripts/tests/` 配下の全 20 テストスイート（266 件）を実行します。標準ライブラリのみで完走し、GitHub Actions CI でも自動検証されます。
 ```bash
 npm run test:python:fast
 ```

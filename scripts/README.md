@@ -92,11 +92,11 @@
 
 ## 4. テスト対応表 (`scripts/tests/`)
 
-`scripts/tests/` 配下に実在する **全 20 テストスイート（全 250 件のテストケース）** の一覧です。
+`scripts/tests/` 配下に実在する **全 20 テストスイート（全 266 件のテストケース）** の一覧です。
 
 | テストスクリプト名 | テスト件数 | テスト対象スクリプト / モジュール | 主な検証内容 |
 |---|:---:|---|---|
-| `test_promotion_gate_v2.py` | 17 | `run-autonomous-model-improvement.sh` | 二段階昇格判定、Golden Set v2 フェイルクローズ検証、メトリクス完全性 |
+| `test_promotion_gate_v2.py` | 33 | `run-autonomous-model-improvement.sh` | 二段階昇格判定、Golden Set v2 フェイルクローズ検証、メトリクス完全性、鮮度保証、ディレクトリ整合性 |
 | `test_verify_golden_dataset_v2.py` | 22 | `verify-golden-dataset-v2.py` | Golden Set v2 のマニフェスト整合性、画像破損、SHA256、学習漏洩検知 |
 | `test_reconcile_sample_a_audit.py` | 13 | `reconcile_sample_a_audit.py` | アンブラインド照合、超幾何分布厳密信頼区間、二層採用レジストリ生成 |
 | `test_prepare_gemini_audit_sample_a.py` | 13 | `prepare_gemini_audit_sample_a.py` | Sample A 層化無作為抽出、シード固定再現性、除外整合性 |
@@ -116,13 +116,19 @@
 | `test_food_label_taxonomy.py` | 4 | `food_label_taxonomy.py` | 9 クラスの正規化マッピング |
 | `test_mediapipe_labeling_loop.py` | 12 | `mediapipe_labeling_loop.py` | ループ制御、executor 連携、停止条件 |
 | `test_generate_github_status.py` | 14 | `generate_github_status.py` | GitHub ステータス生成ユーティリティ |
-| **合計** | **250** | — | — |
+| **合計** | **266** | — | — |
 
 ---
 
 ## 5. テスト実行方法
 
-Python テストスイート（全 250 件）は、標準ライブラリ `unittest` で実行可能です。
+Python テストスイート（全 266 件）は、標準ライブラリ `unittest` で実行可能です。
 ```bash
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+# または npm スクリプト
+npm run test:python:fast
 ```
+
+> **Note**:
+> - `npm run test:python:fast` は標準ライブラリのみで動作する軽量テスト群（全 266 件）を実行し、CI（GitHub Actions）および `npm run verify` で自動実行されます。`npm run test:python` は将来の重い ML 統合テストの拡張用に準備されています。
+> - `run-autonomous-model-improvement.sh` 内の評価コマンドは `EVALUATE_MODEL_CMD`（デフォルト: `uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py`）で制御されます。テスト時は環境変数でモック評価スクリプトを注入できるため、CI 上で `.venv_mediapipe` や重い ML 依存関係がなくても独立してゲート検証が可能です。
