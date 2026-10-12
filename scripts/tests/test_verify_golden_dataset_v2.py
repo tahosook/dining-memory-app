@@ -149,6 +149,20 @@ class TestVerifyGoldenDatasetV2(unittest.TestCase):
         errs = verify_mod.reconcile_manifests([r1, r2], [r1])
         self.assertTrue(any("missing in CSV" in e for e in errs))
 
+    def test_manifest_reconciliation_detects_duplicate_golden_id_in_jsonl(self):
+        r1 = {"golden_id": "G001", "candidate_id": "C01", "confirmed_label": "drink", "sha256": "abc", "filename": "1.jpg"}
+        r1_dup = {"golden_id": "G001", "candidate_id": "C02", "confirmed_label": "drink", "sha256": "xyz", "filename": "2.jpg"}
+        r2 = {"golden_id": "G002", "candidate_id": "C03", "confirmed_label": "curry_rice", "sha256": "def", "filename": "3.jpg"}
+        errs = verify_mod.reconcile_manifests([r1, r1_dup, r2], [r1, r2])
+        self.assertTrue(any("Duplicate golden_id found in JSONL manifest" in e for e in errs))
+
+    def test_manifest_reconciliation_detects_duplicate_golden_id_in_csv(self):
+        r1 = {"golden_id": "G001", "candidate_id": "C01", "confirmed_label": "drink", "sha256": "abc", "filename": "1.jpg"}
+        r2 = {"golden_id": "G002", "candidate_id": "C02", "confirmed_label": "curry_rice", "sha256": "def", "filename": "2.jpg"}
+        r2_dup = {"golden_id": "G002", "candidate_id": "C03", "confirmed_label": "curry_rice", "sha256": "xyz", "filename": "3.jpg"}
+        errs = verify_mod.reconcile_manifests([r1, r2], [r1, r2, r2_dup])
+        self.assertTrue(any("Duplicate golden_id found in CSV manifest" in e for e in errs))
+
     # -------------------------------------------------------------------------
     # 5. Training data fail-closed leakage collection tests
     # -------------------------------------------------------------------------
@@ -307,6 +321,52 @@ class TestVerifyGoldenDatasetV2(unittest.TestCase):
         # Simulate that sha1 is in training hashes (LEAKAGE)
         with patch("sys.argv", test_args), \
              patch.object(verify_mod, "collect_training_hashes", return_value=({sha1: "train/sample.jpg"}, [])):
+            exit_code = verify_mod.main()
+            self.assertEqual(exit_code, 1)
+
+    def test_main_detects_duplicate_golden_id(self):
+        p1 = self.test_sub_dir / "curry_rice" / "GOLDEN_V2_001_c1.jpg"
+        sha1 = self._create_dummy_jpeg(p1, b"sample_1")
+        p2 = self.test_sub_dir / "drink" / "GOLDEN_V2_001_d1.jpg"
+        sha2 = self._create_dummy_jpeg(p2, b"sample_2")
+
+        # Two records with the same golden_id: GOLDEN_V2_001
+        records = [
+            {
+                "golden_id": "GOLDEN_V2_001",
+                "candidate_id": "CAND_001",
+                "confirmed_label": "curry_rice",
+                "sha256": sha1,
+                "filename": "c1.jpg",
+            },
+            {
+                "golden_id": "GOLDEN_V2_001",
+                "candidate_id": "CAND_002",
+                "confirmed_label": "drink",
+                "sha256": sha2,
+                "filename": "d1.jpg",
+            },
+        ]
+        with open(self.dataset_dir / "manifest.jsonl", "w", encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps(r) + "\n")
+
+        with open(self.dataset_dir / "manifest.csv", "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(records[0].keys()))
+            writer.writeheader()
+            for r in records:
+                writer.writerow(r)
+
+        self._write_canonical_labels_txt()
+
+        test_args = [
+            "verify-golden-dataset-v2.py",
+            "--dataset-dir", str(self.dataset_dir),
+            "--expected-count", "2",
+            "--allow-empty-classes",
+            "--skip-train-leak-check",
+        ]
+        with patch("sys.argv", test_args):
             exit_code = verify_mod.main()
             self.assertEqual(exit_code, 1)
 

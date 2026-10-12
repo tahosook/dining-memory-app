@@ -193,8 +193,36 @@ def reconcile_manifests(
 ) -> list[str]:
     """Bidirectionally reconcile records between JSONL and CSV."""
     errors: list[str] = []
-    jsonl_by_id = {r.get("golden_id"): r for r in records_jsonl if r.get("golden_id")}
-    csv_by_id = {r.get("golden_id"): r for r in records_csv if r.get("golden_id")}
+
+    # Detect duplicate golden_ids within JSONL
+    jsonl_by_id: dict[str, dict[str, Any]] = {}
+    jsonl_duplicates: set[str] = set()
+    for r in records_jsonl:
+        gid = r.get("golden_id")
+        if not gid:
+            continue
+        if gid in jsonl_by_id:
+            jsonl_duplicates.add(gid)
+        else:
+            jsonl_by_id[gid] = r
+
+    if jsonl_duplicates:
+        errors.append(f"Duplicate golden_id found in JSONL manifest: {sorted(jsonl_duplicates)}")
+
+    # Detect duplicate golden_ids within CSV
+    csv_by_id: dict[str, dict[str, str]] = {}
+    csv_duplicates: set[str] = set()
+    for r in records_csv:
+        gid = r.get("golden_id")
+        if not gid:
+            continue
+        if gid in csv_by_id:
+            csv_duplicates.add(gid)
+        else:
+            csv_by_id[gid] = r
+
+    if csv_duplicates:
+        errors.append(f"Duplicate golden_id found in CSV manifest: {sorted(csv_duplicates)}")
 
     jsonl_ids = set(jsonl_by_id.keys())
     csv_ids = set(csv_by_id.keys())
@@ -312,6 +340,7 @@ def main() -> int:
     # 5. Verify images, path safety, and hash integrity
     class_counts = Counter()
     seen_shas = set()
+    seen_gids = set()
     expected_image_paths: set[Path] = set()
 
     for r in records_jsonl:
@@ -320,6 +349,12 @@ def main() -> int:
         lbl = r.get("confirmed_label", "")
         sha = r.get("sha256", "")
         fname = r.get("filename", "")
+
+        # Check duplicate golden_id in records
+        if gid:
+            if gid in seen_gids:
+                errors.append(f"{gid}: Duplicate golden_id in records")
+            seen_gids.add(gid)
 
         # Path safety validation
         safe, safe_reason = validate_path_safety(test_dir, lbl, f"{gid}_{fname}")
