@@ -137,6 +137,10 @@ def get_git_info() -> tuple[str | None, bool | None]:
     return commit_sha, is_dirty
 
 
+EXPECTED_PROTECTED_EVAL_COUNT = 73
+EXPECTED_BASELINE_TRAIN_COUNT = 190
+
+
 class GeminiAuditSampleASampler:
     """Deterministic sampler for MediaPipe Gemini Audit Sample A (280 images)."""
 
@@ -149,6 +153,8 @@ class GeminiAuditSampleASampler:
         golden_eval_dir: Path | None = None,
         expected_manifest_sha256: str = EXPECTED_REMEDIATED_MANIFEST_SHA256,
         expected_remaining_population: dict[str, int] | None = None,
+        expected_eval_count: int | None = None,
+        expected_baseline_train_count: int | None = None,
         samples_per_class: int = DEFAULT_SAMPLES_PER_CLASS,
         seed: int = DEFAULT_SEED,
     ):
@@ -163,6 +169,8 @@ class GeminiAuditSampleASampler:
             if expected_remaining_population is not None
             else EXPECTED_REMAINING_POPULATION
         )
+        self.expected_eval_count = expected_eval_count
+        self.expected_baseline_train_count = expected_baseline_train_count
         self.samples_per_class = samples_per_class
         self.seed = seed
 
@@ -198,15 +206,27 @@ class GeminiAuditSampleASampler:
 
         if self.golden_eval_dir and self.golden_eval_dir.is_dir():
             for p in self.golden_eval_dir.glob("test/*/*.jpg"):
-                eval_hashes.add(compute_sha256(p))
+                try:
+                    eval_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash golden eval image {p}: {e}") from e
 
         if self.batch250_dir and self.batch250_dir.is_dir():
             for p in (self.batch250_dir / "val").glob("*/*.jpg"):
-                eval_hashes.add(compute_sha256(p))
+                try:
+                    eval_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash batch250 val image {p}: {e}") from e
             for p in (self.batch250_dir / "test").glob("*/*.jpg"):
-                eval_hashes.add(compute_sha256(p))
+                try:
+                    eval_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash batch250 test image {p}: {e}") from e
             for p in (self.batch250_dir / "train").glob("*/*.jpg"):
-                baseline_train_hashes.add(compute_sha256(p))
+                try:
+                    baseline_train_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash baseline train image {p}: {e}") from e
 
         if require_leak_check:
             if not self.golden_eval_dir or not self.golden_eval_dir.is_dir() or len(eval_hashes) == 0:
@@ -223,6 +243,19 @@ class GeminiAuditSampleASampler:
                 raise FileNotFoundError(
                     f"Candidate image directory missing or inaccessible: {self.image_dir}. "
                     "Fail-closed: real image verification requires valid image directory."
+                )
+
+            if self.expected_eval_count is not None and len(eval_hashes) != self.expected_eval_count:
+                raise RuntimeError(
+                    f"Protected evaluation dataset count mismatch: expected {self.expected_eval_count}, "
+                    f"got {len(eval_hashes)} unique hashes. "
+                    "Fail-closed: all protected evaluation images must be present."
+                )
+            if self.expected_baseline_train_count is not None and len(baseline_train_hashes) != self.expected_baseline_train_count:
+                raise RuntimeError(
+                    f"Baseline training dataset count mismatch: expected {self.expected_baseline_train_count}, "
+                    f"got {len(baseline_train_hashes)} unique hashes. "
+                    "Fail-closed: all baseline training images must be present."
                 )
 
         # 4. Read manifest and apply strict candidate filtering
@@ -599,6 +632,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Skip image metadata stripping export",
     )
     parser.add_argument(
+        "--expected-eval-count",
+        type=int,
+        default=EXPECTED_PROTECTED_EVAL_COUNT,
+        help="Expected total protected evaluation image count (default: 73)",
+    )
+    parser.add_argument(
+        "--expected-baseline-train-count",
+        type=int,
+        default=EXPECTED_BASELINE_TRAIN_COUNT,
+        help="Expected baseline training image count (default: 190)",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Overwrite output directory if it exists",
@@ -616,6 +661,8 @@ def main(argv: list[str] | None = None) -> int:
         batch250_dir=args.batch250_dir,
         golden_eval_dir=args.golden_eval_dir,
         expected_manifest_sha256=args.expected_manifest_sha256,
+        expected_eval_count=args.expected_eval_count,
+        expected_baseline_train_count=args.expected_baseline_train_count,
         samples_per_class=args.samples_per_class,
         seed=args.seed,
     )

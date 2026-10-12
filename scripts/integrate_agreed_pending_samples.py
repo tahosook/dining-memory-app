@@ -36,9 +36,12 @@ if str(_REPO_ROOT) not in sys.path:
 from scripts.dataset_safety_guards import (
     LeakageError,
     assert_no_path_collision,
+    assert_path_within_directory,
     atomic_directory_swap,
     check_dual_image_leakage,
     collect_golden_hashes_dual,
+    validate_sha256_format,
+    verify_candidate_record_integrity,
 )
 from scripts.validate_zip2_audit_manifest import compute_sha256
 
@@ -266,10 +269,16 @@ def integrate_agreed_samples(
         integrated_records: List[Dict[str, str]] = []
         blind_images_dir = sample_pkg_dir / "blind_images"
 
+        seen_image_ids: Set[str] = set()
         for r in agreed_records:
-            img_id = r["image_id"]
-            mapped_class = r["mapped_class"]
+            img_id = r.get("image_id", "").strip()
+            if not img_id:
+                raise IntegrationError("Agreed record is missing required 'image_id'")
+            if img_id in seen_image_ids:
+                raise IntegrationError(f"Duplicate image_id '{img_id}' detected in agreed records")
+            seen_image_ids.add(img_id)
 
+            mapped_class = r.get("mapped_class", "").strip()
             if mapped_class not in CANONICAL_CLASSES:
                 raise IntegrationError(f"Invalid class '{mapped_class}' for image '{img_id}'")
 
@@ -277,15 +286,39 @@ def integrate_agreed_samples(
                 raise FileNotFoundError(f"Image ID '{img_id}' not found in private mapping records.")
 
             img_record = img_by_id[img_id]
-            src_image_file = blind_images_dir / img_record["image_file"]
+            try:
+                verify_candidate_record_integrity(r, img_record, allowed_classes=set(CANONICAL_CLASSES))
+            except Exception as e:
+                raise IntegrationError(f"Integrity check failed for image '{img_id}': {e}") from e
+
+            image_file_name = img_record.get("image_file", "").strip()
+            if not image_file_name:
+                raise IntegrationError(f"Mapping record for '{img_id}' missing 'image_file'")
+
+            src_image_file = blind_images_dir / image_file_name
+            try:
+                assert_path_within_directory(src_image_file, blind_images_dir)
+            except Exception as e:
+                raise IntegrationError(f"Path traversal detected in blind image path for '{img_id}': {e}") from e
+
             if not src_image_file.is_file():
                 raise FileNotFoundError(f"Blind image file not found: {src_image_file}")
 
-            raw_sha = img_record.get("raw_image_sha256")
-            stripped_sha = img_record.get("stripped_image_sha256")
-            actual_stripped_sha = compute_sha256(src_image_file)
+            raw_sha = img_record.get("raw_image_sha256", "").strip()
+            stripped_sha = img_record.get("stripped_image_sha256", "").strip()
+            if not raw_sha:
+                raise IntegrationError(f"Missing required 'raw_image_sha256' for image '{img_id}'")
+            if not stripped_sha:
+                raise IntegrationError(f"Missing required 'stripped_image_sha256' for image '{img_id}'")
 
-            if stripped_sha and actual_stripped_sha != stripped_sha:
+            try:
+                validate_sha256_format(raw_sha, "raw_image_sha256")
+                validate_sha256_format(stripped_sha, "stripped_image_sha256")
+            except Exception as e:
+                raise IntegrationError(f"Invalid SHA-256 hash for '{img_id}': {e}") from e
+
+            actual_stripped_sha = compute_sha256(src_image_file)
+            if actual_stripped_sha != stripped_sha:
                 raise RuntimeError(
                     f"Stripped image SHA-256 mismatch for {img_id}: expected {stripped_sha}, got {actual_stripped_sha}"
                 )
@@ -301,7 +334,10 @@ def integrate_agreed_samples(
 
             # Target file in staging / train / <mapped_class> / <filename>
             target_filename = f"agreed_{img_id}.jpg"
-            target_path = staging_dir / "train" / mapped_class / target_filename
+            target_class_dir = staging_dir / "train" / mapped_class
+            assert_path_within_directory(target_class_dir, staging_dir / "train")
+            target_path = target_class_dir / target_filename
+            assert_path_within_directory(target_path, staging_dir / "train")
 
             shutil.copy2(src_image_file, target_path)
 

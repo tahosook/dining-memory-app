@@ -9,6 +9,7 @@ into the Golden Test Set, and ensures clean checkout test compatibility.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import tempfile
 import unittest
@@ -90,11 +91,15 @@ class TestIntegrateEligiblePseudoLabels(unittest.TestCase):
         for img_id, mapped_cls, fname, content in test_samples:
             img_file = blind_images_dir / fname
             img_file.write_bytes(content)
+            sha = hashlib.sha256(content).hexdigest()
 
             mapping_records.append({
                 "image_id": img_id,
                 "image_file": fname,
                 "mapped_class": mapped_cls,
+                "source_path": f"{img_id}.jpg",
+                "raw_image_sha256": sha,
+                "stripped_image_sha256": sha,
             })
             manifest_rows.append({
                 "image_id": img_id,
@@ -313,6 +318,105 @@ class TestIntegrateEligiblePseudoLabels(unittest.TestCase):
             # Prior output must remain intact!
             self.assertTrue(out_ds.exists())
             self.assertEqual((out_ds / "dataset_summary.json").read_text(), summary_before)
+
+    def test_duplicate_image_id_rejected(self) -> None:
+        """Regression test 9: Verify duplicate image_id in manifest is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Append a duplicate row to manifest
+            with open(manifest, "a", encoding="utf-8") as f:
+                f.write("meshi_curry_01,curry_rice,meshi_curry_01.jpg\n")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Duplicate image_id 'meshi_curry_01'", str(ctx.exception))
+
+    def test_source_path_mismatch_rejected(self) -> None:
+        """Regression test 10: Verify source_path mismatch between manifest and mapping is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Mutate mapping source_path for meshi_curry_01
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["source_path"] = "different_source_path.jpg"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("source_path mismatch", str(ctx.exception))
+
+    def test_path_traversal_rejected(self) -> None:
+        """Regression test 11: Verify path traversal in image_file is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            # Mutate mapping image_file to include traversal ../
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+            mapping_data["records"][0]["image_file"] = "../outside.jpg"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+    def test_missing_or_invalid_hash_rejected(self) -> None:
+        """Regression test 12: Verify missing or invalid hash format is rejected."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            base_ds, manifest, pkg, golden, out_ds = self._create_synthetic_environment(tmp)
+
+            mapping_file = pkg / "private_reconciliation" / "blind_id_mapping.private.json"
+            mapping_data = json.loads(mapping_file.read_text(encoding="utf-8"))
+
+            # 1. Missing raw_image_sha256
+            mapping_data["records"][0]["raw_image_sha256"] = ""
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Missing required 'raw_image_sha256'", str(ctx.exception))
+
+            # 2. Invalid hash format (uppercase or bad length)
+            mapping_data["records"][0]["raw_image_sha256"] = "INVALID_HASH_UPPERCASE"
+            mapping_file.write_text(json.dumps(mapping_data), encoding="utf-8")
+            with self.assertRaises(IntegrationError) as ctx:
+                integrate_pseudo_labels(
+                    base_dataset_dir=base_ds,
+                    eligible_manifest_path=manifest,
+                    sample_pkg_dir=pkg,
+                    golden_test_dir=golden,
+                    output_dataset_dir=out_ds,
+                )
+            self.assertIn("Invalid SHA-256 format", str(ctx.exception))
 
 
 if __name__ == "__main__":

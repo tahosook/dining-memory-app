@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -122,6 +123,123 @@ class TestDatasetSafetyGuards(unittest.TestCase):
         self.assertTrue((target_dir / "new_file.txt").is_file())
         self.assertFalse((target_dir / "old_file.txt").exists())
         self.assertFalse(staging_dir.exists())
+
+    def test_path_collision_invalid_input_path_raises(self) -> None:
+        """Regression test 1: assert_no_path_collision must not suppress path resolution failures."""
+        out = self.root / "output"
+        out.mkdir()
+        with self.assertRaises(ValueError) as ctx:
+            assert_no_path_collision([None], out)  # type: ignore[list-item]
+        self.assertIn("cannot be empty or None", str(ctx.exception))
+
+        with self.assertRaises(ValueError) as ctx:
+            assert_no_path_collision([], None)  # type: ignore[arg-type]
+        self.assertIn("output_path cannot be empty or None", str(ctx.exception))
+
+    def test_collect_golden_hashes_dual_manifest_failure_raises(self) -> None:
+        """Regression test 2: collect_golden_hashes_dual must fail-closed on manifest read failure."""
+        golden_dir = self.root / "golden_dir"
+        golden_dir.mkdir()
+        img = golden_dir / "g.jpg"
+        img.write_bytes(make_valid_dummy_jpeg("2024:01:01 12:00:00", b"data"))
+
+        # Missing manifest
+        missing_csv = self.root / "nonexistent.csv"
+        with self.assertRaises(FileNotFoundError):
+            collect_golden_hashes_dual(golden_dir, manifest_csv=missing_csv)
+
+    def test_collect_golden_hashes_dual_separates_raw_and_stripped(self) -> None:
+        """Regression test 3: collect_golden_hashes_dual separates raw and stripped hashes."""
+        golden_dir = self.root / "golden_dir_2"
+        golden_dir.mkdir()
+        raw_bytes = make_valid_dummy_jpeg("2024:01:01 12:00:00", b"unique_pixels_test")
+        img = golden_dir / "g2.jpg"
+        img.write_bytes(raw_bytes)
+
+        res = collect_golden_hashes_dual(golden_dir)
+        import hashlib
+        expected_raw = hashlib.sha256(raw_bytes).hexdigest()
+        expected_stripped = hashlib.sha256(strip_jpeg_bytes(raw_bytes)).hexdigest()
+
+        self.assertIn(expected_raw, res.raw_hashes)
+        self.assertIn(expected_stripped, res.stripped_hashes)
+        self.assertIn(expected_raw, res.all_hashes)
+        self.assertIn(expected_stripped, res.all_hashes)
+        # Verify container supports `in` operator directly
+        self.assertIn(expected_raw, res)
+        self.assertIn(expected_stripped, res)
+
+    def test_validate_sha256_format(self) -> None:
+        """Regression test 4: validate_sha256_format rejects non-64 hex or uppercase."""
+        from scripts.dataset_safety_guards import validate_sha256_format
+
+        valid_hash = "a" * 64
+        self.assertEqual(validate_sha256_format(valid_hash), valid_hash)
+
+        # Uppercase rejected
+        with self.assertRaises(SafetyError) as ctx:
+            validate_sha256_format("A" * 64)
+        self.assertIn("expected 64 lowercase hex", str(ctx.exception))
+
+        # Too short / too long
+        with self.assertRaises(SafetyError):
+            validate_sha256_format("a" * 63)
+        with self.assertRaises(SafetyError):
+            validate_sha256_format("a" * 65)
+
+        # None / invalid types
+        with self.assertRaises(SafetyError):
+            validate_sha256_format(None)
+        with self.assertRaises(SafetyError):
+            validate_sha256_format(12345)
+
+    def test_assert_path_within_directory(self) -> None:
+        """Regression test 5: assert_path_within_directory detects traversal attempts."""
+        from scripts.dataset_safety_guards import assert_path_within_directory
+
+        base_dir = self.root / "base"
+        base_dir.mkdir()
+        safe_child = base_dir / "sub" / "file.txt"
+
+        # Traversal attempt with ..
+        evil_child = base_dir / "sub" / ".." / ".." / "escaped.txt"
+        with self.assertRaises(SafetyError) as ctx:
+            assert_path_within_directory(evil_child, base_dir)
+        self.assertIn("Path traversal detected", str(ctx.exception))
+
+        # Absolute outside path
+        outside_path = self.root / "outside.txt"
+        with self.assertRaises(SafetyError) as ctx:
+            assert_path_within_directory(outside_path, base_dir)
+        self.assertIn("Path traversal detected", str(ctx.exception))
+
+    def test_atomic_directory_swap_preserves_backup_on_rollback_failure(self) -> None:
+        """Regression test 6: atomic_directory_swap preserves backup directory and info on failure."""
+        target_dir = self.root / "target"
+        target_dir.mkdir()
+        (target_dir / "keep_me.txt").write_text("critical", encoding="utf-8")
+
+        staging_dir = self.root / "staging"
+        staging_dir.mkdir()
+
+        # Simulate catastrophic swap failure where target move succeeds, staging move fails, and rollback fails
+        import unittest.mock as mock
+        original_move = shutil.move
+
+        def fail_on_staging_and_rollback(src: str, dst: str, **kwargs):
+            if str(src) == str(staging_dir):
+                raise OSError("Disk failure during staging move")
+            if ".backup" in str(src):
+                raise OSError("Rollback also failed due to permissions")
+            return original_move(src, dst, **kwargs)
+
+        with mock.patch("shutil.move", side_effect=fail_on_staging_and_rollback):
+            with self.assertRaises(SafetyError) as ctx:
+                atomic_directory_swap(staging_dir, target_dir)
+            err_msg = str(ctx.exception)
+            self.assertIn("FATAL: Atomic swap failed AND rollback failed", err_msg)
+            self.assertIn("Backup directory preserved at:", err_msg)
+            self.assertIn("Manual recovery:", err_msg)
 
 
 if __name__ == "__main__":

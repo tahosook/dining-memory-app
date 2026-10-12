@@ -327,6 +327,52 @@ class TestPrepareGeminiAuditSampleA(unittest.TestCase):
         self.assertFalse(meta["safety_verification"]["eval_leak_check_passed"])
         self.assertFalse(meta["safety_verification"]["baseline_leak_check_passed"])
 
+    def test_expected_eval_and_baseline_count_mismatch_raises(self) -> None:
+        """Regression test 8: Verify fail-closed when Sample A protected eval or baseline count does not match expected."""
+        # 1. Eval count mismatch
+        sampler_eval_mismatch = GeminiAuditSampleASampler(
+            manifest_csv=self.manifest_path,
+            pilot_manifest_csv=self.pilot_manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+            expected_eval_count=73,  # Synthetic test only has 1
+            expected_baseline_train_count=1,
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            sampler_eval_mismatch.sample(require_leak_check=True)
+        self.assertIn("Protected evaluation dataset count mismatch: expected 73", str(ctx.exception))
+
+        # 2. Baseline train count mismatch
+        sampler_train_mismatch = GeminiAuditSampleASampler(
+            manifest_csv=self.manifest_path,
+            pilot_manifest_csv=self.pilot_manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+            expected_eval_count=1,
+            expected_baseline_train_count=190,  # Synthetic test only has 1
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            sampler_train_mismatch.sample(require_leak_check=True)
+        self.assertIn("Baseline training dataset count mismatch: expected 190", str(ctx.exception))
+
+        # 3. Matching counts pass
+        sampler_matching = GeminiAuditSampleASampler(
+            manifest_csv=self.manifest_path,
+            pilot_manifest_csv=self.pilot_manifest_path,
+            image_dir=self.image_dir,
+            batch250_dir=self.batch250_dir,
+            golden_eval_dir=self.golden_eval_dir,
+            expected_manifest_sha256=self.manifest_sha256,
+            expected_eval_count=1,
+            expected_baseline_train_count=1,
+        )
+        res = sampler_matching.sample(require_leak_check=True)
+        self.assertTrue(res["leak_check_performed"])
+
 
 if __name__ == "__main__":
     unittest.main()
