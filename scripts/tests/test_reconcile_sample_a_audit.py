@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts.dataset_safety_guards import SafetyError
 from scripts.reconcile_sample_a_audit import (
     CLASS_GATE_MIN_AGREEMENT,
     TARGET_CLASSES,
@@ -461,6 +462,178 @@ class TestReconcileSampleAAudit(unittest.TestCase):
                     verify_images=True,
                 )
             self.assertIn("Package image missing", str(ctx.exception))
+
+    def test_package_image_sha256_strict_validation(self) -> None:
+        """Verify strict SHA-256 enforcement: presence, 64-hex format, case-insensitivity, and mismatch."""
+        from scripts.validate_zip2_audit_manifest import compute_sha256
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            man_path, pred_path, map_path = self._create_minimal_fixtures(tmp_path)
+            img_dir = tmp_path / "blind_images"
+            img_dir.mkdir()
+
+            def setup_valid_mapping(sha_override_fn=None):
+                data = json.loads(map_path.read_text(encoding="utf-8"))
+                for r in data["records"]:
+                    img_file = img_dir / f"{r['blind_id']}.jpg"
+                    if not img_file.exists():
+                        img_file.write_bytes(b"dummy image bytes " + r["blind_id"].encode("utf-8"))
+                    r["image_file"] = f"{r['blind_id']}.jpg"
+                    calc_sha = compute_sha256(img_file)
+                    r["stripped_image_sha256"] = sha_override_fn(r["blind_id"], calc_sha) if sha_override_fn else calc_sha
+                map_path.write_text(json.dumps(data), encoding="utf-8")
+
+            # 1. Valid SHA-256 (including uppercase compatibility) succeeds
+            setup_valid_mapping(lambda b_id, s: s.upper() if b_id.endswith("001") else s.lower())
+            res = reconcile_audit(
+                manifest_path=man_path,
+                predictions_path=pred_path,
+                mapping_path=map_path,
+                verify_predictions_sha256=False,
+                verify_manifest_sha256=False,
+                images_dir=img_dir,
+                verify_images=True,
+            )
+            self.assertEqual(res["sample_a_count"], 280)
+
+            # 2. Missing SHA-256 (None) fails
+            setup_valid_mapping(lambda b_id, s: None if b_id.endswith("001") else s)
+            with self.assertRaises(ValueError) as ctx:
+                reconcile_audit(
+                    manifest_path=man_path,
+                    predictions_path=pred_path,
+                    mapping_path=map_path,
+                    verify_predictions_sha256=False,
+                    verify_manifest_sha256=False,
+                    images_dir=img_dir,
+                    verify_images=True,
+                )
+            self.assertIn("missing required stripped_image_sha256", str(ctx.exception))
+
+            # 3. Empty string / whitespace SHA-256 fails
+            setup_valid_mapping(lambda b_id, s: "   " if b_id.endswith("001") else s)
+            with self.assertRaises(ValueError) as ctx:
+                reconcile_audit(
+                    manifest_path=man_path,
+                    predictions_path=pred_path,
+                    mapping_path=map_path,
+                    verify_predictions_sha256=False,
+                    verify_manifest_sha256=False,
+                    images_dir=img_dir,
+                    verify_images=True,
+                )
+            self.assertIn("missing required stripped_image_sha256", str(ctx.exception))
+
+            # 4. Non-64-hex format fails (too short, too long, non-hex)
+            for bad_sha in ["a" * 63, "a" * 65, "g" * 64, "invalid_hex!"]:
+                setup_valid_mapping(lambda b_id, s, bs=bad_sha: bs if b_id.endswith("001") else s)
+                with self.assertRaises(ValueError) as ctx:
+                    reconcile_audit(
+                        manifest_path=man_path,
+                        predictions_path=pred_path,
+                        mapping_path=map_path,
+                        verify_predictions_sha256=False,
+                        verify_manifest_sha256=False,
+                        images_dir=img_dir,
+                        verify_images=True,
+                    )
+                self.assertIn("Invalid stripped_image_sha256 format", str(ctx.exception))
+
+            # 5. Correct format but mismatching hash fails
+            setup_valid_mapping(lambda b_id, s: "0" * 64 if b_id.endswith("001") else s)
+            with self.assertRaises(ValueError) as ctx:
+                reconcile_audit(
+                    manifest_path=man_path,
+                    predictions_path=pred_path,
+                    mapping_path=map_path,
+                    verify_predictions_sha256=False,
+                    verify_manifest_sha256=False,
+                    images_dir=img_dir,
+                    verify_images=True,
+                )
+            self.assertIn("Package image SHA-256 mismatch", str(ctx.exception))
+
+    def test_package_image_path_traversal_prevention(self) -> None:
+        """Verify that ../ traversal, absolute paths outside images_dir, and symlinks escaping images_dir are rejected."""
+        import os
+        from scripts.validate_zip2_audit_manifest import compute_sha256
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            man_path, pred_path, map_path = self._create_minimal_fixtures(tmp_path)
+            img_dir = tmp_path / "blind_images"
+            img_dir.mkdir()
+            outside_dir = tmp_path / "outside_secret"
+            outside_dir.mkdir()
+            secret_file = outside_dir / "secret.jpg"
+            secret_file.write_bytes(b"sensitive outside content")
+
+            def setup_mapping_with_path(target_path_str: str):
+                data = json.loads(map_path.read_text(encoding="utf-8"))
+                for idx, r in enumerate(data["records"]):
+                    if idx == 0:
+                        r["image_file"] = target_path_str
+                        r["stripped_image_sha256"] = compute_sha256(secret_file)
+                    else:
+                        img_file = img_dir / f"{r['blind_id']}.jpg"
+                        if not img_file.exists():
+                            img_file.write_bytes(b"dummy image bytes " + r["blind_id"].encode("utf-8"))
+                        r["image_file"] = f"{r['blind_id']}.jpg"
+                        r["stripped_image_sha256"] = compute_sha256(img_file)
+                map_path.write_text(json.dumps(data), encoding="utf-8")
+
+            # 1. Normal image paths work (verified in test_package_image_verification)
+
+            # 2. Relative traversal ../ outside images_dir is rejected
+            setup_mapping_with_path("../outside_secret/secret.jpg")
+            with self.assertRaises(SafetyError) as ctx:
+                reconcile_audit(
+                    manifest_path=man_path,
+                    predictions_path=pred_path,
+                    mapping_path=map_path,
+                    verify_predictions_sha256=False,
+                    verify_manifest_sha256=False,
+                    images_dir=img_dir,
+                    verify_images=True,
+                )
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 3. Absolute path outside images_dir is rejected
+            setup_mapping_with_path(str(secret_file.resolve()))
+            with self.assertRaises(SafetyError) as ctx:
+                reconcile_audit(
+                    manifest_path=man_path,
+                    predictions_path=pred_path,
+                    mapping_path=map_path,
+                    verify_predictions_sha256=False,
+                    verify_manifest_sha256=False,
+                    images_dir=img_dir,
+                    verify_images=True,
+                )
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 4. Symlink inside images_dir pointing outside is rejected
+            symlink_path = img_dir / "escaping_symlink.jpg"
+            try:
+                os.symlink(secret_file, symlink_path)
+                has_symlink = True
+            except (OSError, NotImplementedError):
+                has_symlink = False
+
+            if has_symlink:
+                setup_mapping_with_path("escaping_symlink.jpg")
+                with self.assertRaises(SafetyError) as ctx:
+                    reconcile_audit(
+                        manifest_path=man_path,
+                        predictions_path=pred_path,
+                        mapping_path=map_path,
+                        verify_predictions_sha256=False,
+                        verify_manifest_sha256=False,
+                        images_dir=img_dir,
+                        verify_images=True,
+                    )
+                self.assertIn("Path traversal detected", str(ctx.exception))
 
 
 if __name__ == "__main__":

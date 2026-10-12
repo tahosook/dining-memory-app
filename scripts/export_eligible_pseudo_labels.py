@@ -36,6 +36,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from scripts.dataset_safety_guards import (
     assert_no_path_collision,
+    assert_path_within_directory,
     atomic_directory_swap,
 )
 from scripts.validate_zip2_audit_manifest import compute_sha256
@@ -303,18 +304,25 @@ def export_eligible_pseudo_labels(
             exported_images_dir.mkdir(parents=True, exist_ok=True)
 
             for r in eligible_records:
-                source_file = images_dir / r["source_path"]
-                if not source_file.is_file():
+                source_candidate = images_dir / r["source_path"]
+                assert_path_within_directory(source_candidate, images_dir)
+
+                if source_candidate.is_file():
+                    source_file = source_candidate
+                else:
                     # Try finding by image_id or direct filename
                     alt_file = images_dir / f"{r['image_id']}.jpg"
+                    assert_path_within_directory(alt_file, images_dir)
                     if alt_file.is_file():
                         source_file = alt_file
                     else:
                         raise FileNotFoundError(
-                            f"Image file not found for {r['image_id']}: checked {source_file} and {alt_file}"
+                            f"Image file not found for {r['image_id']}: checked {source_candidate} and {alt_file}"
                         )
 
+                assert_path_within_directory(source_file, images_dir)
                 target_file = exported_images_dir / f"{r['image_id']}.jpg"
+                assert_path_within_directory(target_file, exported_images_dir)
                 shutil.copy2(source_file, target_file)
 
                 # Verify hash match

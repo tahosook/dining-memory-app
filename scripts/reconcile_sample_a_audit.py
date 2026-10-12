@@ -23,6 +23,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.dataset_safety_guards import assert_path_within_directory
 from scripts.validate_zip2_audit_manifest import compute_sha256
 
 EXPECTED_REMEDIATED_MANIFEST_SHA256 = (
@@ -184,15 +185,24 @@ def reconcile_audit(
         for b_id, m_rec in mapping_records.items():
             img_file_name = m_rec.get("image_file", f"{b_id}.jpg")
             img_file_path = target_images_dir / img_file_name
+            assert_path_within_directory(img_file_path, target_images_dir)
             if not img_file_path.exists():
                 raise FileNotFoundError(f"Package image missing: {img_file_path}")
             expected_sha = m_rec.get("stripped_image_sha256")
-            if expected_sha:
-                actual_sha = compute_sha256(img_file_path)
-                if actual_sha != expected_sha:
-                    raise ValueError(
-                        f"Package image SHA-256 mismatch for {b_id}: expected {expected_sha}, got {actual_sha}"
-                    )
+            if not expected_sha or not isinstance(expected_sha, str) or not expected_sha.strip():
+                raise ValueError(
+                    f"Package image record {b_id} missing required stripped_image_sha256: '{expected_sha}'"
+                )
+            expected_sha_clean = expected_sha.strip()
+            if len(expected_sha_clean) != 64 or not all(c in "0123456789abcdefABCDEF" for c in expected_sha_clean):
+                raise ValueError(
+                    f"Invalid stripped_image_sha256 format for {b_id}: expected 64 hex characters, got '{expected_sha}'"
+                )
+            actual_sha = compute_sha256(img_file_path)
+            if actual_sha.lower() != expected_sha_clean.lower():
+                raise ValueError(
+                    f"Package image SHA-256 mismatch for {b_id}: expected {expected_sha}, got {actual_sha}"
+                )
 
     # 5. Load pilot 70 image IDs
     pilot_image_ids = set()

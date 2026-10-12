@@ -13,7 +13,10 @@ import csv
 import json
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
+
+from scripts.dataset_safety_guards import SafetyError
 
 from scripts.export_eligible_pseudo_labels import (
     ALLOWED_PASSED_CLASSES,
@@ -558,6 +561,118 @@ class TestExportEligiblePseudoLabels(unittest.TestCase):
                     copy_images=True,
                 )
             self.assertIn("Path collision detected", str(ctx.exception))
+
+    def test_export_images_path_traversal_prevention(self) -> None:
+        """Verify ../ traversal, absolute paths outside images_dir, and escaping symlinks are rejected during export."""
+        import os
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir)
+            images_dir = tmp / "src_images"
+            images_dir.mkdir()
+            outside_dir = tmp / "outside_dir"
+            outside_dir.mkdir()
+            outside_file = outside_dir / "secret.jpg"
+            outside_file.write_bytes(b"outside sensitive image bytes")
+
+            # Normal image for drink
+            (images_dir / "drink_001.jpg").write_bytes(b"\xff\xd8\xff\xe0drink\xff\xd9")
+
+            def run_export_with_curry_source(source_path_val: str, curry_id: str = "img_curry_001"):
+                out_dir = tmp / f"out_{uuid.uuid4().hex[:6]}"
+                reg_path = tmp / f"reg_{uuid.uuid4().hex[:6]}.csv"
+                man_path = tmp / f"man_{uuid.uuid4().hex[:6]}.csv"
+
+                rows = [
+                    {
+                        "image_id": curry_id,
+                        "source_path": source_path_val,
+                        "mapped_class": "curry_rice",
+                        "audit_subset": "sample_A",
+                        "audit_predicted_class": "curry_rice",
+                        "audit_is_uncertain": "false",
+                        "audit_reason_code": "dominant_main_dish_clear",
+                        "class_gate_status": "passed",
+                        "adoption_status": "candidate_eligible",
+                        "rejection_reason": "class_gate_passed_inter_model_agreed_confident",
+                        "evaluated_at": "2026-10-11T00:00:00Z",
+                        "spec_version": "v2",
+                    },
+                    {
+                        "image_id": "img_drink_001",
+                        "source_path": "drink_001.jpg",
+                        "mapped_class": "drink",
+                        "audit_subset": "sample_A",
+                        "audit_predicted_class": "drink",
+                        "audit_is_uncertain": "false",
+                        "audit_reason_code": "dominant_main_dish_clear",
+                        "class_gate_status": "passed",
+                        "adoption_status": "candidate_eligible",
+                        "rejection_reason": "class_gate_passed_inter_model_agreed_confident",
+                        "evaluated_at": "2026-10-11T00:00:00Z",
+                        "spec_version": "v2",
+                    },
+                ]
+                with open(reg_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                    writer.writeheader()
+                    writer.writerows(rows)
+                with open(man_path, "w", encoding="utf-8", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=["image_id", "source_path", "mapped_class", "assigned_role"])
+                    writer.writeheader()
+                    writer.writerow({"image_id": curry_id, "source_path": source_path_val, "mapped_class": "curry_rice", "assigned_role": "pseudo_label_candidate"})
+                    writer.writerow({"image_id": "img_drink_001", "source_path": "drink_001.jpg", "mapped_class": "drink", "assigned_role": "pseudo_label_candidate"})
+
+                return export_eligible_pseudo_labels(
+                    registry_path=reg_path,
+                    manifest_path=man_path,
+                    output_dir=out_dir,
+                    images_dir=images_dir,
+                    copy_images=True,
+                ), out_dir
+
+            # 1. Normal relative path succeeds
+            (images_dir / "curry_normal.jpg").write_bytes(b"\xff\xd8\xff\xe0curry\xff\xd9")
+            (_, _, exp_img_dir), out_1 = run_export_with_curry_source("curry_normal.jpg")
+            self.assertTrue((out_1 / "images" / "img_curry_001.jpg").is_file())
+            self.assertEqual((out_1 / "images" / "img_curry_001.jpg").read_bytes(), b"\xff\xd8\xff\xe0curry\xff\xd9")
+
+            # 2. Relative traversal ../ is rejected and outside file is not copied
+            with self.assertRaises(SafetyError) as ctx:
+                run_export_with_curry_source("../outside_dir/secret.jpg")
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 3. Absolute path outside images_dir is rejected and outside file is not copied
+            with self.assertRaises(SafetyError) as ctx:
+                run_export_with_curry_source(str(outside_file.resolve()))
+            self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 4. Symlink escaping images_dir is rejected
+            symlink_in_images = images_dir / "symlink_escaping.jpg"
+            try:
+                os.symlink(outside_file, symlink_in_images)
+                has_symlink = True
+            except (OSError, NotImplementedError):
+                has_symlink = False
+
+            if has_symlink:
+                with self.assertRaises(SafetyError) as ctx:
+                    run_export_with_curry_source("symlink_escaping.jpg")
+                self.assertIn("Path traversal detected", str(ctx.exception))
+
+            # 5. Fallback alternate search with escaping symlink is rejected
+            alt_symlink_curry = images_dir / "img_curry_alt.jpg"
+            if has_symlink:
+                try:
+                    os.symlink(outside_file, alt_symlink_curry)
+                    has_alt_symlink = True
+                except (OSError, NotImplementedError):
+                    has_alt_symlink = False
+
+                if has_alt_symlink:
+                    with self.assertRaises(SafetyError) as ctx:
+                        run_export_with_curry_source("nonexistent.jpg", curry_id="img_curry_alt")
+                    self.assertIn("Path traversal detected", str(ctx.exception))
 
 
 if __name__ == "__main__":
