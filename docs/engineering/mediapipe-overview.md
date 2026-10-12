@@ -29,7 +29,7 @@ flowchart TD
     Challenger --> Gate["Promotion Gate 実測評価\n(evaluate-mediapipe-model.py)"]
     Gate -->|PROMOTE| Asset["本番アセット配置\n(assets/mediapipe/meal-input-assist.task)"]
     Gate -->|REJECT| Rollback["Champion モデル維持\n(ロールバック安全策)"]
-    
+
     subgraph Benchmark ["評価データセット"]
       OldGolden["旧 Golden Set (7枚)\n(現行 Gate 回帰ガード)"] -.-> Gate
       GoldenV2["Golden Test Set v2 (106枚)\n(包括的ベンチマークセット)"]
@@ -72,20 +72,18 @@ flowchart TD
 各コンポーネントの現状を **「確認済み（Verified）」「未確認（Unverified）」「今後の判断事項（TBD）」** に区分して示します。
 
 ### 3.1 アプリ推論 & UI (Runtime)
-- **ステータス**: **一部確認済み / 一部未コミット**
+- **ステータス**: **確認済み / 改善課題あり**
 - **役割**: Android Native Bridge（MediaPipe Tasks Vision）を介してローカルの `.task` ファイルから推論を実行し、TS 層で料理名・ジャンルに正規化して Review 画面に tap-to-apply 提示する。
 - **確認済み事実**:
   - `MediaPipeMealInputAssistModule.kt` は `filesDir/ai-models/` にモデルがない場合、同梱アセット（`assets/mediapipe/`）から自動シードコピーして `MappedByteBuffer` で安全にロードする仕組みを保持。
-  - master 上の既定ランタイムは `local-runtime-prototype` (GGUF) であり、MediaPipe は hidden / opt-in 状態。
-- **未コミット・判断事項**:
-  - 新モデルの 9 クラス出力を解釈する `mediapipeStaticImageNormalizer.ts` のマッピング追加は現在ワークツリー上で作業中。
-  - `other_or_exclude` クラスは UI サジェスト候補から明示的に除外（非表示）する仕様の確定が必要。
+  - `main` ブランチ上の既定ランタイムは `mediapipe-static-image` に設定済み。
+  - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は 9 つの coarse food classes（`curry_rice`, `drink`, `fish_dish`, `fried_dish`, `meat_dish`, `noodles`, `simmered_dish`, `stir_fry`, `other_or_exclude`）のマッピングが定義されている。
+- **今後の判断事項・改善課題**:
+  - `other_or_exclude` クラスは現在「その他」にマッピングされているが、UI サジェスト候補から明示的に除外（非表示）する方針の検討（[docs/architecture/food-labeling-pipeline.md](../architecture/food-labeling-pipeline.md) セクション 5.3 参照）が今後のタスク。
 
-### 3.2 モデル配布基盤 (Distribution)
-- **ステータス**: **仕様策定済み / 実配布アセット未確認**
-- **役割**: アプリ起動時または設定画面からリモート（GitHub Releases）の `.task` ファイルをオンデマンドダウンロードし、SHA-256 検証を経て `filesDir/ai-models/` に配置する（[docs/architecture/food-labeling-pipeline.md](../architecture/food-labeling-pipeline.md)）。
-- **未確認・判断事項**:
-  - `src/ai/mealInputAssist/modelConfig.ts` の `MEDIAPIPE_MODEL_CONFIG.sha256` は現在プレースホルダー。GitHub Releases への正式アセット公開とハッシュ一致確認が今後のタスク。
+### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
+- **ステータス**: **確認済み**
+- **役割**: `scripts/ensure-mediapipe-model.sh` により、GitHub Releases (`mediapipe-model-v0.1.0`) から `.task` ファイルを取得・SHA-256 検証（`3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601`）して同梱アセットに配置する。また、アプリ側のオンデマンドダウンロード設定（`src/ai/mealInputAssist/modelConfig.ts`）とも整合している。
 
 ### 3.3 モデル学習 & 昇格判定 (Training & Gate)
 - **ステータス**: **確認済み**
@@ -115,12 +113,12 @@ flowchart TD
 
 開発作業時の典型的なシナリオごとの実行手順とコマンドです。各スクリプトの詳細は [scripts/README.md](../../scripts/README.md) を参照してください。
 
-### シナリオ 1: アプリ側の分類結果・正規化ルールを変更したい場合
+### シナリオ 1: アプリ側の分類結果・正規化ルールを変更・拡張したい場合
 1. `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` の `LABEL_MAPPING` を編集。
-   - `other_or_exclude` は UI サジェスト候補から除外する方針を維持する。
+   - 必要に応じてラベル名・料理ジャンルのマッピング調整や、`other_or_exclude` のサジェスト除外処理を追加する。
 2. 関連テストを実行して正規化の期待値を検証：
    ```bash
-   npm test -- --testPathPattern=mediapipeStaticImageNormalizer
+   npm test -- --testPathPattern=mealInputAssistNormalizer
    ```
 
 ### シナリオ 2: モデルの再学習と Promotion Gate 評価を行いたい場合

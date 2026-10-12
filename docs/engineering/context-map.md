@@ -76,6 +76,12 @@
 - Common tests: `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`, `npm test -- --testPathPattern=mediapipe`
 - Preserve: MediaPipe path stays separate unless a task explicitly changes runtime selection.
 
+### Local LLM / Ollama / Batch Labeling
+- Read first: [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md), [docs/notes/local-ai-provider-spike.md](../notes/local-ai-provider-spike.md)
+- Common source: `scripts/mediapipe_labeling_loop.py`, `scripts/mediapipe_labeling_common.py`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`
+- Generated / state files: `state/mediapipe_labeling_state.json`, `state/mediapipe_labeling_runs/`
+- Reading boundaries: `state/` 配下の全件走査は行わず、対象の run や state ファイルのみを参照する。タスクで明示されない限り generated state は編集しない。
+
 ### Expo / Android / Build
 - Read first: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md)
 - Common files: `app.json`, `eas.json`, `metro.config.js`, `babel.config.js`, `android/app/build.gradle`, `.github/workflows/ci.yml`
