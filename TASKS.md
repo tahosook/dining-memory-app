@@ -32,7 +32,6 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
-- MediaPipe 同梱モデル初回自動シード・リリースビルド単体推論・レビューUIサジェスト表示: 完了。内部ストレージ（`files/ai-models/meal-input-assist.task`）不在時に APK 内同梱アセット（`assets/mediapipe/meal-input-assist.task`）から初回自動シードコピーして MappedByteBuffer で安全にロードする Native 仕組みを実装し、デバッグビルドだけでなくリリースビルドでも PC 経由の配置なしに単体動作を可能にした。また、最新チャンピオンモデルの 9 クラス（魚料理、揚げ物、肉料理、麺類、煮物、炒め物等）に対応する正規化マッピングを配備し、Review UI（`MealInputAssistSection`）において料理名（`mealNames`）・料理ジャンル（`cuisineTypes`）をタップ可能なサジェストボタンとして表示、ワンタップで入力欄に反映できる tap-to-apply を提供。Native 単体テスト全 9 件 PASS、TS 関連テスト全 PASS。
 - MediaPipe 合意保留サンプル統合・少数クラスデータ拡張最適化・Challenger 再学習・Promotion 達成: 完了（内部ドキュメント issue-22）。サンプルA合意保留サンプル（54枚）を安全に統合（計384枚、訓練318枚）。Golden Test Set（7枚）とのデータ漏洩ゼロ（0/7）を検証。少数クラスのデータ拡張（目標45、最大倍率3倍）により434枚の均等な学習セットを構築し再学習。Top-1 正解数が 5/7 ➔ 6/7 (85.7%) へ大幅改善、Top-3 は 7/7 (100.0%)、少数クラス Top-3 は 2/2 (100.0%) を完全維持。Champion 満点時におけるデッドロックを解消した Promotion Gate を正当に突破（`PROMOTE`）し、本番モデルアセット（`meal-input-assist.task`）をアトミック更新（[docs/issues/issue-22-integrate-agreed-pending-and-promote-challenger.md](docs/issues/issue-22-integrate-agreed-pending-and-promote-challenger.md)、完了 / Closed）。
 - MediaPipe 採用疑似ラベル統合・Challenger 再学習・Promotion Gate 評価: 完了（内部ドキュメント issue-21）。確定採用疑似ラベル74枚（`curry_rice` 34枚、`drink` 40枚）を正規学習データセット（`zip2-batch250`）へ統合（計330枚、訓練264枚）。Golden Test Set（7枚）とのデータ漏洩ゼロ（0/7）を検証し、MobileNetV2 Challenger モデルを再学習。Golden Test Set 実測において、追加クラスである `curry_rice` は Champion の誤分類（`stir_fry`）から Top-1 正解（49.0%）へ劇的に改善し、`drink` も Top-1 正解（91.6%）を維持。一方でクラス不均衡に伴う他クラス微減により Top-3 が 7/7 ➔ 6/7、Top-1 が 5/7 ➔ 4/7 となり、Promotion Gate は `REJECT`（回帰ガード作動）と判定。回帰防止原則に従い本番アセット（`meal-input-assist.task`）は上書きされず安全に保護された（[docs/issues/issue-21-integrate-pseudo-labels-and-challenger-evaluation.md](docs/issues/issue-21-integrate-pseudo-labels-and-challenger-evaluation.md)、完了 / Closed）。
 - MediaPipe 学習候補疑似ラベルの決定論的抽出・検証パイプライン構築: 完了（内部ドキュメント issue-20）。確定済み二層採用レジストリ（`pseudo_label_adoption_registry.csv`）に基づき、採用基準を完全クリアした学習候補（`candidate_eligible`）74枚（`curry_rice` 34枚、`drink` 40枚）のみを再現可能・決定論的に抽出・検証するパイプライン（`scripts/export_eligible_pseudo_labels.py`）を実装。7つの厳格な不変条件（合格クラス限定、モデル間合意、確信度、個別監査済み等）により、未達クラス5クラス（343枚）および通過クラスの個別未監査画像（138枚）の混入を機械的防衛チェックで100%遮断。全10件のユニットテスト（`scripts/tests/test_export_eligible_pseudo_labels.py`）により、不正混入に対する例外送出、決定論的ソート、画像コピー検証、クリーンチェックアウト互換性を確認（[docs/issues/issue-20-export-eligible-pseudo-labels.md](docs/issues/issue-20-export-eligible-pseudo-labels.md)、完了 / Closed）。
@@ -60,9 +59,9 @@
 - Phase 1 (GitHub Issue #73, #74, #76, #83): Jest テスト環境設定健全化（GitHub Issue #73）、ESLint flat config / Prettier CI フォーマットチェック（GitHub Issue #74）、CI Node.js 24 LTS 固定（GitHub Issue #76）、Knip スキーマ v6 更新（GitHub Issue #83）（PR #84 にて完了）。
 - `src/ai/search/` ディレクトリの確認（GitHub Issue #82）: Git リポジトリ上で未追跡（存在しない）ことを確認し Close 済み。
 - 基本の capture -> save -> records / search / stats flow は実装済み。
-- review 画面の tap-to-apply AI 入力補助は実装済みで、`noteDraft` の notes 追記に加えて `mealNames` / `cuisineTypes` のサジェスト選択が可能。
+- review 画面の tap-to-apply AI 入力補助は一部実装済みで、current visible UI は `noteDraft` を notes に追記する形。
 - Settings の local AI opt-in、model status、runtime status は実装済み。
-- MediaPipe static-image path は Android native bridge および同梱モデル自動シードを配備し、default runtime として接続済み。Settings readiness の表示統合は次期課題。
+- MediaPipe static-image path は Android native bridge まで groundwork 済み。ただし default runtime / Settings readiness への接続は未接続。
 - Records detail からの明示的な X共有導線は実装済み。
 - 内部データのバックアップ / エクスポート / 復元（ローカル ZIP バックアップ基盤、GitHub Issue #63）は実装済み。
 - 旧 `PLANS.md` の MVP completion plan は historical reference で、current plan ではない。

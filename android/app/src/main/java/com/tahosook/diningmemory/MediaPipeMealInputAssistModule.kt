@@ -221,10 +221,6 @@ class MediaPipeMealInputAssistModule(
     }
 
     val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
-    if (!modelFile.exists() || !modelFile.isFile || modelFile.length() <= 0L) {
-      MediaPipeMealInputAssistSupport.copyBundledModelAssetIfAvailable(reactApplicationContext, modelFile)
-    }
-
     if (!modelFile.exists()) {
       throw FileNotFoundException(
         MediaPipeMealInputAssistSupport.buildModelMissingReason(modelFile.absolutePath),

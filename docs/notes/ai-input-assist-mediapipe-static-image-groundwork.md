@@ -13,19 +13,22 @@
 ## Current State
 - MediaPipe path は static-image only で進め、1 枚の `photoUri` を受ける local food classification path だけを対象にする。
 - CameraX は使わず、連続フレーム処理や live camera pipeline への接続は current scope に含めない。
-- 既存の `llama.rn` ベース meal input assist path も維持しつつ、デフォルトランタイム環境を `'mediapipe-static-image'` に設定。
-- rich runtime result や raw classifier categories は provider 内の in-memory only データとして扱い、正規化された `mealNames` / `cuisineTypes` のサジェストボタンを review UI に表示して tap-to-apply を提供。
-- Android では official MediaPipe `tasks-vision` dependency を使う native bridge を配備。端末内部ストレージ（`context.filesDir/ai-models/meal-input-assist.task`）にモデルが存在しない場合、APK 内同梱アセット（`assets/mediapipe/meal-input-assist.task`）から自動シードコピーして `MappedByteBuffer` でロードするハイブリッド構成を採用（デバッグ・リリースビルドの双方で単体動作可能）。
+- 既存の `llama.rn` ベース meal input assist path は active runtime のまま残し、MediaPipe static-image path は別 scaffold として共存させる。
+- rich runtime result や raw classifier categories は provider 内の in-memory only データとして扱い、review UI や save path にそのまま流さない。
+- Android では official MediaPipe `tasks-vision` dependency を使う native bridge が separate path として追加済みで、model source は bundled asset に固定する。
+- model asset は repo commit せず、`android/app/src/main/assets/mediapipe/meal-input-assist.task` への manual local drop-in を前提にする。
+- 未接続なのは default runtime selection、Settings / readiness の user-visible wiring、model packaging / distribution。
 
 ## Decisions / Rules
 - MediaPipe の coarse classifier label は `mealNames` / `cuisineTypes` に正規化してから既存 review UI へ渡す。
 - cuisine type は既存の `和食 / 中華 / 洋食 / その他` に丸め、unknown は原則 UI 候補へ出さない。
-- review UI（`MealInputAssistSection`）では料理名候補（`mealNames`）および料理ジャンル（`cuisineTypes`）をタップ可能なチップとして表示し、ユーザーがワンタップで入力欄に反映できるようにする。
 - save 時に永続化してよい AI metadata は引き続き `ai_source` と `ai_confidence` のみとする。
 - top-k 結果、model metadata、raw response、生の classifier result は DB に保存しない。
 - DB migration を入れない理由は、永続化 contract が増えず、`meals.ai_source` / `meals.ai_confidence` の既存列で今回の保存要件を満たせるため。
-- Android bridge はローカルストレージからの `MappedByteBuffer` 読み込みと同梱アセットの自動シードコピーをサポートし、リリースビルドでも追加の手動配置なしに即時推論可能。
+- MediaPipe native bridge は実装済みで、provider scaffold は `photoUri -> classifier result` 契約を受けられる shape を持つ。
+- Android bridge 実装後も MediaPipe path は hidden path のままにし、default runtime や Settings の user-visible readiness source of truth は直ちに切り替えない。
 
 ## Next Steps or Open Questions
-- model packaging / distribution（リモートオンデマンドダウンロード）の実装。
+- model packaging / distribution の方法整理。
 - Settings や runtime readiness 表示へ MediaPipe path をどう統合するかの wiring。
+- 実運用で使う label taxonomy と training data の見直し。
