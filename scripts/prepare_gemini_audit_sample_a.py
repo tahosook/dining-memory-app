@@ -137,6 +137,13 @@ def get_git_info() -> tuple[str | None, bool | None]:
     return commit_sha, is_dirty
 
 
+EXPECTED_GOLDEN_EVAL_COUNT = 7
+EXPECTED_BATCH250_VAL_COUNT = 33
+EXPECTED_BATCH250_TEST_COUNT = 33
+EXPECTED_PROTECTED_EVAL_COUNT = 73
+EXPECTED_BASELINE_TRAIN_COUNT = 190
+
+
 class GeminiAuditSampleASampler:
     """Deterministic sampler for MediaPipe Gemini Audit Sample A (280 images)."""
 
@@ -149,6 +156,11 @@ class GeminiAuditSampleASampler:
         golden_eval_dir: Path | None = None,
         expected_manifest_sha256: str = EXPECTED_REMEDIATED_MANIFEST_SHA256,
         expected_remaining_population: dict[str, int] | None = None,
+        expected_golden_count: int | None = None,
+        expected_val_count: int | None = None,
+        expected_test_count: int | None = None,
+        expected_eval_count: int | None = None,
+        expected_baseline_train_count: int | None = None,
         samples_per_class: int = DEFAULT_SAMPLES_PER_CLASS,
         seed: int = DEFAULT_SEED,
     ):
@@ -163,10 +175,15 @@ class GeminiAuditSampleASampler:
             if expected_remaining_population is not None
             else EXPECTED_REMAINING_POPULATION
         )
+        self.expected_golden_count = expected_golden_count
+        self.expected_val_count = expected_val_count
+        self.expected_test_count = expected_test_count
+        self.expected_eval_count = expected_eval_count
+        self.expected_baseline_train_count = expected_baseline_train_count
         self.samples_per_class = samples_per_class
         self.seed = seed
 
-    def sample(self) -> dict[str, Any]:
+    def sample(self, require_leak_check: bool = True) -> dict[str, Any]:
         """Perform verified deterministic stratified sampling for Sample A."""
         # 1. Verify manifest existence and SHA-256
         if not self.manifest_csv.is_file():
@@ -192,21 +209,158 @@ class GeminiAuditSampleASampler:
                     if r.get("source_path"):
                         pilot_source_paths.add(r["source_path"])
 
-        # 3. Collect evaluation & baseline protected hashes to prevent leak
-        eval_hashes: set[str] = set()
+        # 3. Collect evaluation & baseline protected files and hashes to prevent leak
+        golden_files: list[Path] = []
+        val_files: list[Path] = []
+        test_files: list[Path] = []
+        baseline_train_files: list[Path] = []
+
+        golden_hashes: set[str] = set()
+        val_hashes: set[str] = set()
+        test_hashes: set[str] = set()
         baseline_train_hashes: set[str] = set()
 
         if self.golden_eval_dir and self.golden_eval_dir.is_dir():
-            for p in self.golden_eval_dir.glob("test/*/*.jpg"):
-                eval_hashes.add(compute_sha256(p))
+            golden_files = sorted(self.golden_eval_dir.glob("test/*/*.jpg"))
+            for p in golden_files:
+                try:
+                    golden_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash golden eval image {p}: {e}") from e
 
         if self.batch250_dir and self.batch250_dir.is_dir():
-            for p in (self.batch250_dir / "val").glob("*/*.jpg"):
-                eval_hashes.add(compute_sha256(p))
-            for p in (self.batch250_dir / "test").glob("*/*.jpg"):
-                eval_hashes.add(compute_sha256(p))
-            for p in (self.batch250_dir / "train").glob("*/*.jpg"):
-                baseline_train_hashes.add(compute_sha256(p))
+            val_files = sorted((self.batch250_dir / "val").glob("*/*.jpg"))
+            for p in val_files:
+                try:
+                    val_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash batch250 val image {p}: {e}") from e
+            test_files = sorted((self.batch250_dir / "test").glob("*/*.jpg"))
+            for p in test_files:
+                try:
+                    test_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash batch250 test image {p}: {e}") from e
+            baseline_train_files = sorted((self.batch250_dir / "train").glob("*/*.jpg"))
+            for p in baseline_train_files:
+                try:
+                    baseline_train_hashes.add(compute_sha256(p))
+                except Exception as e:
+                    raise RuntimeError(f"Failed to read/hash baseline train image {p}: {e}") from e
+
+        eval_hashes = golden_hashes | val_hashes | test_hashes
+        eval_files_count = len(golden_files) + len(val_files) + len(test_files)
+
+        if require_leak_check:
+            if not self.golden_eval_dir or not self.golden_eval_dir.is_dir() or len(eval_hashes) == 0:
+                raise RuntimeError(
+                    f"Golden evaluation dataset missing or empty: {self.golden_eval_dir}. "
+                    "Fail-closed: cannot verify anti-leak protection without valid evaluation images."
+                )
+            if not self.batch250_dir or not self.batch250_dir.is_dir() or len(baseline_train_hashes) == 0:
+                raise RuntimeError(
+                    f"Baseline dataset missing or empty: {self.batch250_dir}. "
+                    "Fail-closed: cannot verify anti-leak protection without baseline images."
+                )
+            if not self.image_dir or not self.image_dir.is_dir():
+                raise FileNotFoundError(
+                    f"Candidate image directory missing or inaccessible: {self.image_dir}. "
+                    "Fail-closed: real image verification requires valid image directory."
+                )
+
+            if self.expected_golden_count is not None:
+                if len(golden_files) != self.expected_golden_count:
+                    raise RuntimeError(
+                        f"Golden evaluation dataset count mismatch: expected {self.expected_golden_count}, "
+                        f"got {len(golden_files)} files (file count mismatch). "
+                        "Fail-closed: all golden evaluation images must be present without missing or extraneous files."
+                    )
+                if len(golden_hashes) != len(golden_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in Golden evaluation dataset: "
+                        f"{len(golden_files)} files found but only {len(golden_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(golden_hashes) != self.expected_golden_count:
+                    raise RuntimeError(
+                        f"Golden evaluation dataset count mismatch: expected {self.expected_golden_count}, "
+                        f"got {len(golden_hashes)} unique hashes. "
+                        "Fail-closed: all golden evaluation images must be present."
+                    )
+
+            if self.expected_val_count is not None:
+                if len(val_files) != self.expected_val_count:
+                    raise RuntimeError(
+                        f"batch250 validation dataset count mismatch: expected {self.expected_val_count}, "
+                        f"got {len(val_files)} files (file count mismatch). "
+                        "Fail-closed: all batch250 validation images must be present without missing or extraneous files."
+                    )
+                if len(val_hashes) != len(val_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in batch250 validation dataset: "
+                        f"{len(val_files)} files found but only {len(val_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(val_hashes) != self.expected_val_count:
+                    raise RuntimeError(
+                        f"batch250 validation dataset count mismatch: expected {self.expected_val_count}, "
+                        f"got {len(val_hashes)} unique hashes. "
+                        "Fail-closed: all batch250 validation images must be present."
+                    )
+
+            if self.expected_test_count is not None:
+                if len(test_files) != self.expected_test_count:
+                    raise RuntimeError(
+                        f"batch250 test dataset count mismatch: expected {self.expected_test_count}, "
+                        f"got {len(test_files)} files (file count mismatch). "
+                        "Fail-closed: all batch250 test images must be present without missing or extraneous files."
+                    )
+                if len(test_hashes) != len(test_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in batch250 test dataset: "
+                        f"{len(test_files)} files found but only {len(test_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(test_hashes) != self.expected_test_count:
+                    raise RuntimeError(
+                        f"batch250 test dataset count mismatch: expected {self.expected_test_count}, "
+                        f"got {len(test_hashes)} unique hashes. "
+                        "Fail-closed: all batch250 test images must be present."
+                    )
+
+            if self.expected_eval_count is not None:
+                if eval_files_count != self.expected_eval_count:
+                    raise RuntimeError(
+                        f"Protected evaluation dataset count mismatch: expected {self.expected_eval_count}, "
+                        f"got {eval_files_count} files (file count mismatch). "
+                        "Fail-closed: all protected evaluation images must be present."
+                    )
+                if len(eval_hashes) != self.expected_eval_count:
+                    raise RuntimeError(
+                        f"Protected evaluation dataset count mismatch: expected {self.expected_eval_count}, "
+                        f"got {len(eval_hashes)} unique hashes. "
+                        "Fail-closed: all protected evaluation images must be present."
+                    )
+
+            if self.expected_baseline_train_count is not None:
+                if len(baseline_train_files) != self.expected_baseline_train_count:
+                    raise RuntimeError(
+                        f"Baseline training dataset count mismatch: expected {self.expected_baseline_train_count}, "
+                        f"got {len(baseline_train_files)} files (file count mismatch). "
+                        "Fail-closed: all baseline training images must be present without missing or extraneous files."
+                    )
+                if len(baseline_train_hashes) != len(baseline_train_files):
+                    raise RuntimeError(
+                        f"Duplicate files detected in baseline training dataset: "
+                        f"{len(baseline_train_files)} files found but only {len(baseline_train_hashes)} unique SHA-256 hashes. "
+                        "Fail-closed: duplicate images are strictly rejected."
+                    )
+                if len(baseline_train_hashes) != self.expected_baseline_train_count:
+                    raise RuntimeError(
+                        f"Baseline training dataset count mismatch: expected {self.expected_baseline_train_count}, "
+                        f"got {len(baseline_train_hashes)} unique hashes. "
+                        "Fail-closed: all baseline training images must be present."
+                    )
 
         # 4. Read manifest and apply strict candidate filtering
         with open(self.manifest_csv, "r", encoding="utf-8") as f:
@@ -287,28 +441,29 @@ class GeminiAuditSampleASampler:
         if overlap_ids:
             raise AssertionError(f"Critical overlap: {len(overlap_ids)} samples were already in pilot 70!")
 
-        # Anti-leak verification against real image files if image_dir exists and is accessible
+        # Anti-leak verification against real image files
         sampled_hashes: dict[str, str] = {}
-        if self.image_dir:
-            try:
-                if self.image_dir.is_dir():
-                    for r in sampled_rows:
-                        sp = r["source_path"]
-                        img_path = self.image_dir / sp
-                        if img_path.is_file():
-                            h = compute_sha256(img_path)
-                            sampled_hashes[sp] = h
-                            if h in eval_hashes:
-                                raise RuntimeError(
-                                    f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches protected evaluation dataset!"
-                                )
-                            if h in baseline_train_hashes:
-                                raise RuntimeError(
-                                    f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches baseline train dataset!"
-                                )
-            except PermissionError:
-                # When running inside sandboxed environments without external filesystem access
-                pass
+        leak_check_performed = False
+
+        if self.image_dir and self.image_dir.is_dir():
+            for r in sampled_rows:
+                sp = r["source_path"]
+                img_path = self.image_dir / sp
+                if not img_path.is_file():
+                    if require_leak_check:
+                        raise FileNotFoundError(f"Required candidate image missing: {img_path}")
+                    continue
+                h = compute_sha256(img_path)
+                sampled_hashes[sp] = h
+                if len(eval_hashes) > 0 and h in eval_hashes:
+                    raise RuntimeError(
+                        f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches protected evaluation dataset!"
+                    )
+                if len(baseline_train_hashes) > 0 and h in baseline_train_hashes:
+                    raise RuntimeError(
+                        f"CRITICAL LEAK: Sampled image {sp} (SHA: {h}) matches baseline train dataset!"
+                    )
+            leak_check_performed = (len(sampled_hashes) == len(sampled_rows)) and (len(eval_hashes) > 0)
 
         # 8. Assign deterministic Sample A blind IDs: sampleA_001 .. sampleA_280
         for idx, r in enumerate(sampled_rows, 1):
@@ -326,6 +481,7 @@ class GeminiAuditSampleASampler:
             "pilot_excluded_count": len(pilot_image_ids),
             "git_commit": git_commit,
             "is_git_dirty": is_git_dirty,
+            "leak_check_performed": leak_check_performed,
         }
 
     def export(
@@ -334,6 +490,7 @@ class GeminiAuditSampleASampler:
         strip_images: bool = True,
         force: bool = False,
         generated_at: str | None = None,
+        require_leak_check: bool = True,
     ) -> dict[str, Any]:
         """Sample and export CSV, JSONL, metadata, blind inputs, and optional stripped images."""
         if output_dir.exists() and any(output_dir.iterdir()) and not force:
@@ -344,7 +501,7 @@ class GeminiAuditSampleASampler:
         output_dir.mkdir(parents=True, exist_ok=True)
         now_iso = generated_at or (datetime.utcnow().isoformat() + "Z")
 
-        sample_res = self.sample()
+        sample_res = self.sample(require_leak_check=require_leak_check)
         sampled_rows = sample_res["sampled_rows"]
         fieldnames = sample_res["fieldnames"]
 
@@ -418,39 +575,41 @@ class GeminiAuditSampleASampler:
         blind_images_count = 0
         blind_images_sha256_manifest: dict[str, str] = {}
 
-        if strip_images and self.image_dir:
-            try:
-                if self.image_dir.is_dir():
-                    stripped_dir = output_dir / "stripped_images"
-                    stripped_dir.mkdir(parents=True, exist_ok=True)
+        if strip_images:
+            if not self.image_dir or not self.image_dir.is_dir():
+                if require_leak_check:
+                    raise FileNotFoundError(f"Image directory missing for stripping: {self.image_dir}")
+            else:
+                stripped_dir = output_dir / "stripped_images"
+                stripped_dir.mkdir(parents=True, exist_ok=True)
 
-                    blind_dir = output_dir / "blind_images"
-                    blind_dir.mkdir(parents=True, exist_ok=True)
+                blind_dir = output_dir / "blind_images"
+                blind_dir.mkdir(parents=True, exist_ok=True)
 
-                    for r in sampled_rows:
-                        sp = r["source_path"]
-                        src_img = self.image_dir / sp
-                        if src_img.is_file():
-                            dst_img = stripped_dir / f"{r['image_id']}.jpg"
-                            strip_jpeg_metadata(src_img, dst_img)
+                for r in sampled_rows:
+                    sp = r["source_path"]
+                    src_img = self.image_dir / sp
+                    if not src_img.is_file():
+                        if require_leak_check:
+                            raise FileNotFoundError(f"Image file missing for stripping: {src_img}")
+                        continue
+                    dst_img = stripped_dir / f"{r['image_id']}.jpg"
+                    strip_jpeg_metadata(src_img, dst_img)
 
-                            # Verify EXIF date stripping
-                            exif_dates = extract_exif_dates(dst_img)
-                            if exif_dates:
-                                raise RuntimeError(
-                                    f"Failed to completely strip metadata from {dst_img}: remaining EXIF: {exif_dates}"
-                                )
-                            stripped_count += 1
+                    # Verify EXIF date stripping
+                    exif_dates = extract_exif_dates(dst_img)
+                    if exif_dates:
+                        raise RuntimeError(
+                            f"Failed to completely strip metadata from {dst_img}: remaining EXIF: {exif_dates}"
+                        )
+                    stripped_count += 1
 
-                            # Copy to blind image
-                            blind_dst_img = blind_dir / r["blind_image_file"]
-                            blind_dst_img.write_bytes(dst_img.read_bytes())
-                            blind_h = compute_sha256(blind_dst_img)
-                            blind_images_sha256_manifest[r["blind_id"]] = blind_h
-                            blind_images_count += 1
-            except PermissionError:
-                # Outside sandbox or unreadable external directory
-                pass
+                    # Copy to blind image
+                    blind_dst_img = blind_dir / r["blind_image_file"]
+                    blind_dst_img.write_bytes(dst_img.read_bytes())
+                    blind_h = compute_sha256(blind_dst_img)
+                    blind_images_sha256_manifest[r["blind_id"]] = blind_h
+                    blind_images_count += 1
 
         # 6. Output provenance_metadata.json
         meta = {
@@ -492,9 +651,9 @@ class GeminiAuditSampleASampler:
             },
             "safety_verification": {
                 "pilot_overlap_check_passed": True,
-                "eval_leak_check_passed": True,
-                "baseline_leak_check_passed": True,
-                "exif_stripping_verified": bool(strip_images and stripped_count > 0),
+                "eval_leak_check_passed": bool(sample_res.get("leak_check_performed", False)),
+                "baseline_leak_check_passed": bool(sample_res.get("leak_check_performed", False)),
+                "exif_stripping_verified": bool(strip_images and stripped_count == len(sampled_rows) and stripped_count > 0),
                 "blind_separation_verified": True,
             },
         }
@@ -577,6 +736,36 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Skip image metadata stripping export",
     )
     parser.add_argument(
+        "--expected-golden-count",
+        type=int,
+        default=EXPECTED_GOLDEN_EVAL_COUNT,
+        help="Expected golden evaluation image count (default: 7)",
+    )
+    parser.add_argument(
+        "--expected-val-count",
+        type=int,
+        default=EXPECTED_BATCH250_VAL_COUNT,
+        help="Expected batch250 validation image count (default: 33)",
+    )
+    parser.add_argument(
+        "--expected-test-count",
+        type=int,
+        default=EXPECTED_BATCH250_TEST_COUNT,
+        help="Expected batch250 test image count (default: 33)",
+    )
+    parser.add_argument(
+        "--expected-eval-count",
+        type=int,
+        default=EXPECTED_PROTECTED_EVAL_COUNT,
+        help="Expected total protected evaluation image count (default: 73)",
+    )
+    parser.add_argument(
+        "--expected-baseline-train-count",
+        type=int,
+        default=EXPECTED_BASELINE_TRAIN_COUNT,
+        help="Expected baseline training image count (default: 190)",
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Overwrite output directory if it exists",
@@ -594,6 +783,11 @@ def main(argv: list[str] | None = None) -> int:
         batch250_dir=args.batch250_dir,
         golden_eval_dir=args.golden_eval_dir,
         expected_manifest_sha256=args.expected_manifest_sha256,
+        expected_golden_count=args.expected_golden_count,
+        expected_val_count=args.expected_val_count,
+        expected_test_count=args.expected_test_count,
+        expected_eval_count=args.expected_eval_count,
+        expected_baseline_train_count=args.expected_baseline_train_count,
         samples_per_class=args.samples_per_class,
         seed=args.seed,
     )

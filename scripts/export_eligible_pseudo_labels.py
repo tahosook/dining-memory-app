@@ -24,6 +24,7 @@ import csv
 import json
 import shutil
 import sys
+import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +34,11 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.dataset_safety_guards import (
+    assert_no_path_collision,
+    assert_path_within_directory,
+    atomic_directory_swap,
+)
 from scripts.validate_zip2_audit_manifest import compute_sha256
 
 DEFAULT_REGISTRY_PATH = (
@@ -234,7 +240,12 @@ def export_eligible_pseudo_labels(
     Returns:
         (manifest_csv_path, summary_json_path, exported_images_dir or None)
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
+    input_paths = [registry_path]
+    if manifest_path:
+        input_paths.append(manifest_path)
+    if images_dir:
+        input_paths.append(images_dir)
+    assert_no_path_collision(input_paths, output_dir)
 
     eligible_records, metrics = load_and_filter_eligible_records(
         registry_path=registry_path,
@@ -244,103 +255,135 @@ def export_eligible_pseudo_labels(
 
     exported_at = datetime.now(timezone.utc).isoformat()
 
-    # 1. Write Eligible Manifest CSV
-    manifest_csv_path = output_dir / "eligible_pseudo_labels_manifest.csv"
-    fieldnames = [
-        "image_id",
-        "source_path",
-        "mapped_class",
-        "audit_predicted_class",
-        "audit_is_uncertain",
-        "class_gate_status",
-        "adoption_status",
-        "original_primary_dish_key",
-        "original_analysis_confidence",
-        "spec_version",
-        "exported_at",
-    ]
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = output_dir.parent / f".tmp_{output_dir.name}_{uuid.uuid4().hex[:8]}"
+    staging_dir.mkdir(parents=True, exist_ok=False)
 
-    with open(manifest_csv_path, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for r in eligible_records:
-            writer.writerow({
-                "image_id": r["image_id"],
-                "source_path": r["source_path"],
-                "mapped_class": r["mapped_class"],
-                "audit_predicted_class": r["audit_predicted_class"],
-                "audit_is_uncertain": r["audit_is_uncertain"],
-                "class_gate_status": r["class_gate_status"],
-                "adoption_status": r["adoption_status"],
-                "original_primary_dish_key": r["original_primary_dish_key"],
-                "original_analysis_confidence": r["original_analysis_confidence"],
-                "spec_version": r["spec_version"],
-                "exported_at": exported_at,
-            })
+    try:
+        # 1. Write Eligible Manifest CSV to staging
+        manifest_csv_path = staging_dir / "eligible_pseudo_labels_manifest.csv"
+        fieldnames = [
+            "image_id",
+            "source_path",
+            "mapped_class",
+            "audit_predicted_class",
+            "audit_is_uncertain",
+            "class_gate_status",
+            "adoption_status",
+            "original_primary_dish_key",
+            "original_analysis_confidence",
+            "spec_version",
+            "exported_at",
+        ]
 
-    manifest_sha256 = compute_sha256(manifest_csv_path)
+        with open(manifest_csv_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for r in eligible_records:
+                writer.writerow({
+                    "image_id": r["image_id"],
+                    "source_path": r["source_path"],
+                    "mapped_class": r["mapped_class"],
+                    "audit_predicted_class": r["audit_predicted_class"],
+                    "audit_is_uncertain": r["audit_is_uncertain"],
+                    "class_gate_status": r["class_gate_status"],
+                    "adoption_status": r["adoption_status"],
+                    "original_primary_dish_key": r["original_primary_dish_key"],
+                    "original_analysis_confidence": r["original_analysis_confidence"],
+                    "spec_version": r["spec_version"],
+                    "exported_at": exported_at,
+                })
 
-    # 2. Copy and verify images if requested
-    exported_images_dir: Optional[Path] = None
-    copied_count = 0
-    if copy_images and images_dir:
-        exported_images_dir = output_dir / "images"
-        exported_images_dir.mkdir(parents=True, exist_ok=True)
+        manifest_sha256 = compute_sha256(manifest_csv_path)
 
-        for r in eligible_records:
-            source_file = images_dir / r["source_path"]
-            if not source_file.is_file():
-                # Try finding by image_id or direct filename
-                alt_file = images_dir / f"{r['image_id']}.jpg"
-                if alt_file.is_file():
-                    source_file = alt_file
+        # 2. Copy and verify images if requested
+        exported_images_dir: Optional[Path] = None
+        copied_count = 0
+        if copy_images and images_dir:
+            exported_images_dir = staging_dir / "images"
+            exported_images_dir.mkdir(parents=True, exist_ok=True)
+
+            for r in eligible_records:
+                source_candidate = images_dir / r["source_path"]
+                assert_path_within_directory(source_candidate, images_dir)
+
+                if source_candidate.is_file():
+                    source_file = source_candidate
                 else:
-                    raise FileNotFoundError(
-                        f"Image file not found for {r['image_id']}: checked {source_file} and {alt_file}"
+                    # Try finding by image_id or direct filename
+                    alt_file = images_dir / f"{r['image_id']}.jpg"
+                    assert_path_within_directory(alt_file, images_dir)
+                    if alt_file.is_file():
+                        source_file = alt_file
+                    else:
+                        raise FileNotFoundError(
+                            f"Image file not found for {r['image_id']}: checked {source_candidate} and {alt_file}"
+                        )
+
+                assert_path_within_directory(source_file, images_dir)
+                target_file = exported_images_dir / f"{r['image_id']}.jpg"
+                assert_path_within_directory(target_file, exported_images_dir)
+                shutil.copy2(source_file, target_file)
+
+                # Verify hash match
+                src_hash = compute_sha256(source_file)
+                tgt_hash = compute_sha256(target_file)
+                if src_hash != tgt_hash:
+                    raise RuntimeError(
+                        f"Image copy hash corruption for {r['image_id']}: {src_hash} != {tgt_hash}"
                     )
+                copied_count += 1
 
-            target_file = exported_images_dir / f"{r['image_id']}.jpg"
-            shutil.copy2(source_file, target_file)
-
-            # Verify hash match
-            src_hash = compute_sha256(source_file)
-            tgt_hash = compute_sha256(target_file)
-            if src_hash != tgt_hash:
+            actual_copied_images = len(list(exported_images_dir.glob("*.jpg")))
+            if actual_copied_images != len(eligible_records):
                 raise RuntimeError(
-                    f"Image copy hash corruption for {r['image_id']}: {src_hash} != {tgt_hash}"
+                    f"Copied image count mismatch: expected {len(eligible_records)}, got {actual_copied_images}"
                 )
-            copied_count += 1
 
-    # 3. Write Export Summary JSON
-    summary_json_path = output_dir / "export_summary.json"
-    summary_data = {
-        "status": "success",
-        "exported_at": exported_at,
-        "manifest_path": str(manifest_csv_path.relative_to(_REPO_ROOT) if manifest_csv_path.is_relative_to(_REPO_ROOT) else manifest_csv_path),
-        "manifest_sha256": manifest_sha256,
-        "eligible_sample_count": len(eligible_records),
-        "class_distribution": metrics["class_distribution"],
-        "blocked_classes_contamination_count": metrics["blocked_classes_contamination_count"],
-        "unaudited_contamination_count": metrics["unaudited_contamination_count"],
-        "registry_source_sha256": metrics["registry_sha256"],
-        "registry_total_candidates": metrics["total_registry_count"],
-        "copied_images_count": copied_count if copy_images else 0,
-        "invariants_enforced": [
-            "adoption_status == candidate_eligible",
-            "class_gate_status == passed",
-            "audit_is_uncertain == false",
-            "mapped_class == audit_predicted_class",
-            "mapped_class in {curry_rice, drink}",
-            "audit_subset == sample_A",
-            "blocked_classes == 0",
-            "deterministic_sort_by_class_and_id",
-        ],
-    }
+        # 3. Write Export Summary JSON to staging
+        summary_json_path = staging_dir / "export_summary.json"
+        final_manifest_path = output_dir / "eligible_pseudo_labels_manifest.csv"
+        summary_data = {
+            "status": "success",
+            "exported_at": exported_at,
+            "manifest_path": str(
+                final_manifest_path.relative_to(_REPO_ROOT)
+                if final_manifest_path.is_relative_to(_REPO_ROOT)
+                else final_manifest_path
+            ),
+            "manifest_sha256": manifest_sha256,
+            "eligible_sample_count": len(eligible_records),
+            "class_distribution": metrics["class_distribution"],
+            "blocked_classes_contamination_count": metrics["blocked_classes_contamination_count"],
+            "unaudited_contamination_count": metrics["unaudited_contamination_count"],
+            "registry_source_sha256": metrics["registry_sha256"],
+            "registry_total_candidates": metrics["total_registry_count"],
+            "copied_images_count": copied_count if copy_images else 0,
+            "invariants_enforced": [
+                "adoption_status == candidate_eligible",
+                "class_gate_status == passed",
+                "audit_is_uncertain == false",
+                "mapped_class == audit_predicted_class",
+                "mapped_class in {curry_rice, drink}",
+                "audit_subset == sample_A",
+                "blocked_classes == 0",
+                "deterministic_sort_by_class_and_id",
+            ],
+        }
 
-    with open(summary_json_path, "w", encoding="utf-8") as f:
-        json.dump(summary_data, f, indent=2, ensure_ascii=False)
+        with open(summary_json_path, "w", encoding="utf-8") as f:
+            json.dump(summary_data, f, indent=2, ensure_ascii=False)
 
-    return manifest_csv_path, summary_json_path, exported_images_dir
+        # 4. Atomic directory swap
+        atomic_directory_swap(staging_dir, output_dir)
+    finally:
+        if staging_dir.exists():
+            shutil.rmtree(staging_dir, ignore_errors=True)
+
+    final_manifest_csv = output_dir / "eligible_pseudo_labels_manifest.csv"
+    final_summary_json = output_dir / "export_summary.json"
+    final_images_dir = (output_dir / "images") if copy_images and images_dir else None
+    return final_manifest_csv, final_summary_json, final_images_dir
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:

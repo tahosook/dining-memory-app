@@ -3,7 +3,7 @@
 - **内部ドキュメントID**: issue-22
 - **ステータス**: 完了 (Closed)
 - **作成日**: 2026-10-11
-- **結果**: サンプルAブラインド監査においてローカルAIとGeminiの両モデルが合意した高確信度な少数クラス実写真54枚（`fish_dish` 17枚、`meat_dish` 14枚、`stir_fry` 16枚、`fried_dish` 5枚、`simmered_dish` 2枚）を安全に訓練スプリットへ統合する再現可能パイプライン（`scripts/integrate_agreed_pending_samples.py`）を実装。Golden Test Set（7枚）に対するデータ漏洩ゼロ（0/7）を機械的に検証。過学習を防ぐデータ拡張パラメータ（目標枚数 45、最大倍率 3倍）により計 434枚の均等な学習セットを構築し、MediaPipe Model Maker による MobileNetV2 Challenger モデルの再学習を実施。Golden Test Set 実測評価において、追加クラスであるカレー（`curry_rice`）および揚げ物（`fried_dish`）が **Top-1 正解へ大改善**し、他の全クラスも高精度を維持。これにより、**Top-1 正解数 6 / 7 (85.7%)**（現行 Champion 5/7 を上回る）、**Top-3 正解数 7 / 7 (100.0%)**、**少数クラス Top-3 2 / 2 (100.0%)**、**推論遅延 16.2ms** を達成。Champion 満点時における Gate デッドロックを解消した Promotion Gate を正当に突破（`PROMOTE`）し、本番モデルアセット（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）へのアトミック昇格・デプロイを完遂した。
+- **結果**: サンプルAブラインド監査においてローカルAIとGeminiの両モデルが合意した高確信度な少数クラス実写真54枚（`fish_dish` 17枚、`meat_dish` 14枚、`stir_fry` 16枚、`fried_dish` 5枚、`simmered_dish` 2枚）を安全に訓練スプリットへ統合する再現可能パイプライン（`scripts/integrate_agreed_pending_samples.py`）を実装。Golden Test Set（7枚）に対するデータ漏洩ゼロ（0/7）を機械的に検証。過学習を防ぐデータ拡張パラメータ（目標枚数 45、最大倍率 3倍）により計 434枚の均等な学習セットを構築し、MediaPipe Model Maker による MobileNetV2 Challenger モデルの再学習を実施。Golden Test Set 実測評価（※注: 7サンプル評価は主要代表サンプルに対する回帰ガード・回帰確認としての位置づけであり、一般的な統計的精度の完全な証明ではない）において、追加クラスであるカレー（`curry_rice`）および揚げ物（`fried_dish`）が **Top-1 正解へ大改善**し、他の全クラスも高精度を維持。これにより、**Top-1 正解数 6 / 7 (85.7%)**（現行 Champion 5/7 を上回る）、**Top-3 正解数 7 / 7 (100.0%)**、**少数クラス Top-3 2 / 2 (100.0%)**、**推論遅延 16.2ms** を達成。Champion 満点時における Gate デッドロックを解消した Promotion Gate を正当に突破（`PROMOTE`）し、本番モデルアセット（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）へのアトミック昇格・デプロイを完遂した。
 - **関連ドキュメント**:
   - 先行評価レポート: [docs/issues/issue-21-integrate-pseudo-labels-and-challenger-evaluation.md](issue-21-integrate-pseudo-labels-and-challenger-evaluation.md)
   - 計画書: [docs/engineering/mediapipe-model-autonomous-improvement-plan.md](../engineering/mediapipe-model-autonomous-improvement-plan.md)
@@ -55,7 +55,10 @@ Output Dataset: .../state/mediapipe-dataset/batch250_plus_agreed54
   - Golden test leakage: 0 / 7
 ```
 
-### 2.2 Golden Test Set 実測比較 (N=7)
+### 2.2 Golden Test Set 実測比較 (N=7: 回帰ガード確認)
+
+> **【評価スコープに関する留意点】**  
+> Golden Test Set（N=7）は各クラスの主要代表サンプルに対する**回帰ガード（7-sample regression guard check）**として機能しています。標本サイズが小さいため、一般的な汎化性能の完全な統計的証明ではなく、代表サンプルにおける既知の誤分類克服および既存性能の回帰ゼロ（No regression）を機械的に担保するゲート基準として評価しています。
 
 | 指標 | 旧 Champion (PR #265) | Challenger (Issue-21) | 新 Champion (本タスク) | Promotion Gate 基準 | 判定 |
 | :--- | :---: | :---: | :---: | :---: | :---: |
