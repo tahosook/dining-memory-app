@@ -460,6 +460,69 @@ sys.exit(0)
         self.assertEqual(code, 0, f"Expected 0, stderr: {err}")
         self.assertEqual(asset_task.read_bytes(), b"CHALLENGER_MODEL_BYTES_12345")
 
+    def test_two_tier_gate_preserves_skip_when_golden_v2_dir_empty_string(self) -> None:
+        """When golden_v2_dir is empty string, Tier 2 is SKIPPED and Tier 1 promotes model."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES_EMPTY_ARG")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, ""
+        )
+        self.assertEqual(code, 0, f"Expected 0, stderr: {err}")
+        self.assertEqual(asset_task.read_bytes(), b"CHALLENGER_MODEL_BYTES_EMPTY_ARG")
+
+    def test_two_tier_gate_blocks_promotion_when_golden_v2_dir_exists_but_test_missing(self) -> None:
+        """Fail-Closed: When Golden v2 directory exists but test/ is missing, promotion is prohibited."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES_BLOCKED")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        # Golden v2 directory exists, but test/ does NOT exist
+        v2_dir = self.root / "golden_v2_no_test"
+        v2_dir.mkdir(parents=True)
+
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, v2_dir
+        )
+        self.assertEqual(code, 1, f"Expected 1, stderr: {err}")
+        self.assertEqual(asset_task.read_bytes(), b"ORIGINAL_CHAMPION_BYTES")
+        self.assertIn("test' subdirectory is missing or not a directory", err)
+        self.assertIn("Status: V2_EVAL_FAILED", err)
+        self.assertIn("Promotion prohibited", err)
+
+    def test_two_tier_gate_blocks_promotion_when_golden_v2_test_is_file(self) -> None:
+        """Fail-Closed: When golden_v2_dir/test is a regular file instead of a directory, promotion is prohibited."""
+        chal_model = self.root / "challenger.task"
+        chal_model.write_bytes(b"CHALLENGER_MODEL_BYTES_BLOCKED")
+        asset_task = self.root / "meal-input-assist.task"
+        asset_task.write_bytes(b"ORIGINAL_CHAMPION_BYTES")
+
+        chal_t1 = self._create_tier1_report("chal_t1.json", total=7, top1_correct=4, top3_correct=7, minority_top3=2)
+        champ_t1 = self._create_tier1_report("champ_t1.json", total=7, top1_correct=2, top3_correct=5, minority_top3=1)
+
+        # Golden v2 directory exists, but test is a regular file
+        v2_dir = self.root / "golden_v2_test_file"
+        v2_dir.mkdir(parents=True)
+        (v2_dir / "test").write_text("not a directory", encoding="utf-8")
+
+        code, out, err = self._run_promotion_gate(
+            chal_model, asset_task, chal_t1, champ_t1, v2_dir
+        )
+        self.assertEqual(code, 1, f"Expected 1, stderr: {err}")
+        self.assertEqual(asset_task.read_bytes(), b"ORIGINAL_CHAMPION_BYTES")
+        self.assertIn("test' subdirectory is missing or not a directory", err)
+        self.assertIn("Status: V2_EVAL_FAILED", err)
+        self.assertIn("Promotion prohibited", err)
+
     def test_two_tier_gate_blocks_promotion_when_tier2_regresses(self) -> None:
         """Fail-Closed: When Tier 1 passes but Tier 2 regresses, promotion is blocked and asset untouched."""
         chal_model = self.root / "challenger.task"

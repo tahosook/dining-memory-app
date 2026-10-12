@@ -516,63 +516,68 @@ execute_two_tier_promotion_gate() {
 
   # Step 3c: Tier 2 Benchmark Evaluation on Golden Test Set v2 (106 samples)
   local v2_gate_result="SKIPPED"
-  if [ -n "$golden_v2_dir" ] && [ -d "$golden_v2_dir/test" ]; then
-    v2_gate_result="V2_EVAL_FAILED"
-    echo -e "\n📊 [Step 3c/4] Running Tier 2 Comprehensive Benchmark against Golden Test Set v2 (106 samples)..."
+  if [ -n "$golden_v2_dir" ] && [ -e "$golden_v2_dir" ]; then
+    if [ ! -d "$golden_v2_dir" ] || [ ! -d "$golden_v2_dir/test" ]; then
+      echo "❌ Error: Golden Test Set v2 directory exists ($golden_v2_dir), but 'test' subdirectory is missing or not a directory." >&2
+      v2_gate_result="V2_EVAL_FAILED"
+    else
+      v2_gate_result="V2_EVAL_FAILED"
+      echo -e "\n📊 [Step 3c/4] Running Tier 2 Comprehensive Benchmark against Golden Test Set v2 (106 samples)..."
 
-    # Freshness Guarantee: Always execute fresh evaluations in a dedicated run directory.
-    # Never reuse past reports from previous runs.
-    local run_v2_dir="${output_dir}/v2_eval_fresh_$$"
-    mkdir -p "$run_v2_dir"
-    local fresh_champ_report="${run_v2_dir}/champion_v2_fresh.json"
-    local fresh_chal_report="${run_v2_dir}/challenger_v2_fresh.json"
+      # Freshness Guarantee: Always execute fresh evaluations in a dedicated run directory.
+      # Never reuse past reports from previous runs.
+      local run_v2_dir="${output_dir}/v2_eval_fresh_$$"
+      mkdir -p "$run_v2_dir"
+      local fresh_champ_report="${run_v2_dir}/champion_v2_fresh.json"
+      local fresh_chal_report="${run_v2_dir}/challenger_v2_fresh.json"
 
-    rm -f "$fresh_champ_report" "$fresh_chal_report"
+      rm -f "$fresh_champ_report" "$fresh_chal_report"
 
-    local eval_success=true
-    echo "Evaluating Production Champion on Golden Test Set v2..."
-    if ! run_evaluate_model \
-      --model-path "$asset_task" \
-      --dataset-dir "$golden_v2_dir" \
-      --output-json "$fresh_champ_report" \
-      --output-md "$output_dir/champion_v2_evaluation_summary.md" \
-      --split test; then
-      echo "❌ Error: Tier 2 evaluation command failed for Champion model" >&2
-      eval_success=false
-    fi
-
-    if [ "$eval_success" = true ]; then
-      echo "Evaluating Challenger on Golden Test Set v2..."
+      local eval_success=true
+      echo "Evaluating Production Champion on Golden Test Set v2..."
       if ! run_evaluate_model \
-        --model-path "$challenger_model" \
+        --model-path "$asset_task" \
         --dataset-dir "$golden_v2_dir" \
-        --output-json "$fresh_chal_report" \
-        --output-md "$output_dir/challenger_v2_evaluation_summary.md" \
+        --output-json "$fresh_champ_report" \
+        --output-md "$output_dir/champion_v2_evaluation_summary.md" \
         --split test; then
-        echo "❌ Error: Tier 2 evaluation command failed for Challenger model" >&2
+        echo "❌ Error: Tier 2 evaluation command failed for Champion model" >&2
         eval_success=false
       fi
-    fi
 
-    if [ "$eval_success" = true ] && [ -f "$fresh_chal_report" ] && [ -f "$fresh_champ_report" ]; then
-      v2_gate_result=$(evaluate_golden_v2_gate "$fresh_chal_report" "$fresh_champ_report")
-      # On success, sync the fresh verified reports to destination paths if requested
-      if [ -n "$champion_v2_report" ]; then
-        cp -f "$fresh_champ_report" "$champion_v2_report"
-      fi
-      if [ -n "$challenger_v2_report" ]; then
-        cp -f "$fresh_chal_report" "$challenger_v2_report"
-      fi
-    else
       if [ "$eval_success" = true ]; then
-        echo "❌ Error: Tier 2 evaluation report(s) not generated" >&2
-        v2_gate_result="V2_REPORT_NOT_FOUND"
-      else
-        v2_gate_result="V2_EVAL_FAILED"
+        echo "Evaluating Challenger on Golden Test Set v2..."
+        if ! run_evaluate_model \
+          --model-path "$challenger_model" \
+          --dataset-dir "$golden_v2_dir" \
+          --output-json "$fresh_chal_report" \
+          --output-md "$output_dir/challenger_v2_evaluation_summary.md" \
+          --split test; then
+          echo "❌ Error: Tier 2 evaluation command failed for Challenger model" >&2
+          eval_success=false
+        fi
       fi
-    fi
 
-    rm -rf "$run_v2_dir"
+      if [ "$eval_success" = true ] && [ -f "$fresh_chal_report" ] && [ -f "$fresh_champ_report" ]; then
+        v2_gate_result=$(evaluate_golden_v2_gate "$fresh_chal_report" "$fresh_champ_report")
+        # On success, sync the fresh verified reports to destination paths if requested
+        if [ -n "$champion_v2_report" ]; then
+          cp -f "$fresh_champ_report" "$champion_v2_report"
+        fi
+        if [ -n "$challenger_v2_report" ]; then
+          cp -f "$fresh_chal_report" "$challenger_v2_report"
+        fi
+      else
+        if [ "$eval_success" = true ]; then
+          echo "❌ Error: Tier 2 evaluation report(s) not generated" >&2
+          v2_gate_result="V2_REPORT_NOT_FOUND"
+        else
+          v2_gate_result="V2_EVAL_FAILED"
+        fi
+      fi
+
+      rm -rf "$run_v2_dir"
+    fi
   fi
 
   # Step 4: Champion / Challenger Gate
