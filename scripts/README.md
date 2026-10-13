@@ -1,7 +1,7 @@
 # Scripts Catalog (scripts/)
 
 ## Meta
-- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 23 本および共通・ツール 9 本、計 32 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
+- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 24 本および共通・ツール 9 本、計 33 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
 - Audience: ML/パイプライン開発者、保守者、AI エージェント。
 - Update trigger: `scripts/` 配下にスクリプトやテストを追加・変更・削除したとき。
 - Related docs: [docs/engineering/mediapipe-overview.md](../docs/engineering/mediapipe-overview.md), [docs/engineering/context-map.md](../docs/engineering/context-map.md), [docs/engineering/golden-test-set-v2-specification.md](../docs/engineering/golden-test-set-v2-specification.md)
@@ -10,11 +10,11 @@
 
 ## 1. 概要
 
-`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、およびラベル探索を行うためのスクリプト群（計 23 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 9 本）の合計 32 本が配置されています。
+`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、およびラベル探索を行うためのスクリプト群（計 24 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 9 本）の合計 33 本が配置されています。
 
 ---
 
-## 2. MediaPipe 関連スクリプト カタログ (全 23 本)
+## 2. MediaPipe 関連スクリプト カタログ (全 24 本)
 
 ### 2.1 モデル学習 & Promotion Gate (4 本)
 
@@ -35,7 +35,7 @@
 
 ---
 
-### 2.3 データ監査 & 採用レジストリ (8 本)
+### 2.3 データ監査 & 採用レジストリ・データセット構築 (9 本)
 
 | スクリプト名 | 役割 / 責務 | 主要な入力 | 主要な出力 | 実行コマンド例 | 対応テスト |
 |---|---|---|---|---|---|
@@ -47,6 +47,7 @@
 | `export_eligible_pseudo_labels.py` | 採用レジストリに基づき、基準完全クリアの学習候補 (`candidate_eligible` 74枚) のみを決定論的抽出する。 | 採用レジストリ CSV、元画像ディレクトリ | 抽出済み学習用画像ディレクトリ | `python3 scripts/export_eligible_pseudo_labels.py` | `test_export_eligible_pseudo_labels.py` |
 | `integrate_eligible_pseudo_labels.py` | 確定採用疑似ラベル (74枚) を正規学習データセットスプリットへ安全に統合する。 | ベースデータセット、抽出済み疑似ラベル | 統合データセット | `python3 scripts/integrate_eligible_pseudo_labels.py` | `test_integrate_eligible_pseudo_labels.py` |
 | `integrate_agreed_pending_samples.py` | Sample A で両モデル合意した少数クラス実写真 (54枚) を訓練スプリットへ安全に統合する。 | ベースデータセット、Sample A パッケージ | 統合データセット | `python3 scripts/integrate_agreed_pending_samples.py` | `test_integrate_agreed_pending_samples.py` |
+| `build_dual_taxonomy_dataset.py` | 1,007枚の先入観なし視覚観察ログから、①汎用シーン7クラス、②わたし専用8クラス＋11シグネチャタグのデータセットを決定論的構築する。 | オープン観察 JSONL、Golden Test Set | デュアルラベル JSONL/CSV、サマリー JSON、スプリット画像ツリー | `python3 scripts/build_dual_taxonomy_dataset.py` | `test_build_dual_taxonomy_dataset.py` |
 
 ---
 
@@ -92,7 +93,7 @@
 
 ## 4. テスト対応表 (`scripts/tests/`)
 
-`scripts/tests/` 配下に実在する **全 20 テストスイート（全 266 件のテストケース）** の一覧です。
+`scripts/tests/` 配下に実在する **全 21 テストスイート（全 272 件のテストケース）** の一覧です。
 
 | テストスクリプト名 | テスト件数 | テスト対象スクリプト / モジュール | 主な検証内容 |
 |---|:---:|---|---|
@@ -107,6 +108,7 @@
 | `test_export_eligible_pseudo_labels.py` | 14 | `export_eligible_pseudo_labels.py` | 確定採用 74 枚の決定論的抽出、7 つの不変条件検証 |
 | `test_integrate_eligible_pseudo_labels.py` | 12 | `integrate_eligible_pseudo_labels.py` | 疑似ラベルのデータセット統合、スプリット保護 |
 | `test_integrate_agreed_pending_samples.py` | 14 | `integrate_agreed_pending_samples.py` | 合意保留 54 枚の統合、Golden Set 漏洩ゼロ検証 |
+| `test_build_dual_taxonomy_dataset.py` | 6 | `build_dual_taxonomy_dataset.py` | 汎用7クラス・わたし専用8クラス＋11シグネチャタグ構築、重複拒否、Golden Set 漏洩防止 |
 | `test_dataset_safety_guards.py` | 17 | `dataset_safety_guards.py` | パストラバーサル拒否、アトミックスワップ、削除保護 |
 | `test_explore_food_labels.py` | 36 | `explore-food-labels.py` | プロンプト生成、主料理抽出、crop refinement ロジック |
 | `test_analyze_food_labels.py` | 4 | `analyze-food-labels.py` | レポート集計、未知・不均衡の検出、CSV 出力 |
@@ -116,13 +118,13 @@
 | `test_food_label_taxonomy.py` | 4 | `food_label_taxonomy.py` | 9 クラスの正規化マッピング |
 | `test_mediapipe_labeling_loop.py` | 12 | `mediapipe_labeling_loop.py` | ループ制御、executor 連携、停止条件 |
 | `test_generate_github_status.py` | 14 | `generate_github_status.py` | GitHub ステータス生成ユーティリティ |
-| **合計** | **266** | — | — |
+| **合計** | **272** | — | — |
 
 ---
 
 ## 5. テスト実行方法
 
-Python テストスイート（全 266 件）は、標準ライブラリ `unittest` で実行可能です。
+Python テストスイート（全 272 件）は、標準ライブラリ `unittest` で実行可能です。
 ```bash
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 # または npm スクリプト
@@ -130,5 +132,5 @@ npm run test:python:fast
 ```
 
 > **Note**:
-> - `npm run test:python:fast` は標準ライブラリのみで動作する軽量テスト群（全 266 件）を実行し、CI（GitHub Actions）および `npm run verify` で自動実行されます。`npm run test:python` は将来の重い ML 統合テストの拡張用に準備されています。
+> - `npm run test:python:fast` は標準ライブラリのみで動作する軽量テスト群（全 272 件）を実行し、CI（GitHub Actions）および `npm run verify` で自動実行されます。`npm run test:python` は将来の重い ML 統合テストの拡張用に準備されています。
 > - `run-autonomous-model-improvement.sh` 内の評価コマンドは `EVALUATE_MODEL_CMD`（デフォルト: `uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py`）で制御されます。テスト時は環境変数でモック評価スクリプトを注入できるため、CI 上で `.venv_mediapipe` や重い ML 依存関係がなくても独立してゲート検証が可能です。

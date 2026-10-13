@@ -8,6 +8,7 @@
 
 ## Now
 ### Investigation / evaluation candidates（調査・評価候補）
+- 1,007枚オープン視覚観察に基づく2階層（汎用シーン7クラス／わたし専用8クラス＋シグネチャタグ）分類モデル構築（内部ドキュメント issue-23）: 進行中。1,007枚（重複ゼロ）の先入観なし視覚観察と決定論的デュアルデータセット構築パイプライン（`scripts/build_dual_taxonomy_dataset.py`）およびユニットテスト（`scripts/tests/test_build_dual_taxonomy_dataset.py`）を配備済み。次は2種類のデータセットによるモデル学習・評価を実施する（[docs/issues/issue-23-dual-dining-classification-models.md](docs/issues/issue-23-dual-dining-classification-models.md)）。
 - AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
 - AIメモ下書きの面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、下書きの実用性と表現を改善する。
 

@@ -62,7 +62,7 @@
 
 ### Food Labeling / Classification / MediaPipe
 - Overview & Entry Point: [docs/engineering/mediapipe-overview.md](mediapipe-overview.md) (全体像・正本リンク・Runbook はまずここを参照)
-- Script Catalog: [scripts/README.md](../../scripts/README.md) (全32スクリプトの入出力・対応テスト一覧)
+- Script Catalog: [scripts/README.md](../../scripts/README.md) (全33スクリプトの入出力・対応テスト一覧)
 - Task-specific entry points:
   - **App Inference & UI**: `mediapipe-overview.md`, `src/ai/mealInputAssist/mediapipe*`, `android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssist*`
   - **Model Training & Promotion Gate**: `mediapipe-overview.md`, `scripts/train-mediapipe-model.py`, `scripts/evaluate-mediapipe-model.py`, `scripts/run-autonomous-model-improvement.sh`
