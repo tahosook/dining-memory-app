@@ -17,6 +17,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 from scripts.build_dual_taxonomy_dataset import (
     PERSONAL_HOME_CLASSES,
     PERSONAL_SIGNATURE_TAGS,
@@ -357,6 +359,14 @@ class TestBuildDualTaxonomyDataset(unittest.TestCase):
                     golden_v2_manifest=None,
                 )
 
+    def test_train_mediapipe_script_contains_kaggle_uri_patch(self) -> None:
+        train_script = _REPO_ROOT / "scripts" / "train-mediapipe-model.py"
+        self.assertTrue(train_script.exists())
+        content = train_script.read_text(encoding="utf-8")
+        self.assertIn("kaggle.com/models/google/mobilenet-v2", content)
+        self.assertIn("SupportedModels.MOBILENET_V2._value_", content)
+
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -110,6 +110,19 @@ def main() -> None:
     check_dependencies()
 
     from mediapipe_model_maker import image_classifier
+    import functools
+    from mediapipe_model_maker.python.vision.image_classifier import model_spec
+
+    # tfhub.dev migrated to Kaggle Models; legacy tfhub.dev endpoints return 404
+    kaggle_mobilenet_v2_uri = (
+        "https://www.kaggle.com/models/google/mobilenet-v2/frameworks/TensorFlow2/"
+        "variations/100-224-feature-vector/versions/2"
+    )
+    model_spec.SupportedModels.MOBILENET_V2._value_ = functools.partial(
+        model_spec.ModelSpec,
+        uri=kaggle_mobilenet_v2_uri,
+        name="mobilenet_v2",
+    )
 
     dataset_dir = Path(args.dataset_dir).resolve()
     output_dir = Path(args.output_dir).resolve()

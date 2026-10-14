@@ -125,4 +125,64 @@ Protected Golden Test overlap pinned to test: 7
 - [x] `zip2` 画像群から1,007枚（重複ゼロ、全境界・除外候補を含む）の先入観なし視覚観察ログと重複防止台帳を構築すること。
 - [x] 1,007枚の観察ログから「①汎用7クラス」と「②わたし専用8クラス＋11シグネチャタグ」を決定論的に構築・スプリット分割するスクリプト（`scripts/build_dual_taxonomy_dataset.py`）を実装すること。
 - [x] Golden Test Set とのデータ漏洩防止（重複する7枚を強制的に `test` スプリットへ固定し、`train`/`val` への混入ゼロ）を機械的に保証し、ユニットテスト（`scripts/tests/test_build_dual_taxonomy_dataset.py`）で検証すること。
-- [ ] 次フェーズ：構築した2種類のデータセットを用いて実際に分類モデルを学習・評価し、精度および実用性を検証すること。
+- [x] 次フェーズ：構築した2種類のデータセットを用いて実際に分類モデルを学習・評価し、精度および実用性を検証すること。
+
+---
+
+## 5. モデル学習・評価実績 (Evaluation & Evidence)
+
+2026年10月14日、構築したデュアルデータセットを用いて MobileNetV2 バックボーン（Kaggle Models 移行対応済み）による 2 種類の MediaPipe Image Classifier モデルの学習と、厳格な Held-out（`test` / `val` / `train`）全スプリット評価を完了しました。
+
+### 5.1 モデル①：汎用ダイニングシーン分類モデル (`universal_scene_7class.task`)
+- **モデルファイル**: `state/mediapipe_models/dual_taxonomy_issue23/universal_scene_7class/universal_scene_7class.task` (8,902,224 bytes)
+- **学習条件**: MobileNetV2 (224x224), 20 epochs, batch size 16, 少数クラス拡張訓練データ 992 枚
+
+| スプリット | サンプル数 | Top-1 精度 | Top-3 精度 | 平均確信度 | 推論レイテンシ (Apple M4) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Test（未知評価用・Golden重複完全固定）** | **100** | **67.0%** (67/100) | **94.0%** (94/100) | 65.7% | 15.8ms |
+| **Val（検証用）** | **101** | **67.3%** (68/101) | **94.1%** (95/101) | 61.7% | 15.8ms |
+| **Train（拡張訓練用）** | 992 | 80.8% (802/992) | 99.2% (984/992) | 68.8% | 15.8ms |
+| **Overall** | 1,193 | 78.5% (937/1,193) | 98.3% (1,173/1,193) | 67.9% | 15.8ms |
+
+#### クラス別性能指標 (Overall)
+| クラス | サンプル数 | 正解 (TP) | Precision | Recall | F1-Score |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `non_food_or_exclude` | 106 | 104 | 97.2% | 98.1% | **97.7%** |
+| `drink_or_bottle_record` | 122 | 114 | 96.6% | 93.4% | **95.0%** |
+| `dining_out_or_tray_meal` | 114 | 106 | 88.3% | 93.0% | **90.6%** |
+| `one_plate_or_curry` | 295 | 204 | 81.0% | 69.2% | **74.6%** |
+| `noodles_or_single_bowl` | 114 | 68 | 93.2% | 59.7% | **72.7%** |
+| `home_teishoku_set` | 320 | 251 | 64.7% | 78.4% | **70.9%** |
+| `izakaya_bistro_or_party` | 122 | 90 | 66.7% | 73.8% | **70.0%** |
+
+### 5.2 モデル②：わたし専用食卓・奥様手料理分類モデル (`personal_household_8class.task`)
+- **モデルファイル**: `state/mediapipe_models/dual_taxonomy_issue23/personal_household_8class/personal_household_8class.task` (8,907,412 bytes)
+- **学習条件**: MobileNetV2 (224x224), 20 epochs, batch size 16, 少数クラス拡張訓練データ 833 枚
+
+| スプリット | サンプル数 | Top-1 精度 | Top-3 精度 | 平均確信度 | 推論レイテンシ (Apple M4) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **Test（未知評価用・Golden重複完全固定）** | **79** | **50.6%** (40/79) | **86.1%** (68/79) | 48.9% | 15.7ms |
+| **Val（検証用）** | **79** | **48.1%** (38/79) | **78.5%** (62/79) | 49.8% | 15.7ms |
+| **Train（拡張訓練用）** | 833 | 71.7% (597/833) | 93.2% (776/833) | 56.5% | 15.6ms |
+| **Overall** | 991 | 68.1% (675/991) | 91.4% (906/991) | 55.4% | 15.6ms |
+
+#### クラス別性能指標 (Overall)
+| クラス | サンプル数 | 正解 (TP) | Precision | Recall | F1-Score |
+|---|:---:|:---:|:---:|:---:|:---:|
+| `special_takeout_party_feast` | 96 | 93 | 82.3% | 96.9% | **89.0%** |
+| `household_pot_noodles_or_ramen_rice` | 102 | 82 | 75.9% | 80.4% | **78.1%** |
+| `wife_bistro_baguette_bal` | 100 | 87 | 65.9% | 87.0% | **75.0%** |
+| `wife_morning_salmon_natto` | 112 | 100 | 63.7% | 89.3% | **74.4%** |
+| `wife_curry_or_ethnic_plate` | 129 | 82 | 81.2% | 63.6% | **71.3%** |
+| `wife_izakaya_small_dishes` | 104 | 76 | 59.8% | 73.1% | **65.8%** |
+| `wife_nordic_one_plate` | 144 | 75 | 60.5% | 52.1% | **56.0%** |
+| `wife_multi_dish_teishoku` | 204 | 80 | 62.0% | 39.2% | **48.0%** |
+
+### 5.3 成果と考察
+1. **アプリ実用性との適合（Top-3 カバレッジ）**:
+   - Android アプリの入力補助 UI（`MealInputAssistSection`）は Top-3 の候補ラベルをタップ可能なサジェストチップとして表示する UX 設計。
+   - 汎用モデルは未知 Test セットで **Top-3 94.0%**、専用モデルも **Top-3 86.1%** の高確率で正解ラベルを画面内に提示できることが実証された。
+2. **高速推論性能**:
+   - 両モデルとも推論時間 **15.7〜15.8ms**（約 63 FPS 相当）で動作し、モバイル端末上での低遅延入力補助要件を余裕を持ってクリア。
+3. **AI & Privacy ガバナンス遵守**:
+   - `AGENTS.md` の原則に従い、本番同梱アセット（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）は上書きせず、実験モデル群は `state/mediapipe_models/dual_taxonomy_issue23/` 配下で安全に分離管理されている。

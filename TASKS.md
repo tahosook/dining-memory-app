@@ -8,7 +8,6 @@
 
 ## Now
 ### Investigation / evaluation candidates（調査・評価候補）
-- 1,007枚オープン視覚観察に基づく2階層（汎用シーン7クラス／わたし専用8クラス＋シグネチャタグ）分類モデル構築（内部ドキュメント issue-23）: 進行中。1,007枚（重複ゼロ）の先入観なし視覚観察と決定論的デュアルデータセット構築パイプライン（`scripts/build_dual_taxonomy_dataset.py`）およびユニットテスト（`scripts/tests/test_build_dual_taxonomy_dataset.py`）を配備済み。次は2種類のデータセットによるモデル学習・評価を実施する（[docs/issues/issue-23-dual-dining-classification-models.md](docs/issues/issue-23-dual-dining-classification-models.md)）。
 - AIメモ下書き生成の待ち時間短縮: 候補。すでに progress / remaining time 表示と review 中の live preview 停止はあるため、次は実測と小さな runtime 改善から始める。
 - AIメモ下書きの面白さ・品質改善: 候補。manual save と tap-to-apply を崩さず、下書きの実用性と表現を改善する。
 
@@ -33,6 +32,7 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
+- 1,007枚オープン視覚観察に基づく2階層（汎用シーン7クラス／わたし専用8クラス＋シグネチャタグ）分類モデル構築・評価（内部ドキュメント issue-23）: 完了。1,007枚（重複ゼロ）の先入観なし視覚観察ログ、決定論的デュアルデータセット構築パイプライン（`scripts/build_dual_taxonomy_dataset.py`）、ユニットテスト（`scripts/tests/test_build_dual_taxonomy_dataset.py`）、および2種類のモデル（汎用7クラス: Test Top-3 94.0% / Top-1 67.0%、専用8クラス: Test Top-3 86.1% / Top-1 50.6%、推論15.8ms）の学習・評価・証拠記録を完了。本番同梱アセットは非破壊で保護し、`state/` 配下にモデル・レポートを配備（[docs/issues/issue-23-dual-dining-classification-models.md](docs/issues/issue-23-dual-dining-classification-models.md)、完了 / Closed）。
 - MediaPipe CI・Python テスト・データセット復元・サジェスト除外・二段階昇格判定の改善 (Phase 2 & Phase 3): 完了。Python 依存定義（`requirements-mediapipe.txt`）および CI 高速テスト自動実行（`test:python:fast` / 全 266 件）の配備、非コミット実画像データセット復元手順（`docs/engineering/mediapipe-dataset-recovery.md`）の策定、`mediapipeStaticImageNormalizer.ts` における `other_or_exclude` の UI サジェスト除外（`excludeFromSuggestions: true`）と監査メタデータ記録、自律改善パイプライン（`scripts/run-autonomous-model-improvement.sh`）への二段階昇格判定（Tier 1: 7サンプル回帰ガード、Tier 2: 106サンプル Golden Test Set v2 による包括的ベンチマーク、Fail-Closed 安全設計）および `--evaluate-golden-v2` / `--run-promotion-gate` の配備、ならびに関連ドキュメント群の最新化を完了。
 - 記録編集画面（MealEditModal）における AI 料理名・ジャンル提案のタップ適用配線および UI 文言適正化: 完了。MealDetailScreen から MealEditModal、MealInputAssistSection へ `onApplyMealNameSuggestion` および `onApplyCuisineSuggestion` を接続し、MediaPipe 画像分類モデルが抽出した料理名・ジャンルのサジェストボタンをタップして編集ドラフト（料理名欄・ジャンル選択）に直接反映できる tap-to-apply を提供。また、ボタン文言を『AIで提案を作成』、ヘルパー文言を提案全般に即した表現に適正化し、ユニットテストを追加。
 - MediaPipe 同梱モデル初回自動シード・リリースビルド単体推論・レビューUIサジェスト表示: 完了。内部ストレージ（`files/ai-models/meal-input-assist.task`）不在時に APK 内同梱アセット（`assets/mediapipe/meal-input-assist.task`）から初回自動シードコピーして MappedByteBuffer で安全にロードする Native 仕組みを実装し、デバッグビルドだけでなくリリースビルドでも PC 経由の配置なしに単体動作を可能にした。また、最新チャンピオンモデルの 9 クラス（魚料理、揚げ物、肉料理、麺類、煮物、炒め物等）に対応する正規化マッピングを配備し、Review UI（`MealInputAssistSection`）において料理名（`mealNames`）・料理ジャンル（`cuisineTypes`）をタップ可能なサジェストボタンとして表示、ワンタップで入力欄に反映できる tap-to-apply を提供。Native 単体テスト全 9 件 PASS、TS 関連テスト全 PASS。
