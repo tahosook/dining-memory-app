@@ -27,6 +27,7 @@ from scripts.build_dual_taxonomy_dataset import (
     build_dual_taxonomy_dataset,
     classify_personal_home_mode,
     classify_universal_scene,
+    collect_protected_golden_meshi_keys,
     extract_meshi_key,
     extract_personal_signature_tags,
     verify_golden_test_leakage,
@@ -287,7 +288,7 @@ class TestBuildDualTaxonomyDataset(unittest.TestCase):
                 observations_jsonl=obs_jsonl,
                 output_dir=out_dir,
                 golden_v1_dir=golden_v1_dir.parent,
-                golden_v2_manifest=tmp_dir / "nonexistent.csv",
+                golden_v2_manifest=None,
                 export_image_dirs=True,
             )
 
@@ -352,13 +353,13 @@ class TestBuildDualTaxonomyDataset(unittest.TestCase):
                 f.write(json.dumps(rec) + "\n")
                 f.write(json.dumps(rec) + "\n")
 
-            with self.assertRaises(DualTaxonomyError):
+            with self.assertRaises(DualTaxonomyError) as ctx:
                 build_dual_taxonomy_dataset(
                     observations_jsonl=obs_jsonl,
                     output_dir=tmp_dir / "out",
-                    golden_v1_dir=None,
-                    golden_v2_manifest=None,
                 )
+            self.assertIn("Duplicate meshi_key detected", str(ctx.exception))
+
 
     def test_verify_golden_test_leakage_success(self) -> None:
         records = [
@@ -461,14 +462,150 @@ class TestBuildDualTaxonomyDataset(unittest.TestCase):
             verify_golden_test_leakage(records, protected_keys)
         self.assertIn("MESHI_20250101_120001", str(ctx.exception))
 
-    def test_train_mediapipe_script_contains_kaggle_uri_patch(self) -> None:
-        train_script = _REPO_ROOT / "scripts" / "train-mediapipe-model.py"
-        self.assertTrue(train_script.exists())
-        content = train_script.read_text(encoding="utf-8")
-        self.assertIn("kaggle.com/models/google/mobilenet-v2", content)
-        self.assertIn("configure_mobilenet_v2_spec", content)
+    def test_collect_protected_golden_meshi_keys_fails_when_golden_v1_dir_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_dir = Path(tmp) / "nonexistent_v1_dir"
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v1_dir=missing_dir)
+            self.assertIn("Golden Test Set v1 directory does not exist", str(ctx.exception))
+            self.assertIn(str(missing_dir), str(ctx.exception))
+
+    def test_collect_protected_golden_meshi_keys_fails_when_golden_v1_not_a_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            a_file = Path(tmp) / "not_a_dir.txt"
+            a_file.write_text("dummy", encoding="utf-8")
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v1_dir=a_file)
+            self.assertIn("Golden Test Set v1 path is not a directory", str(ctx.exception))
+            self.assertIn(str(a_file), str(ctx.exception))
+
+    def test_collect_protected_golden_meshi_keys_fails_when_golden_v2_manifest_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_manifest = Path(tmp) / "nonexistent_manifest.csv"
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v2_manifest=missing_manifest)
+            self.assertIn("Golden Test Set v2 manifest file does not exist", str(ctx.exception))
+            self.assertIn(str(missing_manifest), str(ctx.exception))
+
+    def test_collect_protected_golden_meshi_keys_fails_when_golden_v2_manifest_not_a_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            a_dir = Path(tmp) / "manifest_dir"
+            a_dir.mkdir()
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v2_manifest=a_dir)
+            self.assertIn("Golden Test Set v2 manifest path is not a file", str(ctx.exception))
+            self.assertIn(str(a_dir), str(ctx.exception))
+
+    def test_collect_protected_golden_meshi_keys_fails_when_both_sources_none(self) -> None:
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            collect_protected_golden_meshi_keys(golden_v1_dir=None, golden_v2_manifest=None)
+        self.assertIn("At least one Golden test set source", str(ctx.exception))
+
+    def test_collect_protected_golden_meshi_keys_fails_when_sources_empty_or_no_valid_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            empty_v1 = Path(tmp) / "empty_v1"
+            empty_v1.mkdir()
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v1_dir=empty_v1)
+            self.assertIn("No valid protected Golden MESHI keys could be extracted", str(ctx.exception))
+
+            (empty_v1 / "random_photo.jpg").write_bytes(b"data")
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v1_dir=empty_v1)
+            self.assertIn("No valid protected Golden MESHI keys could be extracted", str(ctx.exception))
+
+            empty_v2 = Path(tmp) / "empty_v2.csv"
+            empty_v2.write_text("filename,rel_path_source\nsample.jpg,other/path.jpg\n", encoding="utf-8")
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v2_manifest=empty_v2)
+            self.assertIn("No valid protected Golden MESHI keys could be extracted", str(ctx.exception))
+
+    def test_collect_protected_golden_meshi_keys_fails_on_manifest_read_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            bad_csv = Path(tmp) / "corrupt.csv"
+            bad_csv.write_bytes(b"filename\x00\xff")
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v2_manifest=bad_csv)
+            self.assertIn("Failed to read Golden Test Set v2 manifest", str(ctx.exception))
+
+    def test_collect_protected_golden_meshi_keys_optional_combinations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            v1_dir = Path(tmp) / "v1" / "test"
+            v1_dir.mkdir(parents=True)
+            (v1_dir / "001__MESHI_20250101_120001__a.jpg").write_bytes(b"img1")
+
+            v2_csv = Path(tmp) / "v2.csv"
+            v2_csv.write_text(
+                "filename,rel_path_source\n"
+                "002__MESHI_20250101_120002__b.jpg,source/path.jpg\n",
+                encoding="utf-8",
+            )
+
+            # v1 only
+            keys_v1 = collect_protected_golden_meshi_keys(golden_v1_dir=v1_dir, golden_v2_manifest=None)
+            self.assertEqual(keys_v1, {"MESHI_20250101_120001"})
+
+            # v2 only
+            keys_v2 = collect_protected_golden_meshi_keys(golden_v1_dir=None, golden_v2_manifest=v2_csv)
+            self.assertEqual(keys_v2, {"MESHI_20250101_120002"})
+
+            # both v1 and v2
+            keys_both = collect_protected_golden_meshi_keys(golden_v1_dir=v1_dir, golden_v2_manifest=v2_csv)
+            self.assertEqual(keys_both, {"MESHI_20250101_120001", "MESHI_20250101_120002"})
+
+    def test_verify_golden_test_leakage_fails_on_empty_protected_keys(self) -> None:
+        records = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "test",
+                "universal_scene_class": "one_plate_or_curry",
+            }
+        ]
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records, set())
+        self.assertIn("protected_test_keys is empty", str(ctx.exception))
+
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records, {"", "   "})
+        self.assertIn("no non-empty protected test keys", str(ctx.exception))
+
+    def test_build_dual_taxonomy_dataset_fails_when_golden_sources_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_dir = Path(tmp)
+            obs_jsonl = tmp_dir / "obs.jsonl"
+            obs_jsonl.write_text(
+                json.dumps({
+                    "meshi_key": "MESHI_20250101_120001",
+                    "short_caption": "定食",
+                    "image_id": "b1",
+                }) + "\n",
+                encoding="utf-8",
+            )
+            out_dir = tmp_dir / "out"
+
+            # missing v1
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                build_dual_taxonomy_dataset(
+                    observations_jsonl=obs_jsonl,
+                    output_dir=out_dir,
+                    golden_v1_dir=tmp_dir / "missing_v1",
+                    golden_v2_manifest=None,
+                )
+            self.assertIn("Golden Test Set v1 directory does not exist", str(ctx.exception))
+
+            # missing v2
+            valid_v1 = tmp_dir / "valid_v1"
+            valid_v1.mkdir()
+            (valid_v1 / "001__MESHI_20250101_120001.jpg").write_bytes(b"data")
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                build_dual_taxonomy_dataset(
+                    observations_jsonl=obs_jsonl,
+                    output_dir=out_dir,
+                    golden_v1_dir=valid_v1,
+                    golden_v2_manifest=tmp_dir / "missing_v2.csv",
+                )
+            self.assertIn("Golden Test Set v2 manifest file does not exist", str(ctx.exception))
 
 
 if __name__ == "__main__":
     unittest.main()
-

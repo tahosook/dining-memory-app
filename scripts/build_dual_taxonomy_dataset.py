@@ -74,13 +74,8 @@ DEFAULT_GOLDEN_V1_TEST_DIR = (
     / "exported_dataset"
     / "test"
 )
-DEFAULT_GOLDEN_V2_MANIFEST = (
-    _REPO_ROOT
-    / "state"
-    / "mediapipe-dataset"
-    / "golden_eval_v2"
-    / "golden_eval_v2_manifest.csv"
-)
+DEFAULT_GOLDEN_V2_MANIFEST: Optional[Path] = None
+
 
 UNIVERSAL_CLASSES: Tuple[str, ...] = (
     "home_teishoku_set",
@@ -612,23 +607,82 @@ def collect_protected_golden_meshi_keys(
     golden_v1_dir: Optional[Path] = None,
     golden_v2_manifest: Optional[Path] = None,
 ) -> Set[str]:
-    """Collect MESHI_YYYYMMDD_HHMMSS keys belonging to Golden Test Set v1 or v2."""
+    """Collect MESHI_YYYYMMDD_HHMMSS keys belonging to Golden Test Set v1 or v2.
+
+    Fail-closed validation:
+    1. At least one Golden source (golden_v1_dir or golden_v2_manifest) must be provided.
+    2. If golden_v1_dir is provided, it must exist and be a directory.
+    3. If golden_v2_manifest is provided, it must exist and be a readable CSV file.
+    4. At least one valid MESHI_YYYYMMDD_HHMMSS key must be extracted.
+    """
+    if golden_v1_dir is None and golden_v2_manifest is None:
+        raise DualTaxonomyError(
+            "At least one Golden test set source (golden_v1_dir or golden_v2_manifest) "
+            "must be provided. Fail-closed: cannot build dataset without Golden protection."
+        )
+
     protected: Set[str] = set()
-    if golden_v1_dir and golden_v1_dir.exists():
-        for root, _, files in os.walk(golden_v1_dir):
-            for fname in files:
-                if fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
-                    mk = extract_meshi_key(fname)
-                    if mk.startswith("MESHI_"):
-                        protected.add(mk)
-    if golden_v2_manifest and golden_v2_manifest.exists():
-        with open(golden_v2_manifest, encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                for field in ("image_id", "source_path", "file_name", "relative_path"):
-                    if field in row and row[field]:
-                        mk = extract_meshi_key(row[field])
+
+    if golden_v1_dir is not None:
+        if not golden_v1_dir.exists():
+            raise DualTaxonomyError(
+                f"Golden Test Set v1 directory does not exist: {golden_v1_dir}"
+            )
+        if not golden_v1_dir.is_dir():
+            raise DualTaxonomyError(
+                f"Golden Test Set v1 path is not a directory: {golden_v1_dir}"
+            )
+        try:
+            for root, _, files in os.walk(golden_v1_dir):
+                for fname in sorted(files):
+                    if fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                        mk = extract_meshi_key(fname)
                         if mk.startswith("MESHI_"):
                             protected.add(mk)
+        except OSError as e:
+            raise DualTaxonomyError(
+                f"Failed to read Golden Test Set v1 directory at {golden_v1_dir}: {e}"
+            ) from e
+
+    if golden_v2_manifest is not None:
+        if not golden_v2_manifest.exists():
+            raise DualTaxonomyError(
+                f"Golden Test Set v2 manifest file does not exist: {golden_v2_manifest}"
+            )
+        if not golden_v2_manifest.is_file():
+            raise DualTaxonomyError(
+                f"Golden Test Set v2 manifest path is not a file: {golden_v2_manifest}"
+            )
+        try:
+            with open(golden_v2_manifest, encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    for field in (
+                        "image_id",
+                        "source_path",
+                        "file_name",
+                        "filename",
+                        "relative_path",
+                        "rel_path_source",
+                    ):
+                        if field in row and row[field]:
+                            mk = extract_meshi_key(str(row[field]))
+                            if mk.startswith("MESHI_"):
+                                protected.add(mk)
+        except DualTaxonomyError:
+            raise
+        except Exception as e:
+            raise DualTaxonomyError(
+                f"Failed to read Golden Test Set v2 manifest at {golden_v2_manifest}: {e}"
+            ) from e
+
+    if not protected:
+        raise DualTaxonomyError(
+            f"No valid protected Golden MESHI keys could be extracted from sources "
+            f"(v1: {golden_v1_dir}, v2: {golden_v2_manifest}). Fail-closed: protection "
+            f"key set must not be empty."
+        )
+
     return protected
 
 
@@ -643,8 +697,20 @@ def verify_golden_test_leakage(
     2. Records matching protected Golden keys with personal_home_class must have personal_split == 'test'
     3. Distinguishes protected keys present in dataset vs absent from dataset
     4. Reports and raises DualTaxonomyError if any leakage is detected in either taxonomy.
+    5. Fails closed if protected_test_keys is empty.
     """
-    normalized_protected = {extract_meshi_key(k) for k in protected_test_keys if k}
+    if not protected_test_keys:
+        raise DualTaxonomyError(
+            "Cannot verify Golden test leakage: protected_test_keys is empty. "
+            "Fail-closed: verification requires at least one protected key."
+        )
+    normalized_protected = {extract_meshi_key(k) for k in protected_test_keys if k and extract_meshi_key(k)}
+    if not normalized_protected:
+        raise DualTaxonomyError(
+            "Cannot verify Golden test leakage: no non-empty protected test keys provided. "
+            "Fail-closed: verification requires at least one valid key."
+        )
+
     present_keys: Set[str] = set()
     universal_leakages: List[Dict[str, Any]] = []
     personal_leakages: List[Dict[str, Any]] = []
@@ -1003,7 +1069,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--golden-v2-manifest",
         type=Path,
         default=DEFAULT_GOLDEN_V2_MANIFEST,
-        help="Path to Golden Test Set v2 manifest CSV for leakage prevention.",
+        help="Optional path to Golden Test Set v2 manifest CSV for leakage prevention (default: None).",
     )
     parser.add_argument(
         "--export-image-dirs",

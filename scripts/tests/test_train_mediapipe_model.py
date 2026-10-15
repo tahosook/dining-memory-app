@@ -54,10 +54,12 @@ class TestTrainMediaPipeModel(unittest.TestCase):
         enum_spec = model_spec.SupportedModels.get(model_spec.SupportedModels.MOBILENET_V2)
         self.assertEqual(enum_spec.uri, custom_uri)
 
-    def test_invalid_uri_layer_creation_error_handling(self) -> None:
+    def test_invalid_uri_spec_configuration_and_error_propagation(self) -> None:
         invalid_uri = "https://example.com/nonexistent_model_spec/invalid/1"
+        configured_spec = train_module.configure_mobilenet_v2_spec(invalid_uri)
+        self.assertEqual(configured_spec.uri, invalid_uri)
         with self.assertRaises(Exception):
-            hub.KerasLayer(invalid_uri)
+            hub.KerasLayer(configured_spec.uri)
 
     def test_smoke_image_classifier_creation_with_synthetic_dataset(self) -> None:
         from PIL import Image
