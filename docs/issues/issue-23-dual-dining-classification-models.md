@@ -2,7 +2,7 @@
 
 - **内部ドキュメントID**: issue-23
 - **対応 GitHub Issue**: 未起票
-- **ステータス**: 進行中 (In Progress — データセット構築・検証パイプライン完了、次フェーズにてモデル学習評価)
+- **ステータス**: Phase 1 & 2 完了（データセット構築・モデル学習評価完了、アプリ統合は Phase 3 次期フェーズ候補）
 - **作成日**: 2026-10-13
 - **関連ドキュメント**:
   - 総合概要: [docs/engineering/mediapipe-overview.md](../engineering/mediapipe-overview.md)
@@ -122,10 +122,18 @@ Protected Golden Test overlap pinned to test: 7
 
 ## 4. 受入基準 (Acceptance Criteria)
 
+### フェーズ 1: オープン視覚観察とデュアルデータセット構築（完了）
 - [x] `zip2` 画像群から1,007枚（重複ゼロ、全境界・除外候補を含む）の先入観なし視覚観察ログと重複防止台帳を構築すること。
 - [x] 1,007枚の観察ログから「①汎用7クラス」と「②わたし専用8クラス＋11シグネチャタグ」を決定論的に構築・スプリット分割するスクリプト（`scripts/build_dual_taxonomy_dataset.py`）を実装すること。
-- [x] Golden Test Set とのデータ漏洩防止（重複する7枚を強制的に `test` スプリットへ固定し、`train`/`val` への混入ゼロ）を機械的に保証し、ユニットテスト（`scripts/tests/test_build_dual_taxonomy_dataset.py`）で検証すること。
-- [x] 次フェーズ：構築した2種類のデータセットを用いて実際に分類モデルを学習・評価し、精度および実用性を検証すること。
+- [x] Golden Test Set とのデータ漏洩防止（重複する7枚を強制的に `test` スプリットへ固定し、`train`/`val` への混入ゼロ）を実測検証し、ユニットテスト（`scripts/tests/test_build_dual_taxonomy_dataset.py`）で検証すること。
+
+### フェーズ 2: デュアル分類モデルの学習と Held-out 全スプリット評価（完了）
+- [x] 構築した2種類のデータセットを用いて実際に分類モデル（汎用7クラス / 専用8クラス）を学習し、Held-out `test` / `val` / `train` スプリットでの Top-1 / Top-3 精度およびレイテンシを実測・記録すること。
+- [x] TensorFlow Hub の Kaggle Models 移行に対応し、MobileNetV2 バックボーンの取得・モデル仕様生成・学習処理の実動作を検証すること。
+
+### フェーズ 3: Android アプリ本体・本番ランタイムへの統合（次期フェーズ・未着手）
+- [ ] （次期フェーズ候補）Android アプリ（APK）同梱アセット（`assets/mediapipe/meal-input-assist.task`）の更新、または二刀流モデルのオンデマンド切替機構の実装。
+- [ ] （次期フェーズ候補）TypeScript / Native 側の推論正規化レイヤーおよび `MealInputAssistSection` UI でのデュアルモデルサジェスト配線。
 
 ---
 

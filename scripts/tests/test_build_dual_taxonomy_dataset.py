@@ -29,6 +29,7 @@ from scripts.build_dual_taxonomy_dataset import (
     classify_universal_scene,
     extract_meshi_key,
     extract_personal_signature_tags,
+    verify_golden_test_leakage,
 )
 
 
@@ -359,12 +360,113 @@ class TestBuildDualTaxonomyDataset(unittest.TestCase):
                     golden_v2_manifest=None,
                 )
 
+    def test_verify_golden_test_leakage_success(self) -> None:
+        records = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "test",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "test",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+                "is_protected_golden_test": True,
+            },
+            {
+                "meshi_key": "MESHI_20250101_120002",
+                "universal_split": "train",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "train",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+                "is_protected_golden_test": False,
+            },
+        ]
+        protected_keys = {"MESHI_20250101_120001", "MESHI_20250101_999999"}
+        res = verify_golden_test_leakage(records, protected_keys)
+        self.assertTrue(res["verified"])
+        self.assertEqual(res["total_leakage_count"], 0)
+        self.assertEqual(res["universal_leakage_count"], 0)
+        self.assertEqual(res["personal_leakage_count"], 0)
+        self.assertEqual(res["present_in_dataset_count"], 1)
+        self.assertEqual(res["absent_from_dataset_count"], 1)
+
+    def test_verify_golden_test_leakage_detects_universal_leak(self) -> None:
+        records = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "train",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "test",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        protected_keys = {"MESHI_20250101_120001"}
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records, protected_keys)
+        err_msg = str(ctx.exception)
+        self.assertIn("Golden test leakage detected", err_msg)
+        self.assertIn("MESHI_20250101_120001", err_msg)
+        self.assertIn("Universal: 1", err_msg)
+
+    def test_verify_golden_test_leakage_detects_personal_leak(self) -> None:
+        records = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "test",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "val",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        protected_keys = {"MESHI_20250101_120001"}
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records, protected_keys)
+        err_msg = str(ctx.exception)
+        self.assertIn("Golden test leakage detected", err_msg)
+        self.assertIn("Personal: 1", err_msg)
+
+    def test_verify_golden_test_leakage_detects_multiple_leaks(self) -> None:
+        records = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "val",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "test",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            },
+            {
+                "meshi_key": "MESHI_20250101_120002",
+                "universal_split": "test",
+                "universal_scene_class": "home_teishoku_set",
+                "personal_split": "train",
+                "personal_home_class": "wife_multi_dish_teishoku",
+            },
+        ]
+        protected_keys = {"MESHI_20250101_120001", "MESHI_20250101_120002"}
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records, protected_keys)
+        err_msg = str(ctx.exception)
+        self.assertIn("Total leaked keys: 2", err_msg)
+        self.assertIn("MESHI_20250101_120001", err_msg)
+        self.assertIn("MESHI_20250101_120002", err_msg)
+
+    def test_verify_golden_test_leakage_key_normalization(self) -> None:
+        records = [
+            {
+                "meshi_key": "  meshi_20250101_120001.jpg  ",
+                "universal_split": "train",
+                "universal_scene_class": "one_plate_or_curry",
+            }
+        ]
+        protected_keys = {"MESHI_20250101_120001"}
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records, protected_keys)
+        self.assertIn("MESHI_20250101_120001", str(ctx.exception))
+
     def test_train_mediapipe_script_contains_kaggle_uri_patch(self) -> None:
         train_script = _REPO_ROOT / "scripts" / "train-mediapipe-model.py"
         self.assertTrue(train_script.exists())
         content = train_script.read_text(encoding="utf-8")
         self.assertIn("kaggle.com/models/google/mobilenet-v2", content)
-        self.assertIn("SupportedModels.MOBILENET_V2._value_", content)
+        self.assertIn("configure_mobilenet_v2_spec", content)
 
 
 if __name__ == "__main__":

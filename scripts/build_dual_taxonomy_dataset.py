@@ -617,8 +617,10 @@ def collect_protected_golden_meshi_keys(
     if golden_v1_dir and golden_v1_dir.exists():
         for root, _, files in os.walk(golden_v1_dir):
             for fname in files:
-                if fname.lower().endswith(".jpg"):
-                    protected.add(extract_meshi_key(fname))
+                if fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    mk = extract_meshi_key(fname)
+                    if mk.startswith("MESHI_"):
+                        protected.add(mk)
     if golden_v2_manifest and golden_v2_manifest.exists():
         with open(golden_v2_manifest, encoding="utf-8") as f:
             for row in csv.DictReader(f):
@@ -628,6 +630,81 @@ def collect_protected_golden_meshi_keys(
                         if mk.startswith("MESHI_"):
                             protected.add(mk)
     return protected
+
+
+def verify_golden_test_leakage(
+    records: Sequence[Dict[str, Any]],
+    protected_test_keys: Set[str],
+) -> Dict[str, Any]:
+    """Inspect records to strictly verify zero Golden Test Set images leak into train or val.
+
+    Validates:
+    1. Records matching protected Golden keys must have universal_split == 'test'
+    2. Records matching protected Golden keys with personal_home_class must have personal_split == 'test'
+    3. Distinguishes protected keys present in dataset vs absent from dataset
+    4. Reports and raises DualTaxonomyError if any leakage is detected in either taxonomy.
+    """
+    normalized_protected = {extract_meshi_key(k) for k in protected_test_keys if k}
+    present_keys: Set[str] = set()
+    universal_leakages: List[Dict[str, Any]] = []
+    personal_leakages: List[Dict[str, Any]] = []
+
+    for rec in records:
+        raw_key = rec.get("meshi_key") or rec.get("original_path") or rec.get("image_id") or ""
+        mk = extract_meshi_key(str(raw_key))
+        is_protected = mk in normalized_protected or bool(rec.get("is_protected_golden_test"))
+        if not is_protected:
+            continue
+
+        present_keys.add(mk)
+        u_split = rec.get("universal_split")
+        if u_split in ("train", "val"):
+            universal_leakages.append({
+                "meshi_key": mk,
+                "split": u_split,
+                "universal_scene_class": rec.get("universal_scene_class"),
+            })
+
+        p_class = rec.get("personal_home_class")
+        p_split = rec.get("personal_split")
+        if p_class is not None and p_split in ("train", "val"):
+            personal_leakages.append({
+                "meshi_key": mk,
+                "split": p_split,
+                "personal_home_class": p_class,
+            })
+
+    absent_keys = sorted(normalized_protected - present_keys)
+    all_leaked_keys = sorted(
+        set(x["meshi_key"] for x in universal_leakages)
+        | set(x["meshi_key"] for x in personal_leakages)
+    )
+    total_leakage_count = len(all_leaked_keys)
+
+    verification_result = {
+        "verified": True,
+        "protected_keys_total": len(normalized_protected),
+        "present_in_dataset_count": len(present_keys),
+        "absent_from_dataset_count": len(absent_keys),
+        "universal_leakage_count": len(universal_leakages),
+        "personal_leakage_count": len(personal_leakages),
+        "total_leakage_count": total_leakage_count,
+        "universal_leakages": universal_leakages,
+        "personal_leakages": personal_leakages,
+        "absent_keys_sample": absent_keys[:5],
+    }
+
+    if total_leakage_count > 0:
+        raise DualTaxonomyError(
+            f"Golden test leakage detected! Total leaked keys: {total_leakage_count} "
+            f"(Universal: {len(universal_leakages)}, Personal: {len(personal_leakages)}). "
+            f"Leaked keys: {all_leaked_keys}. "
+            f"Universal details: {universal_leakages}. "
+            f"Personal details: {personal_leakages}."
+        )
+
+    return verification_result
+
 
 
 def assign_stratified_splits(
@@ -748,11 +825,11 @@ def build_dual_taxonomy_dataset(
         mk = item["meshi_key"]
         u_split = univ_splits[mk]
         p_split = pers_splits.get(mk)
-        if item["is_protected_golden_test"]:
-            if u_split != "test" or (p_split is not None and p_split != "test"):
-                raise DualTaxonomyError(f"Golden test leakage detected for {mk}")
         item["universal_split"] = u_split
         item["personal_split"] = p_split
+
+    # Strictly verify zero Golden Test Set images leak into train or val in either model
+    leakage_verification = verify_golden_test_leakage(enriched, protected_test_keys)
 
     # Deterministic order by meshi_key
     enriched.sort(key=lambda r: r["meshi_key"])
@@ -819,10 +896,9 @@ def build_dual_taxonomy_dataset(
         "schema_version": "1.0.0",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_records": len(enriched),
-        "protected_golden_overlap_count": sum(
-            1 for r in enriched if r["is_protected_golden_test"]
-        ),
-        "golden_train_val_leakage_count": 0,
+        "protected_golden_overlap_count": leakage_verification["present_in_dataset_count"],
+        "golden_train_val_leakage_count": leakage_verification["total_leakage_count"],
+        "golden_leakage_verification": leakage_verification,
         "universal_scene_7class": {
             "total": len(enriched),
             "by_class": {cls: univ_counter.get(cls, 0) for cls in UNIVERSAL_CLASSES},
