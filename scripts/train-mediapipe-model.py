@@ -105,11 +105,49 @@ def validate_exported_model(model_path: Path) -> None:
     print(f"✓ Validated exported model format ({model_path.stat().st_size} bytes, labels metadata present)")
 
 
+KAGGLE_MOBILENET_V2_URI = (
+    "https://www.kaggle.com/models/google/mobilenet-v2/frameworks/TensorFlow2/"
+    "variations/100-224-feature-vector/versions/2"
+)
+
+
+def configure_mobilenet_v2_spec(uri: str = KAGGLE_MOBILENET_V2_URI) -> Any:
+    """Configures MediaPipe image_classifier to use the migrated Kaggle Models MobileNetV2 URI.
+
+    Rationale and Internal API Dependency:
+    - TensorFlow Hub (tfhub.dev) has been retired, and legacy model endpoints return HTTP 404.
+    - In mediapipe-model-maker (v0.2.x), SupportedModels is an Enum whose values are partial
+      callables returning ModelSpec. ImageClassifierOptions.supported_model strictly expects
+      a SupportedModels Enum member, and SupportedModels.get(spec) validates membership in the enum.
+      There is no public API parameter on ImageClassifierOptions or ImageClassifier to pass an
+      arbitrary custom URI or ModelSpec directly.
+    - Therefore, updating SupportedModels.MOBILENET_V2._value_ is the minimal and necessary
+      mechanism to direct MediaPipe to the official Kaggle Models MobileNetV2 feature vector.
+
+    Returns:
+        The resolved ModelSpec instance corresponding to SupportedModels.MOBILENET_V2.
+    """
+    import functools
+    from mediapipe_model_maker.python.vision.image_classifier import model_spec
+
+    new_spec = functools.partial(
+        model_spec.ModelSpec,
+        uri=uri,
+        name="mobilenet_v2",
+    )
+    model_spec.SupportedModels.MOBILENET_V2._value_ = new_spec
+    resolved_spec = model_spec.SupportedModels.get(model_spec.SupportedModels.MOBILENET_V2)
+    return resolved_spec
+
+
 def main() -> None:
     args = parse_args()
     check_dependencies()
 
     from mediapipe_model_maker import image_classifier
+
+    spec = configure_mobilenet_v2_spec()
+    print(f"Configured MobileNetV2 backbone URI: {spec.uri}")
 
     dataset_dir = Path(args.dataset_dir).resolve()
     output_dir = Path(args.output_dir).resolve()
