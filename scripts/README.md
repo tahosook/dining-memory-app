@@ -20,7 +20,7 @@
 
 | スクリプト名 | 役割 / 責務 | 主要な入力 | 主要な出力 | 実行コマンド例 | 対応テスト |
 |---|---|---|---|---|---|
-| `train-mediapipe-model.py` | MediaPipe Model Maker を用いて MobileNetV2 食事分類モデル（`.task`）を学習・エクスポートする。 | クラス別ディレクトリ構造の学習データセット (`--dataset-dir`) | `.task` モデルバイナリ (`--output-path`) | `python3 scripts/train-mediapipe-model.py --dataset-dir <dir> --output-path model.task` | `test_mediapipe_labeling_loop.py` 等 |
+| `train-mediapipe-model.py` | MediaPipe Model Maker を用いて MobileNetV2 食事分類モデル（`.task`）を学習・エクスポートする。 | クラス別ディレクトリ構造の学習データセット (`--dataset-dir`) | `.task` モデルバイナリ (`--output-path`) | `python3 scripts/train-mediapipe-model.py --dataset-dir <dir> --output-path model.task` | `test_train_mediapipe_model.py`, `test_mediapipe_labeling_loop.py` 等 |
 | `evaluate-mediapipe-model.py` | MediaPipe 食事分類モデルを評価データセットに対して推論実行し、Top-1/Top-3 精度および遅延を測定・JSON 出力する。 | `.task` モデル、テスト画像ディレクトリ | 評価結果 JSON (`--output-json`) | `python3 scripts/evaluate-mediapipe-model.py --model model.task --test-dir <dir> --output-json eval.json` | `test_verify_golden_dataset_v2.py` 等 |
 | `run-autonomous-model-improvement.sh` | データ拡張 ➔ Challenger 再学習 ➔ Champion/Challenger 実測比較 ➔ Promotion Gate 判定 ➔ 本番アセット昇格またはロールバックを自動実行する。 | 正規学習データセット、旧 Golden 7枚テストセット | 本番アセット `meal-input-assist.task` (昇格時)、評価 JSON | `./scripts/run-autonomous-model-improvement.sh` | 結合実走・Gate安全策テスト |
 | `augment-mediapipe-dataset.py` | 少数クラスの過学習を防ぎつつ、回転・反転等の画像拡張を施してクラス間データ数を均等化する。 | 生画像ディレクトリ、拡張目標件数 (`--target-count`) | 拡張済み画像ディレクトリ | `python3 scripts/augment-mediapipe-dataset.py --input-dir <dir> --output-dir <out>` | `test_dataset_safety_guards.py` |
@@ -93,7 +93,7 @@
 
 ## 4. テスト対応表 (`scripts/tests/`)
 
-`scripts/tests/` 配下に実在する **全 21 テストスイート（全 272 件のテストケース）** の一覧です。
+`scripts/tests/` 配下に実在する **全 22 テストスイート（全 295 件のテストケース）** の一覧です。
 
 | テストスクリプト名 | テスト件数 | テスト対象スクリプト / モジュール | 主な検証内容 |
 |---|:---:|---|---|
@@ -108,7 +108,7 @@
 | `test_export_eligible_pseudo_labels.py` | 14 | `export_eligible_pseudo_labels.py` | 確定採用 74 枚の決定論的抽出、7 つの不変条件検証 |
 | `test_integrate_eligible_pseudo_labels.py` | 12 | `integrate_eligible_pseudo_labels.py` | 疑似ラベルのデータセット統合、スプリット保護 |
 | `test_integrate_agreed_pending_samples.py` | 14 | `integrate_agreed_pending_samples.py` | 合意保留 54 枚の統合、Golden Set 漏洩ゼロ検証 |
-| `test_build_dual_taxonomy_dataset.py` | 6 | `build_dual_taxonomy_dataset.py` | 汎用7クラス・わたし専用8クラス＋11シグネチャタグ構築、重複拒否、Golden Set 漏洩防止 |
+| `test_build_dual_taxonomy_dataset.py` | 25 | `build_dual_taxonomy_dataset.py` | 汎用7クラス・わたし専用8クラス＋11シグネチャタグ構築、重複拒否、Golden Set フェイルクローズ検証（トラバーサルエラー・不正 split 検知・漏洩防止） |
 | `test_dataset_safety_guards.py` | 17 | `dataset_safety_guards.py` | パストラバーサル拒否、アトミックスワップ、削除保護 |
 | `test_explore_food_labels.py` | 36 | `explore-food-labels.py` | プロンプト生成、主料理抽出、crop refinement ロジック |
 | `test_analyze_food_labels.py` | 4 | `analyze-food-labels.py` | レポート集計、未知・不均衡の検出、CSV 出力 |
@@ -118,13 +118,14 @@
 | `test_food_label_taxonomy.py` | 4 | `food_label_taxonomy.py` | 9 クラスの正規化マッピング |
 | `test_mediapipe_labeling_loop.py` | 12 | `mediapipe_labeling_loop.py` | ループ制御、executor 連携、停止条件 |
 | `test_generate_github_status.py` | 14 | `generate_github_status.py` | GitHub ステータス生成ユーティリティ |
-| **合計** | **272** | — | — |
+| `test_train_mediapipe_model.py` | 4 | `train-mediapipe-model.py` | MobileNet V2 仕様生成、KerasLayer ハンドリング、パラメータ検証 |
+| **合計** | **295** | — | — |
 
 ---
 
 ## 5. テスト実行方法
 
-Python テストスイート（全 272 件）は、標準ライブラリ `unittest` で実行可能です。
+Python テストスイート（全 295 件）は、標準ライブラリ `unittest` で実行可能です。
 ```bash
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 # または npm スクリプト
@@ -132,5 +133,5 @@ npm run test:python:fast
 ```
 
 > **Note**:
-> - `npm run test:python:fast` は標準ライブラリのみで動作する軽量テスト群（全 272 件）を実行し、CI（GitHub Actions）および `npm run verify` で自動実行されます。`npm run test:python` は将来の重い ML 統合テストの拡張用に準備されています。
+> - `npm run test:python:fast` は標準ライブラリのみで動作する軽量テスト群（全 295 件）を実行し、CI（GitHub Actions）および `npm run verify` で自動実行されます。`npm run test:python` は将来の重い ML 統合テストの拡張用に準備されています。
 > - `run-autonomous-model-improvement.sh` 内の評価コマンドは `EVALUATE_MODEL_CMD`（デフォルト: `uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py`）で制御されます。テスト時は環境変数でモック評価スクリプトを注入できるため、CI 上で `.venv_mediapipe` や重い ML 依存関係がなくても独立してゲート検証が可能です。

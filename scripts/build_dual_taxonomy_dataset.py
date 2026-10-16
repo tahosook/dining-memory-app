@@ -632,17 +632,27 @@ def collect_protected_golden_meshi_keys(
             raise DualTaxonomyError(
                 f"Golden Test Set v1 path is not a directory: {golden_v1_dir}"
             )
+
+        def _on_walk_error(err: OSError) -> None:
+            target_path = err.filename or str(golden_v1_dir)
+            raise DualTaxonomyError(
+                f"Failed to traverse Golden Test Set v1 directory at '{target_path}': {err}"
+            ) from err
+
         try:
-            for root, _, files in os.walk(golden_v1_dir):
+            for root, _, files in os.walk(golden_v1_dir, onerror=_on_walk_error):
                 for fname in sorted(files):
                     if fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
                         mk = extract_meshi_key(fname)
                         if mk.startswith("MESHI_"):
                             protected.add(mk)
+        except DualTaxonomyError:
+            raise
         except OSError as e:
             raise DualTaxonomyError(
-                f"Failed to read Golden Test Set v1 directory at {golden_v1_dir}: {e}"
+                f"Failed to read Golden Test Set v1 directory at '{golden_v1_dir}': {e}"
             ) from e
+
 
     if golden_v2_manifest is not None:
         if not golden_v2_manifest.exists():
@@ -724,19 +734,21 @@ def verify_golden_test_leakage(
 
         present_keys.add(mk)
         u_split = rec.get("universal_split")
-        if u_split in ("train", "val"):
+        if u_split != "test":
             universal_leakages.append({
                 "meshi_key": mk,
                 "split": u_split,
+                "taxonomy": "universal",
                 "universal_scene_class": rec.get("universal_scene_class"),
             })
 
         p_class = rec.get("personal_home_class")
         p_split = rec.get("personal_split")
-        if p_class is not None and p_split in ("train", "val"):
+        if p_class is not None and p_split != "test":
             personal_leakages.append({
                 "meshi_key": mk,
                 "split": p_split,
+                "taxonomy": "personal",
                 "personal_home_class": p_class,
             })
 

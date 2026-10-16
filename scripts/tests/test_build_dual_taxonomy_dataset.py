@@ -16,6 +16,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -605,6 +606,143 @@ class TestBuildDualTaxonomyDataset(unittest.TestCase):
                     golden_v2_manifest=tmp_dir / "missing_v2.csv",
                 )
             self.assertIn("Golden Test Set v2 manifest file does not exist", str(ctx.exception))
+
+    @patch("scripts.build_dual_taxonomy_dataset.os.walk")
+    def test_collect_protected_golden_meshi_keys_fails_on_os_walk_error_in_subdir(
+        self, mock_walk: MagicMock
+    ) -> None:
+        def fake_walk(top: str | Path, onerror=None):
+            yield (str(top), ["subdir"], ["001__MESHI_20250101_120001.jpg"])
+            if onerror:
+                onerror(OSError(13, "Permission denied", str(Path(top) / "subdir")))
+            yield (str(Path(top) / "subdir"), [], [])
+
+        mock_walk.side_effect = fake_walk
+        with tempfile.TemporaryDirectory() as tmp:
+            v1_dir = Path(tmp) / "v1"
+            v1_dir.mkdir()
+            with self.assertRaises(DualTaxonomyError) as ctx:
+                collect_protected_golden_meshi_keys(golden_v1_dir=v1_dir, golden_v2_manifest=None)
+            err_msg = str(ctx.exception)
+            self.assertIn("Failed to traverse Golden Test Set v1 directory", err_msg)
+            self.assertIn("Permission denied", err_msg)
+
+    def test_verify_golden_test_leakage_detects_universal_missing_or_invalid_split(self) -> None:
+        # missing split
+        records_missing = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "test",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        protected_keys = {"MESHI_20250101_120001"}
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records_missing, protected_keys)
+        err_msg = str(ctx.exception)
+        self.assertIn("Golden test leakage detected", err_msg)
+        self.assertIn("Universal: 1", err_msg)
+        self.assertIn("'split': None", err_msg)
+        self.assertIn("'taxonomy': 'universal'", err_msg)
+
+        # None split
+        records_none = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": None,
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "test",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records_none, protected_keys)
+        self.assertIn("Universal: 1", str(ctx.exception))
+
+        # unknown split
+        records_invalid = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "unknown_split",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "test",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records_invalid, protected_keys)
+        err_msg = str(ctx.exception)
+        self.assertIn("Universal: 1", err_msg)
+        self.assertIn("unknown_split", err_msg)
+
+    def test_verify_golden_test_leakage_detects_personal_missing_or_invalid_split(self) -> None:
+        # missing split
+        records_missing = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "test",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        protected_keys = {"MESHI_20250101_120001"}
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records_missing, protected_keys)
+        err_msg = str(ctx.exception)
+        self.assertIn("Golden test leakage detected", err_msg)
+        self.assertIn("Personal: 1", err_msg)
+        self.assertIn("'split': None", err_msg)
+        self.assertIn("'taxonomy': 'personal'", err_msg)
+
+        # None split
+        records_none = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "test",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": None,
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records_none, protected_keys)
+        self.assertIn("Personal: 1", str(ctx.exception))
+
+        # unknown split
+        records_invalid = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "test",
+                "universal_scene_class": "one_plate_or_curry",
+                "personal_split": "invalid_value",
+                "personal_home_class": "wife_curry_or_ethnic_plate",
+            }
+        ]
+        with self.assertRaises(DualTaxonomyError) as ctx:
+            verify_golden_test_leakage(records_invalid, protected_keys)
+        err_msg = str(ctx.exception)
+        self.assertIn("Personal: 1", err_msg)
+        self.assertIn("invalid_value", err_msg)
+
+    def test_verify_golden_test_leakage_allows_personal_non_home_excluded_records(self) -> None:
+        records = [
+            {
+                "meshi_key": "MESHI_20250101_120001",
+                "universal_split": "test",
+                "universal_scene_class": "noodle_soup_or_ramen",
+                "personal_split": None,
+                "personal_home_class": None,
+                "is_protected_golden_test": True,
+            }
+        ]
+        protected_keys = {"MESHI_20250101_120001"}
+        res = verify_golden_test_leakage(records, protected_keys)
+        self.assertTrue(res["verified"])
+        self.assertEqual(res["total_leakage_count"], 0)
+        self.assertEqual(res["universal_leakage_count"], 0)
+        self.assertEqual(res["personal_leakage_count"], 0)
+        self.assertEqual(res["present_in_dataset_count"], 1)
 
 
 if __name__ == "__main__":
