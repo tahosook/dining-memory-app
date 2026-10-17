@@ -50,7 +50,7 @@ Settings には local AI の事前許可、meal input assist model のダウン�
   - Settings の opt-in と `app_settings` 保存あり
   - model / projector は Settings から direct URL を使って端末へ明示ダウンロードする
   - supported device/runtime と app-local model / projector が揃う build では `llama.rn` の real local runtime を使う
-  - MediaPipe custom food classifier 向け static-image classification path は Android native bridge および同梱モデル自動シードを配備し、デフォルトランタイム環境として接続済み。Settings/readiness wiring は次期課題
+  - MediaPipe custom food classifier 向け static-image classification path は Android native bridge および同梱モデル自動シードを配備し、デフォルトランタイム環境および Settings の readiness 判定に接続済み
   - capture review 中は live camera preview を止め、AI 解析時の memory pressure を下げる
   - 条件を満たさない build では disabled reason を返し、manual save はそのまま使える
   - Settings で meal input assist model の導入状態、ready / unavailable reason、固定 model path を確認できる

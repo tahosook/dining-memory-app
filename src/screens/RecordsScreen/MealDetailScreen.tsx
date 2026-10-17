@@ -275,6 +275,12 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         notes: editDraft.notes || undefined,
         is_homemade: editDraft.isHomemade,
         cooking_level: editDraft.isHomemade ? editDraft.cookingLevel || undefined : undefined,
+        ...(editMealInputAssist.appliedMetadata
+          ? {
+              ai_confidence: editMealInputAssist.appliedMetadata.aiConfidence,
+              ai_source: editMealInputAssist.appliedMetadata.aiSource,
+            }
+          : {}),
       });
 
       if (updatedMeal) {
@@ -293,7 +299,13 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     } finally {
       setSavingEdit(false);
     }
-  }, [currentIndex, editDraft, editingMeal, shareComposerVisible]);
+  }, [
+    currentIndex,
+    editDraft,
+    editMealInputAssist.appliedMetadata,
+    editingMeal,
+    shareComposerVisible,
+  ]);
 
   const rotatePhotoClockwise = useCallback(async () => {
     if (!photoUri || rotatingPhoto) {
