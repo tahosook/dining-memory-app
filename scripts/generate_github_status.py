@@ -95,7 +95,9 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
         content = path.read_text(encoding="utf-8")
 
         # 内部ドキュメントID
-        doc_id_match = re.search(r"-\s+\*\*内部ドキュメントID\*\*:\s*([^\n]+)", content)
+        doc_id_match = re.search(
+            r"-\s+(?:\*\*)?内部ドキュメントID(?:\*\*)?:\s*([^\n]+)", content
+        )
         parts = path.stem.split("-")
         doc_id = (
             doc_id_match.group(1).strip()
@@ -104,7 +106,9 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
         )
 
         # 対応 GitHub Issue
-        gh_match = re.search(r"-\s+\*\*対応 GitHub Issue\*\*:\s*([^\n]+)", content)
+        gh_match = re.search(
+            r"-\s+(?:\*\*)?対応 GitHub Issue(?:\*\*)?:\s*([^\n]+)", content
+        )
         gh_str = gh_match.group(1).strip() if gh_match else "未起票"
 
         gh_num = None
@@ -113,7 +117,9 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
             gh_num = int(gh_num_match.group(1))
 
         # ステータス
-        status_match = re.search(r"-\s+\*\*ステータス\*\*:\s*([^\n]+)", content)
+        status_match = re.search(
+            r"-\s+(?:\*\*)?(?:ステータス|Status)(?:\*\*)?:\s*([^\n]+)", content
+        )
         status = status_match.group(1).strip() if status_match else "未設定"
 
         # タイトル (H1)
@@ -121,7 +127,11 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
         title = title_match.group(1).strip() if title_match else path.stem
 
         # 受入基準チェックボックスの集計（受入基準セクションに限定）
-        criteria_match = re.search(r"## (?:受入基準|Acceptance Criteria)\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
+        criteria_match = re.search(
+            r"^##\s+(?:\d+\.\s*)?(?:受入基準|Acceptance Criteria)[^\n]*\n(.*?)(?=\n^##\s+|\Z)",
+            content,
+            re.DOTALL | re.MULTILINE,
+        )
         criteria_text = criteria_match.group(1) if criteria_match else content
         completed = len(re.findall(r"-\s+\[x\]", criteria_text, re.IGNORECASE))
         uncompleted = len(re.findall(r"-\s+\[\s\]", criteria_text))
@@ -129,7 +139,11 @@ def parse_docs_issues(repo_root: Path) -> list[DocIssue]:
 
         # 概要または目的
         overview = ""
-        overview_match = re.search(r"## (?:概要|目的)\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
+        overview_match = re.search(
+            r"^##\s+(?:\d+\.\s*)?(?:概要|目的)[^\n]*\n(.*?)(?=\n^##\s+|\Z)",
+            content,
+            re.DOTALL | re.MULTILINE,
+        )
         if overview_match:
             first_line = overview_match.group(1).strip().splitlines()[0].strip()
             overview = first_line

@@ -1,7 +1,7 @@
 # MediaPipe Image Classification & Pipeline Dependencies
 # Python requirement: 3.11.x (MediaPipe Model Maker requires Python <= 3.11)
 #
-# NOTE: Unit tests under scripts/tests/ (233 tests across 19 files) do NOT require
+# NOTE: Unit tests under scripts/tests/ (295 tests across 22 files; see scripts/README.md) do NOT require
 # any external packages and run using Python's standard library alone.
 #
 # Environment Setup (recommended with uv):

@@ -1,6 +1,7 @@
 # [Enhancement & Promotion] MediaPipe 合意保留サンプル統合・少数クラスデータ拡張最適化・Challenger 再学習・Promotion Gate 突破レポート
 
 - **内部ドキュメントID**: issue-22
+- **対応 GitHub Issue**: 未起票
 - **ステータス**: 完了 (Closed)
 - **作成日**: 2026-10-11
 - **結果**: サンプルAブラインド監査においてローカルAIとGeminiの両モデルが合意した高確信度な少数クラス実写真54枚（`fish_dish` 17枚、`meat_dish` 14枚、`stir_fry` 16枚、`fried_dish` 5枚、`simmered_dish` 2枚）を安全に訓練スプリットへ統合する再現可能パイプライン（`scripts/integrate_agreed_pending_samples.py`）を実装。Golden Test Set（7枚）に対するデータ漏洩ゼロ（0/7）を機械的に検証。過学習を防ぐデータ拡張パラメータ（目標枚数 45、最大倍率 3倍）により計 434枚の均等な学習セットを構築し、MediaPipe Model Maker による MobileNetV2 Challenger モデルの再学習を実施。Golden Test Set 実測評価（※注: 7サンプル評価は主要代表サンプルに対する回帰ガード・回帰確認としての位置づけであり、一般的な統計的精度の完全な証明ではない）において、追加クラスであるカレー（`curry_rice`）および揚げ物（`fried_dish`）が **Top-1 正解へ大改善**し、他の全クラスも高精度を維持。これにより、**Top-1 正解数 6 / 7 (85.7%)**（現行 Champion 5/7 を上回る）、**Top-3 正解数 7 / 7 (100.0%)**、**少数クラス Top-3 2 / 2 (100.0%)**、**推論遅延 16.2ms** を達成。Champion 満点時における Gate デッドロックを解消した Promotion Gate を正当に突破（`PROMOTE`）し、本番モデルアセット（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）へのアトミック昇格・デプロイを完遂した。

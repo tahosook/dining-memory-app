@@ -52,6 +52,18 @@ class GenerateGitHubStatusTests(unittest.TestCase):
         self.assertEqual(issue_08.completed_criteria, 7)
         self.assertEqual(issue_08.total_criteria, 7)
 
+        issue_13 = next((i for i in issues if i.doc_id == "issue-13"), None)
+        self.assertIsNotNone(issue_13)
+        assert issue_13 is not None
+        self.assertEqual(issue_13.github_issue_num, 120)
+        self.assertEqual(issue_13.completed_criteria, 14)
+        self.assertEqual(issue_13.total_criteria, 16)
+
+        issue_18 = next((i for i in issues if i.doc_id == "issue-18"), None)
+        self.assertIsNotNone(issue_18)
+        assert issue_18 is not None
+        self.assertEqual(issue_18.github_issue_num, 267)
+
     def test_is_later_issue(self) -> None:
         doc_map = {
             80: DocIssue(
