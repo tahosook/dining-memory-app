@@ -1,6 +1,7 @@
 # [Enhancement] MediaPipe 学習候補疑似ラベルの決定論的抽出・検証パイプライン構築
 
 - **内部ドキュメントID**: issue-20
+- **対応 GitHub Issue**: 未起票
 - **ステータス**: 完了 (Closed)
 - **作成日**: 2026-10-11
 - **結果**: 確定済み採用レジストリ（`pseudo_label_adoption_registry.csv`）に基づき、二層採用ゲートを完全通過した学習候補（`candidate_eligible`）74枚（`curry_rice` 34枚、`drink` 40枚）のみを再現可能・決定論的に抽出・検証するパイプライン（`scripts/export_eligible_pseudo_labels.py`）を実装。未達クラス5クラス（343枚）および通過クラスの個別未監査画像（138枚）の混入を機械的防衛チェック（7つの厳格な不変条件）で100%遮断することを保証。ユニットテスト（`scripts/tests/test_export_eligible_pseudo_labels.py`）により、不正混入に対する例外送出、決定論的ソート、画像コピー検証、クリーンチェックアウト互換性を検証完了。

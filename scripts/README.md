@@ -1,7 +1,7 @@
 # Scripts Catalog (scripts/)
 
 ## Meta
-- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 24 本および共通・ツール 9 本、計 33 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
+- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 24 本および共通・ツール 10 本、計 34 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
 - Audience: ML/パイプライン開発者、保守者、AI エージェント。
 - Update trigger: `scripts/` 配下にスクリプトやテストを追加・変更・削除したとき。
 - Related docs: [docs/engineering/mediapipe-overview.md](../docs/engineering/mediapipe-overview.md), [docs/engineering/context-map.md](../docs/engineering/context-map.md), [docs/engineering/golden-test-set-v2-specification.md](../docs/engineering/golden-test-set-v2-specification.md)
@@ -10,7 +10,7 @@
 
 ## 1. 概要
 
-`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、およびラベル探索を行うためのスクリプト群（計 24 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 9 本）の合計 33 本が配置されています。
+`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、およびラベル探索を行うためのスクリプト群（計 24 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 10 本）の合計 34 本が配置されています。
 
 ---
 
@@ -75,7 +75,7 @@
 
 ---
 
-## 3. プロジェクト共通 / ガバナンス / ビルド / ツール関連スクリプト (参考・9 本)
+## 3. プロジェクト共通 / ガバナンス / ビルド / ツール関連スクリプト (参考・10 本)
 
 | スクリプト名 | 役割 / 責務 | 主要な用途 | 実行コマンド例 |
 |---|---|---|---|
@@ -85,7 +85,8 @@
 | `build-android-release.sh` | Android リリース APK のビルドと同梱モデル検証を行う。 | ローカル / CI ビルド (`npm run build:android:release`) | `bash ./scripts/build-android-release.sh` |
 | `install-android-artifact.sh` | ビルドした Android APK を adb 経由で実機にインストールする。 | ローカル実機検証 (`npm run install:android:release`) | `bash ./scripts/install-android-artifact.sh` |
 | `benchmark-android-photo-save.sh` | Android 実機環境における写真保存パイプラインのプロファイリングを実行する。 | パフォーマンス評価 | `bash ./scripts/benchmark-android-photo-save.sh` |
-| `generate_github_status.py` | GitHub Actions の実行ステータスを JSON/Markdown 出力する。 | CI 運用 (`test_generate_github_status.py` 対応) | `python3 scripts/generate_github_status.py` |
+| `benchmarks/benchmark-meals-query.ts` | `searchMeals` 等の SQLite ページネーション（OFFSET vs Keyset）および複合インデックスのクエリプラン・実行時間をベンチマーク測定する。 | DB クエリ性能評価 (`docs/notes/pagination-index-benchmark-report.md` 参照) | `npx ts-node scripts/benchmarks/benchmark-meals-query.ts` |
+| `generate_github_status.py` | GitHub Actions の実行ステータスおよび `docs/issues/` の進捗レポートを JSON/Markdown 出力する。 | CI 運用 (`test_generate_github_status.py` 対応) | `python3 scripts/generate_github_status.py` |
 | `generate-icons.py` | アプリアイコンおよびスプラッシュ画面の PNG アセットを Python 組み込み機能のみで生成する。 | アイコン画像生成 | `python3 scripts/generate-icons.py` |
 | `create-github-issues.sh` | `docs/issues/` 配下の仕様書から GitHub Issue を一括起票するワンタイムスクリプト（起票済みのため通常実行不要）。 | 初回起票ツール（要 `--force-create-all`） | `./scripts/create-github-issues.sh` |
 

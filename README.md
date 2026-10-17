@@ -19,15 +19,20 @@
 ### 実装向けドキュメント
 - [コンテキストマップ](docs/engineering/context-map.md): task ごとに読むべき最小 context の索引
 - [技術仕様](docs/architecture/tech-spec.md): current implementation と runtime assumptions
+- [食事分類パイプライン仕様](docs/architecture/food-labeling-pipeline.md): MediaPipe 食事分類モデルのリモートオンデマンド配布・端末内ローカル読み込みパイプライン仕様
 - [画面設計](docs/ux/screen-designs.md): current screen behavior
 - [ユーザーフロー](docs/ux/user-flows.md): current implemented flows
 - [DB設計](docs/domain/database-design.md): current schema and storage rules
 - [実装規約](docs/engineering/coding-standards.md): coding rules
 - [開発ワークフロー](docs/engineering/development-workflow.md): review and verification workflow
 - [GitHub セキュリティ設定](docs/engineering/github-security-settings.md): CodeQL、Dependabot、Secret scanning、branch protection、Actions permissions の運用手順
+- [リリース署名鍵ガイドライン](docs/engineering/release-keystore-guidelines.md): Android 本番リリース署名鍵の生成・保管・注入手順
 - [依存関係管理ポリシー](docs/engineering/dependency-policy.md): 依存関係の4層分類、Expo SDK アップグレード手順、Dependabot 運用方針、ネイティブ互換性ゲート
+- [MediaPipe システム概要](docs/engineering/mediapipe-overview.md): MediaPipe 食事分類システム全体の鳥瞰図、正本管理、開発者 Runbook
+- [Golden Test Set v2 仕様](docs/engineering/golden-test-set-v2-specification.md): MediaPipe 食事分類 Golden Test Set v2 (106枚) の仕様と運用方法
 - [食事画像ラベリング指針](docs/engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けた script 修整の判断ルール
 - [MediaPipe ラベル改善ワークフロー](docs/engineering/mediapipe-labeling-workflow.md): 自動改善 loop の目的、guardrail、停止条件
+- [MediaPipe データセット復元手順](docs/engineering/mediapipe-dataset-recovery.md): Git 管理外の MediaPipe データセット構成、外部保管方針、復元手順 Runbook
 - [即時改善提案](docs/engineering/immediate-improvements.md): 今すぐ入れるべき改善案の整理
 
 ### ドキュメント入口
@@ -61,7 +66,7 @@ dining-memory-app/
 ## 開発環境セットアップ
 
 ### システム要件
-- Node.js 25.9.x 推奨
+- Node.js 24.x LTS 推奨
 - Expo SDK 57.x
 - Expo CLI（`npx expo` 推奨）
 - iOS 開発: Xcode
@@ -87,11 +92,11 @@ npx expo start --dev-client
 - `llama.rn` を使う local AI runtime は Expo Go ではなく dev build / native build 前提です
 
 ### Local AI Runtime
-- local AI model は repo や app bundle に含めません
 - local AI の current scope は meal input assist のみです
-- model / projector は Settings 画面からユーザーが明示操作でダウンロードします
+- Android ビルドでは MediaPipe static-image classifier（`meal-input-assist.task`）がデフォルトの推論ランタイムとして動作し、初回起動時に同梱アセットから自動シードされます（Settings からリモート最新版への更新も可能）
+- GGUF（`llama.rn`）model / projector は repo や app bundle に含めず、Settings 画面からユーザーが明示操作でダウンロードします
 - document picker や設定画面からの path 上書きは現在サポートしません
-- app-local の固定 path に必要な file がある場合だけ runtime が `Ready` になります
+- デフォルトの MediaPipe ランタイムまたは app-local の固定 path に GGUF ファイルが揃っている場合に Settings の AI 入力補助トグルを有効化できます
 - review 画面の AI 入力補助は current stage、進捗の目安、残り時間の目安を表示します
 - capture review 中は live camera preview を止め、AI 解析時の端末負荷を下げます
 - meal input assist model: `documentDirectory/ai-models/meal-input-assist.gguf`

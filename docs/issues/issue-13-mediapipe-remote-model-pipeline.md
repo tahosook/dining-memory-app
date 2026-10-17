@@ -2,12 +2,12 @@
 
 ## Meta
 - Purpose: MediaPipe 食事分類モデルのリモート配布パイプラインを実装するためのタスク仕様。
-- 内部ドキュメントID: issue-13
-- 対応 GitHub Issue: GitHub Issue #120
+- **内部ドキュメントID**: issue-13
+- **対応 GitHub Issue**: GitHub Issue #120
+- **ステータス**: 次期実装候補 (Open)
 - Audience: 実装担当者および PR レビューア。
 - Update trigger: 各 Phase の受入基準やスコープが変わったとき。
 - Related docs: [docs/architecture/food-labeling-pipeline.md](../architecture/food-labeling-pipeline.md), [docs/notes/ai-input-assist-mediapipe-static-image-groundwork.md](../notes/ai-input-assist-mediapipe-static-image-groundwork.md)
-- Status: open
 
 ---
 
