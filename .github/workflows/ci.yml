@@ -32,6 +32,7 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
+          ALLOW_JULES_CHANGE: ${{ (contains(github.event.pull_request.labels.*.name, 'governance') && github.event.pull_request.user.login == github.repository_owner) && 'true' || 'false' }}
         run: bash ./scripts/verify-pr-gates.sh "origin/${{ github.base_ref }}...HEAD"
 
       - name: Install dependencies
