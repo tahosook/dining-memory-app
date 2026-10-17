@@ -535,6 +535,33 @@ describe('SettingsScreen', () => {
     });
   });
 
+  test('enables the AI input assist switch and offers redownload when MediaPipe is ready but GGUF model is in error state', async () => {
+    (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
+    (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(createModelStatus('error'));
+    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue(
+      createRuntimeStatus('unavailable')
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'ready',
+      mode: 'mediapipe-static-image',
+      description: 'MediaPipe static-image meal input assist provider',
+      provider: { suggest: jest.fn() },
+    });
+
+    const { getByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('状態: 利用可能')).toBeTruthy();
+    expect(getByTestId('ai-input-assist-toggle').props.disabled).toBe(false);
+    expect(getByTestId('meal-input-assist-model-redownload-button')).toBeTruthy();
+    expect(getByTestId('delete-all-downloaded-ai-models-button')).toBeTruthy();
+
+    fireEvent(getByTestId('ai-input-assist-toggle'), 'valueChange', true);
+    await waitFor(() => {
+      expect(AppSettingsService.setAiInputAssistEnabled).toHaveBeenCalledWith(true);
+    });
+  });
+
   test('shows downloading then ready when the model download succeeds', async () => {
     const deferred = createDeferred<void>();
     (installMealInputAssistModel as jest.Mock).mockImplementation(

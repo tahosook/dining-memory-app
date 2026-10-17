@@ -448,11 +448,11 @@ export default function SettingsScreen() {
     if (modelActionState === 'downloading') {
       return 'downloading' as const;
     }
-    if (mealInputAssistModelStatus?.kind === 'error') {
-      return 'error' as const;
-    }
     if (isAiAssistReady) {
       return 'ready' as const;
+    }
+    if (mealInputAssistModelStatus?.kind === 'error') {
+      return 'error' as const;
     }
     return 'not_ready' as const;
   }, [
@@ -544,7 +544,8 @@ export default function SettingsScreen() {
               <Text style={styles.actionButtonText}>モデルをダウンロード</Text>
             </TouchableOpacity>
           ) : null}
-          {(aiAssistState === 'ready' && modelReady) ||
+          {(aiAssistState === 'ready' &&
+            (modelReady || mealInputAssistModelStatus?.kind === 'error')) ||
           aiAssistState === 'error' ||
           (modelReady && !runtimeReady && aiAssistState !== 'checking') ? (
             <TouchableOpacity
