@@ -20,6 +20,7 @@ import {
 import { requestMealThumbnail } from '../src/media/mealThumbnail';
 import * as MealShareModule from '../src/media/mealShare';
 import type {
+  AppliedMealInputAssistMetadata,
   MealInputAssistCuisineSuggestion,
   MealInputAssistTextSuggestion,
 } from '../src/ai/mealInputAssist';
@@ -141,6 +142,7 @@ type MockAiAssistState = {
   applyNoteDraftSuggestion: jest.Mock | ((suggestion: MealInputAssistTextSuggestion) => void);
   applyMealNameSuggestion?: jest.Mock | ((suggestion: MealInputAssistTextSuggestion) => void);
   applyCuisineSuggestion?: jest.Mock | ((suggestion: MealInputAssistCuisineSuggestion) => void);
+  appliedMetadata?: AppliedMealInputAssistMetadata | null;
 };
 
 function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAiAssistState {
@@ -159,6 +161,7 @@ function createAiAssistState(overrides: Partial<MockAiAssistState> = {}): MockAi
     applyNoteDraftSuggestion: jest.fn(),
     applyMealNameSuggestion: jest.fn(),
     applyCuisineSuggestion: jest.fn(),
+    appliedMetadata: null,
     ...overrides,
   };
 }
@@ -679,6 +682,62 @@ describe('MealDetailScreen', () => {
 
     await waitFor(() => {
       expect(applyCuisineSuggestion).toHaveBeenCalledWith(cuisineSuggestion);
+    });
+  });
+
+  test('persists ai_confidence and ai_source when saving an edit with applied AI metadata', async () => {
+    const mealNameSuggestion: MealInputAssistTextSuggestion = {
+      value: 'ラーメン',
+      label: 'ラーメン',
+      confidence: 0.95,
+      source: 'mediapipe-static-image',
+    };
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      meal_name: 'ラーメン',
+      ai_confidence: 0.95,
+      ai_source: 'mediapipe-static-image',
+    });
+    (useMealInputAssist as jest.Mock).mockImplementation(
+      ({
+        onCaptureReviewChange,
+      }: {
+        onCaptureReviewChange: (field: string, value: string) => void;
+      }) =>
+        createAiAssistState({
+          status: 'success',
+          suggestions: {
+            source: 'mediapipe-static-image',
+            noteDraft: null,
+            mealNames: [mealNameSuggestion],
+            cuisineTypes: [],
+          },
+          appliedMetadata: {
+            aiSource: 'mediapipe-static-image',
+            aiConfidence: 0.95,
+            appliedFields: ['mealName'],
+          },
+          applyMealNameSuggestion: (suggestion: MealInputAssistTextSuggestion) => {
+            onCaptureReviewChange('mealName', suggestion.value);
+          },
+        })
+    );
+
+    const { getByTestId, getByLabelText } = render(<MealDetailScreen {...createProps()} />);
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.press(getByLabelText('料理名をラーメンに設定'));
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(MealService.updateMeal).toHaveBeenCalledWith(
+        'meal-1',
+        expect.objectContaining({
+          meal_name: 'ラーメン',
+          ai_confidence: 0.95,
+          ai_source: 'mediapipe-static-image',
+        })
+      );
     });
   });
 

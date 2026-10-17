@@ -31,6 +31,7 @@ import {
   MEDIAPIPE_MODEL_DISPLAY_NAME,
   resolveMediaPipeModelPath,
 } from '../src/ai/mealInputAssist/modelConfig';
+import { getMediaPipeStaticImageAvailability } from '../src/ai/mealInputAssist/mediapipeStaticImageProvider';
 
 let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
 
@@ -59,6 +60,10 @@ jest.mock('../src/database/services/BackupService', () => ({
 
 jest.mock('../src/ai/runtime', () => ({
   getLocalAiRuntimeStatusSnapshot: jest.fn(),
+}));
+
+jest.mock('../src/ai/mealInputAssist/mediapipeStaticImageProvider', () => ({
+  getMediaPipeStaticImageAvailability: jest.fn(),
 }));
 
 jest.mock('../src/ai/mealInputAssist/modelInstaller', () => ({
@@ -382,6 +387,12 @@ describe('SettingsScreen', () => {
     (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue(
       createRuntimeStatus('unavailable')
     );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'unavailable',
+      mode: 'mediapipe-static-image',
+      code: 'runtime_unavailable',
+      reason: 'MediaPipe unavailable',
+    });
     (installMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (redownloadMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (deleteMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
@@ -489,6 +500,34 @@ describe('SettingsScreen', () => {
     expect(await findByText('状態: 利用可能')).toBeTruthy();
     expect(getByTestId('ai-input-assist-toggle').props.disabled).toBe(false);
     expect(getByTestId('meal-input-assist-model-redownload-button')).toBeTruthy();
+
+    fireEvent(getByTestId('ai-input-assist-toggle'), 'valueChange', true);
+    await waitFor(() => {
+      expect(AppSettingsService.setAiInputAssistEnabled).toHaveBeenCalledWith(true);
+    });
+  });
+
+  test('enables the AI input assist switch when MediaPipe static-image runtime is ready without GGUF model installed', async () => {
+    (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
+    (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(
+      createModelStatus('not_installed')
+    );
+    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue(
+      createRuntimeStatus('unavailable')
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'ready',
+      mode: 'mediapipe-static-image',
+      description: 'MediaPipe static-image meal input assist provider',
+      provider: { suggest: jest.fn() },
+    });
+
+    const { getByTestId, findByText, queryByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('状態: 利用可能')).toBeTruthy();
+    expect(getByTestId('ai-input-assist-toggle').props.disabled).toBe(false);
+    expect(queryByTestId('meal-input-assist-model-redownload-button')).toBeNull();
 
     fireEvent(getByTestId('ai-input-assist-toggle'), 'valueChange', true);
     await waitFor(() => {
