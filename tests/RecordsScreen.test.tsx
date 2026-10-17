@@ -71,10 +71,12 @@ describe('RecordsScreen', () => {
   test('renders empty state when there are no records', async () => {
     (MealService.getRecentMeals as jest.Mock).mockResolvedValue([]);
 
-    const { findByText } = render(<RecordsScreen />);
+    const { findByText, queryByLabelText } = render(<RecordsScreen />);
     await triggerLatestFocus();
 
     expect(await findByText('まだ食事記録がありません')).toBeTruthy();
+    expect(await findByText('食事記録')).toBeTruthy();
+    expect(queryByLabelText('設定')).toBeNull();
   });
 
   test('renders records grouped by date', async () => {

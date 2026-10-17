@@ -28,8 +28,7 @@
 - Location and note should default to compact one-line triggers and swap into inline inputs after a single tap.
 - AI suggestion section should show `未実行 / 解析中 / 成功 / 失敗 / 無効` and keep the save and cancel actions available in every state.
 - AI suggestion section の `解析中` では、少なくとも current stage、進捗の目安、経過時間、残り時間の目安を表示する。
-- Current visible AI output is a `noteDraft` card, and `メモに追加` should append it to notes only when the user taps the action.
-- Meal name / cuisine candidate chips are not part of the current visible Camera UI; MediaPipe or test-only providers may still use those fields behind the provider contract.
+- Current visible AI output includes a `noteDraft` card (`メモに追加` appends it to notes only when the user taps the action) as well as tap-to-apply suggestion buttons (`サジェストボタン`) for `mealNames` and `cuisineTypes` when provided by the MediaPipe static-image classifier.
 - AI suggestion section の `無効` 理由は、少なくとも `設定で未許可` `この build では未対応` `model / projector 未準備` を区別できるようにする。
 - capture review を開いたら live camera preview は止め、review 中の端末負荷を抑える。
 - AI 入力補助は captured original をそのまま解析せず、端末内で一時的に downsized image を作ってから推論し、終わったら一時 file を片付ける。
@@ -51,7 +50,7 @@
 - The detail screen should provide compact previous/next record buttons near the photo for moving through Records list order, with no action at the list ends.
 - Edit and delete entry points should live on the detail screen.
 - The detail edit modal should show the saved photo, allow a user-triggered right 90-degree rotation that updates the saved image file, and expose homemade style when the record is homemade.
-- When the saved record has a photo, the detail edit modal can show the same AI note-draft assist used in capture review; `メモに追加` appends the draft to the edit notes field, and the database is updated only when the user presses the modal save action.
+- When the saved record has a photo, the detail edit modal can show the same AI input assist used in capture review (`noteDraft` の `メモに追加`、および `mealNames` / `cuisineTypes` のサジェストボタン反映); the database (including applied `ai_confidence` and `ai_source` metadata) is updated only when the user presses the modal save action.
 - The detail screen should also provide an explicit user-triggered share path for posting to X through the OS share sheet.
 
 ## Search Screen
@@ -75,8 +74,8 @@
 
 ## Settings Screen
 - Prioritize privacy, current scope, data management (backup export / restore, local data deletion), and app information.
-- AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。
-- meal input assist model の status を `未導入 / ダウンロード中 / 利用可能 / エラー` で表示し、`ダウンロード / 再ダウンロード / 削除` を提供する。
+- AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。デフォルトの MediaPipe static-image ランタイムまたは GGUF model / runtime のいずれかが利用可能な場合にトグルを有効化できる。
+- GGUF meal input assist model の status を `未導入 / ダウンロード中 / 利用可能 / エラー` で表示し、`ダウンロード / 再ダウンロード / 削除` を提供する。また、MediaPipe 食事分類モデルのリモート取得・削除導線も提供する。
 - `Local AI Runtime Status` では AI 入力補助だけを表示し、ready / unavailable、reason、expected path を確認できる。
 - 「データ管理」セクションに「バックアップをエクスポート」と「バックアップから復元」ボタンを提供し、食事記録とオリジナル写真の単一 ZIP 書き出しおよび復元を行う。復元時は検証成功後に日時・件数・置換警告を含む確認ダイアログを表示する。
 - Keep destructive actions visually separated and require explicit confirmation dialogs.

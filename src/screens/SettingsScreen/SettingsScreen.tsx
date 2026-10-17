@@ -21,10 +21,12 @@ import {
 } from '../../utils/buildInfo';
 import {
   getMealInputAssistManagedFiles,
+  getMediaPipeStaticImageAvailability,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
   MEDIAPIPE_MODEL_DISPLAY_NAME,
   type MealInputAssistModelDownloadProgress,
   type MealInputAssistModelStatus,
+  type MealInputAssistRuntimeAvailability,
   type MediaPipeModelDownloadProgress,
   type MediaPipeModelStatus,
 } from '../../ai/mealInputAssist';
@@ -60,6 +62,8 @@ export default function SettingsScreen() {
   const [mealInputAssistModelStatusLoading, setMealInputAssistModelStatusLoading] = useState(true);
   const [localAiRuntimeStatus, setLocalAiRuntimeStatus] =
     useState<LocalAiRuntimeStatusSnapshot | null>(null);
+  const [mediaPipeRuntimeAvailability, setMediaPipeRuntimeAvailability] =
+    useState<MealInputAssistRuntimeAvailability | null>(null);
   const [localAiRuntimeStatusLoading, setLocalAiRuntimeStatusLoading] = useState(true);
   const [modelActionState, setModelActionState] = useState<ModelActionState>('idle');
   const [modelDownloadProgress, setModelDownloadProgress] =
@@ -108,11 +112,16 @@ export default function SettingsScreen() {
     setLocalAiRuntimeStatusLoading(true);
 
     try {
-      const snapshot = await getLocalAiRuntimeStatusSnapshot();
+      const [snapshot, nextMediaPipeAvailability] = await Promise.all([
+        getLocalAiRuntimeStatusSnapshot(),
+        getMediaPipeStaticImageAvailability().catch(() => null),
+      ]);
       setLocalAiRuntimeStatus(snapshot);
+      setMediaPipeRuntimeAvailability(nextMediaPipeAvailability);
     } catch (error) {
       console.error('Failed to load local AI runtime status:', sanitizeLogObject(error));
       setLocalAiRuntimeStatus(null);
+      setMediaPipeRuntimeAvailability(null);
     } finally {
       setLocalAiRuntimeStatusLoading(false);
     }
@@ -248,11 +257,14 @@ export default function SettingsScreen() {
           });
         }
 
-        await loadMediaPipeModelStatus();
+        await Promise.all([loadMediaPipeModelStatus(), loadLocalAiRuntimeStatus()]);
         Alert.alert('ダウンロード完了', `${MEDIAPIPE_MODEL_DISPLAY_NAME} を端末に保存しました。`);
       } catch (error) {
         console.error('Failed to download MediaPipe model:', sanitizeLogObject(error));
-        await loadMediaPipeModelStatus().catch(() => undefined);
+        await Promise.all([
+          loadMediaPipeModelStatus().catch(() => undefined),
+          loadLocalAiRuntimeStatus().catch(() => undefined),
+        ]);
         const message =
           error instanceof Error && error.message
             ? error.message
@@ -263,7 +275,7 @@ export default function SettingsScreen() {
         setMediaPipeActionState('idle');
       }
     },
-    [loadMediaPipeModelStatus]
+    [loadLocalAiRuntimeStatus, loadMediaPipeModelStatus]
   );
 
   const handleMediaPipeDelete = useCallback(() => {
@@ -280,11 +292,14 @@ export default function SettingsScreen() {
 
             try {
               await deleteMediaPipeModel();
-              await loadMediaPipeModelStatus();
+              await Promise.all([loadMediaPipeModelStatus(), loadLocalAiRuntimeStatus()]);
               Alert.alert('削除完了', `${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除しました。`);
             } catch (error) {
               console.error('Failed to delete MediaPipe model:', sanitizeLogObject(error));
-              await loadMediaPipeModelStatus().catch(() => undefined);
+              await Promise.all([
+                loadMediaPipeModelStatus().catch(() => undefined),
+                loadLocalAiRuntimeStatus().catch(() => undefined),
+              ]);
               const message =
                 error instanceof Error && error.message
                   ? error.message
@@ -297,7 +312,7 @@ export default function SettingsScreen() {
         },
       ]
     );
-  }, [loadMediaPipeModelStatus]);
+  }, [loadLocalAiRuntimeStatus, loadMediaPipeModelStatus]);
 
   const handleDeleteAllData = useCallback(() => {
     Alert.alert(
@@ -424,6 +439,8 @@ export default function SettingsScreen() {
   }, [mealInputAssistModelStatus]);
   const runtimeReady = localAiRuntimeStatus?.mealInputAssist.kind === 'ready';
   const modelReady = mealInputAssistModelStatus?.kind === 'ready';
+  const mediaPipeRuntimeReady = mediaPipeRuntimeAvailability?.kind === 'ready';
+  const isAiAssistReady = (modelReady && runtimeReady) || mediaPipeRuntimeReady;
   const aiAssistState = useMemo(() => {
     if (mealInputAssistModelStatusLoading || localAiRuntimeStatusLoading) {
       return 'checking' as const;
@@ -434,20 +451,19 @@ export default function SettingsScreen() {
     if (mealInputAssistModelStatus?.kind === 'error') {
       return 'error' as const;
     }
-    if (modelReady && runtimeReady) {
+    if (isAiAssistReady) {
       return 'ready' as const;
     }
     return 'not_ready' as const;
   }, [
+    isAiAssistReady,
     localAiRuntimeStatusLoading,
     mealInputAssistModelStatus?.kind,
     mealInputAssistModelStatusLoading,
     modelActionState,
-    modelReady,
-    runtimeReady,
   ]);
   const aiAssistSwitchDisabled =
-    aiInputAssistLoading || modelActionState !== 'idle' || !modelReady || !runtimeReady;
+    aiInputAssistLoading || modelActionState !== 'idle' || !isAiAssistReady;
   const aiAssistDisabledReason =
     aiAssistState === 'checking'
       ? '状態を確認しています。'
@@ -528,7 +544,7 @@ export default function SettingsScreen() {
               <Text style={styles.actionButtonText}>モデルをダウンロード</Text>
             </TouchableOpacity>
           ) : null}
-          {aiAssistState === 'ready' ||
+          {(aiAssistState === 'ready' && modelReady) ||
           aiAssistState === 'error' ||
           (modelReady && !runtimeReady && aiAssistState !== 'checking') ? (
             <TouchableOpacity

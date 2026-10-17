@@ -66,7 +66,7 @@
 - 基本の capture -> save -> records / search / stats flow は実装済み。
 - review 画面の tap-to-apply AI 入力補助は実装済みで、`noteDraft` の notes 追記に加えて `mealNames` / `cuisineTypes` のサジェスト選択が可能。
 - Settings の local AI opt-in、model status、runtime status は実装済み。
-- MediaPipe static-image path は Android native bridge および同梱モデル自動シードを配備し、default runtime として接続済み。Settings readiness の表示統合は次期課題。
+- MediaPipe static-image path は Android native bridge および同梱モデル自動シードを配備し、default runtime および Settings readiness 判定として接続済み。
 - Records detail からの明示的な X共有導線は実装済み。
 - 内部データのバックアップ / エクスポート / 復元（ローカル ZIP バックアップ基盤、GitHub Issue #63）は実装済み。
 - 旧 `PLANS.md` の MVP completion plan は historical reference で、current plan ではない。
