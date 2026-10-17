@@ -6,8 +6,8 @@ jest.mock('expo-file-system/legacy', () => {
     return Array.from(
       new Set(
         [...existingFiles, ...downloads.keys()]
-          .filter((path) => path.startsWith(prefix))
-          .map((path) => path.slice(prefix.length))
+          .filter(path => path.startsWith(prefix))
+          .map(path => path.slice(prefix.length))
       )
     );
   };
@@ -26,23 +26,30 @@ jest.mock('expo-file-system/legacy', () => {
       exists: existingFiles.has(path) || downloads.has(path),
     })),
     makeDirectoryAsync: jest.fn(async () => undefined),
-    createDownloadResumable: jest.fn((url: string, fileUri: string, _options: unknown, onProgress?: (event: {
-      totalBytesWritten: number;
-      totalBytesExpectedToWrite: number;
-    }) => void) => ({
-      downloadAsync: jest.fn(async () => {
-        onProgress?.({
-          totalBytesWritten: 256,
-          totalBytesExpectedToWrite: 1024,
-        });
-        onProgress?.({
-          totalBytesWritten: 1024,
-          totalBytesExpectedToWrite: 1024,
-        });
-        downloads.set(fileUri, url);
-        return { uri: fileUri, status: 200, headers: {} };
-      }),
-    })),
+    createDownloadResumable: jest.fn(
+      (
+        url: string,
+        fileUri: string,
+        _options: unknown,
+        onProgress?: (event: {
+          totalBytesWritten: number;
+          totalBytesExpectedToWrite: number;
+        }) => void
+      ) => ({
+        downloadAsync: jest.fn(async () => {
+          onProgress?.({
+            totalBytesWritten: 256,
+            totalBytesExpectedToWrite: 1024,
+          });
+          onProgress?.({
+            totalBytesWritten: 1024,
+            totalBytesExpectedToWrite: 1024,
+          });
+          downloads.set(fileUri, url);
+          return { uri: fileUri, status: 200, headers: {} };
+        }),
+      })
+    ),
     readDirectoryAsync: jest.fn(async (directoryPath: string) => listEntries(directoryPath)),
     moveAsync: jest.fn(async ({ from, to }: { from: string; to: string }) => {
       existingFiles.delete(from);
@@ -133,7 +140,9 @@ describe('meal input assist model installer', () => {
 
     expect(fileSystemMock.createDownloadResumable).toHaveBeenCalledTimes(2);
     expect(fileSystemMock.__mock.existingFiles.has(resolveMealInputAssistModelPath()!)).toBe(true);
-    expect(fileSystemMock.__mock.existingFiles.has(resolveMealInputAssistProjectorPath()!)).toBe(true);
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMealInputAssistProjectorPath()!)).toBe(
+      true
+    );
     await expect(getMealInputAssistModelStatus()).resolves.toMatchObject({
       kind: 'ready',
       files: {
@@ -148,24 +157,32 @@ describe('meal input assist model installer', () => {
 
     await installMealInputAssistModel({ onProgress });
 
-    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
-      phase: 'preparing',
-      totalFiles: 2,
-    }));
-    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
-      phase: 'downloading',
-      currentFileSourceFileName: 'Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf',
-    }));
-    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
-      phase: 'downloading',
-      currentFileSourceFileName: 'mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf',
-    }));
-    expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
-      phase: 'installing',
-      completedFiles: 2,
-      totalFiles: 2,
-      overallProgress: 1,
-    }));
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'preparing',
+        totalFiles: 2,
+      })
+    );
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'downloading',
+        currentFileSourceFileName: 'Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf',
+      })
+    );
+    expect(onProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phase: 'downloading',
+        currentFileSourceFileName: 'mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf',
+      })
+    );
+    expect(onProgress).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        phase: 'installing',
+        completedFiles: 2,
+        totalFiles: 2,
+        overallProgress: 1,
+      })
+    );
   });
 
   test('does not report ready when only one fixed-path file exists', async () => {
@@ -222,10 +239,14 @@ describe('meal input assist model installer', () => {
       }),
     }));
 
-    await expect(redownloadMealInputAssistModel()).rejects.toThrow('Qwen2.5-VL-3B-Instruct model のダウンロードに失敗しました');
+    await expect(redownloadMealInputAssistModel()).rejects.toThrow(
+      'Qwen2.5-VL-3B-Instruct model のダウンロードに失敗しました'
+    );
 
     expect(fileSystemMock.__mock.existingFiles.has(resolveMealInputAssistModelPath()!)).toBe(true);
-    expect(fileSystemMock.__mock.existingFiles.has(resolveMealInputAssistProjectorPath()!)).toBe(true);
+    expect(fileSystemMock.__mock.existingFiles.has(resolveMealInputAssistProjectorPath()!)).toBe(
+      true
+    );
     await expect(getMealInputAssistModelStatus()).resolves.toMatchObject({
       kind: 'ready',
     });
@@ -417,18 +438,22 @@ describe('MediaPipe model installer', () => {
     await AppSettingsService.setMediaPipeModelStatus('ready');
     await AppSettingsService.setMediaPipeModelVersion('v1');
 
-    fileSystemMock.moveAsync.mockImplementation(async ({ from, to }: { from: string; to: string }) => {
-      if (to === targetPath && !from.includes('.backup-')) {
-        throw new Error('disk full during model placement');
+    fileSystemMock.moveAsync.mockImplementation(
+      async ({ from, to }: { from: string; to: string }) => {
+        if (to === targetPath && !from.includes('.backup-')) {
+          throw new Error('disk full during model placement');
+        }
+        return defaultMoveAsync({ from, to });
       }
-      return defaultMoveAsync({ from, to });
-    });
+    );
 
     try {
       await expect(redownloadMediaPipeModel()).rejects.toThrow('disk full during model placement');
 
       expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(true);
-      expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(false);
+      expect(
+        Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))
+      ).toBe(false);
       expect(fileSystemMock.__mock.downloads.size).toBe(0);
 
       await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
@@ -446,21 +471,25 @@ describe('MediaPipe model installer', () => {
     await AppSettingsService.setMediaPipeModelStatus('ready');
     await AppSettingsService.setMediaPipeModelVersion('v1');
 
-    fileSystemMock.moveAsync.mockImplementation(async ({ from, to }: { from: string; to: string }) => {
-      if (to === targetPath && !from.includes('.backup-')) {
-        throw new Error('disk full during model placement');
+    fileSystemMock.moveAsync.mockImplementation(
+      async ({ from, to }: { from: string; to: string }) => {
+        if (to === targetPath && !from.includes('.backup-')) {
+          throw new Error('disk full during model placement');
+        }
+        if (to === targetPath && from.includes('.backup-')) {
+          throw new Error('fatal error during restore');
+        }
+        return defaultMoveAsync({ from, to });
       }
-      if (to === targetPath && from.includes('.backup-')) {
-        throw new Error('fatal error during restore');
-      }
-      return defaultMoveAsync({ from, to });
-    });
+    );
 
     try {
       await expect(redownloadMediaPipeModel()).rejects.toThrow('disk full during model placement');
 
       expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(false);
-      expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(true);
+      expect(
+        Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))
+      ).toBe(true);
       expect(fileSystemMock.__mock.downloads.size).toBe(0);
 
       await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
@@ -483,7 +512,9 @@ describe('MediaPipe model installer', () => {
     });
 
     expect(fileSystemMock.__mock.existingFiles.has(targetPath)).toBe(true);
-    expect(Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))).toBe(false);
+    expect(
+      Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))
+    ).toBe(false);
     await expect(getMediaPipeModelStatus()).resolves.toMatchObject({
       kind: 'ready',
       version: 'v2',

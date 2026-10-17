@@ -105,7 +105,8 @@ function createModelStatus(kind: 'not_installed' | 'ready' | 'error') {
     kind,
     version: kind === 'not_installed' ? null : 'qwen2.5-vl-3b-instruct-q4km-2026-04-20',
     downloadedAt: kind === 'ready' ? 1713590400000 : null,
-    errorMessage: kind === 'error' ? 'meal input assist model のダウンロードに失敗しました。' : null,
+    errorMessage:
+      kind === 'error' ? 'meal input assist model のダウンロードに失敗しました。' : null,
     expectedPaths: [
       'file:///documents/ai-models/meal-input-assist.gguf',
       'file:///documents/ai-models/meal-input-assist.mmproj',
@@ -131,28 +132,30 @@ function createMediaPipeModelStatus(kind: 'not_installed' | 'ready' | 'error') {
 
 function createRuntimeStatus(kind: 'ready' | 'unavailable') {
   return {
-    mealInputAssist: kind === 'ready'
-      ? {
-        capability: 'meal-input-assist' as const,
-        kind: 'ready' as const,
-        mode: 'local-runtime-prototype' as const,
-        reason: '端末内 AI 入力補助 runtime を利用できます。',
-        expectedPaths: [
-          'file:///documents/ai-models/meal-input-assist.gguf',
-          'file:///documents/ai-models/meal-input-assist.mmproj',
-        ],
-      }
-      : {
-        capability: 'meal-input-assist' as const,
-        kind: 'unavailable' as const,
-        mode: 'local-runtime-prototype' as const,
-        code: 'model_unavailable' as const,
-        reason: 'meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj',
-        expectedPaths: [
-          'file:///documents/ai-models/meal-input-assist.gguf',
-          'file:///documents/ai-models/meal-input-assist.mmproj',
-        ],
-      },
+    mealInputAssist:
+      kind === 'ready'
+        ? {
+            capability: 'meal-input-assist' as const,
+            kind: 'ready' as const,
+            mode: 'local-runtime-prototype' as const,
+            reason: '端末内 AI 入力補助 runtime を利用できます。',
+            expectedPaths: [
+              'file:///documents/ai-models/meal-input-assist.gguf',
+              'file:///documents/ai-models/meal-input-assist.mmproj',
+            ],
+          }
+        : {
+            capability: 'meal-input-assist' as const,
+            kind: 'unavailable' as const,
+            mode: 'local-runtime-prototype' as const,
+            code: 'model_unavailable' as const,
+            reason:
+              'meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj',
+            expectedPaths: [
+              'file:///documents/ai-models/meal-input-assist.gguf',
+              'file:///documents/ai-models/meal-input-assist.mmproj',
+            ],
+          },
   };
 }
 
@@ -305,10 +308,12 @@ describe('StatsScreen', () => {
     expect(await findByText('8件')).toBeTruthy();
     expect(await findByText('よく行った場所 Top 3')).toBeTruthy();
     expect(await findByText('1. 自宅')).toBeTruthy();
-    expect(MealService.getStatistics).toHaveBeenCalledWith(expect.objectContaining({
-      dateFrom: expect.any(Date),
-      dateTo: expect.any(Date),
-    }));
+    expect(MealService.getStatistics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dateFrom: expect.any(Date),
+        dateTo: expect.any(Date),
+      })
+    );
 
     const allPeriodButton = getByTestId('stats-period-all');
     expect(allPeriodButton.props.accessibilityRole).toBe('button');
@@ -371,13 +376,19 @@ describe('SettingsScreen', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
     (AppSettingsService.setAiInputAssistEnabled as jest.Mock).mockResolvedValue(undefined);
-    (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(createModelStatus('not_installed'));
-    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue(createRuntimeStatus('unavailable'));
+    (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(
+      createModelStatus('not_installed')
+    );
+    (getLocalAiRuntimeStatusSnapshot as jest.Mock).mockResolvedValue(
+      createRuntimeStatus('unavailable')
+    );
     (installMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (redownloadMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (deleteMealInputAssistModel as jest.Mock).mockResolvedValue(undefined);
     (deleteAllDownloadedLocalAiModels as jest.Mock).mockResolvedValue(undefined);
-    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('not_installed'));
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(
+      createMediaPipeModelStatus('not_installed')
+    );
     (installMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
     (redownloadMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
     (deleteMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
@@ -402,15 +413,25 @@ describe('SettingsScreen', () => {
   });
 
   test('shows user-facing settings sections without technical details by default', async () => {
-    const { getByText, getByTestId, queryAllByText, queryByText, queryByTestId } = render(<SettingsScreen />);
+    const { getByText, getByTestId, queryAllByText, queryByText, queryByTestId } = render(
+      <SettingsScreen />
+    );
     await triggerLatestFocus();
 
     expect(getByText('プライバシー')).toBeTruthy();
     expect(getByText('AI入力補助')).toBeTruthy();
     expect(getByText('データ管理')).toBeTruthy();
     expect(getByText('アプリ情報')).toBeTruthy();
-    expect(getByText('自動的な外部送信はしない設計です。Records 詳細などからユーザーが明示的に共有した場合のみ、外部アプリに渡ります。')).toBeTruthy();
-    expect(getByText('AI入力補助は写真を外部送信しません。ただし、AI入力補助のモデルデータをダウンロードする時だけ外部通信が発生します。')).toBeTruthy();
+    expect(
+      getByText(
+        '自動的な外部送信はしない設計です。Records 詳細などからユーザーが明示的に共有した場合のみ、外部アプリに渡ります。'
+      )
+    ).toBeTruthy();
+    expect(
+      getByText(
+        'AI入力補助は写真を外部送信しません。ただし、AI入力補助のモデルデータをダウンロードする時だけ外部通信が発生します。'
+      )
+    ).toBeTruthy();
     expect(getByText('状態: 未準備')).toBeTruthy();
     expect(getByText('モデルをダウンロードすると利用できます。')).toBeTruthy();
     expect(getByTestId('meal-input-assist-model-download-button')).toBeTruthy();
@@ -447,8 +468,14 @@ describe('SettingsScreen', () => {
     expect(getByText('Local AI Runtime Status')).toBeTruthy();
     expect(getByText('Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf')).toBeTruthy();
     expect(getByText('mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf')).toBeTruthy();
-    expect(queryAllByText('file:///documents/ai-models/meal-input-assist.gguf').length).toBeGreaterThan(0);
-    expect(getByText('meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj')).toBeTruthy();
+    expect(
+      queryAllByText('file:///documents/ai-models/meal-input-assist.gguf').length
+    ).toBeGreaterThan(0);
+    expect(
+      getByText(
+        'meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj'
+      )
+    ).toBeTruthy();
   });
 
   test('enables the AI input assist switch only when model and runtime are ready', async () => {
@@ -471,10 +498,14 @@ describe('SettingsScreen', () => {
 
   test('shows downloading then ready when the model download succeeds', async () => {
     const deferred = createDeferred<void>();
-    (installMealInputAssistModel as jest.Mock).mockImplementation(({ onProgress }: { onProgress?: (progress: ReturnType<typeof createDownloadProgress>) => void } = {}) => {
-      onProgress?.(createDownloadProgress());
-      return deferred.promise;
-    });
+    (installMealInputAssistModel as jest.Mock).mockImplementation(
+      ({
+        onProgress,
+      }: { onProgress?: (progress: ReturnType<typeof createDownloadProgress>) => void } = {}) => {
+        onProgress?.(createDownloadProgress());
+        return deferred.promise;
+      }
+    );
     (getMealInputAssistModelStatus as jest.Mock)
       .mockResolvedValueOnce(createModelStatus('not_installed'))
       .mockResolvedValueOnce(createModelStatus('ready'));
@@ -497,7 +528,9 @@ describe('SettingsScreen', () => {
     });
 
     expect(await findByText('状態: 利用可能')).toBeTruthy();
-    expect(await findByText('写真を外部送信せず、端末内で食事メモの下書きを作成できます。')).toBeTruthy();
+    expect(
+      await findByText('写真を外部送信せず、端末内で食事メモの下書きを作成できます。')
+    ).toBeTruthy();
     expect(getByTestId('ai-input-assist-toggle')).toBeTruthy();
   });
 
@@ -508,7 +541,9 @@ describe('SettingsScreen', () => {
     await triggerLatestFocus();
 
     expect(await findByText('状態: エラー')).toBeTruthy();
-    expect(await findByText('AI入力補助の準備に問題があります。再ダウンロードを試してください。')).toBeTruthy();
+    expect(
+      await findByText('AI入力補助の準備に問題があります。再ダウンロードを試してください。')
+    ).toBeTruthy();
     expect(getByTestId('meal-input-assist-model-redownload-button')).toBeTruthy();
     expect(queryByText('meal input assist model のダウンロードに失敗しました。')).toBeNull();
 
@@ -570,10 +605,7 @@ describe('SettingsScreen', () => {
       expect(BackupService.exportBackup).toHaveBeenCalledTimes(1);
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      'エクスポート完了',
-      expect.stringContaining('5件')
-    );
+    expect(Alert.alert).toHaveBeenCalledWith('エクスポート完了', expect.stringContaining('5件'));
   });
 
   test('shows error alert when BackupService.exportBackup fails', async () => {
@@ -596,7 +628,7 @@ describe('SettingsScreen', () => {
   test('shows confirmation dialog on valid import and restores when user confirms', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
       if (title === 'バックアップから復元') {
-        const confirmButton = buttons?.find((b) => b.text === '復元する');
+        const confirmButton = buttons?.find(b => b.text === '復元する');
         confirmButton?.onPress?.();
       }
     });
@@ -630,10 +662,7 @@ describe('SettingsScreen', () => {
       expect(BackupService.restoreVerifiedBackup).toHaveBeenCalledTimes(1);
     });
 
-    expect(alertSpy).toHaveBeenCalledWith(
-      '復元完了',
-      expect.stringContaining('5件')
-    );
+    expect(alertSpy).toHaveBeenCalledWith('復元完了', expect.stringContaining('5件'));
 
     alertSpy.mockRestore();
   });
@@ -641,7 +670,7 @@ describe('SettingsScreen', () => {
   test('cleans up staging when user cancels import confirmation alert', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
       if (title === 'バックアップから復元') {
-        const cancelButton = buttons?.find((b) => b.text === 'キャンセル');
+        const cancelButton = buttons?.find(b => b.text === 'キャンセル');
         cancelButton?.onPress?.();
       }
     });
@@ -672,7 +701,9 @@ describe('SettingsScreen', () => {
     });
 
     await waitFor(() => {
-      expect(BackupService.cleanupStaging).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/');
+      expect(BackupService.cleanupStaging).toHaveBeenCalledWith(
+        'file:///mock-cache/dm-import-123/'
+      );
     });
 
     expect(BackupService.restoreVerifiedBackup).not.toHaveBeenCalled();
@@ -681,7 +712,9 @@ describe('SettingsScreen', () => {
   });
 
   test('renders MediaPipe DEV section when __DEV__ is true', async () => {
-    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('not_installed'));
+    (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(
+      createMediaPipeModelStatus('not_installed')
+    );
 
     const { findByTestId, findByText } = render(<SettingsScreen />);
     await triggerLatestFocus();
@@ -745,7 +778,7 @@ describe('SettingsScreen', () => {
     (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('ready'));
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
       if (title.includes(`${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除`)) {
-        const deleteButton = buttons?.find((b) => b.text === '削除する');
+        const deleteButton = buttons?.find(b => b.text === '削除する');
         deleteButton?.onPress?.();
       }
     });
@@ -779,7 +812,7 @@ describe('SettingsScreen', () => {
     (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(
       createMediaPipeModelStatus('not_installed')
     );
-    (installMediaPipeModel as jest.Mock).mockImplementation(async (options) => {
+    (installMediaPipeModel as jest.Mock).mockImplementation(async options => {
       options?.onProgress?.({
         phase: 'verifying',
         bytesWritten: 500,
@@ -813,7 +846,7 @@ describe('SettingsScreen', () => {
 
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
       if (title === 'ダウンロード済みモデルを削除') {
-        const confirmButton = buttons?.find((b) => b.text === '削除する');
+        const confirmButton = buttons?.find(b => b.text === '削除する');
         confirmButton?.onPress?.();
       }
     });

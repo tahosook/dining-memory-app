@@ -1,8 +1,4 @@
-import {
-  deleteAsync,
-  getInfoAsync,
-  readDirectoryAsync,
-} from 'expo-file-system/legacy';
+import { deleteAsync, getInfoAsync, readDirectoryAsync } from 'expo-file-system/legacy';
 
 import { getAllPersistedMealRows } from '../src/database/services/localDatabase';
 import { getInFlightThumbnailPhotoPaths } from '../src/media/mealThumbnail';
@@ -25,7 +21,6 @@ jest.mock('expo-media-library', () => ({
 }));
 
 jest.mock('expo-file-system/legacy', () => ({
-
   documentDirectory: 'file:///mock-documents/',
   cacheDirectory: 'file:///mock-cache/',
   deleteAsync: jest.fn(),
@@ -93,9 +88,7 @@ describe('photoLifecycle', () => {
       expect(isManagedMealPhotoFileName('meal-20260420120000-1.jpg')).toBe(true);
       expect(isManagedMealPhotoFileName('meal-20260420120000-fallback-abc123.jpg')).toBe(true);
       expect(
-        isManagedMealPhotoFileName(
-          'meal-photo-rotated-2026-04-20T10-11-12-123Z-12345678.jpg'
-        )
+        isManagedMealPhotoFileName('meal-photo-rotated-2026-04-20T10-11-12-123Z-12345678.jpg')
       ).toBe(true);
       expect(isManagedMealPhotoFileName('meal-20260420120000-thumb.jpg')).toBe(true);
       expect(isManagedMealPhotoFileName('meal-photo-rotated-123-thumb.jpg')).toBe(true);
@@ -230,14 +223,12 @@ describe('photoLifecycle', () => {
       );
       expect(cleanupResult.deletedFileNames).not.toContain('meal-B.jpg');
 
-      expect(deleteAsync).toHaveBeenCalledWith(
-        'file:///mock-documents/meal-A.jpg',
-        { idempotent: true }
-      );
-      expect(deleteAsync).toHaveBeenCalledWith(
-        'file:///mock-documents/meal-A-thumb.jpg',
-        { idempotent: true }
-      );
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/meal-A.jpg', {
+        idempotent: true,
+      });
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/meal-A-thumb.jpg', {
+        idempotent: true,
+      });
       expect(deleteAsync).not.toHaveBeenCalledWith(
         'file:///mock-documents/meal-B.jpg',
         expect.anything()
@@ -433,10 +424,9 @@ describe('photoLifecycle', () => {
       const cleanupResult = await cleanupOrphanedPhotoFiles();
 
       expect(cleanupResult.deletedFileNames).toContain('meal-A.jpg');
-      expect(deleteAsync).toHaveBeenCalledWith(
-        'file:///mock-documents/meal-A.jpg',
-        { idempotent: true }
-      );
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/meal-A.jpg', {
+        idempotent: true,
+      });
       expect(mockFileSystem.has('meal-A.jpg')).toBe(false);
       expect(cleanupResult.skippedFileNames).not.toContain('meal-A.jpg');
     });

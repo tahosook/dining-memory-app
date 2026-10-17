@@ -40,6 +40,9 @@ jobs:
       - name: Check React version compatibility
         run: npm run check:react-versions
 
+      - name: Check dependencies
+        run: npm run check:deps
+
       - name: Check documentation integrity
         run: npm run check:docs
 

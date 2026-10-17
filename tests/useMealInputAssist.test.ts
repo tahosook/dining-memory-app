@@ -291,7 +291,9 @@ describe('useMealInputAssist', () => {
       }),
     };
     const loadAiInputAssistEnabled = async () => false;
-    const resolveRuntimeAvailability = jest.fn(async () => createReadyRuntimeAvailability(provider));
+    const resolveRuntimeAvailability = jest.fn(async () =>
+      createReadyRuntimeAvailability(provider)
+    );
     const { result } = renderHook(() =>
       useMealInputAssist({
         captureReview: createCaptureReview(),

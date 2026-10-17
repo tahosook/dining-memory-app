@@ -100,8 +100,22 @@ describe('RecordsScreen', () => {
 
   test('groups meals across today, yesterday, and older dates in correct order', async () => {
     const now = new Date();
-    const todayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0).getTime();
-    const yesterdayTimestamp = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 12, 0, 0).getTime();
+    const todayTimestamp = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      12,
+      0,
+      0
+    ).getTime();
+    const yesterdayTimestamp = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - 1,
+      12,
+      0,
+      0
+    ).getTime();
     const olderDate = new Date(2026, 3, 10, 12, 0, 0); // 2026-04-10
     const olderTimestamp = olderDate.getTime();
 
@@ -155,7 +169,9 @@ describe('RecordsScreen', () => {
     // Verify full chronological sequence of headers and meal items
     const renderedSequence = UNSAFE_getAllByType(Text)
       .map(node => node.props.children)
-      .filter(t => ['今日', '今日のランチ', '昨日', '昨日のディナー', '4月10日', '過去のカレー'].includes(t));
+      .filter(t =>
+        ['今日', '今日のランチ', '昨日', '昨日のディナー', '4月10日', '過去のカレー'].includes(t)
+      );
     expect(renderedSequence).toEqual([
       '今日',
       '今日のランチ',
@@ -172,9 +188,30 @@ describe('RecordsScreen', () => {
 
   test('orders meals within the same date in descending order of meal_datetime', async () => {
     const targetDate = new Date(2026, 3, 15); // 2026-04-15
-    const timestamp08 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 8, 0, 0).getTime();
-    const timestamp12 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 12, 0, 0).getTime();
-    const timestamp18 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 18, 0, 0).getTime();
+    const timestamp08 = new Date(
+      targetDate.getFullYear(),
+      targetDate.getMonth(),
+      targetDate.getDate(),
+      8,
+      0,
+      0
+    ).getTime();
+    const timestamp12 = new Date(
+      targetDate.getFullYear(),
+      targetDate.getMonth(),
+      targetDate.getDate(),
+      12,
+      0,
+      0
+    ).getTime();
+    const timestamp18 = new Date(
+      targetDate.getFullYear(),
+      targetDate.getMonth(),
+      targetDate.getDate(),
+      18,
+      0,
+      0
+    ).getTime();
 
     // MealService.getRecentMeals guarantees sort order by meal_datetime DESC.
     // The component relies on this and does not perform redundant sorting.
@@ -229,11 +266,7 @@ describe('RecordsScreen', () => {
     const mealNames = UNSAFE_getAllByType(Text)
       .map(node => node.props.children)
       .filter(t => ['朝ごはん (08:00)', '昼ごはん (12:00)', '夜ごはん (18:00)'].includes(t));
-    expect(mealNames).toEqual([
-      '夜ごはん (18:00)',
-      '昼ごはん (12:00)',
-      '朝ごはん (08:00)',
-    ]);
+    expect(mealNames).toEqual(['夜ごはん (18:00)', '昼ごはん (12:00)', '朝ごはん (08:00)']);
 
     // Verify card testID order
     const cardIds = getAllByTestId(/^meal-card-/).map(el => el.props.testID);
@@ -297,11 +330,7 @@ describe('RecordsScreen', () => {
     const mealNames = UNSAFE_getAllByType(Text)
       .map(node => node.props.children)
       .filter(t => ['深夜食 (00:01)', '夜食 (23:59)', '前日の夜食 (23:59)'].includes(t));
-    expect(mealNames).toEqual([
-      '夜食 (23:59)',
-      '深夜食 (00:01)',
-      '前日の夜食 (23:59)',
-    ]);
+    expect(mealNames).toEqual(['夜食 (23:59)', '深夜食 (00:01)', '前日の夜食 (23:59)']);
   });
 
   test('falls back to photo_path when thumbnail is missing', async () => {

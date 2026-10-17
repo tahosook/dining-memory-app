@@ -28,9 +28,7 @@ jest.mock('expo-file-system/legacy', () => ({
 
 jest.mock('../src/media/photoStorage', () => ({
   persistThumbnailToStablePath: jest.fn(),
-  resolveThumbnailDestinationUri: jest.fn(
-    (uri: string) => uri.replace(/\.jpg$/, '-thumb.jpg')
-  ),
+  resolveThumbnailDestinationUri: jest.fn((uri: string) => uri.replace(/\.jpg$/, '-thumb.jpg')),
 }));
 
 jest.mock('../src/media/tempFiles', () => ({
@@ -73,9 +71,7 @@ describe('mealThumbnail', () => {
       width: 320,
       height: 240,
     });
-    (persistThumbnailToStablePath as jest.Mock).mockResolvedValue(
-      'file:///docs/meal-1-thumb.jpg'
-    );
+    (persistThumbnailToStablePath as jest.Mock).mockResolvedValue('file:///docs/meal-1-thumb.jpg');
     (cleanupTempFile as jest.Mock).mockResolvedValue(undefined);
     (MealService.updateMealThumbnail as jest.Mock).mockResolvedValue(true);
   });
@@ -183,7 +179,7 @@ describe('mealThumbnail', () => {
   describe('In-flight Guard', () => {
     test('reuses existing in-flight Promise for identical mealId and does not run ImageResizer twice', async () => {
       let resolveResizer!: (value: any) => void;
-      const resizerPromise = new Promise((resolve) => {
+      const resizerPromise = new Promise(resolve => {
         resolveResizer = resolve;
       });
       (ImageResizer.createResizedImage as jest.Mock).mockReturnValue(resizerPromise);
@@ -222,7 +218,7 @@ describe('mealThumbnail', () => {
           activeTaskPeak.peak = activeTaskPeak.current;
         }
 
-        return new Promise((resolve) => {
+        return new Promise(resolve => {
           deferredList.push(() => {
             activeTaskPeak.current -= 1;
             resolve({
@@ -249,7 +245,7 @@ describe('mealThumbnail', () => {
       ];
 
       // Wait a tick for queue pump
-      await new Promise((r) => setTimeout(r, 10));
+      await new Promise(r => setTimeout(r, 10));
 
       // Peak active should not exceed MAX_CONCURRENT_THUMBNAILS (2)
       expect(activeTaskPeak.peak).toBeLessThanOrEqual(MAX_CONCURRENT_THUMBNAILS);
@@ -259,7 +255,7 @@ describe('mealThumbnail', () => {
       while (deferredList.length > 0) {
         const resolveFn = deferredList.shift();
         resolveFn?.();
-        await new Promise((r) => setTimeout(r, 10));
+        await new Promise(r => setTimeout(r, 10));
       }
 
       await Promise.all(promises);
@@ -685,7 +681,7 @@ describe('mealThumbnail', () => {
       ];
 
       (MealService.getMealById as jest.Mock).mockImplementation(async (id: string) => {
-        return meals.find((m) => m.id === id) ?? null;
+        return meals.find(m => m.id === id) ?? null;
       });
 
       (getInfoAsync as jest.Mock).mockImplementation(async (uri: string) => {
@@ -700,7 +696,7 @@ describe('mealThumbnail', () => {
       requestMealThumbnails(meals, { onGenerated });
 
       // Wait for async queue execution
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 50));
 
       expect(ImageResizer.createResizedImage).toHaveBeenCalledWith(
         'file:///docs/meal-1.jpg',
@@ -724,12 +720,9 @@ describe('mealThumbnail', () => {
       const onGenerated = jest.fn();
       requestMealThumbnail('meal-callback', { onGenerated });
 
-      await new Promise((r) => setTimeout(r, 50));
+      await new Promise(r => setTimeout(r, 50));
 
-      expect(onGenerated).toHaveBeenCalledWith(
-        'meal-callback',
-        'file:///docs/meal-1-thumb.jpg'
-      );
+      expect(onGenerated).toHaveBeenCalledWith('meal-callback', 'file:///docs/meal-1-thumb.jpg');
     });
 
     test('processes meals in chunks of THUMBNAIL_CHECK_CHUNK_SIZE, continues across chunks, isolates individual getInfoAsync failures, and processes all candidates', async () => {
@@ -750,7 +743,7 @@ describe('mealThumbnail', () => {
       );
 
       (MealService.getMealById as jest.Mock).mockImplementation(async (id: string) => {
-        return meals.find((m) => m.id === id) ?? null;
+        return meals.find(m => m.id === id) ?? null;
       });
 
       let activeBatchChecks = 0;
@@ -792,7 +785,7 @@ describe('mealThumbnail', () => {
           batchInspectedUris.add(uri);
 
           // Yield to event loop allowing concurrent promises within the chunk to overlap
-          await new Promise<void>((resolve) => setImmediate(resolve));
+          await new Promise<void>(resolve => setImmediate(resolve));
 
           activeBatchChecks--;
 
@@ -814,7 +807,7 @@ describe('mealThumbnail', () => {
 
       let completedThumbnails = 0;
       let finishGeneration: () => void;
-      const allGeneratedPromise = new Promise<void>((resolve) => {
+      const allGeneratedPromise = new Promise<void>(resolve => {
         finishGeneration = resolve;
       });
 
@@ -845,7 +838,7 @@ describe('mealThumbnail', () => {
         'Failed to inspect meal for thumbnail backfill in chunk:',
         expect.any(Error)
       );
-      const warnCall = warnSpy.mock.calls.find((c) =>
+      const warnCall = warnSpy.mock.calls.find(c =>
         String(c[0]).includes('Failed to inspect meal for thumbnail backfill in chunk:')
       );
       expect(warnCall).toBeDefined();

@@ -171,7 +171,9 @@ describe('SearchScreen', () => {
   test('shows only the text search and filter toggle by default', async () => {
     (MealService.searchMeals as jest.Mock).mockResolvedValue([]);
 
-    const { getByTestId, queryByPlaceholderText, queryByTestId, queryByText } = render(<SearchScreen />);
+    const { getByTestId, queryByPlaceholderText, queryByTestId, queryByText } = render(
+      <SearchScreen />
+    );
     await triggerLatestFocus();
 
     expect(getByTestId('search-input')).toBeTruthy();
@@ -191,7 +193,9 @@ describe('SearchScreen', () => {
     const toggleButton = getByTestId('search-filter-toggle');
     expect(toggleButton.props.accessibilityRole).toBe('button');
     expect(toggleButton.props.accessibilityLabel).toBe('検索フィルター');
-    expect(toggleButton.props.accessibilityHint).toBe('タップして検索フィルターの表示を切り替えます');
+    expect(toggleButton.props.accessibilityHint).toBe(
+      'タップして検索フィルターの表示を切り替えます'
+    );
     expect(toggleButton.props.accessibilityState).toEqual({ expanded: false });
 
     fireEvent.press(toggleButton);
@@ -280,7 +284,9 @@ describe('SearchScreen', () => {
     const { findByTestId, queryByText } = render(<SearchScreen />);
     await triggerLatestFocus();
 
-    expect((await findByTestId('search-result-image-1')).props.source).toEqual({ uri: 'file:///thumb-photo.jpg' });
+    expect((await findByTestId('search-result-image-1')).props.source).toEqual({
+      uri: 'file:///thumb-photo.jpg',
+    });
     expect(await findByTestId('search-result-placeholder-2')).toBeTruthy();
     expect(queryByText('ラーメン')).toBeNull();
     expect(queryByText('神田')).toBeNull();
@@ -422,9 +428,7 @@ describe('SearchScreen', () => {
   });
 
   test('discards stale loadMore results when search query changes during loadMore', async () => {
-    const page1Meals = Array.from({ length: 60 }, (_, i) =>
-      createMeal({ id: `item-${i}` })
-    );
+    const page1Meals = Array.from({ length: 60 }, (_, i) => createMeal({ id: `item-${i}` }));
     const deferredLoadMore = createDeferred<unknown[]>();
 
     (MealService.searchMeals as jest.Mock)
@@ -491,4 +495,3 @@ describe('SearchScreen', () => {
     );
   });
 });
-

@@ -13,7 +13,10 @@ import {
 import type { RootStackParamList } from '../src/navigation/types';
 import { MealService } from '../src/database/services/MealService';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
-import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
+import {
+  deleteMealPhotoFileIfSafe,
+  rotateMealPhotoClockwise,
+} from '../src/utils/mealPhotoRotation';
 import { requestMealThumbnail } from '../src/media/mealThumbnail';
 import * as MealShareModule from '../src/media/mealShare';
 import type {

@@ -64,8 +64,12 @@ describe('normalizeMealInputAssistResult', () => {
   test('tolerates missing source and malformed object candidates', () => {
     const normalized = normalizeMealInputAssistResult({
       source: undefined as unknown as string,
-      mealNames: [{ value: undefined }, { value: '  カツ丼  ' }] as unknown as Array<{ value: string }>,
-      cuisineTypes: [{ value: undefined }, { value: '和食' }] as unknown as Array<{ value: string }>,
+      mealNames: [{ value: undefined }, { value: '  カツ丼  ' }] as unknown as Array<{
+        value: string;
+      }>,
+      cuisineTypes: [{ value: undefined }, { value: '和食' }] as unknown as Array<{
+        value: string;
+      }>,
     });
 
     expect(normalized).toEqual({
@@ -110,9 +114,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
         { value: '寿司', confidence: 0.81 },
         { value: '飲み物', confidence: 0.42 },
       ],
-      cuisineTypes: [
-        { value: '中華', confidence: 0.93 },
-      ],
+      cuisineTypes: [{ value: '中華', confidence: 0.93 }],
     });
     expect(normalized.metadata).toEqual({
       categoryCount: 3,
@@ -123,12 +125,12 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       classifierName: 'food-classifier',
       modelVersion: 'v1',
     });
-    expect(reviewSuggestions.mealNames.map((candidate) => candidate.value)).toEqual([
+    expect(reviewSuggestions.mealNames.map(candidate => candidate.value)).toEqual([
       'ラーメン',
       '寿司',
       '飲み物',
     ]);
-    expect(reviewSuggestions.cuisineTypes.map((candidate) => candidate.value)).toEqual(['中華']);
+    expect(reviewSuggestions.cuisineTypes.map(candidate => candidate.value)).toEqual(['中華']);
   });
 
   test('drops unknown, invalid, and duplicate categories before they reach the review UI', () => {
@@ -150,9 +152,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
         { value: '飲み物', confidence: 1 },
         { value: 'ラーメン', confidence: 0.88 },
       ],
-      cuisineTypes: [
-        { value: 'その他', confidence: 1 },
-      ],
+      cuisineTypes: [{ value: 'その他', confidence: 1 }],
     });
     expect(normalized.metadata).toEqual({
       categoryCount: 6,
@@ -170,7 +170,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       photoUri: 'file:///tmp/other-photo.jpg',
       categories: [
         { label: 'other_or_exclude', score: 0.95 },
-        { label: 'curry_rice', score: 0.40 },
+        { label: 'curry_rice', score: 0.4 },
       ],
       classifierName: 'food-classifier',
       modelVersion: 'v2',
@@ -179,12 +179,8 @@ describe('normalizeMediaPipeStaticImageResult', () => {
 
     expect(normalized.providerResult).toEqual({
       source: 'mediapipe-static-image',
-      mealNames: [
-        { value: 'カレーライス', confidence: 0.40 },
-      ],
-      cuisineTypes: [
-        { value: '洋食', confidence: 0.40 },
-      ],
+      mealNames: [{ value: 'カレーライス', confidence: 0.4 }],
+      cuisineTypes: [{ value: '洋食', confidence: 0.4 }],
     });
     expect(normalized.metadata).toEqual({
       categoryCount: 2,
@@ -195,11 +191,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       classifierName: 'food-classifier',
       modelVersion: 'v2',
     });
-    expect(reviewSuggestions.mealNames.map((candidate) => candidate.value)).toEqual([
-      'カレーライス',
-    ]);
-    expect(reviewSuggestions.cuisineTypes.map((candidate) => candidate.value)).toEqual([
-      '洋食',
-    ]);
+    expect(reviewSuggestions.mealNames.map(candidate => candidate.value)).toEqual(['カレーライス']);
+    expect(reviewSuggestions.cuisineTypes.map(candidate => candidate.value)).toEqual(['洋食']);
   });
 });

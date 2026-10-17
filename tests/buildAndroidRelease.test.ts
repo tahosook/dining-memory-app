@@ -22,7 +22,11 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     fs.mkdirSync(mockAssetsDir, { recursive: true });
 
     // Script should fail before running gradlew
-    const res = spawnSync('bash', ['-c', `
+    const res = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
       ANDROID_DIR="${mockAndroidDir}"
       BUILD_OUTPUT_TYPE="release"
       REQUIRE_BUNDLED_MODEL="true"
@@ -31,7 +35,10 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
         echo "error: MediaPipe model asset is missing or empty at $MODEL_ASSET_PATH" >&2
         exit 1
       fi
-    `], { encoding: 'utf-8' });
+    `,
+      ],
+      { encoding: 'utf-8' }
+    );
 
     expect(res.status).toBe(1);
     expect(res.stderr).toContain('error: MediaPipe model asset is missing or empty');
@@ -44,7 +51,11 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     const emptyModelFile = path.join(mockAssetsDir, 'meal-input-assist.task');
     fs.writeFileSync(emptyModelFile, '');
 
-    const res = spawnSync('bash', ['-c', `
+    const res = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
       ANDROID_DIR="${mockAndroidDir}"
       BUILD_OUTPUT_TYPE="release"
       REQUIRE_BUNDLED_MODEL="true"
@@ -53,7 +64,10 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
         echo "error: MediaPipe model asset is missing or empty at $MODEL_ASSET_PATH" >&2
         exit 1
       fi
-    `], { encoding: 'utf-8' });
+    `,
+      ],
+      { encoding: 'utf-8' }
+    );
 
     expect(res.status).toBe(1);
     expect(res.stderr).toContain('error: MediaPipe model asset is missing or empty');
@@ -66,7 +80,11 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     const validModelFile = path.join(mockAssetsDir, 'meal-input-assist.task');
     fs.writeFileSync(validModelFile, 'valid-model-binary-data');
 
-    const res = spawnSync('bash', ['-c', `
+    const res = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
       ANDROID_DIR="${mockAndroidDir}"
       BUILD_OUTPUT_TYPE="release"
       REQUIRE_BUNDLED_MODEL="true"
@@ -76,7 +94,10 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
         exit 1
       fi
       echo "Verified bundled model asset exists"
-    `], { encoding: 'utf-8' });
+    `,
+      ],
+      { encoding: 'utf-8' }
+    );
 
     expect(res.status).toBe(0);
     expect(res.stdout).toContain('Verified bundled model asset exists');
@@ -85,7 +106,10 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
   test('verifies bundled model asset presence and non-zero size inside APK archive', () => {
     const apkDir = path.join(tempTestDir, 'apk-test');
     fs.mkdirSync(path.join(apkDir, 'assets/mediapipe'), { recursive: true });
-    fs.writeFileSync(path.join(apkDir, 'assets/mediapipe/meal-input-assist.task'), 'dummy-model-payload');
+    fs.writeFileSync(
+      path.join(apkDir, 'assets/mediapipe/meal-input-assist.task'),
+      'dummy-model-payload'
+    );
 
     const mockApkPath = path.join(tempTestDir, 'mock-app-release.apk');
     // Create zip archive as mock APK
@@ -95,7 +119,11 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     });
     expect(zipRes.status).toBe(0);
 
-    const verifyRes = spawnSync('bash', ['-c', `
+    const verifyRes = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
       APK_PATH="${mockApkPath}"
       APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
       if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
@@ -108,7 +136,10 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
         exit 1
       fi
       echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
-    `], { encoding: 'utf-8' });
+    `,
+      ],
+      { encoding: 'utf-8' }
+    );
 
     expect(verifyRes.status).toBe(0);
     expect(verifyRes.stdout).toContain('Bundled model verified in APK');
@@ -127,17 +158,26 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     });
     expect(zipRes.status).toBe(0);
 
-    const verifyRes = spawnSync('bash', ['-c', `
+    const verifyRes = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
       APK_PATH="${mockApkPath}"
       APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
       if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
         echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
         exit 1
       fi
-    `], { encoding: 'utf-8' });
+    `,
+      ],
+      { encoding: 'utf-8' }
+    );
 
     expect(verifyRes.status).toBe(1);
-    expect(verifyRes.stderr).toContain("error: APK verification failed - 'assets/mediapipe/meal-input-assist.task' is missing");
+    expect(verifyRes.stderr).toContain(
+      "error: APK verification failed - 'assets/mediapipe/meal-input-assist.task' is missing"
+    );
   });
 
   test('ensure-mediapipe-model.sh skips download when valid model already exists with matching checksum', () => {
@@ -184,7 +224,7 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
 
     // Verify no temporary files remain
     const remainingFiles = fs.readdirSync(mockModelDir);
-    expect(remainingFiles.filter((f) => f.includes('.download-'))).toHaveLength(0);
+    expect(remainingFiles.filter(f => f.includes('.download-'))).toHaveLength(0);
   });
 
   test('ensure-mediapipe-model.sh fails with descriptive error on checksum mismatch', () => {

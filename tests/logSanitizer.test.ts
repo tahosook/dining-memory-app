@@ -51,13 +51,13 @@ describe('logSanitizer', () => {
           originalPath: '/data/user/0/com.example/files/original.jpg',
           resizedPhotoUri: 'file:///data/user/0/com.example/cache/resized.jpg',
           nested: {
-            url: 'https://example.com/image.jpg'
-          }
+            url: 'https://example.com/image.jpg',
+          },
         },
         items: [
           { path: '/absolute/path/file1.txt' },
-          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' }
-        ]
+          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' },
+        ],
       };
 
       const sanitized = sanitizeLogObject(input);
@@ -70,13 +70,13 @@ describe('logSanitizer', () => {
           originalPath: '[MASKED_PATH]/original.jpg',
           resizedPhotoUri: 'file://.../resized.jpg',
           nested: {
-            url: '[MASKED_PATH]/image.jpg'
-          }
+            url: '[MASKED_PATH]/image.jpg',
+          },
         },
         items: [
           { path: '[MASKED_PATH]/file1.txt' },
-          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' }
-        ]
+          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' },
+        ],
       });
     });
   });
@@ -90,9 +90,7 @@ describe('logSanitizer', () => {
       expect(sanitized).toBeInstanceOf(Error);
       expect(sanitized.message).not.toContain('/Users/developer/work/app/src/');
       expect(sanitized.message).not.toContain(rawPath);
-      expect(sanitized.message).toBe(
-        'Failed to read [MASKED_PATH]/secret-config.json: ENOENT'
-      );
+      expect(sanitized.message).toBe('Failed to read [MASKED_PATH]/secret-config.json: ENOENT');
     });
 
     it('sanitizes Android /data/user/... absolute paths in Error.message', () => {
@@ -103,9 +101,7 @@ describe('logSanitizer', () => {
       expect(sanitized).toBeInstanceOf(Error);
       expect(sanitized.message).not.toContain('/data/user/0/com.example.app/files/');
       expect(sanitized.message).not.toContain(rawPath);
-      expect(sanitized.message).toBe(
-        'Failed to read [MASKED_PATH]/meal-101.jpg: ENOENT'
-      );
+      expect(sanitized.message).toBe('Failed to read [MASKED_PATH]/meal-101.jpg: ENOENT');
     });
 
     it('sanitizes file:///... URIs in Error.message', () => {
@@ -188,7 +184,9 @@ describe('logSanitizer', () => {
 
       const sanitized = sanitizeLogObject(complexObject);
 
-      expect(sanitized.context.capturedPhotoPath).not.toContain('/data/user/0/com.example.app/cache/');
+      expect(sanitized.context.capturedPhotoPath).not.toContain(
+        '/data/user/0/com.example.app/cache/'
+      );
       expect(sanitized.context.capturedPhotoPath).toBe('[MASKED_PATH]/photo-123.jpg');
 
       expect(sanitized.context.sourceUri).not.toContain('/var/mobile/Containers/Data/');
@@ -198,9 +196,7 @@ describe('logSanitizer', () => {
       expect(sanitized.context.remoteUrl).toBe('[MASKED_PATH]/sample.jpg');
 
       expect(sanitized.context.error.message).not.toContain('/private/var/log/');
-      expect(sanitized.context.error.message).toBe(
-        'Sub-task failed at [MASKED_PATH]/error.log'
-      );
+      expect(sanitized.context.error.message).toBe('Sub-task failed at [MASKED_PATH]/error.log');
     });
 
     it('sanitizes objects and errors inside arrays', () => {
@@ -223,9 +219,7 @@ describe('logSanitizer', () => {
       expect(sanitizedArray[1]?.uri).toBe('file://.../photo2.jpg');
 
       expect(sanitizedArray[2]?.error?.message).not.toContain('/Users/developer/');
-      expect(sanitizedArray[2]?.error?.message).toBe(
-        'Failed to load [MASKED_PATH]/file3.txt'
-      );
+      expect(sanitizedArray[2]?.error?.message).toBe('Failed to load [MASKED_PATH]/file3.txt');
     });
 
     it('preserves required information in standard Error messages without paths', () => {

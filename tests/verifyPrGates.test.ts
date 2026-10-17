@@ -5,10 +5,7 @@ import path from 'path';
 
 describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
   const scriptPath = path.resolve(__dirname, '../scripts/verify-pr-gates.sh');
-  const testRepoDir = path.resolve(
-    __dirname,
-    '../node_modules/.cache/gate-test-repo'
-  );
+  const testRepoDir = path.resolve(__dirname, '../node_modules/.cache/gate-test-repo');
 
   function runGate(args: string[] = [], env: Record<string, string> = {}) {
     return spawnSync('bash', [scriptPath, ...args], {
@@ -25,18 +22,12 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
   let baseCommit = '';
 
   const validProblem = '### 具体的な問題 (Problem)\nIssue description here';
-  const validEvidence =
-    '### 客観的証拠 (Evidence)\nBenchmark shows 45ms -> 12ms, test passing.';
+  const validEvidence = '### 客観的証拠 (Evidence)\nBenchmark shows 45ms -> 12ms, test passing.';
   const validImpact = '### 期待される効果 (Expected Impact)\nReduced latency.';
   const validOutOfScope =
     '### 意図して変更しなかったこと (Out of Scope)\nNo database schema changes.';
 
-  const fullValidBody = [
-    validProblem,
-    validEvidence,
-    validImpact,
-    validOutOfScope,
-  ].join('\n\n');
+  const fullValidBody = [validProblem, validEvidence, validImpact, validOutOfScope].join('\n\n');
 
   beforeAll(() => {
     fs.rmSync(testRepoDir, { recursive: true, force: true });
@@ -52,14 +43,8 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
 
     // Commit 2: valid non-zero diff with a source and test file
     fs.mkdirSync(path.join(testRepoDir, 'tests'), { recursive: true });
-    fs.writeFileSync(
-      path.join(testRepoDir, 'src_file.ts'),
-      'export const initial = 1;\n'
-    );
-    fs.writeFileSync(
-      path.join(testRepoDir, 'tests/sample.test.ts'),
-      'test("ok", () => {});\n'
-    );
+    fs.writeFileSync(path.join(testRepoDir, 'src_file.ts'), 'export const initial = 1;\n');
+    fs.writeFileSync(path.join(testRepoDir, 'tests/sample.test.ts'), 'test("ok", () => {});\n');
     execGit('git add .');
     execGit('git commit -m "baseline files"');
     baseCommit = execGit('git rev-parse HEAD').trim();
@@ -83,11 +68,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
     });
 
     it('2. Evidenceセクションなし -> FAIL', () => {
-      const bodyWithoutEvidence = [
-        validProblem,
-        validImpact,
-        validOutOfScope,
-      ].join('\n\n');
+      const bodyWithoutEvidence = [validProblem, validImpact, validOutOfScope].join('\n\n');
       const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithoutEvidence]);
       expect(res.status).toBe(1);
       expect(res.stderr).toContain('PR body is missing mandatory section(s)');
@@ -113,11 +94,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         validImpact,
         validOutOfScope,
       ].join('\n\n');
-      const res = runGate([
-        'HEAD~1...HEAD',
-        '--pr-body',
-        bodyWithHtmlCommentOnly,
-      ]);
+      const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithHtmlCommentOnly]);
       expect(res.status).toBe(1);
       expect(res.stderr).toContain(
         'Evidence section in PR body is empty (or contains only HTML comments)'
@@ -125,30 +102,16 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
     });
 
     it('5. EvidenceがTODO/TBD/N/Aだけ -> FAIL', () => {
-      for (const placeholder of [
-        'TODO',
-        'TBD',
-        'N/A',
-        'NA',
-        '-',
-        'none',
-        'なし',
-      ]) {
+      for (const placeholder of ['TODO', 'TBD', 'N/A', 'NA', '-', 'none', 'なし']) {
         const bodyWithPlaceholder = [
           validProblem,
           `### 客観的証拠 (Evidence)\n${placeholder}`,
           validImpact,
           validOutOfScope,
         ].join('\n\n');
-        const res = runGate([
-          'HEAD~1...HEAD',
-          '--pr-body',
-          bodyWithPlaceholder,
-        ]);
+        const res = runGate(['HEAD~1...HEAD', '--pr-body', bodyWithPlaceholder]);
         expect(res.status).toBe(1);
-        expect(res.stderr).toContain(
-          'Evidence section contains only a placeholder'
-        );
+        expect(res.stderr).toContain('Evidence section contains only a placeholder');
       }
     });
 
@@ -167,9 +130,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
     it('7. 通常の有効なPR本文 (環境変数経由) -> PASS', () => {
       const res = runGate(['HEAD~1...HEAD'], { PR_BODY: fullValidBody });
       expect(res.stdout).toContain('PR body Evidence Gate passed');
-      expect(res.stdout).toContain(
-        'All PR machine gates passed successfully for HEAD~1...HEAD'
-      );
+      expect(res.stdout).toContain('All PR machine gates passed successfully for HEAD~1...HEAD');
       expect(res.status).toBe(0);
     });
 
@@ -364,7 +325,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       }
     });
 
-    it('テスト保護: tests/ 配下のテストファイル削除をブロックする', () => {
+    it('テスト保護: tests/ および scripts/tests/ 配下のテストファイル削除をブロックする', () => {
       fs.unlinkSync(path.join(testRepoDir, 'tests/sample.test.ts'));
       execGit('git add tests/sample.test.ts');
       execGit('git commit -m "delete test"');
@@ -374,7 +335,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
       expect(res.stdout).toContain('Deleted test file(s) detected in tests/');
     });
 
-    it('テスト弱体化検知: skip / xit をブロックする', () => {
+    it('テスト弱体化検知: skip / xit / unittest.skip をブロックする', () => {
       const skipWord = 'skip';
       const skipPatterns = [
         `it.${skipWord}("test", () => {});`,
@@ -382,21 +343,18 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         `describe.${skipWord}("suite", () => {});`,
         `x${'it'}("test", () => {});`,
         `x${'describe'}("suite", () => {});`,
+        `@${'unittest'}.${skipWord}("reason")`,
+        `self.${'skipTest'}("reason")`,
       ];
 
       for (const skipPat of skipPatterns) {
-        fs.writeFileSync(
-          path.join(testRepoDir, 'tests/sample.test.ts'),
-          skipPat + '\n'
-        );
+        fs.writeFileSync(path.join(testRepoDir, 'tests/sample.test.ts'), skipPat + '\n');
         execGit('git add tests/sample.test.ts');
         execGit('git commit -m "add skip test"');
 
         const res = runGate(['HEAD~1...HEAD', '--pr-body', fullValidBody]);
         expect(res.status).toBe(1);
-        expect(res.stdout).toContain(
-          'Test skipping / weakening detected in tests/'
-        );
+        expect(res.stdout).toContain('Test skipping / weakening detected in tests/');
 
         execGit('git reset --hard HEAD~1');
       }
@@ -404,26 +362,18 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
 
     it('.jules/ ディレクトリ保護: 許可フラグなしでの変更をブロックする', () => {
       fs.mkdirSync(path.join(testRepoDir, '.jules'), { recursive: true });
-      fs.writeFileSync(
-        path.join(testRepoDir, '.jules/rules.md'),
-        '# Modified rules\n'
-      );
+      fs.writeFileSync(path.join(testRepoDir, '.jules/rules.md'), '# Modified rules\n');
       execGit('git add .jules/rules.md');
       execGit('git commit -m "modify jules rule"');
 
       const res = runGate(['HEAD~1...HEAD', '--pr-body', fullValidBody]);
       expect(res.status).toBe(1);
-      expect(res.stdout).toContain(
-        'Unauthorized modification to .jules/ directory detected'
-      );
+      expect(res.stdout).toContain('Unauthorized modification to .jules/ directory detected');
     });
 
     it('.jules/ ディレクトリ保護: ALLOW_JULES_CHANGE=true 指定時は変更を許可する', () => {
       fs.mkdirSync(path.join(testRepoDir, '.jules'), { recursive: true });
-      fs.writeFileSync(
-        path.join(testRepoDir, '.jules/rules.md'),
-        '# Legitimate rules update\n'
-      );
+      fs.writeFileSync(path.join(testRepoDir, '.jules/rules.md'), '# Legitimate rules update\n');
       execGit('git add .jules/rules.md');
       execGit('git commit -m "legitimate jules rule update"');
 
@@ -431,9 +381,7 @@ describe('verify-pr-gates.sh Machine Gates and Evidence Gate', () => {
         ALLOW_JULES_CHANGE: 'true',
       });
       expect(res.status).toBe(0);
-      expect(res.stdout).toContain(
-        '.jules/ modification permitted via ALLOW_JULES_CHANGE=true'
-      );
+      expect(res.stdout).toContain('.jules/ modification permitted via ALLOW_JULES_CHANGE=true');
     });
   });
 });
