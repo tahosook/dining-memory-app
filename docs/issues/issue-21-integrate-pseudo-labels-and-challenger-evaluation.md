@@ -1,6 +1,7 @@
 # [Evaluation & Benchmark] MediaPipe 採用疑似ラベル統合・Challenger 再学習・Promotion Gate 評価レポート
 
 - **内部ドキュメントID**: issue-21
+- **対応 GitHub Issue**: 未起票
 - **ステータス**: 完了 (Closed)
 - **作成日**: 2026-10-11
 - **結果**: 確定採用疑似ラベル74枚（`curry_rice` 34枚、`drink` 40枚）を正規学習データセット（`zip2-batch250`）の訓練スプリットへ安全に統合（計330枚、訓練264枚）。Golden Test Set（7枚）に対するデータ漏洩ゼロ（0/7）を検証した上で、MediaPipe Model Maker による MobileNetV2 Challenger モデルの再学習を実施。Golden Test Set 実測評価において、追加クラスである `curry_rice` は Champion の誤分類（`stir_fry`）から **Top-1 正解（確信度 49.0%）へ劇的に改善**し、`drink` も **Top-1 正解（確信度 91.6%）を安定維持**した。しかし、クラス不均衡の拡大に伴い `other_or_exclude` が Top-3 圏外へ脱落したため、Top-3 が 7/7 (100%) ➔ 6/7 (85.7%)、Top-1 が 5/7 (71.4%) ➔ 4/7 (57.1%) となり、Promotion Gate は `REJECT`（回帰ガード作動）と判定。AGENTS.md の原則「No regression, no PR」に基づき、本番アセット（`meal-input-assist.task`）は上書きされず安全に保護された。

@@ -159,7 +159,7 @@ MediaPipe 用ラベル改善 loop を、local LLM / Ollama を使って bounded 
 - 既定 executor や model 候補は workflow doc を優先する。
 - `state/mediapipe_labeling_runs/` は生成物なので、編集対象にするかはタスクごとに要確認。
 
-## MediaPipe分類モデル同梱
+## MediaPipe分類モデル同梱（完了 / Historical）
 
 ### Goal
 MediaPipe static-image classifier の `.task` model を Android build で利用できる状態へ近づける。
@@ -188,7 +188,7 @@ MediaPipe static-image classifier の `.task` model を Android build で利用�
 - `android/app/src/main/assets/mediapipe/meal-input-assist.task` は期待 path だが、actual model は現在 repo に含めない。
 - label set は JS normalizer と一致する必要がある。
 
-## ランタイム動作安定化と過剰ループ・全件走査の解消
+## ランタイム動作安定化と過剰ループ・全件走査の解消（完了 / Historical）
 
 ### Goal
 画面フォーカス時やユーザー入力時の二重フェッチ・過剰な再レンダリングループを解消し、データ件数増加時でも快適に動作するよう DB アクセスとリスト描画を最適化する。
@@ -223,7 +223,7 @@ MediaPipe static-image classifier の `.task` model を Android build で利用�
 - RecordsScreen は nested FlatList を SectionList に置き換えてリスト仮想化を回復。
 - useCameraCapture は captureReviewRef で BackHandler の再登録を入力中から分離。
 
-## MediaPipe 食事分類モデルの自律改善パイプライン
+## MediaPipe 食事分類モデルの自律改善パイプライン（完了 / Historical）
 
 ### Goal
 `zip2` データセット（48枚）を基盤に、人手によるアノテーション修正を介さず自律的（Human-free）にデータ拡張・自動再学習・定量評価・昇格判定を実行し、入力補助モデル（`meal-input-assist.task`）の Top-3 精度（現行 57.1%）と少数クラス Recall を改善する。
@@ -248,6 +248,6 @@ MediaPipe static-image classifier の `.task` model を Android build で利用�
 - `scripts/train-mediapipe-model.py`
 
 ## Historical Notes
-- 以前の MVP completion plan は current plan ではない。
+- 以前の MVP completion plan、および上記 `（完了 / Historical）` マーク付きの計画はすでに実装・達成済みであり、current plan ではない。
 - Search / Stats / Records の基本改善は現在の canonical docs と `src/` 実装を source of truth とする。
 

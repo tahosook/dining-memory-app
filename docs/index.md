@@ -70,6 +70,7 @@
 - [Dependency Policy](./engineering/dependency-policy.md): 依存関係の4層分類、Expo SDK アップグレード手順、Dependabot 運用方針、ネイティブ互換性ゲート.
 - [Food Labeling Guidelines](./engineering/food-labeling-guidelines.md): MediaPipe 用ラベル設計と教師データ作成に向けたスクリプト修整の判断ルール.
 - [MediaPipe Labeling Workflow](./engineering/mediapipe-labeling-workflow.md): MediaPipe 用ラベル改善 loop の自動化方針、guardrail、停止条件.
+- [MediaPipe Dataset Recovery](./engineering/mediapipe-dataset-recovery.md): Git 管理外（.gitignore 対象）の MediaPipe 食事画像データセット構成、外部保管方針、復元手順 Runbook.
 - [Immediate Improvements](./engineering/immediate-improvements.md): 今すぐ入れるべき具体的な改善案と優先度.
 
 ### Notes
