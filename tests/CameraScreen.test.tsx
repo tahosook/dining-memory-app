@@ -4,7 +4,11 @@ import * as ReactNative from 'react-native';
 import { ActivityIndicator, Alert } from 'react-native';
 import * as MediaLibrary from 'expo-media-library';
 import * as Camera from 'expo-camera';
-import { useCameraPermission, useCameraCapture, useMealInputAssist } from '../src/hooks/cameraCapture';
+import {
+  useCameraPermission,
+  useCameraCapture,
+  useMealInputAssist,
+} from '../src/hooks/cameraCapture';
 import CameraScreen from '../src/screens/CameraScreen/CameraScreen';
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -37,7 +41,9 @@ jest.mock('expo-camera', () => {
   const ReactModule = require('react');
 
   return {
-    CameraView: jest.fn(({ children, ...props }) => ReactModule.createElement('View', { ...props, testID: 'camera-view' }, children)),
+    CameraView: jest.fn(({ children, ...props }) =>
+      ReactModule.createElement('View', { ...props, testID: 'camera-view' }, children)
+    ),
     useCameraPermissions: jest.fn(),
   };
 });
@@ -85,8 +91,8 @@ jest.mock('react-native', () => ({
     })),
   },
   StyleSheet: {
-    create: jest.fn((styles) => styles),
-    flatten: jest.fn((styles) => styles),
+    create: jest.fn(styles => styles),
+    flatten: jest.fn(styles => styles),
   },
   View: 'View',
   Text: 'Text',
@@ -126,13 +132,17 @@ jest.mock('react-native', () => ({
   },
 }));
 
-jest.mock('canvas', () => ({
-  createCanvas: jest.fn(() => ({
-    width: 800,
-    height: 600,
-    toDataURL: jest.fn(() => 'data:image/jpeg;base64,mockBase64Data'),
-  })),
-}), { virtual: true });
+jest.mock(
+  'canvas',
+  () => ({
+    createCanvas: jest.fn(() => ({
+      width: 800,
+      height: 600,
+      toDataURL: jest.fn(() => 'data:image/jpeg;base64,mockBase64Data'),
+    })),
+  }),
+  { virtual: true }
+);
 
 const mockCameraPermissionsGranted = {
   granted: true,
@@ -213,7 +223,13 @@ type MockAiAssistState = {
   };
   errorMessage: string | null;
   progress: {
-    stage: 'preparing' | 'loading_model' | 'initializing_multimodal' | 'analyzing_photo' | 'generating_response' | 'finalizing';
+    stage:
+      | 'preparing'
+      | 'loading_model'
+      | 'initializing_multimodal'
+      | 'analyzing_photo'
+      | 'generating_response'
+      | 'finalizing';
     message: string;
     progress: number | null;
     elapsedMs: number;
@@ -309,10 +325,12 @@ describe('CameraScreen', () => {
 
   describe('Permission Flow', () => {
     test('renders permission screen initially', () => {
-      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
-        permission: null,
-        uiState: 'checking',
-      }));
+      (useCameraPermission as jest.Mock).mockReturnValue(
+        createPermissionState({
+          permission: null,
+          uiState: 'checking',
+        })
+      );
 
       const { getByText } = render(<CameraScreen />);
 
@@ -321,11 +339,13 @@ describe('CameraScreen', () => {
 
     test('renders permission request view before requesting access', async () => {
       const requestPermissions = jest.fn().mockResolvedValue(undefined);
-      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
-        permission: mockCameraPermissionsUndetermined,
-        uiState: 'needs_request',
-        requestPermissions,
-      }));
+      (useCameraPermission as jest.Mock).mockReturnValue(
+        createPermissionState({
+          permission: mockCameraPermissionsUndetermined,
+          uiState: 'needs_request',
+          requestPermissions,
+        })
+      );
 
       const { findByText, findByTestId } = render(<CameraScreen />);
 
@@ -336,11 +356,13 @@ describe('CameraScreen', () => {
 
     test('renders recovery view when permission is denied', async () => {
       const openAppSettings = jest.fn().mockResolvedValue(undefined);
-      (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
-        permission: mockCameraPermissionsDenied,
-        uiState: 'denied',
-        openAppSettings,
-      }));
+      (useCameraPermission as jest.Mock).mockReturnValue(
+        createPermissionState({
+          permission: mockCameraPermissionsDenied,
+          uiState: 'denied',
+          openAppSettings,
+        })
+      );
 
       const { findByText, findByTestId } = render(<CameraScreen />);
 
@@ -371,7 +393,9 @@ describe('CameraScreen', () => {
         mockCameraPermissionsGranted,
         jest.fn().mockResolvedValue(mockCameraPermissionsGranted),
       ]);
-      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(mockMediaLibraryPermissionsGranted);
+      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(
+        mockMediaLibraryPermissionsGranted
+      );
     });
 
     test('renders the default camera controls without capture guide copy', async () => {
@@ -395,9 +419,11 @@ describe('CameraScreen', () => {
     });
 
     test('disables the library picker action while a photo is being selected', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        pickingPhotoFromLibrary: true,
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          pickingPhotoFromLibrary: true,
+        })
+      );
       const { findByTestId, findByText } = render(<CameraScreen />);
 
       const addButton = await findByTestId('add-photo-from-library-button');
@@ -416,9 +442,11 @@ describe('CameraScreen', () => {
     test('prewarms AI input assist after the camera is ready and idle', async () => {
       jest.useFakeTimers();
       const prewarm = jest.fn().mockResolvedValue(undefined);
-      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
-        prewarm,
-      }));
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          prewarm,
+        })
+      );
 
       render(<CameraScreen />);
 
@@ -437,13 +465,17 @@ describe('CameraScreen', () => {
         mockCameraPermissionsGranted,
         jest.fn().mockResolvedValue(mockCameraPermissionsGranted),
       ]);
-      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(mockMediaLibraryPermissionsGranted);
+      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(
+        mockMediaLibraryPermissionsGranted
+      );
       const closeCamera = jest.fn(() => {
         mockNavigate('Records');
       });
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        closeCamera,
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          closeCamera,
+        })
+      );
     });
 
     test('navigates to Records immediately when the close button is pressed', async () => {
@@ -462,13 +494,17 @@ describe('CameraScreen', () => {
         mockCameraPermissionsGranted,
         jest.fn().mockResolvedValue(mockCameraPermissionsGranted),
       ]);
-      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(mockMediaLibraryPermissionsGranted);
+      (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(
+        mockMediaLibraryPermissionsGranted
+      );
     });
 
     test('renders the simplified review form higher on the screen', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+        })
+      );
 
       const { findByText, findByTestId, queryByTestId, queryByText } = render(<CameraScreen />);
       const reviewContainer = await findByTestId('capture-review-container');
@@ -480,14 +516,18 @@ describe('CameraScreen', () => {
       expect((await findByTestId('ai-input-assist-status')).props.children).toBe('未実行');
       expect(await findByTestId('ai-input-assist-button')).toBeTruthy();
       expect(await findByText('AIで提案を作成')).toBeTruthy();
-      expect(mealNameInput.props.placeholder).toBe('料理名（入力しない場合は自動で名前が付きます）');
+      expect(mealNameInput.props.placeholder).toBe(
+        '料理名（入力しない場合は自動で名前が付きます）'
+      );
       expect(await findByTestId('capture-review-cuisine-和食')).toBeTruthy();
       expect(await findByText('自炊')).toBeTruthy();
       expect(await findByTestId('location-input-trigger')).toBeTruthy();
       expect(await findByTestId('notes-input-trigger')).toBeTruthy();
       expect(await findByTestId('save-meal-button')).toBeTruthy();
       expect(queryByText('料理ジャンル')).toBeNull();
-      expect(queryByText('料理名やメニュー名を入れておくと、あとで探しやすくなります。')).toBeNull();
+      expect(
+        queryByText('料理名やメニュー名を入れておくと、あとで探しやすくなります。')
+      ).toBeNull();
       expect(queryByText('店名・施設名・自宅など、食べた場所を記録できます。')).toBeNull();
       expect(queryByText('ボタンをタップして撮影')).toBeNull();
       expect(queryByTestId('camera-view')).toBeTruthy();
@@ -495,10 +535,12 @@ describe('CameraScreen', () => {
 
     test('calls cuisine type change handler when a cuisine option is pressed', async () => {
       const onCaptureReviewChange = jest.fn();
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-        onCaptureReviewChange,
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+          onCaptureReviewChange,
+        })
+      );
 
       const { findByTestId } = render(<CameraScreen />);
 
@@ -508,9 +550,11 @@ describe('CameraScreen', () => {
     });
 
     test('reveals location and notes inputs with a single tap', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+        })
+      );
 
       const { findByTestId, queryByTestId } = render(<CameraScreen />);
 
@@ -525,9 +569,11 @@ describe('CameraScreen', () => {
     });
 
     test('provides accessibility attributes for form inputs and switch with isHomemade=false', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview({ isHomemade: false }),
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview({ isHomemade: false }),
+        })
+      );
 
       const { findByTestId } = render(<CameraScreen />);
 
@@ -550,9 +596,11 @@ describe('CameraScreen', () => {
     });
 
     test('sets accessibilityState.checked to true on homemade switch when isHomemade is true', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview({ isHomemade: true }),
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview({ isHomemade: true }),
+        })
+      );
 
       const { findByTestId } = render(<CameraScreen />);
 
@@ -564,12 +612,16 @@ describe('CameraScreen', () => {
 
     test('requests AI suggestions when the assist button is pressed', async () => {
       const requestSuggestions = jest.fn().mockResolvedValue(undefined);
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-      }));
-      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
-        requestSuggestions,
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+        })
+      );
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          requestSuggestions,
+        })
+      );
 
       const { findByTestId } = render(<CameraScreen />);
 
@@ -580,24 +632,30 @@ describe('CameraScreen', () => {
 
     test('shows the AI note draft and applies it to notes', async () => {
       const applyNoteDraftSuggestion = jest.fn();
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-      }));
-      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
-        status: 'success',
-        suggestions: {
-          source: 'mock-local',
-          noteDraft: {
-            value: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
-            label: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
-            confidence: 0.91,
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+        })
+      );
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          status: 'success',
+          suggestions: {
             source: 'mock-local',
+            noteDraft: {
+              value: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
+              label: '料理名: 海鮮丼に見える\nメモ: 魚介がのった丼もの',
+              confidence: 0.91,
+              source: 'mock-local',
+            },
+            mealNames: [
+              { value: '海鮮丼', label: '海鮮丼', confidence: 0.91, source: 'mock-local' },
+            ],
+            cuisineTypes: [{ value: '和食', label: '和食', confidence: 0.8, source: 'mock-local' }],
           },
-          mealNames: [{ value: '海鮮丼', label: '海鮮丼', confidence: 0.91, source: 'mock-local' }],
-          cuisineTypes: [{ value: '和食', label: '和食', confidence: 0.8, source: 'mock-local' }],
-        },
-        applyNoteDraftSuggestion,
-      }));
+          applyNoteDraftSuggestion,
+        })
+      );
 
       const { findByTestId, queryByTestId } = render(<CameraScreen />);
 
@@ -617,13 +675,17 @@ describe('CameraScreen', () => {
     });
 
     test('keeps the save button available when AI suggestion loading fails', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-      }));
-      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
-        status: 'error',
-        errorMessage: '候補を取得できませんでした。もう一度お試しください。',
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+        })
+      );
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          status: 'error',
+          errorMessage: '候補を取得できませんでした。もう一度お試しください。',
+        })
+      );
 
       const { findByTestId, findByText } = render(<CameraScreen />);
 
@@ -632,10 +694,12 @@ describe('CameraScreen', () => {
     });
 
     test('disables the save button and shows spinner while capture review is saving', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-        savingCapture: true,
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+          savingCapture: true,
+        })
+      );
 
       const { findByTestId, findByText, UNSAFE_getByType } = render(<CameraScreen />);
       const saveButton = await findByTestId('save-meal-button');
@@ -656,23 +720,29 @@ describe('CameraScreen', () => {
     });
 
     test('shows AI analysis progress and ETA while running', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-      }));
-      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
-        status: 'running',
-        progress: {
-          stage: 'loading_model',
-          message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
-          progress: 0.42,
-          elapsedMs: 9000,
-          estimatedRemainingMs: 24000,
-        },
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+        })
+      );
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          status: 'running',
+          progress: {
+            stage: 'loading_model',
+            message: 'AI model を読み込んでいます。初回は時間がかかることがあります。',
+            progress: 0.42,
+            elapsedMs: 9000,
+            estimatedRemainingMs: 24000,
+          },
+        })
+      );
 
       const { findByText, findByTestId } = render(<CameraScreen />);
 
-      expect(await findByText('AI model を読み込んでいます。初回は時間がかかることがあります。')).toBeTruthy();
+      expect(
+        await findByText('AI model を読み込んでいます。初回は時間がかかることがあります。')
+      ).toBeTruthy();
       expect(await findByText('進捗の目安: 42%')).toBeTruthy();
       expect(await findByText('経過: 9秒')).toBeTruthy();
       expect(await findByText('残り目安: 約24秒')).toBeTruthy();
@@ -680,13 +750,17 @@ describe('CameraScreen', () => {
     });
 
     test('shows the disabled reason when AI input assist is unavailable', async () => {
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-      }));
-      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
-        status: 'disabled',
-        disabledReason: '設定画面でAI入力補助をオンにすると利用できます。',
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+        })
+      );
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          status: 'disabled',
+          disabledReason: '設定画面でAI入力補助をオンにすると利用できます。',
+        })
+      );
 
       const { findByText, findByTestId } = render(<CameraScreen />);
 
@@ -696,17 +770,21 @@ describe('CameraScreen', () => {
 
     test('passes applied AI metadata when the user saves the review', async () => {
       const onCaptureReviewSave = jest.fn().mockResolvedValue(undefined);
-      (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState({
-        captureReview: createCaptureReview(),
-        onCaptureReviewSave,
-      }));
-      (useMealInputAssist as jest.Mock).mockReturnValue(createAiAssistState({
-        appliedMetadata: {
-          aiSource: 'mock-local',
-          aiConfidence: 0.93,
-          appliedFields: ['mealName'],
-        },
-      }));
+      (useCameraCapture as jest.Mock).mockReturnValue(
+        createCaptureState({
+          captureReview: createCaptureReview(),
+          onCaptureReviewSave,
+        })
+      );
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          appliedMetadata: {
+            aiSource: 'mock-local',
+            aiConfidence: 0.93,
+            appliedFields: ['mealName'],
+          },
+        })
+      );
 
       const { findByTestId } = render(<CameraScreen />);
 
@@ -766,15 +844,19 @@ describe('CameraScreen Web Mode', () => {
     jest.clearAllMocks();
     mockCameraRef.current = null;
     (useCameraCapture as jest.Mock).mockReturnValue(createCaptureState());
-    (useCameraPermission as jest.Mock).mockReturnValue(createPermissionState({
-      permission: mockCameraPermissionsDenied,
-      uiState: 'denied',
-    }));
+    (useCameraPermission as jest.Mock).mockReturnValue(
+      createPermissionState({
+        permission: mockCameraPermissionsDenied,
+        uiState: 'denied',
+      })
+    );
     (Camera.useCameraPermissions as jest.Mock).mockReturnValue([
       mockCameraPermissionsDenied,
       jest.fn().mockResolvedValue(mockCameraPermissionsDenied),
     ]);
-    (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(mockMediaLibraryPermissionsGranted);
+    (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue(
+      mockMediaLibraryPermissionsGranted
+    );
   });
 
   afterAll(() => {

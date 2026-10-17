@@ -72,12 +72,16 @@ describe('mealShare', () => {
 
     test('identifies cache paths', () => {
       expect(detectStorageLocation('file:///data/user/0/com.app/cache/temp.jpg')).toBe('cache');
-      expect(detectStorageLocation('file:///data/user/0/com.app/cached_expo_files/temp.jpg')).toBe('cache');
+      expect(detectStorageLocation('file:///data/user/0/com.app/cached_expo_files/temp.jpg')).toBe(
+        'cache'
+      );
     });
 
     test('identifies document paths', () => {
       expect(detectStorageLocation('file:///data/user/0/com.app/files/meal.jpg')).toBe('document');
-      expect(detectStorageLocation('file:///data/user/0/com.app/expo_files/meal.jpg')).toBe('document');
+      expect(detectStorageLocation('file:///data/user/0/com.app/expo_files/meal.jpg')).toBe(
+        'document'
+      );
     });
 
     test('identifies external paths', () => {
@@ -92,7 +96,10 @@ describe('mealShare', () => {
 
   describe('inspectSharePhoto', () => {
     test('inspects file info and populates sanitized debug info', async () => {
-      const debugInfo = await inspectSharePhoto('file:///data/user/0/com.app/files/meal.jpg', 'image/jpeg');
+      const debugInfo = await inspectSharePhoto(
+        'file:///data/user/0/com.app/files/meal.jpg',
+        'image/jpeg'
+      );
 
       expect(debugInfo.exists).toBe(true);
       expect(debugInfo.fileSize).toBe(102400);
@@ -223,10 +230,13 @@ describe('mealShare', () => {
       });
 
       expect(mockShareMeal).toHaveBeenCalled();
-      expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///data/user/0/com.app/files/ramen.jpg', {
-        dialogTitle: '共有',
-        mimeType: 'image/jpeg',
-      });
+      expect(Sharing.shareAsync).toHaveBeenCalledWith(
+        'file:///data/user/0/com.app/files/ramen.jpg',
+        {
+          dialogTitle: '共有',
+          mimeType: 'image/jpeg',
+        }
+      );
       expect(result.completed).toBe(true);
       expect(result.method).toBe('expoSharing');
       expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -269,10 +279,13 @@ describe('mealShare', () => {
         photoUri: 'file:///data/user/0/com.app/files/ramen.jpg',
       });
 
-      expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///data/user/0/com.app/files/ramen.jpg', {
-        dialogTitle: '共有',
-        mimeType: 'image/jpeg',
-      });
+      expect(Sharing.shareAsync).toHaveBeenCalledWith(
+        'file:///data/user/0/com.app/files/ramen.jpg',
+        {
+          dialogTitle: '共有',
+          mimeType: 'image/jpeg',
+        }
+      );
       expect(result.completed).toBe(true);
       expect(result.method).toBe('expoSharing');
     });
@@ -476,4 +489,3 @@ describe('mealShare', () => {
     });
   });
 });
-

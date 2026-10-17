@@ -16,7 +16,7 @@
 ## Repo Settings Already Managed In Code
 - CI workflow は `.github/workflows/ci.yml` で管理する。
 - CI の `GITHUB_TOKEN` permission は workflow top-level で `contents: read` に制限する。
-- CI required check として使う job 名は `static-analysis`、`test`、`native-build` とする（`static-analysis` 内で `check:react-versions`、`check:docs`、`type-check`、`lint`、`format:check`、`expo-doctor` を順次実行。`native-build` はネイティブ影響ファイル変更時のみビルド実行）。
+- CI required check として使う job 名は `static-analysis`、`test`、`native-build` とする（`static-analysis` 内で `check:react-versions`、`check:deps`、`check:docs`、`type-check`、`lint`、`format:check`、`expo-doctor` を順次実行。`native-build` はネイティブ影響ファイル変更時のみビルド実行）。
 - Dependabot version updates は `.github/dependabot.yml` で管理する。詳細な 4 層分類方針と運用プロトコルは [docs/engineering/dependency-policy.md](dependency-policy.md) を参照する。
 - npm updates は週1回、月曜 09:00 JST、open PR 上限 3、Tier 1（Expo/RN コア・ネイティブ境界）は除外し Tier 3 の純粋 JS / TS ツールを中心にグループ化。
 - GitHub Actions updates は週1回、月曜 09:30 JST、open PR 上限 3。

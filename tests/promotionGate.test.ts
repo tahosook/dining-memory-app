@@ -71,7 +71,11 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
     return filePath;
   }
 
-  function runGate(challengerFile: string, championFile?: string, env: Record<string, string> = {}) {
+  function runGate(
+    challengerFile: string,
+    championFile?: string,
+    env: Record<string, string> = {}
+  ) {
     const args = ['--evaluate-gate', challengerFile];
     if (championFile) {
       args.push(championFile);
@@ -417,15 +421,26 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
 
   describe('Dataset Validation and Class Compatibility (run-autonomous-model-improvement.sh)', () => {
     const REQUIRED_CLASSES = [
-      'curry_rice', 'drink', 'fish_dish', 'fried_dish',
-      'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+      'curry_rice',
+      'drink',
+      'fish_dish',
+      'fried_dish',
+      'meat_dish',
+      'noodles',
+      'other_or_exclude',
+      'simmered_dish',
+      'stir_fry',
     ];
 
-    function createDummyDataset(dirName: string, classes: string[], options: {
-      includeLeakage?: boolean;
-      extraClass?: string;
-      labelsContent?: string[];
-    } = {}): {
+    function createDummyDataset(
+      dirName: string,
+      classes: string[],
+      options: {
+        includeLeakage?: boolean;
+        extraClass?: string;
+        labelsContent?: string[];
+      } = {}
+    ): {
       datasetDir: string;
       goldenDir: string;
     } {
@@ -452,9 +467,10 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
         for (const cls of splitClasses) {
           const clsDir = path.join(splitDir, cls);
           fs.mkdirSync(clsDir, { recursive: true });
-          const imgContent = options.includeLeakage && split === 'train' && cls === splitClasses[0]
-            ? goldenHashes[0] // Intentionally leak first golden sample
-            : `unique_${split}_${cls}_image_content`;
+          const imgContent =
+            options.includeLeakage && split === 'train' && cls === splitClasses[0]
+              ? goldenHashes[0] // Intentionally leak first golden sample
+              : `unique_${split}_${cls}_image_content`;
           fs.writeFileSync(path.join(clsDir, 'sample.jpg'), imgContent, 'utf-8');
         }
       }
@@ -477,10 +493,14 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
     }
 
     function runCheckCompatibility(chalFile: string, champFile: string) {
-      const result = spawnSync('bash', [scriptPath, '--check-class-compatibility', chalFile, champFile], {
-        cwd: path.resolve(__dirname, '..'),
-        encoding: 'utf-8',
-      });
+      const result = spawnSync(
+        'bash',
+        [scriptPath, '--check-class-compatibility', chalFile, champFile],
+        {
+          cwd: path.resolve(__dirname, '..'),
+          encoding: 'utf-8',
+        }
+      );
       return {
         exitCode: result.status,
         stdout: result.stdout.trim(),
@@ -497,12 +517,23 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
 
     it('accepts dataset when labels.txt has valid 9 classes in exact canonical order', () => {
       const canonicalLabels = [
-        'curry_rice', 'drink', 'fish_dish', 'fried_dish',
-        'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+        'curry_rice',
+        'drink',
+        'fish_dish',
+        'fried_dish',
+        'meat_dish',
+        'noodles',
+        'other_or_exclude',
+        'simmered_dish',
+        'stir_fry',
       ];
-      const { datasetDir, goldenDir } = createDummyDataset('valid_labels_order_ds', REQUIRED_CLASSES, {
-        labelsContent: canonicalLabels,
-      });
+      const { datasetDir, goldenDir } = createDummyDataset(
+        'valid_labels_order_ds',
+        REQUIRED_CLASSES,
+        {
+          labelsContent: canonicalLabels,
+        }
+      );
       const res = runValidate(datasetDir, goldenDir);
       expect(res.exitCode).toBe(0);
       expect(res.stdout).toContain('Dataset validation PASSED: 9 classes verified');
@@ -510,12 +541,23 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
 
     it('rejects dataset when labels.txt has same 9 classes but incorrect order', () => {
       const reorderedLabels = [
-        'drink', 'curry_rice', 'fish_dish', 'fried_dish',
-        'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+        'drink',
+        'curry_rice',
+        'fish_dish',
+        'fried_dish',
+        'meat_dish',
+        'noodles',
+        'other_or_exclude',
+        'simmered_dish',
+        'stir_fry',
       ];
-      const { datasetDir, goldenDir } = createDummyDataset('reordered_labels_ds', REQUIRED_CLASSES, {
-        labelsContent: reorderedLabels,
-      });
+      const { datasetDir, goldenDir } = createDummyDataset(
+        'reordered_labels_ds',
+        REQUIRED_CLASSES,
+        {
+          labelsContent: reorderedLabels,
+        }
+      );
       const res = runValidate(datasetDir, goldenDir);
       expect(res.exitCode).toBe(1);
       expect(res.stderr).toContain('labels.txt class order mismatch in dataset at index 0');
@@ -525,12 +567,24 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
 
     it('rejects dataset when labels.txt has line count mismatch (e.g. empty line in between)', () => {
       const invalidLineCountLabels = [
-        'curry_rice', '', 'drink', 'fish_dish', 'fried_dish',
-        'meat_dish', 'noodles', 'other_or_exclude', 'simmered_dish', 'stir_fry'
+        'curry_rice',
+        '',
+        'drink',
+        'fish_dish',
+        'fried_dish',
+        'meat_dish',
+        'noodles',
+        'other_or_exclude',
+        'simmered_dish',
+        'stir_fry',
       ];
-      const { datasetDir, goldenDir } = createDummyDataset('empty_line_labels_ds', REQUIRED_CLASSES, {
-        labelsContent: invalidLineCountLabels,
-      });
+      const { datasetDir, goldenDir } = createDummyDataset(
+        'empty_line_labels_ds',
+        REQUIRED_CLASSES,
+        {
+          labelsContent: invalidLineCountLabels,
+        }
+      );
       const res = runValidate(datasetDir, goldenDir);
       expect(res.exitCode).toBe(1);
       expect(res.stderr).toContain('labels.txt line count mismatch in dataset');
@@ -545,14 +599,18 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
     });
 
     it('rejects dataset when unexpected unknown class is present', () => {
-      const { datasetDir, goldenDir } = createDummyDataset('unknown_class_ds', REQUIRED_CLASSES, { extraClass: 'ramen' });
+      const { datasetDir, goldenDir } = createDummyDataset('unknown_class_ds', REQUIRED_CLASSES, {
+        extraClass: 'ramen',
+      });
       const res = runValidate(datasetDir, goldenDir);
       expect(res.exitCode).toBe(1);
       expect(res.stderr).toContain('Unknown unexpected class(es) in dataset: ramen');
     });
 
     it('rejects dataset when Golden Test sample is leaked into training split (SHA256 match)', () => {
-      const { datasetDir, goldenDir } = createDummyDataset('leakage_ds', REQUIRED_CLASSES, { includeLeakage: true });
+      const { datasetDir, goldenDir } = createDummyDataset('leakage_ds', REQUIRED_CLASSES, {
+        includeLeakage: true,
+      });
       const res = runValidate(datasetDir, goldenDir);
       expect(res.exitCode).toBe(1);
       expect(res.stderr).toContain('Data leakage detected! Image');
@@ -566,7 +624,9 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
 
       const res = runCheckCompatibility(chalFile, champFile);
       expect(res.exitCode).toBe(0);
-      expect(res.stdout).toContain('Class compatibility verified: Champion (9 classes) === Challenger (9 classes) === 9');
+      expect(res.stdout).toContain(
+        'Class compatibility verified: Champion (9 classes) === Challenger (9 classes) === 9'
+      );
     });
 
     it('verifies class compatibility fails when class counts differ (e.g. Challenger has 8 classes, Champion has 9)', () => {
@@ -577,7 +637,9 @@ describe('Promotion Gate Evaluation Logic (run-autonomous-model-improvement.sh)'
 
       const res = runCheckCompatibility(chalFile, champFile);
       expect(res.exitCode).toBe(1);
-      expect(res.stderr).toContain('Class compatibility mismatch! Challenger has 8 classes, Champion has 9 classes');
+      expect(res.stderr).toContain(
+        'Class compatibility mismatch! Challenger has 8 classes, Champion has 9 classes'
+      );
     });
   });
 

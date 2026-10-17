@@ -17,7 +17,10 @@ import {
   validatePortableMeals,
   validateSafeFileName,
 } from '../src/domain/backup';
-import type { PersistedAppSettingRow, PersistedMealRow } from '../src/database/services/localDatabase';
+import type {
+  PersistedAppSettingRow,
+  PersistedMealRow,
+} from '../src/database/services/localDatabase';
 
 describe('backup pathNormalizer', () => {
   test('stripFileScheme removes file:// prefix', () => {
@@ -32,16 +35,18 @@ describe('backup pathNormalizer', () => {
 
   test('extractPhotoFileName extracts clean filename from various URI forms', () => {
     expect(
-      extractPhotoFileName('file:///data/user/0/com.tahosook.diningmemory/files/meal-20260422-213507-00.jpg')
+      extractPhotoFileName(
+        'file:///data/user/0/com.tahosook.diningmemory/files/meal-20260422-213507-00.jpg'
+      )
     ).toBe('meal-20260422-213507-00.jpg');
 
     expect(
-      extractPhotoFileName('file:///var/mobile/Containers/Data/Application/UUID/Documents/meal-20260422-01.jpg')
+      extractPhotoFileName(
+        'file:///var/mobile/Containers/Data/Application/UUID/Documents/meal-20260422-01.jpg'
+      )
     ).toBe('meal-20260422-01.jpg');
 
-    expect(
-      extractPhotoFileName('/storage/emulated/0/DCIM/meal.jpeg?v=123')
-    ).toBe('meal.jpeg');
+    expect(extractPhotoFileName('/storage/emulated/0/DCIM/meal.jpeg?v=123')).toBe('meal.jpeg');
 
     expect(extractPhotoFileName('')).toBe('');
   });
@@ -71,13 +76,13 @@ describe('backup pathNormalizer', () => {
   });
 
   test('resolveRestoredPhotoUri joins documentDirectory and safe filename', () => {
-    expect(
-      resolveRestoredPhotoUri('meal-01.jpg', 'file:///data/user/0/files/')
-    ).toBe('file:///data/user/0/files/meal-01.jpg');
+    expect(resolveRestoredPhotoUri('meal-01.jpg', 'file:///data/user/0/files/')).toBe(
+      'file:///data/user/0/files/meal-01.jpg'
+    );
 
-    expect(
-      resolveRestoredPhotoUri('meal-01.jpg', 'file:///data/user/0/files')
-    ).toBe('file:///data/user/0/files/meal-01.jpg');
+    expect(resolveRestoredPhotoUri('meal-01.jpg', 'file:///data/user/0/files')).toBe(
+      'file:///data/user/0/files/meal-01.jpg'
+    );
 
     expect(() => {
       resolveRestoredPhotoUri('../evil.jpg', 'file:///data/user/0/files/');
@@ -209,14 +214,28 @@ describe('backup manifest', () => {
   test('validateBackupManifest rejects invalid counts or malformed date', () => {
     expect(
       validateBackupManifest(
-        { formatVersion: 1, appId: 'com.tahosook.diningmemory', schemaVersion: 2, exportedAt: 'invalid-date', mealCount: 0, photoCount: 0 },
+        {
+          formatVersion: 1,
+          appId: 'com.tahosook.diningmemory',
+          schemaVersion: 2,
+          exportedAt: 'invalid-date',
+          mealCount: 0,
+          photoCount: 0,
+        },
         2
       ).valid
     ).toBe(false);
 
     expect(
       validateBackupManifest(
-        { formatVersion: 1, appId: 'com.tahosook.diningmemory', schemaVersion: 2, exportedAt: '2026-09-19T10:00:00.000Z', mealCount: -1, photoCount: 0 },
+        {
+          formatVersion: 1,
+          appId: 'com.tahosook.diningmemory',
+          schemaVersion: 2,
+          exportedAt: '2026-09-19T10:00:00.000Z',
+          mealCount: -1,
+          photoCount: 0,
+        },
         2
       ).valid
     ).toBe(false);
@@ -240,7 +259,7 @@ describe('backup serializer', () => {
       photo_thumbnail_path: 'file:///data/user/0/app/files/meal-20260422-01-thumb.jpg',
       location_name: '新宿',
       latitude: 35.69,
-      longitude: 139.70,
+      longitude: 139.7,
       meal_datetime: 1713800000000,
       search_text: 'しょうゆラーメン 新宿',
       tags: 'ラーメン,夕食',
@@ -278,14 +297,15 @@ describe('backup serializer', () => {
 
     expect(result.portableMeals).toHaveLength(2);
     expect(result.portableMeals[0].photo_file_name).toBe('meal-20260422-01.jpg');
-    expect((result.portableMeals[0] as unknown as Record<string, unknown>).photo_thumbnail_path).toBeUndefined();
-    expect((result.portableMeals[0] as unknown as Record<string, unknown>).photo_path).toBeUndefined();
+    expect(
+      (result.portableMeals[0] as unknown as Record<string, unknown>).photo_thumbnail_path
+    ).toBeUndefined();
+    expect(
+      (result.portableMeals[0] as unknown as Record<string, unknown>).photo_path
+    ).toBeUndefined();
 
     // Unique photo file names collected
-    expect(result.photoFileNames).toEqual([
-      'meal-20260422-01.jpg',
-      'meal-20260423-01.jpg',
-    ]);
+    expect(result.photoFileNames).toEqual(['meal-20260422-01.jpg', 'meal-20260423-01.jpg']);
   });
 
   test('serializeMeals rejects meals with empty or missing photo_path', () => {

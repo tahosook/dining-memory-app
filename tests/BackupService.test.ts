@@ -74,7 +74,7 @@ describe('BackupService', () => {
       photo_thumbnail_path: 'file:///mock-documents/meal-20260422-01-thumb.jpg',
       location_name: '新宿',
       latitude: 35.69,
-      longitude: 139.70,
+      longitude: 139.7,
       meal_datetime: 1713800000000,
       search_text: 'とんかつ定食 新宿',
       tags: null,
@@ -146,10 +146,9 @@ describe('BackupService', () => {
 
       // Cleanup called for staging directory, while temporary zip file is retained in cache directory for sharing
       expect(deleteAsync).toHaveBeenCalledTimes(1);
-      expect(deleteAsync).toHaveBeenCalledWith(
-        expect.stringContaining('/dm-export-'),
-        { idempotent: true }
-      );
+      expect(deleteAsync).toHaveBeenCalledWith(expect.stringContaining('/dm-export-'), {
+        idempotent: true,
+      });
       expect(deleteAsync).not.toHaveBeenCalledWith(
         expect.stringContaining('.zip'),
         expect.anything()
@@ -167,7 +166,9 @@ describe('BackupService', () => {
     test('rejects exportBackup when referenced photo does not exist on device', async () => {
       (getInfoAsync as jest.Mock).mockResolvedValue({ exists: false });
 
-      await expect(BackupService.exportBackup()).rejects.toThrow('バックアップ対象の写真ファイルが端末内に見つかりません。');
+      await expect(BackupService.exportBackup()).rejects.toThrow(
+        'バックアップ対象の写真ファイルが端末内に見つかりません。'
+      );
 
       // zip and share are not executed
       expect(zip).not.toHaveBeenCalled();
@@ -178,7 +179,9 @@ describe('BackupService', () => {
     test('rejects exportBackup when copying a photo to staging fails', async () => {
       (copyAsync as jest.Mock).mockRejectedValue(new Error('Disk write error'));
 
-      await expect(BackupService.exportBackup()).rejects.toThrow('写真ファイルのバックアップ一時領域へのコピーに失敗しました。');
+      await expect(BackupService.exportBackup()).rejects.toThrow(
+        '写真ファイルのバックアップ一時領域へのコピーに失敗しました。'
+      );
 
       expect(zip).not.toHaveBeenCalled();
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
@@ -263,8 +266,16 @@ describe('BackupService', () => {
       // Create three meals with different photos
       (getAllPersistedMealRows as jest.Mock).mockResolvedValue([
         mockMealRows[0],
-        { ...mockMealRows[0], id: 'meal-2', photo_path: 'file:///mock-documents/meal-20260423-02.jpg' },
-        { ...mockMealRows[0], id: 'meal-3', photo_path: 'file:///mock-documents/meal-20260424-03.jpg' },
+        {
+          ...mockMealRows[0],
+          id: 'meal-2',
+          photo_path: 'file:///mock-documents/meal-20260423-02.jpg',
+        },
+        {
+          ...mockMealRows[0],
+          id: 'meal-3',
+          photo_path: 'file:///mock-documents/meal-20260424-03.jpg',
+        },
       ]);
 
       // Succeed for the first photo, fail for the second; third should not be checked
@@ -278,7 +289,9 @@ describe('BackupService', () => {
         return Promise.resolve({ exists: true });
       });
 
-      await expect(BackupService.exportBackup()).rejects.toThrow('バックアップ対象の写真ファイルの読み取りに失敗しました。');
+      await expect(BackupService.exportBackup()).rejects.toThrow(
+        'バックアップ対象の写真ファイルの読み取りに失敗しました。'
+      );
 
       // Fails fast: validation halts at the failing photo, getInfoAsync called only twice, copyAsync never called
       expect(getInfoAsync).toHaveBeenCalledTimes(2);
@@ -293,7 +306,9 @@ describe('BackupService', () => {
         { ...mockMealRows[0], photo_path: '' },
       ]);
 
-      await expect(BackupService.exportBackup()).rejects.toThrow('写真パスが指定されていないか不正です');
+      await expect(BackupService.exportBackup()).rejects.toThrow(
+        '写真パスが指定されていないか不正です'
+      );
 
       expect(zip).not.toHaveBeenCalled();
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
@@ -305,7 +320,9 @@ describe('BackupService', () => {
         { ...mockMealRows[0], photo_path: 'file:///data/user/0/files/../../evil.jpg' },
       ]);
 
-      await expect(BackupService.exportBackup()).rejects.toThrow('無効または非オリジナルの写真パス');
+      await expect(BackupService.exportBackup()).rejects.toThrow(
+        '無効または非オリジナルの写真パス'
+      );
 
       expect(zip).not.toHaveBeenCalled();
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
@@ -317,7 +334,9 @@ describe('BackupService', () => {
         { ...mockMealRows[0], photo_path: 'file:///mock-documents/meal-20260422-01-thumb.jpg' },
       ]);
 
-      await expect(BackupService.exportBackup()).rejects.toThrow('無効または非オリジナルの写真パス');
+      await expect(BackupService.exportBackup()).rejects.toThrow(
+        '無効または非オリジナルの写真パス'
+      );
 
       expect(zip).not.toHaveBeenCalled();
       expect(Sharing.shareAsync).not.toHaveBeenCalled();
@@ -594,7 +613,9 @@ describe('BackupService', () => {
 
       const result = await BackupService.pickAndValidateBackup();
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。');
+      expect(result.error).toBe(
+        'バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。'
+      );
       expect(unzip).not.toHaveBeenCalled();
     });
 
@@ -741,10 +762,7 @@ describe('BackupService', () => {
         assets: [{ uri: 'file:///mock-picker/backup.zip' }],
       });
 
-      (listContents as jest.Mock).mockResolvedValue([
-        { path: 'manifest.json' },
-        { path: '/' },
-      ]);
+      (listContents as jest.Mock).mockResolvedValue([{ path: 'manifest.json' }, { path: '/' }]);
 
       const result = await BackupService.pickAndValidateBackup();
       expect(result.valid).toBe(false);
@@ -775,10 +793,7 @@ describe('BackupService', () => {
         assets: [{ uri: 'file:///mock-picker/backup.zip' }],
       });
 
-      (listContents as jest.Mock).mockResolvedValue([
-        { path: 'manifest.json' },
-        { path: '..' },
-      ]);
+      (listContents as jest.Mock).mockResolvedValue([{ path: 'manifest.json' }, { path: '..' }]);
 
       const result = await BackupService.pickAndValidateBackup();
       expect(result.valid).toBe(false);
@@ -956,7 +971,8 @@ describe('BackupService', () => {
         if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
         if (path.endsWith('meals.json')) return Promise.resolve('[]');
         // Array of invalid setting object (missing required key)
-        if (path.endsWith('app_settings.json')) return Promise.resolve(JSON.stringify([{ invalid_key: 'value' }]));
+        if (path.endsWith('app_settings.json'))
+          return Promise.resolve(JSON.stringify([{ invalid_key: 'value' }]));
         return Promise.resolve('{}');
       });
 
@@ -1074,7 +1090,10 @@ describe('BackupService', () => {
       });
 
       // photos/ has 2 files: meal-udon.jpg (referenced) and extra-unreferenced.jpg (not referenced)
-      (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-udon.jpg', 'extra-unreferenced.jpg']);
+      (readDirectoryAsync as jest.Mock).mockResolvedValue([
+        'meal-udon.jpg',
+        'extra-unreferenced.jpg',
+      ]);
 
       const result = await BackupService.pickAndValidateBackup();
       expect(result.valid).toBe(false);
@@ -1101,9 +1120,7 @@ describe('BackupService', () => {
             updated_at: 1713800000000,
           },
         ],
-        appSettings: [
-          { key: 'ai_input_assist_enabled', value: 'true', updated_at: 1713800000000 },
-        ],
+        appSettings: [{ key: 'ai_input_assist_enabled', value: 'true', updated_at: 1713800000000 }],
       };
 
       const result = await BackupService.restoreVerifiedBackup(validationResult);
@@ -1130,7 +1147,9 @@ describe('BackupService', () => {
       );
 
       // Staging directory cleaned up
-      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', {
+        idempotent: true,
+      });
     });
 
     test('cleans up orphaned old photos and thumbnails not referenced in restored database', async () => {
@@ -1182,14 +1201,12 @@ describe('BackupService', () => {
       await BackupService.restoreVerifiedBackup(validationResult);
 
       // Orphan old photos were deleted
-      expect(deleteAsync).toHaveBeenCalledWith(
-        'file:///mock-documents/meal-old.jpg',
-        { idempotent: true }
-      );
-      expect(deleteAsync).toHaveBeenCalledWith(
-        'file:///mock-documents/meal-old-thumb.jpg',
-        { idempotent: true }
-      );
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/meal-old.jpg', {
+        idempotent: true,
+      });
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/meal-old-thumb.jpg', {
+        idempotent: true,
+      });
 
       // Restored photo and DB file were NOT deleted
       expect(deleteAsync).not.toHaveBeenCalledWith(
@@ -1204,7 +1221,6 @@ describe('BackupService', () => {
 
     // Test E: Photo copy failure rollback
     test('rolls back photo changes when copying a photo fails midway, without modifying DB', async () => {
-
       const validationResult = {
         valid: true,
         stagingDirectory: 'file:///mock-cache/dm-import-123/',
@@ -1256,7 +1272,9 @@ describe('BackupService', () => {
         return Promise.resolve(undefined);
       });
 
-      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow('Disk full');
+      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow(
+        'Disk full'
+      );
 
       // Database replace was NEVER called
       expect(replaceDatabaseWithBackup).not.toHaveBeenCalled();
@@ -1264,7 +1282,9 @@ describe('BackupService', () => {
       // Overwritten existing photo was restored from rollback directory
       expect(copyAsync).toHaveBeenCalledWith(
         expect.objectContaining({
-          from: expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\/existing-photo\.jpg/),
+          from: expect.stringMatching(
+            /file:\/\/\/mock-cache\/dm-restore-rollback-\d+\/existing-photo\.jpg/
+          ),
           to: 'file:///mock-documents/existing-photo.jpg',
         })
       );
@@ -1274,7 +1294,9 @@ describe('BackupService', () => {
         expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\//),
         { idempotent: true }
       );
-      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', {
+        idempotent: true,
+      });
     });
 
     // Test F: DB transaction failure rollback
@@ -1326,27 +1348,37 @@ describe('BackupService', () => {
         return Promise.resolve({ exists: true });
       });
 
-      (replaceDatabaseWithBackup as jest.Mock).mockRejectedValue(new Error('SQLite transaction failed'));
+      (replaceDatabaseWithBackup as jest.Mock).mockRejectedValue(
+        new Error('SQLite transaction failed')
+      );
 
-      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow('SQLite transaction failed');
+      await expect(BackupService.restoreVerifiedBackup(validationResult)).rejects.toThrow(
+        'SQLite transaction failed'
+      );
 
       // 1. Existing photo is restored from rollback dir
       expect(copyAsync).toHaveBeenCalledWith(
         expect.objectContaining({
-          from: expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\/existing-photo\.jpg/),
+          from: expect.stringMatching(
+            /file:\/\/\/mock-cache\/dm-restore-rollback-\d+\/existing-photo\.jpg/
+          ),
           to: 'file:///mock-documents/existing-photo.jpg',
         })
       );
 
       // 2. Newly created photo is deleted from documentDirectory
-      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/new-photo.jpg', { idempotent: true });
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-documents/new-photo.jpg', {
+        idempotent: true,
+      });
 
       // 3. Rollback directory and staging directory are cleaned up
       expect(deleteAsync).toHaveBeenCalledWith(
         expect.stringMatching(/file:\/\/\/mock-cache\/dm-restore-rollback-\d+\//),
         { idempotent: true }
       );
-      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', { idempotent: true });
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/dm-import-123/', {
+        idempotent: true,
+      });
     });
 
     test('warns and reports error when photo rollback restoration itself fails', async () => {
@@ -1468,7 +1500,9 @@ describe('BackupService', () => {
   describe('cleanupStaging', () => {
     test('deletes staging directory safely', async () => {
       await BackupService.cleanupStaging('file:///mock-cache/test-staging/');
-      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/test-staging/', { idempotent: true });
+      expect(deleteAsync).toHaveBeenCalledWith('file:///mock-cache/test-staging/', {
+        idempotent: true,
+      });
     });
 
     test('handles undefined without error', async () => {

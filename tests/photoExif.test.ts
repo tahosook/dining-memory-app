@@ -118,9 +118,17 @@ describe('photoExif', () => {
       },
       GPS: {
         1: 'N',
-        2: [[35, 1], [41, 1], [222000, 10000]],
+        2: [
+          [35, 1],
+          [41, 1],
+          [222000, 10000],
+        ],
         3: 'E',
-        4: [[139, 1], [41, 1], [301200, 10000]],
+        4: [
+          [139, 1],
+          [41, 1],
+          [301200, 10000],
+        ],
         6: [10, 1],
         7: buildExpectedExifGpsTimeStamp(capturedAt),
         29: formatExpectedExifGpsDateStamp(capturedAt),
@@ -150,7 +158,11 @@ describe('photoExif', () => {
       Exif: {},
       GPS: {
         1: 'N',
-        2: [[1, 1], [2, 1], [3, 1]],
+        2: [
+          [1, 1],
+          [2, 1],
+          [3, 1],
+        ],
       },
       Interop: {},
       '1st': {},

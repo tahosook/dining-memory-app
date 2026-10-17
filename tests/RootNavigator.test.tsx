@@ -156,45 +156,35 @@ describe('RootNavigator Integration', () => {
     // 1. Camera: headerShown === false
     // React Navigation の公開 API (getCurrentOptions) による設定値と、実際のレンダリング結果（タブバーラベル1件のみ）を検証
     expect(mockCapturedNav?.getCurrentRoute()?.name).toBe('Camera');
-    const cameraOptions = mockCapturedNav?.getCurrentOptions() as
-      | Record<string, any>
-      | undefined;
+    const cameraOptions = mockCapturedNav?.getCurrentOptions() as Record<string, any> | undefined;
     expect(cameraOptions?.headerShown).toBe(false);
     expect(getAllByText('撮影')).toHaveLength(1);
 
     // 2. Records: headerShown === false
     fireEvent.press(getByText('記録'));
     expect(mockCapturedNav?.getCurrentRoute()?.name).toBe('Records');
-    const recordsOptions = mockCapturedNav?.getCurrentOptions() as
-      | Record<string, any>
-      | undefined;
+    const recordsOptions = mockCapturedNav?.getCurrentOptions() as Record<string, any> | undefined;
     expect(recordsOptions?.headerShown).toBe(false);
     expect(getAllByText('記録')).toHaveLength(1);
 
     // 3. Search: headerShown === true (React Navigation bottom-tabs のデフォルトは true)
     fireEvent.press(getAllByText('検索')[0]);
     expect(mockCapturedNav?.getCurrentRoute()?.name).toBe('Search');
-    const searchOptions = mockCapturedNav?.getCurrentOptions() as
-      | Record<string, any>
-      | undefined;
+    const searchOptions = mockCapturedNav?.getCurrentOptions() as Record<string, any> | undefined;
     expect(searchOptions?.headerShown ?? true).toBe(true);
     expect(getAllByText('検索')).toHaveLength(2);
 
     // 4. Stats: headerShown === true (デフォルト true)
     fireEvent.press(getAllByText('統計')[0]);
     expect(mockCapturedNav?.getCurrentRoute()?.name).toBe('Stats');
-    const statsOptions = mockCapturedNav?.getCurrentOptions() as
-      | Record<string, any>
-      | undefined;
+    const statsOptions = mockCapturedNav?.getCurrentOptions() as Record<string, any> | undefined;
     expect(statsOptions?.headerShown ?? true).toBe(true);
     expect(getAllByText('統計')).toHaveLength(2);
 
     // 5. Settings: headerShown === true (デフォルト true)
     fireEvent.press(getAllByText('設定')[0]);
     expect(mockCapturedNav?.getCurrentRoute()?.name).toBe('Settings');
-    const settingsOptions = mockCapturedNav?.getCurrentOptions() as
-      | Record<string, any>
-      | undefined;
+    const settingsOptions = mockCapturedNav?.getCurrentOptions() as Record<string, any> | undefined;
     expect(settingsOptions?.headerShown ?? true).toBe(true);
     expect(getAllByText('設定')).toHaveLength(2);
   });

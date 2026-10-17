@@ -112,9 +112,7 @@ describe('photoAcquisition', () => {
       Platform.OS = 'ios';
       const cameraRef = { current: null };
 
-      await expect(takePhotoForReview(cameraRef, null)).rejects.toThrow(
-        '写真の撮影に失敗しました'
-      );
+      await expect(takePhotoForReview(cameraRef, null)).rejects.toThrow('写真の撮影に失敗しました');
     });
   });
 

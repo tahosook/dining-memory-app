@@ -1,6 +1,9 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { copyAsync, deleteAsync, getInfoAsync } from 'expo-file-system/legacy';
-import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../src/utils/mealPhotoRotation';
+import {
+  deleteMealPhotoFileIfSafe,
+  rotateMealPhotoClockwise,
+} from '../src/utils/mealPhotoRotation';
 import { CAMERA_CONSTANTS } from '../src/constants/CameraConstants';
 
 jest.mock('@bam.tech/react-native-image-resizer', () => ({
@@ -56,19 +59,26 @@ describe('mealPhotoRotation', () => {
     expect(CAMERA_CONSTANTS.SAVED_PHOTO_MAX_WIDTH).toBe(1600);
     expect(CAMERA_CONSTANTS.SAVED_PHOTO_MAX_HEIGHT).toBe(1600);
     expect(CAMERA_CONSTANTS.SAVED_PHOTO_QUALITY_PERCENT).toBe(80);
-    expect(rotatedUri).toBe('file:///documents/meal-photo-rotated-2026-04-20T10-11-12-123Z-12345678.jpg');
+    expect(rotatedUri).toBe(
+      'file:///documents/meal-photo-rotated-2026-04-20T10-11-12-123Z-12345678.jpg'
+    );
     expect(copyAsync).toHaveBeenCalledWith({
       from: 'file:///cache/rotated-temp.jpg',
       to: rotatedUri,
     });
-    expect(deleteAsync).toHaveBeenCalledWith('file:///cache/rotated-temp.jpg', { idempotent: true });
+    expect(deleteAsync).toHaveBeenCalledWith('file:///cache/rotated-temp.jpg', {
+      idempotent: true,
+    });
   });
 
   test('deletes only app document files when cleanup is safe', async () => {
     await deleteMealPhotoFileIfSafe('content://photos/original.jpg');
     await deleteMealPhotoFileIfSafe('https://example.com/original.jpg');
     await deleteMealPhotoFileIfSafe('file:///tmp/original.jpg');
-    await deleteMealPhotoFileIfSafe('file:///documents/current.jpg', 'file:///documents/current.jpg');
+    await deleteMealPhotoFileIfSafe(
+      'file:///documents/current.jpg',
+      'file:///documents/current.jpg'
+    );
 
     expect(deleteAsync).not.toHaveBeenCalled();
 

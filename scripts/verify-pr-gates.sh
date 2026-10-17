@@ -78,25 +78,25 @@ echo "  ✓ No 'eslint-disable' escape hatches introduced."
 
 # 3. Test protection check
 # 3a. Deletion check
-DELETED_TESTS=$(git diff --name-only --diff-filter=D "$TARGET_REF" -- 'tests/*' 2>/dev/null || true)
+DELETED_TESTS=$(git diff --name-only --diff-filter=D "$TARGET_REF" -- 'tests/*' 'scripts/tests/*' 2>/dev/null || true)
 
 if [ -n "$DELETED_TESTS" ]; then
-  echo "❌ [GATE FAIL] Deleted test file(s) detected in tests/:"
+  echo "❌ [GATE FAIL] Deleted test file(s) detected in tests/ (or scripts/tests/):"
   echo "$DELETED_TESTS"
-  echo "   Core Principle: Machine-enforced test protection. Deleting test files under tests/ is blocked."
+  echo "   Core Principle: Machine-enforced test protection. Deleting test files under tests/ or scripts/tests/ is blocked."
   exit 1
 fi
 echo "  ✓ No test files deleted."
 
-# 3b. Test weakening check (blocks it.skip, test.skip, describe.skip, xit, xdescribe)
-TEST_WEAKENING_MATCHES=$(git diff -U0 "$TARGET_REF" -- 'tests/*' 2>/dev/null \
+# 3b. Test weakening check (blocks it.skip, test.skip, describe.skip, xit, xdescribe, @unittest.skip, self.skipTest)
+TEST_WEAKENING_MATCHES=$(git diff -U0 "$TARGET_REF" -- 'tests/*' 'scripts/tests/*' 2>/dev/null \
   | grep '^\+[^+]' \
-  | grep -E '(\b(it|test|describe)\.skip\b|\b(xit|xdescribe)\s*\()' || true)
+  | grep -E '(\b(it|test|describe)\.skip\b|\b(xit|xdescribe)\s*\(|@unittest\.skip|\bself\.skipTest\s*\()' || true)
 
 if [ -n "$TEST_WEAKENING_MATCHES" ]; then
-  echo "❌ [GATE FAIL] Test skipping / weakening detected in tests/:"
+  echo "❌ [GATE FAIL] Test skipping / weakening detected in tests/ (or scripts/tests/):"
   echo "$TEST_WEAKENING_MATCHES"
-  echo "   Core Principle: Machine-enforced test integrity. Adding it.skip, test.skip, describe.skip, xit, or xdescribe is blocked."
+  echo "   Core Principle: Machine-enforced test integrity. Adding skipped tests (it.skip, test.skip, describe.skip, xit, xdescribe, @unittest.skip, self.skipTest) is blocked."
   exit 1
 fi
 echo "  ✓ No skipped or weakened tests introduced."

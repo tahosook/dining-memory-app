@@ -27,11 +27,11 @@
     "test:python:fast": "python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
     "lint": "eslint App.tsx index.ts src tests --cache --cache-location .eslintcache",
     "lint:fix": "eslint App.tsx index.ts src tests --fix --cache --cache-location .eslintcache",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+    "format": "prettier --write \"App.tsx\" \"index.ts\" \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"App.tsx\" \"index.ts\" \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\"",
     "type-check": "tsc --noEmit",
     "verify:pr-gates": "bash ./scripts/verify-pr-gates.sh",
-    "verify": "npm run verify:pr-gates && npm run check:react-versions && npm run check:docs && npm run format:check && npm run lint && npm run type-check && npm run check:expo-doctor && npm test && npm run test:python:fast"
+    "verify": "npm run verify:pr-gates && npm run check:react-versions && npm run check:deps && npm run check:docs && npm run format:check && npm run lint && npm run type-check && npm run check:expo-doctor && npm test && npm run test:python:fast"
   },
   "dependencies": {
     "@bam.tech/react-native-image-resizer": "^3.0.11",

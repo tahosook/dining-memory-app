@@ -1,4 +1,8 @@
-import { formatCookingLevel, inferCookingLevel, normalizeCookingLevel } from '../src/utils/cookingLevel';
+import {
+  formatCookingLevel,
+  inferCookingLevel,
+  normalizeCookingLevel,
+} from '../src/utils/cookingLevel';
 
 describe('cookingLevel utilities', () => {
   test('formats current homemade style values', () => {

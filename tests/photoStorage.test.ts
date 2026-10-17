@@ -120,10 +120,9 @@ describe('photoStorage', () => {
     });
 
     expect(MediaLibrary.Album.get).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME);
-    expect(MediaLibrary.Album.create).toHaveBeenCalledWith(
-      ANDROID_PHOTO_ALBUM_NAME,
-      ['file:///mock-documents/meal-20260422213507.jpg']
-    );
+    expect(MediaLibrary.Album.create).toHaveBeenCalledWith(ANDROID_PHOTO_ALBUM_NAME, [
+      'file:///mock-documents/meal-20260422213507.jpg',
+    ]);
     expect(result.stablePhotoUri).toBe('file:///mock-documents/meal-20260422213507.jpg');
     expect(result.savedToMediaLibrary).toBe(true);
   });
@@ -169,7 +168,7 @@ describe('photoStorage', () => {
   test('adds a numeric suffix when the timestamp-based name already exists', async () => {
     Platform.OS = 'ios';
     (getInfoAsync as jest.Mock)
-      .mockResolvedValueOnce({ exists: true })  // collision check for meal-20260422213507.jpg
+      .mockResolvedValueOnce({ exists: true }) // collision check for meal-20260422213507.jpg
       .mockResolvedValueOnce({ exists: false }) // collision check for meal-20260422213507-1.jpg
       .mockResolvedValueOnce({ exists: true }); // verify file exists after copy
 

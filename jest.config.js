@@ -17,10 +17,4 @@ module.exports = {
   transformIgnorePatterns: [
     'node_modules/(?!((jest-)?react-native|@react-native|@react-navigation|@react-navigation/.*|@expo-modules-core|@expo-modules-core/.*|@expo-modules-core/shared|@expo-modules-core/shared/.*|expo-modules-core/.*/.*|@expo/vector-icons|@expo/vector-icons/.*|expo|expo/.*/.*|expo-asset/.*|expo-crypto|expo-crypto/.*|expo-file-system/.*|expo-document-picker/.*|expo-sharing/.*|llama\\.rn))'
   ],
-  extensionsToTreatAsEsm: ['.ts'],
-  globals: {
-    'ts-jest': {
-      useESM: true,
-    },
-  },
 };

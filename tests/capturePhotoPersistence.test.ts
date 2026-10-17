@@ -27,10 +27,7 @@ describe('capturePhotoPersistence', () => {
 
     // Persist is called directly with the input photoUri (resizing is handled inside persistPhotoToStablePath)
     expect(persistPhotoToStablePath).toHaveBeenCalledTimes(1);
-    expect(persistPhotoToStablePath).toHaveBeenCalledWith(
-      'file:///tmp/captured-raw.jpg',
-      options
-    );
+    expect(persistPhotoToStablePath).toHaveBeenCalledWith('file:///tmp/captured-raw.jpg', options);
 
     // Result contains stablePhotoUri and undefined stableThumbnailUri (async thumbnail handled separately)
     expect(result).toEqual({

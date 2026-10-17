@@ -55,7 +55,8 @@ describe('local AI runtime status snapshot', () => {
       kind: 'unavailable',
       mode: 'local-runtime-prototype',
       code: 'model_unavailable',
-      reason: 'meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj',
+      reason:
+        'meal input assist projector が見つかりません: file:///documents/ai-models/meal-input-assist.mmproj',
       expectedPaths: [
         'file:///documents/ai-models/meal-input-assist.gguf',
         'file:///documents/ai-models/meal-input-assist.mmproj',

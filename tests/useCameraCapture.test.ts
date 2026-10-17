@@ -127,7 +127,10 @@ describe('useCameraCapture', () => {
       width: 1600,
       height: 1200,
     });
-    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({ canceled: true, assets: [] });
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
+      canceled: true,
+      assets: [],
+    });
   });
 
   afterEach(() => {
@@ -193,9 +196,11 @@ describe('useCameraCapture', () => {
       await Promise.all([firstCapture, secondCapture]);
     });
 
-    expect(result.current.captureReview).toEqual(expect.objectContaining({
-      photoUri: 'file:///tmp/photo.jpg',
-    }));
+    expect(result.current.captureReview).toEqual(
+      expect.objectContaining({
+        photoUri: 'file:///tmp/photo.jpg',
+      })
+    );
   });
 
   test('does not create a meal when local persistence fails', async () => {
@@ -225,7 +230,10 @@ describe('useCameraCapture', () => {
     expect(MealService.createMeal).not.toHaveBeenCalled();
     expect(result.current.captureReview?.mealName).toBe('親子丼');
     expect(result.current.savingCapture).toBe(false);
-    expect(Alert.alert).toHaveBeenCalledWith('保存に失敗しました', '記録の保存に失敗しました。再度お試しください。');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '保存に失敗しました',
+      '記録の保存に失敗しました。再度お試しください。'
+    );
   });
 
   test('ignores overlapping save calls for the same capture review', async () => {
@@ -367,7 +375,9 @@ describe('useCameraCapture', () => {
 
   test('keeps the manual homemade choice when the async default arrives later', async () => {
     const nearbyDefault = createDeferred<boolean | null>();
-    (MealService.getRecentNearbyHomemadeDefault as jest.Mock).mockReturnValueOnce(nearbyDefault.promise);
+    (MealService.getRecentNearbyHomemadeDefault as jest.Mock).mockReturnValueOnce(
+      nearbyDefault.promise
+    );
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
 
     result.current.cameraRef.current = {
@@ -449,13 +459,15 @@ describe('useCameraCapture', () => {
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
     (ImagePicker.launchImageLibraryAsync as jest.Mock).mockResolvedValue({
       canceled: false,
-      assets: [{
-        uri: 'file:///tmp/library.jpg',
-        width: 800,
-        height: 600,
-        exif: { GPSLatitude: 35.6895 },
-        base64: 'sensitive-base64',
-      }],
+      assets: [
+        {
+          uri: 'file:///tmp/library.jpg',
+          width: 800,
+          height: 600,
+          exif: { GPSLatitude: 35.6895 },
+          base64: 'sensitive-base64',
+        },
+      ],
     });
 
     await act(async () => {
@@ -468,12 +480,14 @@ describe('useCameraCapture', () => {
       exif: false,
       quality: 1,
     });
-    expect(result.current.captureReview).toEqual(expect.objectContaining({
-      source: 'library',
-      photoUri: 'file:///tmp/library.jpg',
-      width: 800,
-      height: 600,
-    }));
+    expect(result.current.captureReview).toEqual(
+      expect.objectContaining({
+        source: 'library',
+        photoUri: 'file:///tmp/library.jpg',
+        width: 800,
+        height: 600,
+      })
+    );
     expect(result.current.captureReview).not.toHaveProperty('exif');
     expect(result.current.captureReview).not.toHaveProperty('base64');
     expect(result.current.pickingPhotoFromLibrary).toBe(false);
@@ -499,20 +513,24 @@ describe('useCameraCapture', () => {
     await act(async () => {
       photoPicker.resolve({
         canceled: false,
-        assets: [{
-          uri: 'file:///tmp/library.jpg',
-          width: 800,
-          height: 600,
-        }],
+        assets: [
+          {
+            uri: 'file:///tmp/library.jpg',
+            width: 800,
+            height: 600,
+          },
+        ],
       });
       await Promise.all([firstPick, secondPick]);
     });
 
     expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledTimes(1);
-    expect(result.current.captureReview).toEqual(expect.objectContaining({
-      source: 'library',
-      photoUri: 'file:///tmp/library.jpg',
-    }));
+    expect(result.current.captureReview).toEqual(
+      expect.objectContaining({
+        source: 'library',
+        photoUri: 'file:///tmp/library.jpg',
+      })
+    );
     expect(result.current.pickingPhotoFromLibrary).toBe(false);
   });
 
@@ -533,7 +551,9 @@ describe('useCameraCapture', () => {
 
   test('keeps review state empty and shows an alert when the photo picker fails', async () => {
     const { result } = renderHook(() => useCameraCapture(cameraPermission));
-    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockRejectedValue(new Error('picker failed'));
+    (ImagePicker.launchImageLibraryAsync as jest.Mock).mockRejectedValue(
+      new Error('picker failed')
+    );
 
     await act(async () => {
       await result.current.addPhotoFromLibrary();
@@ -752,8 +772,11 @@ describe('useCameraCapture', () => {
     );
     expect(result.current.savingCapture).toBe(false);
 
-    const alertButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as { text: string; onPress?: () => void }[];
-    const settingsButton = alertButtons.find((button) => button.text === '設定を開く');
+    const alertButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as {
+      text: string;
+      onPress?: () => void;
+    }[];
+    const settingsButton = alertButtons.find(button => button.text === '設定を開く');
     await act(async () => {
       settingsButton?.onPress?.();
     });
@@ -806,9 +829,11 @@ describe('useCameraCapture', () => {
     const handledBack = backHandlerRef.current?.({} as HardwareBackPressEvent);
 
     expect(handledBack).toBe(true);
-    expect(result.current.captureReview).toEqual(expect.objectContaining({
-      photoUri: 'file:///tmp/photo.jpg',
-    }));
+    expect(result.current.captureReview).toEqual(
+      expect.objectContaining({
+        photoUri: 'file:///tmp/photo.jpg',
+      })
+    );
     expect(mockNavigate).not.toHaveBeenCalled();
 
     await act(async () => {

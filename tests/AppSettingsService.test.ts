@@ -100,7 +100,9 @@ describe('AppSettingsService', () => {
     await AppSettingsService.setMediaPipeModelErrorMessage('download_failed');
 
     await expect(AppSettingsService.getMediaPipeModelStatus()).resolves.toBe('error');
-    await expect(AppSettingsService.getMediaPipeModelErrorMessage()).resolves.toBe('download_failed');
+    await expect(AppSettingsService.getMediaPipeModelErrorMessage()).resolves.toBe(
+      'download_failed'
+    );
   });
 
   test('falls back to not_installed for invalid MediaPipe status', async () => {

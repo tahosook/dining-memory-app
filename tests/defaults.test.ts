@@ -22,7 +22,7 @@ describe('getGeoBoundingBox', () => {
     expect(nearbyPoint.longitude).toBeLessThanOrEqual(bbox!.maxLon);
 
     // 5km 離れた地点（新宿方面: 35.6900, 139.7000）は bbox の外に出ること
-    const distantPoint = { latitude: 35.6900, longitude: 139.7000 };
+    const distantPoint = { latitude: 35.69, longitude: 139.7 };
     expect(distantPoint.longitude).toBeLessThan(bbox!.minLon);
   });
 

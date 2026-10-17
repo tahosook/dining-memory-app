@@ -53,7 +53,10 @@ describe('useCameraPermission', () => {
 
   test('does not request permission on mount', () => {
     const requestPermission = jest.fn();
-    (useCameraPermissions as jest.Mock).mockReturnValue([undeterminedPermission, requestPermission]);
+    (useCameraPermissions as jest.Mock).mockReturnValue([
+      undeterminedPermission,
+      requestPermission,
+    ]);
 
     const { result } = renderHook(() => useCameraPermission());
 
@@ -63,7 +66,10 @@ describe('useCameraPermission', () => {
 
   test('requests camera permission only when requestPermissions is called', async () => {
     const requestPermission = jest.fn().mockResolvedValue(grantedPermission);
-    (useCameraPermissions as jest.Mock).mockReturnValue([undeterminedPermission, requestPermission]);
+    (useCameraPermissions as jest.Mock).mockReturnValue([
+      undeterminedPermission,
+      requestPermission,
+    ]);
     (MediaLibrary.getPermissionsAsync as jest.Mock).mockResolvedValue({ granted: true });
 
     const { result } = renderHook(() => useCameraPermission());
@@ -96,12 +102,20 @@ describe('useCameraPermission', () => {
       await result.current.openAppSettings();
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith('設定を開けませんでした', 'アプリの設定画面からカメラ権限を許可してください。');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '設定を開けませんでした',
+      'アプリの設定画面からカメラ権限を許可してください。'
+    );
   });
 
   test('handles generic permission request error without exposing raw error message to alert', async () => {
-    const requestPermission = jest.fn().mockRejectedValue(new Error('/var/mobile/secret_path/crash.log'));
-    (useCameraPermissions as jest.Mock).mockReturnValue([undeterminedPermission, requestPermission]);
+    const requestPermission = jest
+      .fn()
+      .mockRejectedValue(new Error('/var/mobile/secret_path/crash.log'));
+    (useCameraPermissions as jest.Mock).mockReturnValue([
+      undeterminedPermission,
+      requestPermission,
+    ]);
 
     const { result } = renderHook(() => useCameraPermission());
 
@@ -110,15 +124,15 @@ describe('useCameraPermission', () => {
     });
 
     expect(Alert.alert).toHaveBeenCalledWith('エラー', '権限確認中にエラーが発生しました。');
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      'Permission request failed:',
-      expect.anything()
-    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith('Permission request failed:', expect.anything());
   });
 
   test('handles camera-specific initialization error alert', async () => {
     const requestPermission = jest.fn().mockRejectedValue(new Error('failed to initialize camera'));
-    (useCameraPermissions as jest.Mock).mockReturnValue([undeterminedPermission, requestPermission]);
+    (useCameraPermissions as jest.Mock).mockReturnValue([
+      undeterminedPermission,
+      requestPermission,
+    ]);
 
     const { result } = renderHook(() => useCameraPermission());
 
