@@ -55,6 +55,24 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     );
   });
 
+  test('verifies android/app/build.gradle verifyReleaseMediaPipeModelAsset task checks all 3 models', () => {
+    const buildGradlePath = path.resolve(__dirname, '../android/app/build.gradle');
+    const buildGradleContent = fs.readFileSync(buildGradlePath, 'utf-8');
+
+    // Task must be registered
+    expect(buildGradleContent).toContain('tasks.register("verifyReleaseMediaPipeModelAsset")');
+
+    // All 3 models must be listed in requiredModelFiles
+    expect(buildGradleContent).toMatch(
+      /requiredModelFiles\s*=\s*\[[\s\S]*?"meal-input-assist\.task"[\s\S]*?"universal_scene_7class\.task"[\s\S]*?"personal_household_8class\.task"[\s\S]*?\]/
+    );
+
+    // mergeReleaseAssets must depend on verifyReleaseMediaPipeModelAsset
+    expect(buildGradleContent).toMatch(
+      /tasks\.matching\s*\{\s*it\.name\s*==\s*"mergeReleaseAssets"\s*\}\.configureEach\s*\{\s*dependsOn\s*"verifyReleaseMediaPipeModelAsset"\s*\}/
+    );
+  });
+
   interface MockEnvOptions {
     preBuildAssetOverrides?: {
       [filename: string]: { content?: string; delete?: boolean };
