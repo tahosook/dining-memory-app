@@ -2,7 +2,8 @@
 
 - **内部ドキュメントID**: issue-23
 - **対応 GitHub Issue**: 未起票
-- **ステータス**: Phase 1 & 2 完了（データセット構築・モデル学習評価完了、アプリ統合は Phase 3 次期フェーズ候補）
+- **対応 PR**: [PR #289](https://github.com/tahosook/dining-memory-app/pull/289)
+- **ステータス**: 完了 (Phase 1, 2, 3 全フェーズ完了 / PR #289)
 - **作成日**: 2026-10-13
 - **関連ドキュメント**:
   - 総合概要: [docs/engineering/mediapipe-overview.md](../engineering/mediapipe-overview.md)
