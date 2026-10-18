@@ -74,7 +74,12 @@ mkdir -p "$ARTIFACT_DIR"
   git -C "$ROOT_DIR" status --short --branch
 } > "$INFO_FILE"
 
-MODEL_ASSET_PATH="$ANDROID_DIR/app/src/main/assets/mediapipe/meal-input-assist.task"
+MODEL_FILENAMES=(
+  "meal-input-assist.task"
+  "universal_scene_7class.task"
+  "personal_household_8class.task"
+)
+MODEL_ASSET_DIR="$ANDROID_DIR/app/src/main/assets/mediapipe"
 REQUIRE_BUNDLED_MODEL="${REQUIRE_BUNDLED_MODEL:-}"
 if [[ -z "$REQUIRE_BUNDLED_MODEL" ]]; then
   if [[ "$BUILD_OUTPUT_TYPE" == "release" || "$BUILD_TASK" == *"Release"* ]]; then
@@ -85,18 +90,29 @@ if [[ -z "$REQUIRE_BUNDLED_MODEL" ]]; then
 fi
 
 if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
-  if [[ ! -f "$MODEL_ASSET_PATH" || ! -s "$MODEL_ASSET_PATH" ]]; then
-    echo "Bundled MediaPipe model asset missing at $MODEL_ASSET_PATH. Fetching model..."
+  NEED_FETCH="false"
+  for model_file in "${MODEL_FILENAMES[@]}"; do
+    target_path="$MODEL_ASSET_DIR/$model_file"
+    if [[ ! -f "$target_path" || ! -s "$target_path" ]]; then
+      NEED_FETCH="true"
+      break
+    fi
+  done
+
+  if [[ "$NEED_FETCH" == "true" ]]; then
+    echo "Bundled MediaPipe model assets missing in $MODEL_ASSET_DIR. Fetching models..."
     bash "$ROOT_DIR/scripts/ensure-mediapipe-model.sh"
   fi
 
-  if [[ ! -f "$MODEL_ASSET_PATH" || ! -s "$MODEL_ASSET_PATH" ]]; then
-    echo "error: MediaPipe model asset is missing or empty at $MODEL_ASSET_PATH" >&2
-    echo "Release builds require the bundled model asset to be present before building." >&2
-    echo "Please place the valid model file at android/app/src/main/assets/mediapipe/meal-input-assist.task before building." >&2
-    exit 1
-  fi
-  echo "Verified bundled model asset exists: $MODEL_ASSET_PATH ($(wc -c < "$MODEL_ASSET_PATH" | tr -d ' ') bytes)"
+  for model_file in "${MODEL_FILENAMES[@]}"; do
+    target_path="$MODEL_ASSET_DIR/$model_file"
+    if [[ ! -f "$target_path" || ! -s "$target_path" ]]; then
+      echo "error: MediaPipe model asset is missing or empty at $target_path" >&2
+      echo "Release builds require all bundled model assets to be present before building." >&2
+      exit 1
+    fi
+    echo "Verified bundled model asset exists: $target_path ($(wc -c < "$target_path" | tr -d ' ') bytes)"
+  done
 fi
 
 echo "Building Android $BUILD_VARIANT_LABEL APK..."
@@ -113,18 +129,20 @@ if [[ ! -f "$APK_PATH" ]]; then
 fi
 
 if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
-  echo "Verifying bundled MediaPipe model asset inside APK..."
-  APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
-  if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
-    echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
-    exit 1
-  fi
-  APK_MODEL_SIZE="$(unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" | awk -v entry="$APK_MODEL_ENTRY" '$NF == entry { print $1 }')"
-  if [[ -z "$APK_MODEL_SIZE" || "$APK_MODEL_SIZE" -le 0 ]]; then
-    echo "error: APK verification failed - '$APK_MODEL_ENTRY' is empty or invalid size ($APK_MODEL_SIZE bytes) in $APK_PATH" >&2
-    exit 1
-  fi
-  echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
+  echo "Verifying bundled MediaPipe model assets inside APK..."
+  for model_file in "${MODEL_FILENAMES[@]}"; do
+    APK_MODEL_ENTRY="assets/mediapipe/$model_file"
+    if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
+      echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
+      exit 1
+    fi
+    APK_MODEL_SIZE="$(unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" | awk -v entry="$APK_MODEL_ENTRY" '$NF == entry { print $1 }')"
+    if [[ -z "$APK_MODEL_SIZE" || "$APK_MODEL_SIZE" -le 0 ]]; then
+      echo "error: APK verification failed - '$APK_MODEL_ENTRY' is empty or invalid size ($APK_MODEL_SIZE bytes) in $APK_PATH" >&2
+      exit 1
+    fi
+    echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
+  done
 fi
 
 cp "$APK_PATH" "$ARTIFACT_DIR/$APK_NAME"

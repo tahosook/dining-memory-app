@@ -1023,4 +1023,159 @@ describe('SettingsScreen', () => {
 
     expect(queryByTestId('mediapipe-model-selection-section')).toBeNull();
   });
+
+  test('keeps previous model selection and shows alert when selected model is unavailable', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'cooking_method_9class'
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockImplementation(
+      async (modelId?: string) => {
+        if (modelId === 'universal_scene_7class') {
+          return {
+            kind: 'unavailable',
+            mode: 'mediapipe-static-image',
+            code: 'model_missing',
+            reason: 'モデルファイルが見つかりません',
+          };
+        }
+        return {
+          kind: 'ready',
+          mode: 'mediapipe-static-image',
+          description: 'MediaPipe static-image meal input assist provider',
+          provider: { suggest: jest.fn() },
+        };
+      }
+    );
+
+    const { getByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('分類モデル')).toBeTruthy();
+
+    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
+    fireEvent.press(universalOption);
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        'モデルを切り替えられませんでした',
+        'モデルファイルが見つかりません'
+      );
+    });
+
+    expect(AppSettingsService.setMediaPipeClassifierModelId).not.toHaveBeenCalled();
+    expect(
+      getByTestId('mediapipe-model-option-cooking_method_9class').props.accessibilityState
+    ).toEqual({
+      selected: true,
+    });
+    expect(
+      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+    ).toEqual({
+      selected: false,
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  test('rolls back model selection and shows alert when persisting model setting fails', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'cooking_method_9class'
+    );
+    (AppSettingsService.setMediaPipeClassifierModelId as jest.Mock).mockRejectedValueOnce(
+      new Error('DB write failed')
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'ready',
+      mode: 'mediapipe-static-image',
+      description: 'MediaPipe static-image meal input assist provider',
+      provider: { suggest: jest.fn() },
+    });
+
+    const { getByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('分類モデル')).toBeTruthy();
+
+    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
+    fireEvent.press(universalOption);
+
+    await waitFor(() => {
+      expect(alertSpy).toHaveBeenCalledWith(
+        '設定を保存できませんでした',
+        '分類モデルの設定を保存できませんでした。もう一度お試しください。'
+      );
+    });
+
+    expect(
+      getByTestId('mediapipe-model-option-cooking_method_9class').props.accessibilityState
+    ).toEqual({
+      selected: true,
+    });
+    expect(
+      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+    ).toEqual({
+      selected: false,
+    });
+
+    alertSpy.mockRestore();
+  });
+
+  test('allows recovery to default model when saved non-default model is unavailable on startup', async () => {
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'universal_scene_7class'
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockImplementation(
+      async (modelId?: string) => {
+        if (modelId === 'universal_scene_7class') {
+          return {
+            kind: 'unavailable',
+            mode: 'mediapipe-static-image',
+            code: 'model_missing',
+            reason: 'モデルファイルが見つかりません',
+          };
+        }
+        return {
+          kind: 'ready',
+          mode: 'mediapipe-static-image',
+          description: 'MediaPipe static-image meal input assist provider',
+          provider: { suggest: jest.fn() },
+        };
+      }
+    );
+
+    const { getByTestId, findByText, queryByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('分類モデル')).toBeTruthy();
+    expect(getByTestId('mediapipe-model-recovery-notice')).toBeTruthy();
+    expect(
+      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+    ).toEqual({
+      selected: true,
+    });
+
+    // Tap default 9-class model to recover
+    const cookingOption = getByTestId('mediapipe-model-option-cooking_method_9class');
+    fireEvent.press(cookingOption);
+
+    await waitFor(() => {
+      expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
+        'cooking_method_9class'
+      );
+    });
+
+    expect(
+      getByTestId('mediapipe-model-option-cooking_method_9class').props.accessibilityState
+    ).toEqual({
+      selected: true,
+    });
+    expect(
+      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+    ).toEqual({
+      selected: false,
+    });
+    expect(queryByTestId('mediapipe-model-recovery-notice')).toBeNull();
+  });
 });

@@ -146,6 +146,60 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     expect(verifyRes.stdout).toContain('dummy-model-payload'.length.toString());
   });
 
+  test('verifies all 3 bundled model assets presence and non-zero size inside APK archive', () => {
+    const apkDir = path.join(tempTestDir, 'apk-3models-test');
+    fs.mkdirSync(path.join(apkDir, 'assets/mediapipe'), { recursive: true });
+    fs.writeFileSync(path.join(apkDir, 'assets/mediapipe/meal-input-assist.task'), 'dummy-model-1');
+    fs.writeFileSync(
+      path.join(apkDir, 'assets/mediapipe/universal_scene_7class.task'),
+      'dummy-model-2'
+    );
+    fs.writeFileSync(
+      path.join(apkDir, 'assets/mediapipe/personal_household_8class.task'),
+      'dummy-model-3'
+    );
+
+    const mockApkPath = path.join(tempTestDir, 'mock-app-release-3models.apk');
+    const zipRes = spawnSync('zip', ['-r', mockApkPath, 'assets'], {
+      cwd: apkDir,
+      encoding: 'utf-8',
+    });
+    expect(zipRes.status).toBe(0);
+
+    const verifyRes = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
+      APK_PATH="${mockApkPath}"
+      MODEL_FILENAMES=(
+        "meal-input-assist.task"
+        "universal_scene_7class.task"
+        "personal_household_8class.task"
+      )
+      for model_file in "\${MODEL_FILENAMES[@]}"; do
+        APK_MODEL_ENTRY="assets/mediapipe/$model_file"
+        if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
+          echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
+          exit 1
+        fi
+        APK_MODEL_SIZE="$(unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" | awk -v entry="$APK_MODEL_ENTRY" '$NF == entry { print $1 }')"
+        if [[ -z "$APK_MODEL_SIZE" || "$APK_MODEL_SIZE" -le 0 ]]; then
+          echo "error: APK verification failed - '$APK_MODEL_ENTRY' is empty or invalid size in $APK_PATH" >&2
+          exit 1
+        fi
+        echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
+      done
+    `,
+      ],
+      { encoding: 'utf-8' }
+    );
+
+    expect(verifyRes.status).toBe(0);
+    expect(verifyRes.stdout).toContain('universal_scene_7class.task');
+    expect(verifyRes.stdout).toContain('personal_household_8class.task');
+  });
+
   test('fails post-build APK verification when model asset is missing from APK archive', () => {
     const apkDir = path.join(tempTestDir, 'apk-empty-test');
     fs.mkdirSync(path.join(apkDir, 'assets'), { recursive: true });
