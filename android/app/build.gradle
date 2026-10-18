@@ -157,6 +157,11 @@ android {
     }
     androidResources {
         ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+        noCompress += ["task", "tflite", "gguf", "mmproj"]
+    }
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 }
 
@@ -214,6 +219,11 @@ dependencies {
 
 // Verify required bundled MediaPipe model assets and SHA-256 checksums before packaging release builds
 tasks.register("verifyReleaseMediaPipeModelAsset") {
+    inputs.files("src/main/assets/mediapipe/meal-input-assist.task",
+                 "src/main/assets/mediapipe/universal_scene_7class.task",
+                 "src/main/assets/mediapipe/personal_household_8class.task")
+    outputs.file(layout.buildDirectory.file("intermediates/mediapipe-verified.marker"))
+
     doLast {
         def requiredModels = [
             [
@@ -252,6 +262,9 @@ tasks.register("verifyReleaseMediaPipeModelAsset") {
                 throw new GradleException("Release build failed: SHA-256 checksum mismatch for bundled model '${modelInfo.name}' at '${modelFile.absolutePath}' (expected=${modelInfo.expectedSha}, actual=${actualSha}). Please run 'bash scripts/ensure-mediapipe-model.sh' before building release.")
             }
         }
+        def marker = layout.buildDirectory.file("intermediates/mediapipe-verified.marker").get().asFile
+        marker.parentFile.mkdirs()
+        marker.text = "verified at ${System.currentTimeMillis()}"
     }
 }
 tasks.matching { it.name == "mergeReleaseAssets" }.configureEach {

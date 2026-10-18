@@ -91,13 +91,19 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 - **Scope**: 課題解決に直結する最小限の変更（スコープ外の周辺コードを触らない）。
 
 ## Verification Rules
+- **2段階検証運用 (Two-Phase Verification)**:
+  1. **対話的な実装・動作確認時 (Quick Loop — Default)**:
+     - ユーザーからの機能変更・UI修正指示に対しては、最も影響の近い最小限のチェック（直結する単一テスト `npx jest <target.test.ts>` または `npm run verify:quick`）のみを回して即座に完了報告する。
+     - 動作確認前の段階で、全件テスト（`npm test` / `test:python:fast`）や台帳同期を毎回回してユーザーを待たせない。
+  2. **コミット・PR作成時 (Commit / PR Gate)**:
+     - ユーザーが手元で動作を確認し、コミットや PR 作成へ進む段階で、以下の標準 Review Gate および台帳更新を実施する。
 - Run the most relevant checks for the change.
 - For behavior changes, verify the affected path with tests.
 - For type or interface changes, run type checking or the narrowest equivalent validation.
 - For docs-only changes, confirm links and structure are correct.
 
 ## Review Gate
-- Standard gate for code changes: `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
+- Standard gate for code changes (PR submission): `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
 - Test-only PR gate: PRs that add or update tests must pass the full test suite (`npm test`) across the entire repository. Running only the single targeted test file (e.g. `npx jest tests/myTest.test.ts`) is strictly insufficient to prevent Jest global mock collisions and cross-suite regressions.
 - Machine gate for PRs: `npm run verify:pr-gates` (`bash scripts/verify-pr-gates.sh`). Automatically enforced in CI for pull requests (zero diff check, test protection, and PR body Evidence Gate).
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.

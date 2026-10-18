@@ -42,7 +42,7 @@ if [[ -z "${COMMIT_HASH:-}" ]]; then
   export COMMIT_HASH="$(git -C "$ROOT_DIR" rev-parse --short=7 HEAD 2>/dev/null || echo '')"
 fi
 if [[ -z "${BUILD_DATE:-}" ]]; then
-  export BUILD_DATE="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  export BUILD_DATE="$(git -C "$ROOT_DIR" log -1 --format=%cI 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')"
 fi
 
 if [[ -z "${NODE_ENV:-}" ]]; then
