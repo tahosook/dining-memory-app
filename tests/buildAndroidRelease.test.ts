@@ -23,24 +23,36 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     return crypto.createHash('sha256').update(data).digest('hex');
   };
 
-  test('verifies SHA-256 constants consistency across modelConfig, ensure-script, and build-script', () => {
+  test('verifies SHA-256 constants consistency and model mapping across modelConfig, ensure-script, and build-script', () => {
     const ensureScriptContent = fs.readFileSync(ensureScript, 'utf-8');
     const releaseScriptContent = fs.readFileSync(releaseScript, 'utf-8');
 
     // 1. Model 1: meal-input-assist.task (cooking_method_9class)
     const expectedModel1Sha = MEDIAPIPE_CLASSIFIER_MODELS.cooking_method_9class.sha256;
-    expect(ensureScriptContent).toContain(expectedModel1Sha);
-    expect(releaseScriptContent).toContain(expectedModel1Sha);
+    expect(ensureScriptContent).toMatch(
+      new RegExp(`MODEL_1_FILE="meal-input-assist\\.task"[\\s\\S]*?${expectedModel1Sha}`)
+    );
+    expect(releaseScriptContent).toMatch(
+      new RegExp(`"meal-input-assist\\.task"\\)[\\s\\S]*?${expectedModel1Sha}`)
+    );
 
     // 2. Model 2: universal_scene_7class.task (universal_scene_7class)
     const expectedModel2Sha = MEDIAPIPE_CLASSIFIER_MODELS.universal_scene_7class.sha256;
-    expect(ensureScriptContent).toContain(expectedModel2Sha);
-    expect(releaseScriptContent).toContain(expectedModel2Sha);
+    expect(ensureScriptContent).toMatch(
+      new RegExp(`MODEL_2_FILE="universal_scene_7class\\.task"[\\s\\S]*?${expectedModel2Sha}`)
+    );
+    expect(releaseScriptContent).toMatch(
+      new RegExp(`"universal_scene_7class\\.task"\\)[\\s\\S]*?${expectedModel2Sha}`)
+    );
 
     // 3. Model 3: personal_household_8class.task (personal_household_8class)
     const expectedModel3Sha = MEDIAPIPE_CLASSIFIER_MODELS.personal_household_8class.sha256;
-    expect(ensureScriptContent).toContain(expectedModel3Sha);
-    expect(releaseScriptContent).toContain(expectedModel3Sha);
+    expect(ensureScriptContent).toMatch(
+      new RegExp(`MODEL_3_FILE="personal_household_8class\\.task"[\\s\\S]*?${expectedModel3Sha}`)
+    );
+    expect(releaseScriptContent).toMatch(
+      new RegExp(`"personal_household_8class\\.task"\\)[\\s\\S]*?${expectedModel3Sha}`)
+    );
   });
 
   interface MockEnvOptions {
