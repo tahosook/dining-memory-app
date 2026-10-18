@@ -212,18 +212,44 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 }
 
-// Verify required bundled MediaPipe model assets before packaging release builds
+// Verify required bundled MediaPipe model assets and SHA-256 checksums before packaging release builds
 tasks.register("verifyReleaseMediaPipeModelAsset") {
     doLast {
-        def requiredModelFiles = [
-            "meal-input-assist.task",
-            "universal_scene_7class.task",
-            "personal_household_8class.task"
+        def requiredModels = [
+            [
+                name: "meal-input-assist.task",
+                expectedSha: System.getenv("MEDIAPIPE_MODEL_SHA256") ?: "3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601"
+            ],
+            [
+                name: "universal_scene_7class.task",
+                expectedSha: System.getenv("MEDIAPIPE_UNIVERSAL_MODEL_SHA256") ?: "6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1"
+            ],
+            [
+                name: "personal_household_8class.task",
+                expectedSha: System.getenv("MEDIAPIPE_PERSONAL_MODEL_SHA256") ?: "924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c"
+            ]
         ]
-        requiredModelFiles.each { modelFilename ->
-            def modelFile = file("src/main/assets/mediapipe/${modelFilename}")
+
+        def computeSha256 = { File targetFile ->
+            def digest = java.security.MessageDigest.getInstance("SHA-256")
+            targetFile.withInputStream { is ->
+                byte[] buffer = new byte[8192]
+                int read
+                while ((read = is.read(buffer)) > 0) {
+                    digest.update(buffer, 0, read)
+                }
+            }
+            return digest.digest().collect { String.format("%02x", it) }.join()
+        }
+
+        requiredModels.each { modelInfo ->
+            def modelFile = file("src/main/assets/mediapipe/${modelInfo.name}")
             if (!modelFile.exists() || !modelFile.isFile() || modelFile.length() <= 0) {
                 throw new GradleException("Release build failed: Bundled MediaPipe model asset is missing or empty at '${modelFile.absolutePath}'. All 3 models must be present before building release. Please run 'bash scripts/ensure-mediapipe-model.sh' before building release.")
+            }
+            def actualSha = computeSha256(modelFile)
+            if (actualSha != modelInfo.expectedSha) {
+                throw new GradleException("Release build failed: SHA-256 checksum mismatch for bundled model '${modelInfo.name}' at '${modelFile.absolutePath}' (expected=${modelInfo.expectedSha}, actual=${actualSha}). Please run 'bash scripts/ensure-mediapipe-model.sh' before building release.")
             }
         }
     }

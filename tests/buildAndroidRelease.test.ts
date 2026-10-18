@@ -55,17 +55,33 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     );
   });
 
-  test('verifies android/app/build.gradle verifyReleaseMediaPipeModelAsset task checks all 3 models', () => {
+  test('verifies android/app/build.gradle verifyReleaseMediaPipeModelAsset task checks all 3 models and SHA-256 checksums', () => {
     const buildGradlePath = path.resolve(__dirname, '../android/app/build.gradle');
     const buildGradleContent = fs.readFileSync(buildGradlePath, 'utf-8');
 
     // Task must be registered
     expect(buildGradleContent).toContain('tasks.register("verifyReleaseMediaPipeModelAsset")');
 
-    // All 3 models must be listed in requiredModelFiles
+    // All 3 models and expected SHA-256 checksums must be configured
     expect(buildGradleContent).toMatch(
-      /requiredModelFiles\s*=\s*\[[\s\S]*?"meal-input-assist\.task"[\s\S]*?"universal_scene_7class\.task"[\s\S]*?"personal_household_8class\.task"[\s\S]*?\]/
+      new RegExp(
+        `name:\\s*"meal-input-assist\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.cooking_method_9class.sha256}`
+      )
     );
+    expect(buildGradleContent).toMatch(
+      new RegExp(
+        `name:\\s*"universal_scene_7class\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.universal_scene_7class.sha256}`
+      )
+    );
+    expect(buildGradleContent).toMatch(
+      new RegExp(
+        `name:\\s*"personal_household_8class\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.personal_household_8class.sha256}`
+      )
+    );
+
+    // MessageDigest SHA-256 and checksum verification logic
+    expect(buildGradleContent).toContain('MessageDigest.getInstance("SHA-256")');
+    expect(buildGradleContent).toContain('SHA-256 checksum mismatch for bundled model');
 
     // mergeReleaseAssets must depend on verifyReleaseMediaPipeModelAsset
     expect(buildGradleContent).toMatch(
