@@ -4,6 +4,5 @@
     "strict": true,
     "types": ["jest"]
   },
-  "include": ["App.tsx", "index.ts", "src", "tests"],
   "exclude": ["node_modules", "artifacts", "state", "android", ".venv_mediapipe"]
 }

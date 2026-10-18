@@ -159,10 +159,6 @@ android {
         ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
         noCompress += ["task", "tflite", "gguf", "mmproj"]
     }
-    lint {
-        checkReleaseBuilds false
-        abortOnError false
-    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
@@ -222,6 +218,9 @@ tasks.register("verifyReleaseMediaPipeModelAsset") {
     inputs.files("src/main/assets/mediapipe/meal-input-assist.task",
                  "src/main/assets/mediapipe/universal_scene_7class.task",
                  "src/main/assets/mediapipe/personal_household_8class.task")
+    inputs.property("expectedShaStandard", System.getenv("MEDIAPIPE_MODEL_SHA256") ?: "3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601")
+    inputs.property("expectedShaUniversal", System.getenv("MEDIAPIPE_UNIVERSAL_MODEL_SHA256") ?: "6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1")
+    inputs.property("expectedShaPersonal", System.getenv("MEDIAPIPE_PERSONAL_MODEL_SHA256") ?: "924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c")
     outputs.file(layout.buildDirectory.file("intermediates/mediapipe-verified.marker"))
 
     doLast {

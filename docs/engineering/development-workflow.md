@@ -93,10 +93,11 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 ## Verification Rules
 - **2段階検証運用 (Two-Phase Verification)**:
   1. **対話的な実装・動作確認時 (Quick Loop — Default)**:
-     - ユーザーからの機能変更・UI修正指示に対しては、最も影響の近い最小限のチェック（直結する単一テスト `npx jest <target.test.ts>` または `npm run verify:quick`）のみを回して即座に完了報告する。
+     - ユーザーからの機能変更・UI修正指示に対しては、コード変更後に直結する単一テスト（`npx jest <target.test.ts>`）および型検査（`npm run type-check` または補助検証 `npm run verify:quick`）を確認し、即座に完了報告する。
+     - コード変更時は `verify:quick`（`--onlyChanged`）で対象テストが 0 件だった場合を含め、必ず該当の単一テストを明示指定して実行するか、該当テストが存在しない理由を報告する。
      - 動作確認前の段階で、全件テスト（`npm test` / `test:python:fast`）や台帳同期を毎回回してユーザーを待たせない。
   2. **コミット・PR作成時 (Commit / PR Gate)**:
-     - ユーザーが手元で動作を確認し、コミットや PR 作成へ進む段階で、以下の標準 Review Gate および台帳更新を実施する。
+     - ユーザーが手元で動作を確認し、コミットや PR 作成へ進む段階で、以下の標準 Review Gate（全件テスト `npm test`、Python テスト、PR Gates 等）および台帳更新を実施する。
 - Run the most relevant checks for the change.
 - For behavior changes, verify the affected path with tests.
 - For type or interface changes, run type checking or the narrowest equivalent validation.
