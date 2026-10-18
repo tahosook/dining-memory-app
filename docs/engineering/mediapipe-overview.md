@@ -43,10 +43,12 @@ flowchart TD
   end
 
   subgraph AppInference ["4. アプリ推論 & UI (App Runtime)"]
-    LocalModel --> Bridge["Android Native Bridge\n(MediaPipeMealInputAssistModule.kt)"]
-    Asset -->|初回シードコピー| LocalModel
-    Bridge --> Provider["mediapipeStaticImageProvider.ts"]
-    Provider --> Norm["mediapipeStaticImageNormalizer.ts\n(9クラス正規化 & 除外抑制)"]
+    Settings["設定画面 (SettingsScreen)\n3モデル選択 & 永続化"] --> AppSettings["AppSettingsService\n(modelId 永続化)"]
+    AppSettings --> Provider["mediapipeStaticImageProvider.ts\n(modelId 指定ルーティング)"]
+    LocalModel --> Bridge["Android Native Bridge\n(MediaPipeMealInputAssistModule.kt)\nモデル別インスタンスキャッシュ"]
+    Asset -->|自動シードコピー| LocalModel
+    Provider --> Bridge
+    Bridge --> Norm["mediapipeStaticImageNormalizer.ts\n(9クラス / 7クラス / 8クラス正規化 & 除外抑制)"]
     Norm --> UI["Review UI (tap-to-apply)\n(MealInputAssistSection)"]
   end
 ```
@@ -60,6 +62,7 @@ flowchart TD
 | 情報項目 | 正本ファイル / エビデンス | 概要 |
 |---|---|---|
 | **Champion モデルバイナリ** | `android/app/src/main/assets/mediapipe/meal-input-assist.task`<br>[docs/issues/issue-22-integrate-agreed-pending-and-promote-challenger.md](../issues/issue-22-integrate-agreed-pending-and-promote-challenger.md) | Promotion Gate を突破し本番アセットへ昇格された最新モデルバイナリとハッシュ記録。 |
+| **マルチモデル仕様・定義** | `src/ai/mealInputAssist/modelConfig.ts`<br>`android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssistSupport.kt`<br>[docs/issues/issue-23-dual-dining-classification-models.md](../issues/issue-23-dual-dining-classification-models.md) | 3モデル（調理法9クラス、汎用シーン7クラス、わたし専用8クラス）のID、ラベル、説明、SHA-256、アセット名。 |
 | **Golden Test Set v2** | `docs/engineering/golden-test-set-v2-specification.md`<br>`state/mediapipe-dataset/golden_eval_v2/manifest.jsonl` | 106枚・9クラスの包括的ベンチマークデータセット仕様およびマニフェスト。 |
 | **現行 Promotion Gate 回帰ガード (旧Golden 7枚)** | `state/mediapipe-dataset/golden_eval/test/`<br>`scripts/run-autonomous-model-improvement.sh` | 自律改善ループで回帰防止ガードとして参照される少数固定データセット（N=7）。 |
 | **データセット外部保管 & 復元手順** | [docs/engineering/mediapipe-dataset-recovery.md](mediapipe-dataset-recovery.md) | `.gitignore` 対象の実画像データセット構成、外部保管方針、復元手順 Runbook。 |
@@ -74,16 +77,20 @@ flowchart TD
 
 ### 3.1 アプリ推論 & UI (Runtime)
 - **ステータス**: **確認済み**
-- **役割**: Android Native Bridge（MediaPipe Tasks Vision）を介してローカルの `.task` ファイルから推論を実行し、TS 層で料理名・ジャンルに正規化して Review 画面に tap-to-apply 提示する。
+- **役割**: Android Native Bridge（MediaPipe Tasks Vision）を介してローカルの `.task` ファイルから推論を実行し、TS 層で料理名・ジャンルに正規化して Review 画面に tap-to-apply 提示する。設定画面（`SettingsScreen`）から分類モデル（3種類）の切り替えに対応。
 - **確認済み事実**:
   - `MediaPipeMealInputAssistModule.kt` は `filesDir/ai-models/` にモデルがない場合、同梱アセット（`assets/mediapipe/`）から自動シードコピーして `MappedByteBuffer` で安全にロードする仕組みを保持。
-  - `main` ブランチ上の既定ランタイムは `mediapipe-static-image` に設定済み。
-  - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は 9 つの coarse food classes（`curry_rice`, `drink`, `fish_dish`, `fried_dish`, `meat_dish`, `noodles`, `simmered_dish`, `stir_fry`, `other_or_exclude`）のマッピングが定義されている。
-  - `other_or_exclude` クラスは `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
+  - `MediaPipeMealInputAssistSupport.kt` およびモジュール本体にて、選択されたモデルID（`cooking_method_9class`、`universal_scene_7class`、`personal_household_8class`）ごとに `ImageClassifier` インスタンスをキャッシュ管理し、モデル切替時もメモリ効率と高速推論を両立。
+  - `main` ブランチ上の既定ランタイムは `mediapipe-static-image`、既定モデルは `cooking_method_9class` に設定済み。
+  - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は以下の3体系の正規化マッピングを配備：
+    1. **調理法9クラス**（`curry_rice`, `drink`, `fish_dish`, `fried_dish`, `meat_dish`, `noodles`, `simmered_dish`, `stir_fry`, `other_or_exclude`）
+    2. **汎用シーン7クラス**（`home_teishoku_set`, `one_plate_or_curry`, `izakaya_bistro_or_party`, `noodles_or_single_bowl`, `dining_out_or_tray_meal`, `drink_or_bottle_record`, `non_food_or_exclude`）
+    3. **わたし専用8クラス**（`wife_multi_dish_teishoku`, `wife_nordic_one_plate`, `wife_curry_or_ethnic_plate`, `wife_morning_salmon_natto`, `wife_bistro_baguette_bal`, `wife_izakaya_small_dishes`, `household_pot_noodles_or_ramen_rice`, `special_takeout_party_feast`）
+  - 除外対象クラス（`other_or_exclude`、`non_food_or_exclude`）は `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
 
 ### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
 - **ステータス**: **確認済み**
-- **役割**: `scripts/ensure-mediapipe-model.sh` により、GitHub Releases (`mediapipe-model-v0.1.0`) から `.task` ファイルを取得・SHA-256 検証（`3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601`）して同梱アセットに配置する。また、アプリ側のオンデマンドダウンロード設定（`src/ai/mealInputAssist/modelConfig.ts`）とも整合している。
+- **役割**: `scripts/ensure-mediapipe-model.sh` により、GitHub Releases (`mediapipe-model-v0.1.0`) から `.task` ファイルを取得・SHA-256 検証して同梱アセットに配置するとともに、ローカル学習済みの追加モデル（`universal_scene_7class.task`, `personal_household_8class.task`）を自動検証・同期する。また、アプリ側のオンデマンドダウンロード設定（`src/ai/mealInputAssist/modelConfig.ts`）とも整合している。
 
 ### 3.3 モデル学習 & 二段階昇格判定 (Training & Two-Tier Gate)
 - **ステータス**: **確認済み**

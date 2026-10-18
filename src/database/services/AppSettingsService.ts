@@ -12,11 +12,14 @@ const MEAL_INPUT_ASSIST_MODEL_VERSION_KEY = 'meal_input_assist_model_version';
 const MEAL_INPUT_ASSIST_MODEL_STATUS_KEY = 'meal_input_assist_model_status';
 const MEAL_INPUT_ASSIST_MODEL_DOWNLOADED_AT_KEY = 'meal_input_assist_model_downloaded_at';
 const MEAL_INPUT_ASSIST_MODEL_ERROR_MESSAGE_KEY = 'meal_input_assist_model_error_message';
+import type { MediaPipeClassifierModelId } from '../../ai/mealInputAssist/types';
+import { invalidateMealInputAssistEnvironment } from '../../ai/mealInputAssist/environment';
 
 const MEDIAPIPE_MODEL_STATUS_KEY = 'mediapipe_model_status';
 const MEDIAPIPE_MODEL_VERSION_KEY = 'mediapipe_model_version';
 const MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY = 'mediapipe_model_downloaded_at';
 const MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY = 'mediapipe_model_error_message';
+const MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY = 'mediapipe_classifier_model_id';
 
 export type MealInputAssistModelStatusSetting = 'not_installed' | 'ready' | 'error';
 export type MediaPipeModelStatusSetting = 'not_installed' | 'ready' | 'error';
@@ -49,6 +52,7 @@ export class AppSettingsService {
 
   static async setAiInputAssistEnabled(enabled: boolean): Promise<void> {
     await this.setBoolean(AI_INPUT_ASSIST_ENABLED_KEY, enabled);
+    invalidateMealInputAssistEnvironment();
   }
 
   static async getMealInputAssistModelVersion(): Promise<string | null> {
@@ -117,6 +121,23 @@ export class AppSettingsService {
 
   static async setMediaPipeModelErrorMessage(errorMessage: string | null): Promise<void> {
     await this.setString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, errorMessage);
+  }
+
+  static async getMediaPipeClassifierModelId(): Promise<MediaPipeClassifierModelId> {
+    const value = await this.getString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, 'cooking_method_9class');
+    if (
+      value === 'cooking_method_9class' ||
+      value === 'universal_scene_7class' ||
+      value === 'personal_household_8class'
+    ) {
+      return value;
+    }
+    return 'cooking_method_9class';
+  }
+
+  static async setMediaPipeClassifierModelId(modelId: MediaPipeClassifierModelId): Promise<void> {
+    await this.setString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, modelId);
+    invalidateMealInputAssistEnvironment();
   }
 
   static async getBoolean(key: string, defaultValue: boolean): Promise<boolean> {

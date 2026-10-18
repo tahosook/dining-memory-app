@@ -75,6 +75,7 @@
 ## Settings Screen
 - Prioritize privacy, current scope, data management (backup export / restore, local data deletion), and app information.
 - AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。デフォルトの MediaPipe static-image ランタイムまたは GGUF model / runtime のいずれかが利用可能な場合にトグルを有効化できる。
+- MediaPipe ランタイムが利用可能な場合、「分類モデル」ブロックを表示し、写真から提案する候補の分類体系（調理法9クラス［既定］、汎用シーン7クラス、わたし専用8クラス）をラジオ選択カード形式で切り替える。選択は SQLite `app_settings` に永続化され、即座に推論ランタイムへ反映される。
 - GGUF meal input assist model の status を `未導入 / ダウンロード中 / 利用可能 / エラー` で表示し、`ダウンロード / 再ダウンロード / 削除` を提供する。また、MediaPipe 食事分類モデルのリモート取得・削除導線も提供する。
 - `Local AI Runtime Status` では AI 入力補助だけを表示し、ready / unavailable、reason、expected path を確認できる。
 - 「データ管理」セクションに「バックアップをエクスポート」と「バックアップから復元」ボタンを提供し、食事記録とオリジナル写真の単一 ZIP 書き出しおよび復元を行う。復元時は検証成功後に日時・件数・置換警告を含む確認ダイアログを表示する。

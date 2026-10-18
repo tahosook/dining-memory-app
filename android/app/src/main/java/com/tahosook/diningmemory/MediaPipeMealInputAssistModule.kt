@@ -31,12 +31,16 @@ class MediaPipeMealInputAssistModule(
   @Volatile
   private var classifier: ImageClassifier? = null
 
+  @Volatile
+  private var activeModelId: String? = null
+
   override fun getName(): String = MODULE_NAME
 
   override fun invalidate() {
     synchronized(this) {
       classifier?.close()
       classifier = null
+      activeModelId = null
     }
     worker.shutdown()
     super.invalidate()
@@ -44,15 +48,27 @@ class MediaPipeMealInputAssistModule(
 
   @ReactMethod
   fun getClassifierStatus(promise: Promise) {
+    getClassifierStatusForModel(MODEL_ID_COOKING_METHOD_9CLASS, promise)
+  }
+
+  @ReactMethod
+  fun getClassifierStatusForModel(modelId: String, promise: Promise) {
     worker.execute {
       val status = Arguments.createMap()
+      val spec = MediaPipeMealInputAssistSupport.resolveModelSpec(modelId)
+      if (spec == null) {
+        status.putString("kind", "unavailable")
+        status.putString("reason", "Unknown MediaPipe model ID: $modelId")
+        promise.resolve(status)
+        return@execute
+      }
 
       try {
-        ensureClassifier()
+        ensureClassifier(spec.id)
         status.putString("kind", "ready")
       } catch (error: FileNotFoundException) {
         status.putString("kind", "unavailable")
-        val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
+        val modelFile = MediaPipeMealInputAssistSupport.resolveModelFile(reactApplicationContext, spec)
         status.putString("reason", error.message ?: MediaPipeMealInputAssistSupport.buildModelMissingReason(modelFile.absolutePath))
       } catch (error: Exception) {
         status.putString("kind", "unavailable")
@@ -67,6 +83,7 @@ class MediaPipeMealInputAssistModule(
       promise.resolve(status)
     }
   }
+
 
   @ReactMethod
   fun verifyFileSha256(filePathOrUri: String, expectedSha256: String, promise: Promise) {
@@ -139,6 +156,11 @@ class MediaPipeMealInputAssistModule(
 
   @ReactMethod
   fun classifyStaticImage(photoUri: String, promise: Promise) {
+    classifyStaticImageWithModel(photoUri, MODEL_ID_COOKING_METHOD_9CLASS, promise)
+  }
+
+  @ReactMethod
+  fun classifyStaticImageWithModel(photoUri: String, modelId: String, promise: Promise) {
     worker.execute {
       val photoPath = MediaPipeMealInputAssistSupport.resolveLocalPhotoPath(photoUri)
       if (photoPath == null) {
@@ -167,11 +189,18 @@ class MediaPipeMealInputAssistModule(
         return@execute
       }
 
+      val spec = MediaPipeMealInputAssistSupport.resolveModelSpec(modelId)
+      if (spec == null) {
+        bitmap.recycle()
+        promise.reject("E_INVALID_MODEL_ID", "Unknown MediaPipe model ID: $modelId")
+        return@execute
+      }
+
       try {
         val imageClassifier = try {
-          ensureClassifier()
+          ensureClassifier(spec.id)
         } catch (error: FileNotFoundException) {
-          val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
+          val modelFile = MediaPipeMealInputAssistSupport.resolveModelFile(reactApplicationContext, spec)
           promise.reject(
             "E_MODEL_MISSING",
             error.message ?: MediaPipeMealInputAssistSupport.buildModelMissingReason(modelFile.absolutePath),
@@ -208,7 +237,7 @@ class MediaPipeMealInputAssistModule(
           return@execute
         }
 
-        promise.resolve(buildClassificationResultMap(photoUri, classifierResult))
+        promise.resolve(buildClassificationResultMap(photoUri, classifierResult, spec.id))
       } finally {
         bitmap.recycle()
       }
@@ -216,16 +245,32 @@ class MediaPipeMealInputAssistModule(
   }
 
   @Synchronized
-  private fun ensureClassifier(): ImageClassifier {
+  private fun ensureClassifier(modelId: String = MODEL_ID_COOKING_METHOD_9CLASS): ImageClassifier {
+    val spec = MediaPipeMealInputAssistSupport.resolveModelSpec(modelId)
+      ?: throw IllegalArgumentException("Unknown MediaPipe model ID: $modelId")
+
     classifier?.let { existingClassifier ->
-      return existingClassifier
+      if (activeModelId == spec.id) {
+        return existingClassifier
+      }
+      try {
+        existingClassifier.close()
+      } catch (_: Exception) {
+        // ignore close error
+      }
+      classifier = null
+      activeModelId = null
     }
 
-    val modelFile = MediaPipeMealInputAssistSupport.resolveDefaultModelFile(reactApplicationContext)
+    val modelFile = MediaPipeMealInputAssistSupport.resolveModelFile(reactApplicationContext, spec)
     if (!modelFile.exists() || !modelFile.isFile || modelFile.length() <= 0L) {
-      val seeded = MediaPipeMealInputAssistSupport.copyBundledModelAssetIfAvailable(reactApplicationContext, modelFile)
+      val seeded = MediaPipeMealInputAssistSupport.copyBundledModelAssetIfAvailable(
+        reactApplicationContext,
+        modelFile,
+        spec.assetPath,
+      )
       if (!seeded) {
-        Log.w(MODULE_NAME, "Failed to seed bundled MediaPipe model asset to ${modelFile.absolutePath}")
+        Log.w(MODULE_NAME, "Failed to seed bundled MediaPipe model asset ${spec.assetPath} to ${modelFile.absolutePath}")
       }
     }
 
@@ -268,19 +313,25 @@ class MediaPipeMealInputAssistModule(
 
     return ImageClassifier.createFromOptions(reactApplicationContext, classifierOptions).also { createdClassifier ->
       classifier = createdClassifier
+      activeModelId = spec.id
     }
   }
 
   private fun buildClassificationResultMap(
     photoUri: String,
     classifierResult: ImageClassifierResult,
+    modelVersion: String? = null,
   ) = Arguments.createMap().apply {
     putString("photoUri", photoUri)
     putArray("categories", buildCategoriesArray(classifierResult))
     putString("classifierName", MEDIAPIPE_MEAL_INPUT_ASSIST_CLASSIFIER_NAME)
+    if (modelVersion != null) {
+      putString("modelVersion", modelVersion)
+    }
   }
 
   private fun buildCategoriesArray(classifierResult: ImageClassifierResult) = Arguments.createArray().apply {
+
     val rawCategories = classifierResult.classificationResult().classifications().flatMap { classifications ->
       classifications.categories().map { category ->
         MediaPipeCategoryPayload(

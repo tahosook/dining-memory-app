@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ANDROID_DIR="$ROOT_DIR/android"
+ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ANDROID_DIR="${ANDROID_DIR:-$ROOT_DIR/android}"
+ENSURE_MEDIAPIPE_MODEL_SCRIPT="${ENSURE_MEDIAPIPE_MODEL_SCRIPT:-$ROOT_DIR/scripts/ensure-mediapipe-model.sh}"
 BUILD_TASK="${BUILD_ANDROID_TASK:-assembleRelease}"
 BUILD_OUTPUT_TYPE="${BUILD_ANDROID_OUTPUT_TYPE:-release}"
 BUILD_VARIANT_LABEL="${BUILD_ANDROID_VARIANT_LABEL:-release}"
@@ -74,7 +75,53 @@ mkdir -p "$ARTIFACT_DIR"
   git -C "$ROOT_DIR" status --short --branch
 } > "$INFO_FILE"
 
-MODEL_ASSET_PATH="$ANDROID_DIR/app/src/main/assets/mediapipe/meal-input-assist.task"
+compute_sha256() {
+  local target="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$target" | awk '{ print $1 }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$target" | awk '{ print $1 }'
+  else
+    echo "error: sha256sum or shasum is required for checksum verification" >&2
+    exit 1
+  fi
+}
+
+compute_sha256_stream() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{ print $1 }'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 | awk '{ print $1 }'
+  else
+    echo "error: sha256sum or shasum is required for checksum verification" >&2
+    exit 1
+  fi
+}
+
+MODEL_FILENAMES=(
+  "meal-input-assist.task"
+  "universal_scene_7class.task"
+  "personal_household_8class.task"
+)
+expected_sha256_for_model() {
+  local model_file="$1"
+  case "$model_file" in
+    "meal-input-assist.task")
+      echo "${MEDIAPIPE_MODEL_SHA256:-3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601}"
+      ;;
+    "universal_scene_7class.task")
+      echo "${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1}"
+      ;;
+    "personal_household_8class.task")
+      echo "${MEDIAPIPE_PERSONAL_MODEL_SHA256:-924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c}"
+      ;;
+    *)
+      echo "error: unknown MediaPipe model file: $model_file" >&2
+      exit 1
+      ;;
+  esac
+}
+MODEL_ASSET_DIR="$ANDROID_DIR/app/src/main/assets/mediapipe"
 REQUIRE_BUNDLED_MODEL="${REQUIRE_BUNDLED_MODEL:-}"
 if [[ -z "$REQUIRE_BUNDLED_MODEL" ]]; then
   if [[ "$BUILD_OUTPUT_TYPE" == "release" || "$BUILD_TASK" == *"Release"* ]]; then
@@ -85,18 +132,24 @@ if [[ -z "$REQUIRE_BUNDLED_MODEL" ]]; then
 fi
 
 if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
-  if [[ ! -f "$MODEL_ASSET_PATH" || ! -s "$MODEL_ASSET_PATH" ]]; then
-    echo "Bundled MediaPipe model asset missing at $MODEL_ASSET_PATH. Fetching model..."
-    bash "$ROOT_DIR/scripts/ensure-mediapipe-model.sh"
-  fi
+  echo "Ensuring and verifying bundled MediaPipe model assets..."
+  bash "$ENSURE_MEDIAPIPE_MODEL_SCRIPT"
 
-  if [[ ! -f "$MODEL_ASSET_PATH" || ! -s "$MODEL_ASSET_PATH" ]]; then
-    echo "error: MediaPipe model asset is missing or empty at $MODEL_ASSET_PATH" >&2
-    echo "Release builds require the bundled model asset to be present before building." >&2
-    echo "Please place the valid model file at android/app/src/main/assets/mediapipe/meal-input-assist.task before building." >&2
-    exit 1
-  fi
-  echo "Verified bundled model asset exists: $MODEL_ASSET_PATH ($(wc -c < "$MODEL_ASSET_PATH" | tr -d ' ') bytes)"
+  for model_file in "${MODEL_FILENAMES[@]}"; do
+    target_path="$MODEL_ASSET_DIR/$model_file"
+    if [[ ! -f "$target_path" || ! -s "$target_path" ]]; then
+      echo "error: MediaPipe model asset is missing or empty at $target_path" >&2
+      echo "Release builds require all bundled model assets to be present before building." >&2
+      exit 1
+    fi
+    actual_sha="$(compute_sha256 "$target_path")"
+    expected_sha="$(expected_sha256_for_model "$model_file")"
+    if [[ "$actual_sha" != "$expected_sha" ]]; then
+      echo "error: SHA256 checksum mismatch for bundled model $model_file at $target_path (expected=$expected_sha, actual=$actual_sha)" >&2
+      exit 1
+    fi
+    echo "Verified bundled model asset exists and matches checksum: $target_path ($(wc -c < "$target_path" | tr -d ' ') bytes, sha256=$actual_sha)"
+  done
 fi
 
 echo "Building Android $BUILD_VARIANT_LABEL APK..."
@@ -113,18 +166,26 @@ if [[ ! -f "$APK_PATH" ]]; then
 fi
 
 if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
-  echo "Verifying bundled MediaPipe model asset inside APK..."
-  APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
-  if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
-    echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
-    exit 1
-  fi
-  APK_MODEL_SIZE="$(unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" | awk -v entry="$APK_MODEL_ENTRY" '$NF == entry { print $1 }')"
-  if [[ -z "$APK_MODEL_SIZE" || "$APK_MODEL_SIZE" -le 0 ]]; then
-    echo "error: APK verification failed - '$APK_MODEL_ENTRY' is empty or invalid size ($APK_MODEL_SIZE bytes) in $APK_PATH" >&2
-    exit 1
-  fi
-  echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
+  echo "Verifying bundled MediaPipe model assets inside APK..."
+  for model_file in "${MODEL_FILENAMES[@]}"; do
+    APK_MODEL_ENTRY="assets/mediapipe/$model_file"
+    if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
+      echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
+      exit 1
+    fi
+    APK_MODEL_SIZE="$(unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" | awk -v entry="$APK_MODEL_ENTRY" '$NF == entry { print $1 }')"
+    if [[ -z "$APK_MODEL_SIZE" || "$APK_MODEL_SIZE" -le 0 ]]; then
+      echo "error: APK verification failed - '$APK_MODEL_ENTRY' is empty or invalid size ($APK_MODEL_SIZE bytes) in $APK_PATH" >&2
+      exit 1
+    fi
+    APK_MODEL_SHA="$(unzip -p "$APK_PATH" "$APK_MODEL_ENTRY" | compute_sha256_stream)"
+    expected_sha="$(expected_sha256_for_model "$model_file")"
+    if [[ "$APK_MODEL_SHA" != "$expected_sha" ]]; then
+      echo "error: APK verification failed - SHA256 checksum mismatch for '$APK_MODEL_ENTRY' in $APK_PATH (expected=$expected_sha, actual=$APK_MODEL_SHA)" >&2
+      exit 1
+    fi
+    echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes, sha256=$APK_MODEL_SHA)"
+  done
 fi
 
 cp "$APK_PATH" "$ARTIFACT_DIR/$APK_NAME"

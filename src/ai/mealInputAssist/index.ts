@@ -6,6 +6,11 @@ export {
 } from './mediapipeStaticImageNormalizer';
 export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
 export {
+  getMealInputAssistEnvironmentRevision,
+  invalidateMealInputAssistEnvironment,
+  subscribeMealInputAssistEnvironmentChange,
+} from './environment';
+export {
   LocalRuntimePrototypeMealInputAssistProvider,
   getLocalRuntimePrototypeAvailability,
 } from './localRuntimePrototype';
@@ -19,6 +24,9 @@ export {
   getMealInputAssistExpectedPaths,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
   MEAL_INPUT_ASSIST_MODEL_CONFIG,
+  DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
+  MEDIAPIPE_CLASSIFIER_MODELS,
+  MEDIAPIPE_CLASSIFIER_MODEL_LIST,
   MEDIAPIPE_MODEL_CONFIG,
   MEDIAPIPE_MODEL_DISPLAY_NAME,
   resolveMealInputAssistModelDirectoryPath,
@@ -26,6 +34,8 @@ export {
   resolveMealInputAssistProjectorPath,
   resolveMediaPipeModelPath,
 } from './modelConfig';
+export type { MediaPipeClassifierModelMeta } from './modelConfig';
+
 export {
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
@@ -56,6 +66,7 @@ export type {
   MealInputAssistModelInstallerOptions,
   MealInputAssistModelStatus,
   MealInputAssistModelStatusKind,
+  MediaPipeClassifierModelId,
   MediaPipeModelDownloadProgress,
   MediaPipeModelInstallerOptions,
   MediaPipeModelStatus,

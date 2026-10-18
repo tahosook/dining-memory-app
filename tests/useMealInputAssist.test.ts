@@ -2,9 +2,10 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { useMealInputAssist } from '../src/hooks/cameraCapture/useMealInputAssist';
-import type {
-  MealInputAssistProviderResult,
-  MealInputAssistRuntimeAvailability,
+import {
+  invalidateMealInputAssistEnvironment,
+  type MealInputAssistProviderResult,
+  type MealInputAssistRuntimeAvailability,
 } from '../src/ai/mealInputAssist';
 import type { CaptureReviewState } from '../src/hooks/cameraCapture/useCameraCapture';
 
@@ -815,5 +816,69 @@ describe('useMealInputAssist', () => {
       aiConfidence: 0.87,
       appliedFields: ['mealName', 'cuisineType'],
     });
+  });
+
+  test('invalidates and refreshes provider when meal input assist environment is invalidated', async () => {
+    let currentModel = 'cooking_method_9class';
+    const providerCooking = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mediapipe-static-image',
+        mealNames: [{ value: '焼き魚', confidence: 0.9 }],
+        cuisineTypes: [{ value: '和食', confidence: 0.8 }],
+      }),
+    };
+    const providerUniversal = {
+      suggest: jest.fn().mockResolvedValue({
+        source: 'mediapipe-static-image',
+        mealNames: [{ value: 'パスタ', confidence: 0.88 }],
+        cuisineTypes: [{ value: '洋食', confidence: 0.85 }],
+      }),
+    };
+
+    const loadAiInputAssistEnabled = async () => true;
+    const resolveRuntimeAvailability = jest.fn(async () => {
+      const activeProvider =
+        currentModel === 'cooking_method_9class' ? providerCooking : providerUniversal;
+      return createReadyRuntimeAvailability(activeProvider);
+    });
+
+    const { result } = renderHook(() =>
+      useMealInputAssist({
+        captureReview: createCaptureReview(),
+        onCaptureReviewChange: jest.fn(),
+        loadAiInputAssistEnabled,
+        resolveRuntimeAvailability,
+      })
+    );
+
+    await flushEffects();
+
+    // 1st request with cooking_method_9class
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    expect(result.current.status).toBe('success');
+    expect(providerCooking.suggest).toHaveBeenCalledTimes(1);
+    expect(providerUniversal.suggest).not.toHaveBeenCalled();
+    expect(resolveRuntimeAvailability).toHaveBeenCalledTimes(1);
+
+    // Switch model setting in Settings screen (triggers invalidation)
+    currentModel = 'universal_scene_7class';
+    act(() => {
+      invalidateMealInputAssistEnvironment();
+    });
+
+    await flushEffects();
+
+    // 2nd request should reload runtime and use the new model provider
+    await act(async () => {
+      await result.current.requestSuggestions();
+    });
+
+    expect(result.current.status).toBe('success');
+    expect(resolveRuntimeAvailability).toHaveBeenCalledTimes(2);
+    expect(providerCooking.suggest).toHaveBeenCalledTimes(1);
+    expect(providerUniversal.suggest).toHaveBeenCalledTimes(1);
   });
 });

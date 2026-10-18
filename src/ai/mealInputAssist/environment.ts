@@ -11,6 +11,31 @@ export interface MealInputAssistEnvironmentLoaderDependencies {
   loadRuntimeAvailability: () => Promise<MealInputAssistRuntimeAvailability>;
 }
 
+let environmentRevision = 0;
+const environmentListeners = new Set<() => void>();
+
+export function getMealInputAssistEnvironmentRevision(): number {
+  return environmentRevision;
+}
+
+export function invalidateMealInputAssistEnvironment(): void {
+  environmentRevision += 1;
+  environmentListeners.forEach(listener => {
+    try {
+      listener();
+    } catch (error) {
+      console.error('Failed to notify meal input assist environment listener:', error);
+    }
+  });
+}
+
+export function subscribeMealInputAssistEnvironmentChange(listener: () => void): () => void {
+  environmentListeners.add(listener);
+  return () => {
+    environmentListeners.delete(listener);
+  };
+}
+
 type MealInputAssistRuntimeModule = typeof import('./runtime');
 
 export async function loadDefaultMealInputAssistRuntimeAvailability(

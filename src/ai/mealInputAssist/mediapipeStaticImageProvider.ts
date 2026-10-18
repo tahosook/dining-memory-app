@@ -1,5 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 import { normalizeMediaPipeStaticImageResult } from './mediapipeStaticImageNormalizer';
+import { DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID, MEDIAPIPE_CLASSIFIER_MODELS } from './modelConfig';
+import { AppSettingsService } from '../../database/services/AppSettingsService';
 import type {
   MediaPipeStaticImageClassifier,
   MediaPipeStaticImageClassifierStatus,
@@ -11,6 +13,7 @@ import type {
   MealInputAssistRequest,
   MealInputAssistRuntimeAvailability,
   MealInputAssistRuntimeUnavailableCode,
+  MediaPipeClassifierModelId,
 } from './types';
 
 const MEDIAPIPE_STATIC_IMAGE_MODE = 'mediapipe-static-image' as const;
@@ -21,7 +24,12 @@ const MEDIAPIPE_MODEL_MISSING_FILE_REASON_PREFIX =
 
 export type MediaPipeMealInputAssistNativeModule = {
   getClassifierStatus?: () => Promise<MediaPipeStaticImageClassifierStatus>;
+  getClassifierStatusForModel?: (modelId: string) => Promise<MediaPipeStaticImageClassifierStatus>;
   classifyStaticImage?: (photoUri: string) => Promise<MediaPipeStaticImageRawResult>;
+  classifyStaticImageWithModel?: (
+    photoUri: string,
+    modelId: string
+  ) => Promise<MediaPipeStaticImageRawResult>;
   verifyFileSha256?: (filePathOrUri: string, expectedSha256: string) => Promise<boolean>;
   computeFileSha256?: (filePathOrUri: string) => Promise<string>;
 };
@@ -63,13 +71,26 @@ function getUnavailableCode(status: MediaPipeStaticImageClassifierStatus) {
 
 export class MediaPipeStaticImageNativeModuleClassifier implements MediaPipeStaticImageClassifier {
   constructor(
-    private readonly nativeModule: Required<
-      Pick<MediaPipeMealInputAssistNativeModule, 'classifyStaticImage'>
-    >
+    private readonly nativeModule: Pick<
+      MediaPipeMealInputAssistNativeModule,
+      'classifyStaticImage' | 'classifyStaticImageWithModel'
+    >,
+    private readonly modelId?: MediaPipeClassifierModelId
   ) {}
 
   async classifyStaticImage(photoUri: string): Promise<MediaPipeStaticImageRawResult> {
-    return this.nativeModule.classifyStaticImage(photoUri);
+    const activeModelId =
+      this.modelId ??
+      (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
+      DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+
+    if (typeof this.nativeModule.classifyStaticImageWithModel === 'function') {
+      return this.nativeModule.classifyStaticImageWithModel(photoUri, activeModelId);
+    }
+    if (typeof this.nativeModule.classifyStaticImage === 'function') {
+      return this.nativeModule.classifyStaticImage(photoUri);
+    }
+    throw new Error('classifyStaticImage is not available on native module.');
   }
 }
 
@@ -83,7 +104,9 @@ export class MediaPipeStaticImageMealInputAssistProvider implements MealInputAss
   }
 }
 
-export async function getMediaPipeStaticImageAvailability(): Promise<MealInputAssistRuntimeAvailability> {
+export async function getMediaPipeStaticImageAvailability(
+  modelId?: MediaPipeClassifierModelId
+): Promise<MealInputAssistRuntimeAvailability> {
   if (Platform.OS !== 'android') {
     return createUnavailableAvailability('runtime_unavailable', getUnsupportedPlatformReason());
   }
@@ -91,13 +114,26 @@ export async function getMediaPipeStaticImageAvailability(): Promise<MealInputAs
   const nativeModule = getMediaPipeMealInputAssistNativeModule();
   if (
     !nativeModule ||
-    typeof nativeModule.classifyStaticImage !== 'function' ||
-    typeof nativeModule.getClassifierStatus !== 'function'
+    (typeof nativeModule.classifyStaticImage !== 'function' &&
+      typeof nativeModule.classifyStaticImageWithModel !== 'function') ||
+    (typeof nativeModule.getClassifierStatus !== 'function' &&
+      typeof nativeModule.getClassifierStatusForModel !== 'function')
   ) {
     return createUnavailableAvailability('runtime_unavailable', getMissingBridgeReason());
   }
 
-  const classifierStatus = await nativeModule.getClassifierStatus();
+  const resolvedModelId: MediaPipeClassifierModelId =
+    modelId ??
+    (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
+    DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+
+  const classifierStatus =
+    typeof nativeModule.getClassifierStatusForModel === 'function'
+      ? await nativeModule.getClassifierStatusForModel(resolvedModelId)
+      : typeof nativeModule.getClassifierStatus === 'function'
+        ? await nativeModule.getClassifierStatus()
+        : { kind: 'unavailable' as const, reason: getMissingBridgeReason() };
+
   if (classifierStatus.kind === 'unavailable') {
     return createUnavailableAvailability(
       getUnavailableCode(classifierStatus),
@@ -105,14 +141,19 @@ export async function getMediaPipeStaticImageAvailability(): Promise<MealInputAs
     );
   }
 
+  const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[resolvedModelId];
+  const description =
+    resolvedModelId === DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID
+      ? 'MediaPipe static-image meal input assist provider'
+      : `MediaPipe static-image meal input assist provider (${modelMeta?.label ?? resolvedModelId})`;
+
   return {
     kind: 'ready',
     mode: MEDIAPIPE_STATIC_IMAGE_MODE,
-    description: 'MediaPipe static-image meal input assist provider',
+    description,
+
     provider: new MediaPipeStaticImageMealInputAssistProvider(
-      new MediaPipeStaticImageNativeModuleClassifier({
-        classifyStaticImage: nativeModule.classifyStaticImage.bind(nativeModule),
-      })
+      new MediaPipeStaticImageNativeModuleClassifier(nativeModule, modelId)
     ),
   };
 }

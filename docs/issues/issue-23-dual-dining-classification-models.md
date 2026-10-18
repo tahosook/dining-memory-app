@@ -2,7 +2,8 @@
 
 - **内部ドキュメントID**: issue-23
 - **対応 GitHub Issue**: 未起票
-- **ステータス**: Phase 1 & 2 完了（データセット構築・モデル学習評価完了、アプリ統合は Phase 3 次期フェーズ候補）
+- **対応 PR**: [PR #289](https://github.com/tahosook/dining-memory-app/pull/289)
+- **ステータス**: 完了 (Phase 1, 2, 3 全フェーズ完了 / PR #289)
 - **作成日**: 2026-10-13
 - **関連ドキュメント**:
   - 総合概要: [docs/engineering/mediapipe-overview.md](../engineering/mediapipe-overview.md)
@@ -131,9 +132,11 @@ Protected Golden Test overlap pinned to test: 7
 - [x] 構築した2種類のデータセットを用いて実際に分類モデル（汎用7クラス / 専用8クラス）を学習し、Held-out `test` / `val` / `train` スプリットでの Top-1 / Top-3 精度およびレイテンシを実測・記録すること。
 - [x] TensorFlow Hub の Kaggle Models 移行に対応し、MobileNetV2 バックボーンの取得・モデル仕様生成・学習処理の実動作を検証すること。
 
-### フェーズ 3: Android アプリ本体・本番ランタイムへの統合（次期フェーズ・未着手）
-- [ ] （次期フェーズ候補）Android アプリ（APK）同梱アセット（`assets/mediapipe/meal-input-assist.task`）の更新、または二刀流モデルのオンデマンド切替機構の実装。
-- [ ] （次期フェーズ候補）TypeScript / Native 側の推論正規化レイヤーおよび `MealInputAssistSection` UI でのデュアルモデルサジェスト配線。
+### フェーズ 3: Android アプリ本体・設定画面からの3モデル切替統合（完了）
+- [x] 既存の調理法9クラスモデル（`cooking_method_9class`、既定）を安全に維持しつつ、汎用シーン7クラス（`universal_scene_7class`）およびわたし専用8クラス（`personal_household_8class`）の計3モデルを設定画面（`SettingsScreen`）から切り替え可能にする UI および永続化（`AppSettingsService`）を実装すること。
+- [x] Android Native Bridge（`MediaPipeMealInputAssistModule` / `MediaPipeMealInputAssistSupport`）においてモデルIDごとのインスタンスキャッシュ管理、アセット自動シード、および後方互換性を持つ引数なし/ありブリッジメソッドを実装すること。
+- [x] TypeScript 側の推論正規化レイヤー（`mediapipeStaticImageNormalizer.ts`）において汎用7クラスおよび専用8クラスの料理名・ジャンルマッピング（`non_food_or_exclude` の UI サジェスト除外含む）を配備し、全ユニットテストで検証すること。
+- [x] 同梱アセット検証スクリプト（`scripts/ensure-mediapipe-model.sh`）を拡張し、3つのモデルバイナリの存在と SHA-256 チェックサムを機械的に保証すること。
 
 ---
 
@@ -194,3 +197,26 @@ Protected Golden Test overlap pinned to test: 7
    - 両モデルとも推論時間 **15.7〜15.8ms**（約 63 FPS 相当）で動作し、モバイル端末上での低遅延入力補助要件を余裕を持ってクリア。
 3. **AI & Privacy ガバナンス遵守**:
    - `AGENTS.md` の原則に従い、本番同梱アセット（`android/app/src/main/assets/mediapipe/meal-input-assist.task`）は上書きせず、実験モデル群は `state/mediapipe_models/dual_taxonomy_issue23/` 配下で安全に分離管理されている。
+
+### 5.4 フェーズ 3 実装実績（アプリ本体・設定画面統合）
+2026年10月18日、作成済みの 2 種類の MediaPipe モデル（汎用7クラス / 専用8クラス）と既存の調理法9クラスモデルの計 3 種類を、設定画面からユーザーが明示的に切り替えて Android 端末上で実行可能にする統合を完了しました。
+
+1. **デフォルト安全性の維持**:
+   - `DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID = 'cooking_method_9class'` を維持し、未選択時や旧バージョンデータでは既存の調理法モデルが透過的に動作。
+2. **モデル仕様・定義の一元管理**:
+   - `src/ai/mealInputAssist/modelConfig.ts` に 3 モデルのメタデータ（ID、表示名、説明、アセットファイル名、SHA-256）を定義。
+   - Android Native（`MediaPipeMealInputAssistSupport.kt`）にも同一の仕様テーブル（`SUPPORTED_MODEL_SPECS`）を定義し、厳格な ID 検証とパス解決を実現。
+3. **Android Native マルチモデルキャッシュ**:
+   - `MediaPipeMealInputAssistModule.kt` において、`activeModelId` に応じてモデルごとの分類器インスタンス（`ImageClassifier`）をキャッシュし、不要な再初期化コストを防止。
+   - `filesDir/ai-models/<filename>` に存在しない場合は同梱アセット（`assets/mediapipe/<filename>`）から自動シードコピー。
+4. **TypeScript 正規化層の拡張**:
+   - `mediapipeStaticImageNormalizer.ts` にて、7クラス / 8クラスの各ラベルから料理名（`mealNames`）と料理ジャンル（`cuisineTypes`）への変換を配備。汎用モデルの `non_food_or_exclude` は UI サジェストから安全に除外（`excludeFromSuggestions: true`）。
+5. **設定画面 UI & 永続化**:
+   - `SettingsScreen.tsx` において、MediaPipe ランタイムが利用可能な場合に「分類モデル」セクションをレンダリング。3 つのモデルをラジオ選択カード形式で提示し、タップで `AppSettingsService`（SQLite `app_settings`）に即座に永続化。
+6. **機械的検証**:
+   - Android Native 単体テスト（`MediaPipeMealInputAssistSupportTest.kt`）: 100% PASS。
+   - TS 正規化テスト（`mealInputAssistNormalizer.test.ts`）: 9/9 PASS。
+   - TS ランタイムテスト（`mealInputAssistRuntime.test.ts`）: 17/17 PASS。
+   - 設定画面テスト（`StatsSettingsScreens.test.tsx`）: 31/31 PASS。
+   - リリース検証スクリプト（`buildAndroidRelease.test.ts`）: 8/8 PASS。
+

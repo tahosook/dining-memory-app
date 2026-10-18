@@ -81,6 +81,67 @@ const LABEL_MAPPING: Record<string, LabelMapping> = {
   other_or_exclude: {
     excludeFromSuggestions: true,
   },
+  // Model 1: Universal Dining Scene (7 classes)
+  home_teishoku_set: {
+    mealName: 'おうち定食',
+    cuisineType: '和食',
+  },
+  one_plate_or_curry: {
+    mealName: 'ワンプレート・カレー',
+    cuisineType: '洋食',
+  },
+  izakaya_bistro_or_party: {
+    mealName: '晩酌・パーティー',
+    cuisineType: 'その他',
+  },
+  noodles_or_single_bowl: {
+    mealName: '麺・単品ボウル',
+    cuisineType: 'その他',
+  },
+  dining_out_or_tray_meal: {
+    mealName: '外食・トレイ飯',
+    cuisineType: 'その他',
+  },
+  drink_or_bottle_record: {
+    mealName: 'お酒・ドリンク',
+    cuisineType: 'その他',
+  },
+  non_food_or_exclude: {
+    excludeFromSuggestions: true,
+  },
+  // Model 2: Personal Household & Wife's Cooking (8 classes)
+  wife_multi_dish_teishoku: {
+    mealName: '一汁複数菜・夕定食',
+    cuisineType: '和食',
+  },
+  wife_nordic_one_plate: {
+    mealName: '北欧大皿ワンプレート',
+    cuisineType: '洋食',
+  },
+  wife_curry_or_ethnic_plate: {
+    mealName: '特製カレー・エスニック皿',
+    cuisineType: '洋食',
+  },
+  wife_morning_salmon_natto: {
+    mealName: '焼き鮭＆納豆の和朝食',
+    cuisineType: '和食',
+  },
+  wife_bistro_baguette_bal: {
+    mealName: '洋風ビストロ・おうちバル',
+    cuisineType: '洋食',
+  },
+  wife_izakaya_small_dishes: {
+    mealName: 'おうち居酒屋・染付晩酌膳',
+    cuisineType: '和食',
+  },
+  household_pot_noodles_or_ramen_rice: {
+    mealName: '鍋麺・ラーメンライス',
+    cuisineType: 'その他',
+  },
+  special_takeout_party_feast: {
+    mealName: 'テイクアウト宴席',
+    cuisineType: 'その他',
+  },
 };
 
 function normalizeScore(score: number | null | undefined) {

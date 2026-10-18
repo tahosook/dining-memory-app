@@ -145,6 +145,9 @@ export interface MediaPipeModelInstallerOptions {
   version?: string;
 }
 
+export type MediaPipeClassifierModelId =
+  'cooking_method_9class' | 'universal_scene_7class' | 'personal_household_8class';
+
 export type MealInputAssistProviderMode =
   'mock' | 'local-runtime-prototype' | 'mediapipe-static-image' | 'override';
 
