@@ -675,6 +675,52 @@ describe('meal input assist runtime availability', () => {
     expect(normalized.cuisineTypes.map(candidate => candidate.value)).toEqual(['和食']);
   });
 
+  test('routes to model-specific native bridge methods when modelId is provided', async () => {
+    Object.defineProperty(Platform, 'OS', {
+      configurable: true,
+      value: 'android',
+    });
+    const getStatusForModel = jest.fn().mockResolvedValue({ kind: 'ready' });
+    const classifyWithModel = jest.fn().mockResolvedValue({
+      photoUri: 'file:///tmp/mock-scene.jpg',
+      categories: [{ label: 'home_teishoku_set', score: 0.92 }],
+      classifierName: 'universal-scene-classifier',
+      modelVersion: 'universal_scene_7class',
+    });
+    NativeModules.MediaPipeMealInputAssist = {
+      getClassifierStatusForModel: getStatusForModel,
+      classifyStaticImageWithModel: classifyWithModel,
+      getClassifierStatus: jest.fn(),
+      classifyStaticImage: jest.fn(),
+    };
+
+    const { getMediaPipeStaticImageAvailability } = require('../src/ai/mealInputAssist');
+    const availability = await getMediaPipeStaticImageAvailability('universal_scene_7class');
+
+    expect(availability.kind).toBe('ready');
+    expect(availability.description).toContain('食卓シーン');
+    expect(getStatusForModel).toHaveBeenCalledWith('universal_scene_7class');
+
+    if (availability.kind !== 'ready') {
+      throw new Error('Expected ready availability');
+    }
+
+    const rawResult = await availability.provider.suggest({
+      photoUri: 'file:///tmp/mock-scene.jpg',
+      mealName: '',
+      cuisineType: '',
+      notes: '',
+      locationName: '',
+      isHomemade: true,
+    });
+
+    expect(classifyWithModel).toHaveBeenCalledWith(
+      'file:///tmp/mock-scene.jpg',
+      'universal_scene_7class'
+    );
+    expect(rawResult.mealNames).toEqual([{ value: 'おうち定食', confidence: 0.92 }]);
+  });
+
   test('returns unsupported_architecture on Android when only unsupported ABIs are exposed', async () => {
     Object.defineProperty(Platform, 'OS', {
       configurable: true,

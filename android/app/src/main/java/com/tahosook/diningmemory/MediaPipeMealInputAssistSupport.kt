@@ -18,6 +18,34 @@ internal const val MEDIAPIPE_DEFAULT_MODEL_RELATIVE_PATH = "$MEDIAPIPE_DEFAULT_M
 internal const val MEDIAPIPE_MEAL_INPUT_ASSIST_MODEL_ASSET_PATH = "mediapipe/meal-input-assist.task"
 internal const val MEDIAPIPE_MEAL_INPUT_ASSIST_CLASSIFIER_NAME = "mediapipe-image-classifier"
 
+internal const val MODEL_ID_COOKING_METHOD_9CLASS = "cooking_method_9class"
+internal const val MODEL_ID_UNIVERSAL_SCENE_7CLASS = "universal_scene_7class"
+internal const val MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS = "personal_household_8class"
+
+internal data class MediaPipeModelSpec(
+  val id: String,
+  val fileName: String,
+  val assetPath: String,
+)
+
+internal val SUPPORTED_MODEL_SPECS = mapOf(
+  MODEL_ID_COOKING_METHOD_9CLASS to MediaPipeModelSpec(
+    id = MODEL_ID_COOKING_METHOD_9CLASS,
+    fileName = "meal-input-assist.task",
+    assetPath = "mediapipe/meal-input-assist.task",
+  ),
+  MODEL_ID_UNIVERSAL_SCENE_7CLASS to MediaPipeModelSpec(
+    id = MODEL_ID_UNIVERSAL_SCENE_7CLASS,
+    fileName = "universal_scene_7class.task",
+    assetPath = "mediapipe/universal_scene_7class.task",
+  ),
+  MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS to MediaPipeModelSpec(
+    id = MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS,
+    fileName = "personal_household_8class.task",
+    assetPath = "mediapipe/personal_household_8class.task",
+  ),
+)
+
 private const val MODEL_MISSING_REASON_PREFIX = "MediaPipe meal input assist model file が見つかりません: "
 private const val MODEL_LOAD_FAILED_REASON_PREFIX = "MediaPipe meal input assist model file を読み込めませんでした: "
 private const val CLASSIFIER_INIT_FAILED_REASON_PREFIX = "MediaPipe static-image classifier を初期化できませんでした: "
@@ -36,7 +64,15 @@ internal data class MediaPipeCategoryPayload(
 )
 
 internal object MediaPipeMealInputAssistSupport {
+  fun resolveModelSpec(modelId: String?): MediaPipeModelSpec? {
+    if (modelId.isNullOrBlank()) {
+      return SUPPORTED_MODEL_SPECS[MODEL_ID_COOKING_METHOD_9CLASS]
+    }
+    return SUPPORTED_MODEL_SPECS[modelId.trim()]
+  }
+
   fun buildModelMissingReason(modelPath: String = MEDIAPIPE_DEFAULT_MODEL_RELATIVE_PATH): String {
+
     return "$MODEL_MISSING_REASON_PREFIX$modelPath"
   }
 
@@ -79,6 +115,15 @@ internal object MediaPipeMealInputAssistSupport {
   fun resolveDefaultModelFile(baseDir: File): File {
     return File(File(baseDir, MEDIAPIPE_DEFAULT_MODEL_DIR), MEDIAPIPE_DEFAULT_MODEL_FILE_NAME)
   }
+
+  fun resolveModelFile(context: Context, spec: MediaPipeModelSpec): File {
+    return resolveModelFile(context.filesDir, spec)
+  }
+
+  fun resolveModelFile(baseDir: File, spec: MediaPipeModelSpec): File {
+    return File(File(baseDir, MEDIAPIPE_DEFAULT_MODEL_DIR), spec.fileName)
+  }
+
 
   fun copyAssetStreamToTargetFile(input: InputStream, targetFile: File): Boolean {
     val parent = targetFile.parentFile ?: return false

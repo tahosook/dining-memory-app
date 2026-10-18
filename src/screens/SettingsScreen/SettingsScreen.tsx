@@ -20,6 +20,8 @@ import {
   getIosBuildNumber,
 } from '../../utils/buildInfo';
 import {
+  DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
+  MEDIAPIPE_CLASSIFIER_MODEL_LIST,
   getMealInputAssistManagedFiles,
   getMediaPipeStaticImageAvailability,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
@@ -27,9 +29,11 @@ import {
   type MealInputAssistModelDownloadProgress,
   type MealInputAssistModelStatus,
   type MealInputAssistRuntimeAvailability,
+  type MediaPipeClassifierModelId,
   type MediaPipeModelDownloadProgress,
   type MediaPipeModelStatus,
 } from '../../ai/mealInputAssist';
+
 import {
   deleteAllDownloadedLocalAiModels,
   deleteMediaPipeModel,
@@ -70,6 +74,8 @@ export default function SettingsScreen() {
     useState<MealInputAssistModelDownloadProgress | null>(null);
   const [backupActionState, setBackupActionState] = useState<BackupActionState>('idle');
   const [showAiDetails, setShowAiDetails] = useState(false);
+  const [selectedMediaPipeModelId, setSelectedMediaPipeModelId] =
+    useState<MediaPipeClassifierModelId>(DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID);
 
   const showMediaPipeDevSection = typeof __DEV__ !== 'undefined' && Boolean(__DEV__);
   const [mediaPipeModelStatus, setMediaPipeModelStatus] = useState<MediaPipeModelStatus | null>(
@@ -112,9 +118,14 @@ export default function SettingsScreen() {
     setLocalAiRuntimeStatusLoading(true);
 
     try {
+      const currentModelId =
+        (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
+        DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+      setSelectedMediaPipeModelId(currentModelId);
+
       const [snapshot, nextMediaPipeAvailability] = await Promise.all([
         getLocalAiRuntimeStatusSnapshot(),
-        getMediaPipeStaticImageAvailability().catch(() => null),
+        getMediaPipeStaticImageAvailability(currentModelId).catch(() => null),
       ]);
       setLocalAiRuntimeStatus(snapshot);
       setMediaPipeRuntimeAvailability(nextMediaPipeAvailability);
@@ -126,6 +137,30 @@ export default function SettingsScreen() {
       setLocalAiRuntimeStatusLoading(false);
     }
   }, []);
+
+  const handleSelectMediaPipeModel = useCallback(
+    async (nextModelId: MediaPipeClassifierModelId) => {
+      setSelectedMediaPipeModelId(nextModelId);
+
+      try {
+        await AppSettingsService.setMediaPipeClassifierModelId?.(nextModelId);
+        const nextMediaPipeAvailability = await getMediaPipeStaticImageAvailability(
+          nextModelId
+        ).catch(() => null);
+        setMediaPipeRuntimeAvailability(nextMediaPipeAvailability);
+      } catch (error) {
+        console.error(
+          'Failed to save MediaPipe classifier model setting:',
+          sanitizeLogObject(error)
+        );
+        Alert.alert(
+          '設定を保存できませんでした',
+          '分類モデルの設定を保存できませんでした。もう一度お試しください。'
+        );
+      }
+    },
+    []
+  );
 
   const reloadLocalAiSection = useCallback(async () => {
     await Promise.all([loadMealInputAssistModelStatus(), loadLocalAiRuntimeStatus()]);
@@ -512,20 +547,67 @@ export default function SettingsScreen() {
         ) : null}
 
         {aiAssistState === 'ready' ? (
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextBlock}>
-              <Text style={styles.settingTitle}>AI入力補助を使う</Text>
-              <Text style={styles.settingDescription}>
-                撮影後の確認画面で、端末内だけでメモ下書きを作成します。
-              </Text>
+          <>
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextBlock}>
+                <Text style={styles.settingTitle}>AI入力補助を使う</Text>
+                <Text style={styles.settingDescription}>
+                  撮影後の確認画面で、端末内だけでメモ下書きを作成します。
+                </Text>
+              </View>
+              <Switch
+                value={aiInputAssistEnabled}
+                onValueChange={handleAiInputAssistToggle}
+                disabled={aiAssistSwitchDisabled}
+                testID="ai-input-assist-toggle"
+              />
             </View>
-            <Switch
-              value={aiInputAssistEnabled}
-              onValueChange={handleAiInputAssistToggle}
-              disabled={aiAssistSwitchDisabled}
-              testID="ai-input-assist-toggle"
-            />
-          </View>
+
+            {mediaPipeRuntimeReady ? (
+              <View style={styles.modelSelectionBlock} testID="mediapipe-model-selection-section">
+                <Text style={styles.modelSelectionTitle}>分類モデル</Text>
+                <Text style={styles.modelSelectionSubtitle}>
+                  写真から提案する候補の分類体系を選択できます。
+                </Text>
+                {MEDIAPIPE_CLASSIFIER_MODEL_LIST.map(model => {
+                  const isSelected = selectedMediaPipeModelId === model.id;
+                  return (
+                    <TouchableOpacity
+                      key={model.id}
+                      style={[
+                        styles.modelOptionCard,
+                        isSelected ? styles.modelOptionCardSelected : null,
+                      ]}
+                      onPress={() => handleSelectMediaPipeModel(model.id)}
+                      testID={`mediapipe-model-option-${model.id}`}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: isSelected }}
+                    >
+                      <View style={styles.modelOptionHeader}>
+                        <Text
+                          style={[
+                            styles.modelOptionLabel,
+                            isSelected ? styles.modelOptionLabelSelected : null,
+                          ]}
+                        >
+                          {model.label}
+                        </Text>
+                        <View
+                          style={[
+                            styles.radioIndicator,
+                            isSelected ? styles.radioIndicatorSelected : null,
+                          ]}
+                        >
+                          {isSelected ? <View style={styles.radioIndicatorInner} /> : null}
+                        </View>
+                      </View>
+                      <Text style={styles.modelOptionDescription}>{model.description}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
+          </>
         ) : (
           <Text style={styles.settingHint}>{aiAssistDisabledReason}</Text>
         )}
@@ -1117,6 +1199,68 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: Colors.gray,
+  },
+  modelSelectionBlock: {
+    marginTop: 14,
+    gap: 8,
+  },
+  modelSelectionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  modelSelectionSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: Colors.gray,
+  },
+  modelOptionCard: {
+    borderWidth: 1,
+    borderColor: '#d7d7d7',
+    borderRadius: 10,
+    padding: 12,
+    backgroundColor: Colors.white,
+    gap: 4,
+  },
+  modelOptionCardSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: '#f5f8ff',
+  },
+  modelOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modelOptionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  modelOptionLabelSelected: {
+    color: Colors.primary,
+  },
+  modelOptionDescription: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: Colors.gray,
+  },
+  radioIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#b0b0b0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioIndicatorSelected: {
+    borderColor: Colors.primary,
+  },
+  radioIndicatorInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
   },
   aiStatusHeader: {
     flexDirection: 'row',

@@ -194,4 +194,59 @@ describe('normalizeMediaPipeStaticImageResult', () => {
     expect(reviewSuggestions.mealNames.map(candidate => candidate.value)).toEqual(['カレーライス']);
     expect(reviewSuggestions.cuisineTypes.map(candidate => candidate.value)).toEqual(['洋食']);
   });
+
+  test('normalizes universal dining scene classes and suppresses non_food_or_exclude', () => {
+    const normalized = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/scene-photo.jpg',
+      categories: [
+        { label: 'home_teishoku_set', score: 0.85 },
+        { label: 'one_plate_or_curry', score: 0.72 },
+        { label: 'non_food_or_exclude', score: 0.99 },
+      ],
+      classifierName: 'universal-scene-classifier',
+      modelVersion: 'v1',
+    });
+    const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
+
+    expect(normalized.providerResult).toEqual({
+      source: 'mediapipe-static-image',
+      mealNames: [
+        { value: 'おうち定食', confidence: 0.85 },
+        { value: 'ワンプレート・カレー', confidence: 0.72 },
+      ],
+      cuisineTypes: [{ value: '和食', confidence: 0.85 }],
+    });
+    expect(normalized.metadata.topCategoryLabel).toBe('non_food_or_exclude');
+    expect(reviewSuggestions.mealNames.map(candidate => candidate.value)).toEqual([
+      'おうち定食',
+      'ワンプレート・カレー',
+    ]);
+  });
+
+  test('normalizes personal household classes into suggestions', () => {
+    const normalized = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/personal-photo.jpg',
+      categories: [
+        { label: 'wife_nordic_one_plate', score: 0.91 },
+        { label: 'wife_curry_or_ethnic_plate', score: 0.65 },
+        { label: 'wife_morning_salmon_natto', score: 0.52 },
+      ],
+    });
+    const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
+
+    expect(normalized.providerResult).toEqual({
+      source: 'mediapipe-static-image',
+      mealNames: [
+        { value: '北欧大皿ワンプレート', confidence: 0.91 },
+        { value: '特製カレー・エスニック皿', confidence: 0.65 },
+        { value: '焼き鮭＆納豆の和朝食', confidence: 0.52 },
+      ],
+      cuisineTypes: [{ value: '洋食', confidence: 0.91 }],
+    });
+    expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual([
+      '北欧大皿ワンプレート',
+      '特製カレー・エスニック皿',
+      '焼き鮭＆納豆の和朝食',
+    ]);
+  });
 });

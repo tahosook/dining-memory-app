@@ -46,6 +46,8 @@ jest.mock('../src/database/services/AppSettingsService', () => ({
   AppSettingsService: {
     getAiInputAssistEnabled: jest.fn(),
     setAiInputAssistEnabled: jest.fn(),
+    getMediaPipeClassifierModelId: jest.fn(),
+    setMediaPipeClassifierModelId: jest.fn(),
   },
 }));
 
@@ -381,6 +383,10 @@ describe('SettingsScreen', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     (AppSettingsService.getAiInputAssistEnabled as jest.Mock).mockResolvedValue(false);
     (AppSettingsService.setAiInputAssistEnabled as jest.Mock).mockResolvedValue(undefined);
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'cooking_method_9class'
+    );
+    (AppSettingsService.setMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(undefined);
     (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(
       createModelStatus('not_installed')
     );
@@ -931,5 +937,90 @@ describe('SettingsScreen', () => {
     });
 
     alertSpy.mockRestore();
+  });
+
+  test('renders 3 MediaPipe model options when MediaPipe runtime is ready', async () => {
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'cooking_method_9class'
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'ready',
+      mode: 'mediapipe-static-image',
+      description: 'MediaPipe static-image meal input assist provider',
+      provider: { suggest: jest.fn() },
+    });
+
+    const { getByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('分類モデル')).toBeTruthy();
+    expect(getByTestId('mediapipe-model-selection-section')).toBeTruthy();
+
+    const cookingOption = getByTestId('mediapipe-model-option-cooking_method_9class');
+    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
+    const personalOption = getByTestId('mediapipe-model-option-personal_household_8class');
+
+    expect(cookingOption).toBeTruthy();
+    expect(universalOption).toBeTruthy();
+    expect(personalOption).toBeTruthy();
+
+    expect(cookingOption.props.accessibilityState).toEqual({ selected: true });
+    expect(universalOption.props.accessibilityState).toEqual({ selected: false });
+    expect(personalOption.props.accessibilityState).toEqual({ selected: false });
+  });
+
+  test('switches MediaPipe model, persists to AppSettingsService, and re-checks availability on tap', async () => {
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'cooking_method_9class'
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'ready',
+      mode: 'mediapipe-static-image',
+      description: 'MediaPipe static-image meal input assist provider',
+      provider: { suggest: jest.fn() },
+    });
+
+    const { getByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('分類モデル')).toBeTruthy();
+
+    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
+    fireEvent.press(universalOption);
+
+    await waitFor(() => {
+      expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
+        'universal_scene_7class'
+      );
+    });
+
+    await waitFor(() => {
+      expect(getMediaPipeStaticImageAvailability).toHaveBeenCalledWith('universal_scene_7class');
+    });
+
+    expect(
+      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+    ).toEqual({
+      selected: true,
+    });
+    expect(
+      getByTestId('mediapipe-model-option-cooking_method_9class').props.accessibilityState
+    ).toEqual({
+      selected: false,
+    });
+  });
+
+  test('does not render MediaPipe model selection section when MediaPipe runtime is unavailable', async () => {
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'unavailable',
+      mode: 'mediapipe-static-image',
+      code: 'runtime_unavailable',
+      reason: 'MediaPipe unavailable',
+    });
+
+    const { queryByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(queryByTestId('mediapipe-model-selection-section')).toBeNull();
   });
 });

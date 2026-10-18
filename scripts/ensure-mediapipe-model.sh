@@ -22,11 +22,52 @@ compute_sha256() {
   fi
 }
 
+# Sync additional issue-23 dual taxonomy models if available
+sync_additional_model() {
+  local filename="$1"
+  local expected_sha="$2"
+  local source_file="$ROOT_DIR/state/mediapipe_models/dual_taxonomy_issue23/${filename%.task}/$filename"
+  local target_file="$TARGET_DIR/$filename"
+
+  if [[ -f "$target_file" && -s "$target_file" ]]; then
+    local current_sha
+    current_sha="$(compute_sha256 "$target_file")"
+    if [[ "$current_sha" == "$expected_sha" ]]; then
+      echo "Additional MediaPipe model asset is up to date: $target_file ($expected_sha)"
+      return 0
+    fi
+    echo "Existing additional model ($filename) checksum differs ($current_sha vs $expected_sha). Re-syncing..."
+  fi
+
+  if [[ -f "$source_file" && -s "$source_file" ]]; then
+    local src_sha
+    src_sha="$(compute_sha256 "$source_file")"
+    if [[ "$src_sha" != "$expected_sha" ]]; then
+      echo "error: source additional model $source_file checksum ($src_sha) mismatch expected ($expected_sha)" >&2
+      return 1
+    fi
+    mkdir -p "$TARGET_DIR"
+    cp "$source_file" "$target_file"
+    echo "✓ Additional MediaPipe model synchronized: $target_file"
+    return 0
+  fi
+
+  return 0
+}
+
+sync_additional_models() {
+  sync_additional_model "universal_scene_7class.task" "6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1"
+  sync_additional_model "personal_household_8class.task" "924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c"
+}
+
 # Check if valid model already exists
 if [[ -f "$TARGET_FILE" && -s "$TARGET_FILE" ]]; then
   CURRENT_SHA256="$(compute_sha256 "$TARGET_FILE")"
   if [[ "$CURRENT_SHA256" == "$EXPECTED_SHA256" ]]; then
     echo "MediaPipe model asset is up to date: $TARGET_FILE ($EXPECTED_SHA256)"
+    if [[ "$TARGET_DIR" == "$ROOT_DIR/android/app/src/main/assets/mediapipe" || "${MEDIAPIPE_SYNC_ADDITIONAL_MODELS:-false}" == "true" ]]; then
+      sync_additional_models
+    fi
     exit 0
   fi
   echo "Existing MediaPipe model checksum ($CURRENT_SHA256) differs from expected ($EXPECTED_SHA256). Re-downloading..."
@@ -66,4 +107,7 @@ fi
 
 mv "$TEMP_FILE" "$TARGET_FILE"
 echo "✓ MediaPipe model successfully fetched and verified: $TARGET_FILE ($(wc -c < "$TARGET_FILE" | tr -d ' ') bytes)"
+if [[ "$TARGET_DIR" == "$ROOT_DIR/android/app/src/main/assets/mediapipe" || "${MEDIAPIPE_SYNC_ADDITIONAL_MODELS:-false}" == "true" ]]; then
+  sync_additional_models
+fi
 exit 0

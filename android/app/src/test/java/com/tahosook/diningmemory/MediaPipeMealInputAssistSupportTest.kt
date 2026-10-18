@@ -26,6 +26,41 @@ class MediaPipeMealInputAssistSupportTest {
   }
 
   @Test
+  fun `resolves model specs for supported model IDs and defaults to cooking_method_9class`() {
+    val defaultSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(null)
+    assertEquals(MODEL_ID_COOKING_METHOD_9CLASS, defaultSpec?.id)
+    assertEquals("meal-input-assist.task", defaultSpec?.fileName)
+    assertEquals("mediapipe/meal-input-assist.task", defaultSpec?.assetPath)
+
+    val blankSpec = MediaPipeMealInputAssistSupport.resolveModelSpec("   ")
+    assertEquals(MODEL_ID_COOKING_METHOD_9CLASS, blankSpec?.id)
+
+    val sceneSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_SCENE_7CLASS)
+    assertEquals(MODEL_ID_UNIVERSAL_SCENE_7CLASS, sceneSpec?.id)
+    assertEquals("universal_scene_7class.task", sceneSpec?.fileName)
+    assertEquals("mediapipe/universal_scene_7class.task", sceneSpec?.assetPath)
+
+    val personalSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS)
+    assertEquals(MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS, personalSpec?.id)
+    assertEquals("personal_household_8class.task", personalSpec?.fileName)
+    assertEquals("mediapipe/personal_household_8class.task", personalSpec?.assetPath)
+
+    assertNull(MediaPipeMealInputAssistSupport.resolveModelSpec("unknown_model_id"))
+  }
+
+  @Test
+  fun `resolves model file location for each model spec`() {
+    val baseDir = File("/data/user/0/com.tahosook.diningmemory/files")
+    val sceneSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_SCENE_7CLASS)!!
+    val file = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, sceneSpec)
+    assertEquals(
+      File("/data/user/0/com.tahosook.diningmemory/files/ai-models/universal_scene_7class.task"),
+      file,
+    )
+  }
+
+
+  @Test
   fun `builds model load failed reason for empty or invalid model file`() {
     val reason = MediaPipeMealInputAssistSupport.buildModelLoadFailedReason(
       "Model file is not a regular file or is empty: /path/to/meal-input-assist.task"
