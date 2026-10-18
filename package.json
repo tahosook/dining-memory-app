@@ -14,6 +14,7 @@
     "build:android:debug": "BUILD_ANDROID_TASK=assembleDebug BUILD_ANDROID_OUTPUT_TYPE=debug BUILD_ANDROID_VARIANT_LABEL=debug BUILD_ANDROID_ARCHITECTURES= bash ./scripts/build-android-release.sh",
     "install:android:release": "bash ./scripts/install-android-artifact.sh",
     "install:android:debug": "INSTALL_ANDROID_VARIANT=debug bash ./scripts/install-android-artifact.sh",
+    "release:android": "npm run build:android:release && npm run install:android:release",
     "android:gradle": "cd android && ./gradlew",
     "clean": "rm -rf node_modules package-lock.json yarn.lock && echo 'cleaned node_modules and lockfiles'",
     "install:fresh": "npm run clean && npm install",
@@ -30,6 +31,7 @@
     "format": "prettier --write \"App.tsx\" \"index.ts\" \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"App.tsx\" \"index.ts\" \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\"",
     "type-check": "tsc --noEmit",
+    "verify:quick": "npm run type-check && npm run lint && jest --onlyChanged --passWithNoTests",
     "verify:pr-gates": "bash ./scripts/verify-pr-gates.sh",
     "verify": "npm run verify:pr-gates && npm run check:react-versions && npm run check:deps && npm run check:docs && npm run format:check && npm run lint && npm run type-check && npm run check:expo-doctor && npm test && npm run test:python:fast"
   },

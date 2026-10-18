@@ -31,6 +31,13 @@ AI エージェントがこの repo で自律的に活動しつつ品質とガ�
 - 編集前に、読んだファイル、編集予定ファイル、実装計画を短く整理する。
 - 大きな作業は「調査」「計画」「実装」に分ける。
 - 実装変更では、近い既存パターンと関連テストを確認してから編集する。
+- **2段階検証運用 (Two-Phase Verification)**:
+  1. **対話的な実装・動作確認時 (Quick Loop — Default)**:
+     - ユーザーからの機能追加・UI調整・修正指示に対しては、コード変更後に**直結する単一テスト（`npx jest <target.test.ts>`）および型検査（`npm run type-check` または補助検証 `npm run verify:quick`）を確認し、即座に完了報告**する。
+     - コード変更を伴う場合は、`verify:quick`（`--onlyChanged`）の自動検出で対象テストが 0 件だった場合を含め、必ず該当の単一テストを明示指定して実行するか、該当テストが存在しない理由を Finish Report に明記する。
+     - 動作確認前の段階で、全件テスト（`npm test` / `test:python:fast`）や `TASKS.md` / `docs/issues/` の台帳更新、PR Gate を毎回回してユーザーを待たせない。
+  2. **コミット・PR作成時 (Commit / PR Gate)**:
+     - ユーザーが動作を確認し、コミットや PR 作成へ進む段階（または最初から PR 作成まで明示指示された場合）で、対応する `TASKS.md` や canonical doc の更新、およびフルテストゲート（全件テスト `npm test`、Python テスト、PR Gates）を実施する（[docs/engineering/development-workflow.md](docs/engineering/development-workflow.md) 参照）。
 - product / UX / data / engineering convention が変わる場合は、対応する canonical doc も同じタスクで更新する。
 - タスク完了時は、対応する `TASKS.md` や `docs/issues/` のステータス・受入基準を同じ PR/コミットで更新する（[docs/engineering/development-workflow.md](docs/engineering/development-workflow.md) 参照）。
 

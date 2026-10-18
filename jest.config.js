@@ -1,7 +1,20 @@
 module.exports = {
   preset: 'jest-expo',
+  roots: ['<rootDir>/src', '<rootDir>/tests'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'node',
+  modulePathIgnorePatterns: [
+    '<rootDir>/artifacts/',
+    '<rootDir>/state/',
+    '<rootDir>/android/',
+    '<rootDir>/\\.venv',
+  ],
+  watchPathIgnorePatterns: [
+    '<rootDir>/artifacts/',
+    '<rootDir>/state/',
+    '<rootDir>/android/',
+    '<rootDir>/\\.venv',
+  ],
   testMatch: [
     '**/__tests__/**/*.{ts,tsx}',
     '**/?(*.)+(test).{ts,tsx}',
