@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ANDROID_DIR="$ROOT_DIR/android"
+ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+ANDROID_DIR="${ANDROID_DIR:-$ROOT_DIR/android}"
+ENSURE_MEDIAPIPE_MODEL_SCRIPT="${ENSURE_MEDIAPIPE_MODEL_SCRIPT:-$ROOT_DIR/scripts/ensure-mediapipe-model.sh}"
 BUILD_TASK="${BUILD_ANDROID_TASK:-assembleRelease}"
 BUILD_OUTPUT_TYPE="${BUILD_ANDROID_OUTPUT_TYPE:-release}"
 BUILD_VARIANT_LABEL="${BUILD_ANDROID_VARIANT_LABEL:-release}"
@@ -102,11 +103,24 @@ MODEL_FILENAMES=(
   "universal_scene_7class.task"
   "personal_household_8class.task"
 )
-declare -A MODEL_EXPECTED_SHA256=(
-  ["meal-input-assist.task"]="866c1f1ecf042655e81f1e7379fcb8d1d8cf4b301726a978c437937326e0be5a"
-  ["universal_scene_7class.task"]="6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1"
-  ["personal_household_8class.task"]="924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c"
-)
+expected_sha256_for_model() {
+  local model_file="$1"
+  case "$model_file" in
+    "meal-input-assist.task")
+      echo "${MEDIAPIPE_MODEL_SHA256:-3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601}"
+      ;;
+    "universal_scene_7class.task")
+      echo "${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1}"
+      ;;
+    "personal_household_8class.task")
+      echo "${MEDIAPIPE_PERSONAL_MODEL_SHA256:-924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c}"
+      ;;
+    *)
+      echo "error: unknown MediaPipe model file: $model_file" >&2
+      exit 1
+      ;;
+  esac
+}
 MODEL_ASSET_DIR="$ANDROID_DIR/app/src/main/assets/mediapipe"
 REQUIRE_BUNDLED_MODEL="${REQUIRE_BUNDLED_MODEL:-}"
 if [[ -z "$REQUIRE_BUNDLED_MODEL" ]]; then
@@ -119,7 +133,7 @@ fi
 
 if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
   echo "Ensuring and verifying bundled MediaPipe model assets..."
-  bash "$ROOT_DIR/scripts/ensure-mediapipe-model.sh"
+  bash "$ENSURE_MEDIAPIPE_MODEL_SCRIPT"
 
   for model_file in "${MODEL_FILENAMES[@]}"; do
     target_path="$MODEL_ASSET_DIR/$model_file"
@@ -129,7 +143,7 @@ if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
       exit 1
     fi
     actual_sha="$(compute_sha256 "$target_path")"
-    expected_sha="${MODEL_EXPECTED_SHA256[$model_file]}"
+    expected_sha="$(expected_sha256_for_model "$model_file")"
     if [[ "$actual_sha" != "$expected_sha" ]]; then
       echo "error: SHA256 checksum mismatch for bundled model $model_file at $target_path (expected=$expected_sha, actual=$actual_sha)" >&2
       exit 1
@@ -165,7 +179,7 @@ if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
       exit 1
     fi
     APK_MODEL_SHA="$(unzip -p "$APK_PATH" "$APK_MODEL_ENTRY" | compute_sha256_stream)"
-    expected_sha="${MODEL_EXPECTED_SHA256[$model_file]}"
+    expected_sha="$(expected_sha256_for_model "$model_file")"
     if [[ "$APK_MODEL_SHA" != "$expected_sha" ]]; then
       echo "error: APK verification failed - SHA256 checksum mismatch for '$APK_MODEL_ENTRY' in $APK_PATH (expected=$expected_sha, actual=$APK_MODEL_SHA)" >&2
       exit 1
