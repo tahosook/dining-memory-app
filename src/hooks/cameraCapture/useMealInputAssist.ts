@@ -5,8 +5,10 @@ import { normalizeMealInputAssistResult } from '../../ai/mealInputAssist/normali
 import { mergeAppliedMetadata } from '../../ai/mealInputAssist/appliedMetadata';
 import {
   createMealInputAssistEnvironmentLoadFailure,
+  getMealInputAssistEnvironmentRevision,
   loadDefaultMealInputAssistRuntimeAvailability,
   loadMealInputAssistEnvironment,
+  subscribeMealInputAssistEnvironmentChange,
   type MealInputAssistEnvironment,
   type MealInputAssistEnvironmentLoaderDependencies,
 } from '../../ai/mealInputAssist/environment';
@@ -79,6 +81,7 @@ export function useMealInputAssist({
   const latestProgressUpdateRef = useRef<MealInputAssistProgressUpdate | null>(null);
   const isPrewarmingRef = useRef(false);
   const environmentPromiseRef = useRef<Promise<MealInputAssistEnvironment> | null>(null);
+  const environmentRevisionRef = useRef<number>(getMealInputAssistEnvironmentRevision());
   const environmentLoaderDependenciesRef =
     useRef<MealInputAssistEnvironmentLoaderDependencies | null>(null);
   const appliedNoteDraftValuesRef = useRef<Set<string>>(new Set());
@@ -155,13 +158,16 @@ export function useMealInputAssist({
   }, [status]);
 
   const loadEnvironment = useCallback(async () => {
+    const currentRevision = getMealInputAssistEnvironmentRevision();
     const shouldReloadEnvironment =
       !environmentPromiseRef.current ||
+      environmentRevisionRef.current !== currentRevision ||
       environmentLoaderDependenciesRef.current?.loadAiInputAssistEnabledSetting !==
         loadAiInputAssistEnabledSetting ||
       environmentLoaderDependenciesRef.current?.loadRuntimeAvailability !== loadRuntimeAvailability;
 
     if (shouldReloadEnvironment) {
+      environmentRevisionRef.current = currentRevision;
       environmentLoaderDependenciesRef.current = {
         loadAiInputAssistEnabledSetting,
         loadRuntimeAvailability,
@@ -194,12 +200,15 @@ export function useMealInputAssist({
   }, [loadAiInputAssistEnabledSetting, loadRuntimeAvailability]);
 
   const getRequestEnvironment = useCallback(async () => {
+    const currentRevision = getMealInputAssistEnvironmentRevision();
+    const hasMatchingRevision = environmentRevisionRef.current === currentRevision;
     const hasMatchingEnvironmentDependencies =
-      !environmentLoaderDependenciesRef.current ||
-      (environmentLoaderDependenciesRef.current.loadAiInputAssistEnabledSetting ===
-        loadAiInputAssistEnabledSetting &&
-        environmentLoaderDependenciesRef.current.loadRuntimeAvailability ===
-          loadRuntimeAvailability);
+      hasMatchingRevision &&
+      (!environmentLoaderDependenciesRef.current ||
+        (environmentLoaderDependenciesRef.current.loadAiInputAssistEnabledSetting ===
+          loadAiInputAssistEnabledSetting &&
+          environmentLoaderDependenciesRef.current.loadRuntimeAvailability ===
+            loadRuntimeAvailability));
     if (isAiInputAssistEnabled === false && hasMatchingEnvironmentDependencies) {
       return {
         isAiInputAssistEnabled,
@@ -227,6 +236,19 @@ export function useMealInputAssist({
     loadRuntimeAvailability,
     runtimeAvailability,
   ]);
+
+  useEffect(() => {
+    return subscribeMealInputAssistEnvironmentChange(() => {
+      environmentPromiseRef.current = null;
+      if (!provider && !policy) {
+        setIsAiInputAssistEnabled(null);
+        setRuntimeAvailability(null);
+        if (captureReview) {
+          loadEnvironment().catch(() => undefined);
+        }
+      }
+    });
+  }, [captureReview, loadEnvironment, policy, provider]);
 
   useEffect(() => {
     if (!captureReview && !provider && !policy) {

@@ -79,8 +79,13 @@ export class MediaPipeStaticImageNativeModuleClassifier implements MediaPipeStat
   ) {}
 
   async classifyStaticImage(photoUri: string): Promise<MediaPipeStaticImageRawResult> {
-    if (this.modelId && typeof this.nativeModule.classifyStaticImageWithModel === 'function') {
-      return this.nativeModule.classifyStaticImageWithModel(photoUri, this.modelId);
+    const activeModelId =
+      this.modelId ??
+      (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
+      DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+
+    if (typeof this.nativeModule.classifyStaticImageWithModel === 'function') {
+      return this.nativeModule.classifyStaticImageWithModel(photoUri, activeModelId);
     }
     if (typeof this.nativeModule.classifyStaticImage === 'function') {
       return this.nativeModule.classifyStaticImage(photoUri);
@@ -148,7 +153,7 @@ export async function getMediaPipeStaticImageAvailability(
     description,
 
     provider: new MediaPipeStaticImageMealInputAssistProvider(
-      new MediaPipeStaticImageNativeModuleClassifier(nativeModule, resolvedModelId)
+      new MediaPipeStaticImageNativeModuleClassifier(nativeModule, modelId)
     ),
   };
 }

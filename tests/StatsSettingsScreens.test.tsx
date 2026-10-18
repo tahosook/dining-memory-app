@@ -32,6 +32,7 @@ import {
   resolveMediaPipeModelPath,
 } from '../src/ai/mealInputAssist/modelConfig';
 import { getMediaPipeStaticImageAvailability } from '../src/ai/mealInputAssist/mediapipeStaticImageProvider';
+import { getMealInputAssistEnvironmentRevision } from '../src/ai/mealInputAssist/environment';
 
 let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
 
@@ -980,6 +981,7 @@ describe('SettingsScreen', () => {
       provider: { suggest: jest.fn() },
     });
 
+    const initialRevision = getMealInputAssistEnvironmentRevision();
     const { getByTestId, findByText } = render(<SettingsScreen />);
     await triggerLatestFocus();
 
@@ -992,6 +994,10 @@ describe('SettingsScreen', () => {
       expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
         'universal_scene_7class'
       );
+    });
+
+    await waitFor(() => {
+      expect(getMealInputAssistEnvironmentRevision()).toBeGreaterThan(initialRevision);
     });
 
     await waitFor(() => {

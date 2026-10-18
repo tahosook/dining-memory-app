@@ -6,6 +6,11 @@ export {
 } from './mediapipeStaticImageNormalizer';
 export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
 export {
+  getMealInputAssistEnvironmentRevision,
+  invalidateMealInputAssistEnvironment,
+  subscribeMealInputAssistEnvironmentChange,
+} from './environment';
+export {
   LocalRuntimePrototypeMealInputAssistProvider,
   getLocalRuntimePrototypeAvailability,
 } from './localRuntimePrototype';

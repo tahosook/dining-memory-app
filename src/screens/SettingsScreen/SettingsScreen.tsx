@@ -24,6 +24,7 @@ import {
   MEDIAPIPE_CLASSIFIER_MODEL_LIST,
   getMealInputAssistManagedFiles,
   getMediaPipeStaticImageAvailability,
+  invalidateMealInputAssistEnvironment,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
   MEDIAPIPE_MODEL_DISPLAY_NAME,
   type MealInputAssistModelDownloadProgress,
@@ -184,6 +185,7 @@ export default function SettingsScreen() {
 
       try {
         await AppSettingsService.setMediaPipeClassifierModelId?.(nextModelId);
+        invalidateMealInputAssistEnvironment();
       } catch (error) {
         console.error(
           'Failed to save MediaPipe classifier model setting:',
@@ -235,6 +237,7 @@ export default function SettingsScreen() {
 
     try {
       await AppSettingsService.setAiInputAssistEnabled(nextValue);
+      invalidateMealInputAssistEnvironment();
     } catch (error) {
       console.error('Failed to save AI input assist setting:', sanitizeLogObject(error));
       setAiInputAssistEnabled(current => !current);

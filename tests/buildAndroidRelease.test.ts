@@ -27,7 +27,6 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       [
         '-c',
         `
-      ANDROID_DIR="${mockAndroidDir}"
       BUILD_OUTPUT_TYPE="release"
       REQUIRE_BUNDLED_MODEL="true"
       MODEL_ASSET_PATH="$ANDROID_DIR/app/src/main/assets/mediapipe/meal-input-assist.task"
@@ -37,7 +36,13 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       fi
     `,
       ],
-      { encoding: 'utf-8' }
+      {
+        env: {
+          ...process.env,
+          ANDROID_DIR: mockAndroidDir,
+        },
+        encoding: 'utf-8',
+      }
     );
 
     expect(res.status).toBe(1);
@@ -56,7 +61,6 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       [
         '-c',
         `
-      ANDROID_DIR="${mockAndroidDir}"
       BUILD_OUTPUT_TYPE="release"
       REQUIRE_BUNDLED_MODEL="true"
       MODEL_ASSET_PATH="$ANDROID_DIR/app/src/main/assets/mediapipe/meal-input-assist.task"
@@ -66,7 +70,13 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       fi
     `,
       ],
-      { encoding: 'utf-8' }
+      {
+        env: {
+          ...process.env,
+          ANDROID_DIR: mockAndroidDir,
+        },
+        encoding: 'utf-8',
+      }
     );
 
     expect(res.status).toBe(1);
@@ -85,7 +95,6 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       [
         '-c',
         `
-      ANDROID_DIR="${mockAndroidDir}"
       BUILD_OUTPUT_TYPE="release"
       REQUIRE_BUNDLED_MODEL="true"
       MODEL_ASSET_PATH="$ANDROID_DIR/app/src/main/assets/mediapipe/meal-input-assist.task"
@@ -96,11 +105,62 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       echo "Verified bundled model asset exists"
     `,
       ],
-      { encoding: 'utf-8' }
+      {
+        env: {
+          ...process.env,
+          ANDROID_DIR: mockAndroidDir,
+        },
+        encoding: 'utf-8',
+      }
     );
 
     expect(res.status).toBe(0);
     expect(res.stdout).toContain('Verified bundled model asset exists');
+  });
+
+  test('fails pre-build check when bundled model asset has invalid SHA-256 checksum', () => {
+    const mockAndroidDir = path.join(tempTestDir, 'android-corrupt');
+    const mockAssetsDir = path.join(mockAndroidDir, 'app/src/main/assets/mediapipe');
+    fs.mkdirSync(mockAssetsDir, { recursive: true });
+    const corruptModelFile = path.join(mockAssetsDir, 'meal-input-assist.task');
+    fs.writeFileSync(corruptModelFile, 'corrupt-model-content');
+
+    const res = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
+      compute_sha256() {
+        local target="$1"
+        if command -v sha256sum >/dev/null 2>&1; then
+          sha256sum "$target" | awk '{ print $1 }'
+        elif command -v shasum >/dev/null 2>&1; then
+          shasum -a 256 "$target" | awk '{ print $1 }'
+        fi
+      }
+
+      BUILD_OUTPUT_TYPE="release"
+      REQUIRE_BUNDLED_MODEL="true"
+      MODEL_ASSET_PATH="$ANDROID_DIR/app/src/main/assets/mediapipe/meal-input-assist.task"
+      EXPECTED_SHA="866c1f1ecf042655e81f1e7379fcb8d1d8cf4b301726a978c437937326e0be5a"
+      ACTUAL_SHA="$(compute_sha256 "$MODEL_ASSET_PATH")"
+      if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+        echo "error: SHA256 checksum mismatch for bundled model at $MODEL_ASSET_PATH (expected=$EXPECTED_SHA, actual=$ACTUAL_SHA)" >&2
+        exit 1
+      fi
+    `,
+      ],
+      {
+        env: {
+          ...process.env,
+          ANDROID_DIR: mockAndroidDir,
+        },
+        encoding: 'utf-8',
+      }
+    );
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: SHA256 checksum mismatch for bundled model');
   });
 
   test('verifies bundled model asset presence and non-zero size inside APK archive', () => {
@@ -124,7 +184,6 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       [
         '-c',
         `
-      APK_PATH="${mockApkPath}"
       APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
       if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
         echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
@@ -138,7 +197,13 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
     `,
       ],
-      { encoding: 'utf-8' }
+      {
+        env: {
+          ...process.env,
+          APK_PATH: mockApkPath,
+        },
+        encoding: 'utf-8',
+      }
     );
 
     expect(verifyRes.status).toBe(0);
@@ -146,7 +211,7 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
     expect(verifyRes.stdout).toContain('dummy-model-payload'.length.toString());
   });
 
-  test('verifies all 3 bundled model assets presence and non-zero size inside APK archive', () => {
+  test('verifies all 3 bundled model assets presence, non-zero size, and SHA256 inside APK archive', () => {
     const apkDir = path.join(tempTestDir, 'apk-3models-test');
     fs.mkdirSync(path.join(apkDir, 'assets/mediapipe'), { recursive: true });
     fs.writeFileSync(path.join(apkDir, 'assets/mediapipe/meal-input-assist.task'), 'dummy-model-1');
@@ -171,7 +236,14 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       [
         '-c',
         `
-      APK_PATH="${mockApkPath}"
+      compute_sha256_stream() {
+        if command -v sha256sum >/dev/null 2>&1; then
+          sha256sum | awk '{ print $1 }'
+        elif command -v shasum >/dev/null 2>&1; then
+          shasum -a 256 | awk '{ print $1 }'
+        fi
+      }
+
       MODEL_FILENAMES=(
         "meal-input-assist.task"
         "universal_scene_7class.task"
@@ -188,11 +260,22 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
           echo "error: APK verification failed - '$APK_MODEL_ENTRY' is empty or invalid size in $APK_PATH" >&2
           exit 1
         fi
-        echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes)"
+        APK_MODEL_SHA="$(unzip -p "$APK_PATH" "$APK_MODEL_ENTRY" | compute_sha256_stream)"
+        if [[ -z "$APK_MODEL_SHA" ]]; then
+          echo "error: failed to compute sha256" >&2
+          exit 1
+        fi
+        echo "  ✓ Bundled model verified in APK: $APK_MODEL_ENTRY ($APK_MODEL_SIZE bytes, sha256=$APK_MODEL_SHA)"
       done
     `,
       ],
-      { encoding: 'utf-8' }
+      {
+        env: {
+          ...process.env,
+          APK_PATH: mockApkPath,
+        },
+        encoding: 'utf-8',
+      }
     );
 
     expect(verifyRes.status).toBe(0);
@@ -217,7 +300,6 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       [
         '-c',
         `
-      APK_PATH="${mockApkPath}"
       APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
       if ! unzip -l "$APK_PATH" "$APK_MODEL_ENTRY" >/dev/null 2>&1; then
         echo "error: APK verification failed - '$APK_MODEL_ENTRY' is missing in $APK_PATH" >&2
@@ -225,12 +307,70 @@ describe('build-android-release.sh MediaPipe Model Bundling Verification', () =>
       fi
     `,
       ],
-      { encoding: 'utf-8' }
+      {
+        env: {
+          ...process.env,
+          APK_PATH: mockApkPath,
+        },
+        encoding: 'utf-8',
+      }
     );
 
     expect(verifyRes.status).toBe(1);
     expect(verifyRes.stderr).toContain(
       "error: APK verification failed - 'assets/mediapipe/meal-input-assist.task' is missing"
+    );
+  });
+
+  test('fails post-build APK verification when bundled model in APK has invalid SHA-256 checksum', () => {
+    const apkDir = path.join(tempTestDir, 'apk-corrupt-test');
+    fs.mkdirSync(path.join(apkDir, 'assets/mediapipe'), { recursive: true });
+    fs.writeFileSync(
+      path.join(apkDir, 'assets/mediapipe/meal-input-assist.task'),
+      'corrupt-model-in-apk'
+    );
+
+    const mockApkPath = path.join(tempTestDir, 'mock-corrupt-model.apk');
+    const zipRes = spawnSync('zip', ['-r', mockApkPath, 'assets'], {
+      cwd: apkDir,
+      encoding: 'utf-8',
+    });
+    expect(zipRes.status).toBe(0);
+
+    const verifyRes = spawnSync(
+      'bash',
+      [
+        '-c',
+        `
+      compute_sha256_stream() {
+        if command -v sha256sum >/dev/null 2>&1; then
+          sha256sum | awk '{ print $1 }'
+        elif command -v shasum >/dev/null 2>&1; then
+          shasum -a 256 | awk '{ print $1 }'
+        fi
+      }
+
+      APK_MODEL_ENTRY="assets/mediapipe/meal-input-assist.task"
+      EXPECTED_SHA="866c1f1ecf042655e81f1e7379fcb8d1d8cf4b301726a978c437937326e0be5a"
+      APK_MODEL_SHA="$(unzip -p "$APK_PATH" "$APK_MODEL_ENTRY" | compute_sha256_stream)"
+      if [[ "$APK_MODEL_SHA" != "$EXPECTED_SHA" ]]; then
+        echo "error: APK verification failed - SHA256 checksum mismatch for '$APK_MODEL_ENTRY' in $APK_PATH (expected=$EXPECTED_SHA, actual=$APK_MODEL_SHA)" >&2
+        exit 1
+      fi
+    `,
+      ],
+      {
+        env: {
+          ...process.env,
+          APK_PATH: mockApkPath,
+        },
+        encoding: 'utf-8',
+      }
+    );
+
+    expect(verifyRes.status).toBe(1);
+    expect(verifyRes.stderr).toContain(
+      "error: APK verification failed - SHA256 checksum mismatch for 'assets/mediapipe/meal-input-assist.task'"
     );
   });
 
