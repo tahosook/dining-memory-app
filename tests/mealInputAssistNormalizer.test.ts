@@ -301,11 +301,10 @@ describe('normalizeMediaPipeStaticImageResult', () => {
     expect(normalized.providerResult.mealNames).toEqual([
       { value: '生姜焼き・豚肉炒め定食', confidence: 0.35 },
     ]);
-    expect(normalized.providerResult.cuisineTypes).toEqual([
-      { value: '和食', confidence: 0.35 },
-    ]);
+    expect(normalized.providerResult.cuisineTypes).toEqual([{ value: '和食', confidence: 0.35 }]);
     expect(normalized.providerResult.noteDraft).toEqual({
-      value: 'かぼちゃの煮物と具だくさん豚汁がついた生姜焼き。一汁三菜・夕定食スタイルのごはんです。',
+      value:
+        'かぼちゃの煮物と具だくさん豚汁がついた生姜焼き。一汁三菜・夕定食スタイルのごはんです。',
       confidence: 0.35,
     });
     expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual(['生姜焼き・豚肉炒め定食']);
@@ -320,7 +319,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       photoUri: 'file:///tmp/side-only.jpg',
       categories: [
         { label: 'side_simmered_pumpkin', score: 0.45 },
-        { label: 'side_tonjiru_soup', score: 0.30 },
+        { label: 'side_tonjiru_soup', score: 0.3 },
         { label: 'scene_teishoku_multi_dish', score: 0.25 },
       ],
     });
@@ -331,9 +330,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
     // Only main dish
     const mainOnly = normalizeMediaPipeStaticImageResult({
       photoUri: 'file:///tmp/main-only.jpg',
-      categories: [
-        { label: 'main_hamburg', score: 0.50 },
-      ],
+      categories: [{ label: 'main_hamburg', score: 0.5 }],
     });
     expect(normalizeMealInputAssistResult(mainOnly.providerResult).noteDraft?.value).toBe(
       'ハンバーグの食卓です。'

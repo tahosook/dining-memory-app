@@ -433,7 +433,9 @@ export async function installMediaPipeModel(
   const url = options?.url ?? MEDIAPIPE_MODEL_CONFIG.url;
   const expectedSha256 = options?.expectedSha256 ?? MEDIAPIPE_MODEL_CONFIG.sha256;
   if (!expectedSha256 || expectedSha256.trim() === '') {
-    throw new Error('MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。');
+    throw new Error(
+      'MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。'
+    );
   }
   const version = options?.version ?? MEDIAPIPE_MODEL_CONFIG.version;
 

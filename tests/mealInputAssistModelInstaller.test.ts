@@ -437,13 +437,17 @@ describe('MediaPipe model installer', () => {
       installMediaPipeModel({
         expectedSha256: '',
       })
-    ).rejects.toThrow('MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。');
+    ).rejects.toThrow(
+      'MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。'
+    );
 
     await expect(
       installMediaPipeModel({
         expectedSha256: '   ',
       })
-    ).rejects.toThrow('MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。');
+    ).rejects.toThrow(
+      'MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。'
+    );
 
     expect(fileSystemMock.createDownloadResumable).not.toHaveBeenCalled();
   });

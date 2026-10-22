@@ -94,26 +94,111 @@ const LABEL_MAPPING: Record<string, LabelMapping> = {
   // --- Personal 3-Axis Multi-Label 44 Tags (Issue-25) ---
   // =========================================================================
   // 1. Main Dish (20 tags)
-  main_grilled_fish: { axis: 'main', mealName: '焼き魚定食', cleanName: '焼き魚', cuisineType: '和食' },
-  main_pork_ginger_stirfry: { axis: 'main', mealName: '生姜焼き・豚肉炒め定食', cleanName: '生姜焼き', cuisineType: '和食' },
-  main_chicken_dish: { axis: 'main', mealName: 'チキンソテー・鶏肉料理定食', cleanName: 'チキンソテー', cuisineType: '和食' },
-  main_fried_meat: { axis: 'main', mealName: '唐揚げ・フライ定食', cleanName: '唐揚げ', cuisineType: 'その他' },
-  main_hamburg: { axis: 'main', mealName: 'ハンバーグ定食', cleanName: 'ハンバーグ', cuisineType: '洋食' },
-  main_simmered_meat_potato: { axis: 'main', mealName: '肉じゃが・角煮定食', cleanName: '肉じゃが', cuisineType: '和食' },
-  main_keema_curry: { axis: 'main', mealName: '特製キーマカレー', cleanName: '特製キーマカレー', cuisineType: '洋食' },
-  main_curry_hayashi: { axis: 'main', mealName: 'カレー・ハヤシライス', cleanName: 'カレーライス', cuisineType: '洋食' },
-  main_ethnic_gapao: { axis: 'main', mealName: 'ガパオ・エスニック', cleanName: 'ガパオライス', cuisineType: '洋食' },
-  main_ramen: { axis: 'main', mealName: 'ラーメン・つけ麺', cleanName: 'ラーメン', cuisineType: '中華' },
+  main_grilled_fish: {
+    axis: 'main',
+    mealName: '焼き魚定食',
+    cleanName: '焼き魚',
+    cuisineType: '和食',
+  },
+  main_pork_ginger_stirfry: {
+    axis: 'main',
+    mealName: '生姜焼き・豚肉炒め定食',
+    cleanName: '生姜焼き',
+    cuisineType: '和食',
+  },
+  main_chicken_dish: {
+    axis: 'main',
+    mealName: 'チキンソテー・鶏肉料理定食',
+    cleanName: 'チキンソテー',
+    cuisineType: '和食',
+  },
+  main_fried_meat: {
+    axis: 'main',
+    mealName: '唐揚げ・フライ定食',
+    cleanName: '唐揚げ',
+    cuisineType: 'その他',
+  },
+  main_hamburg: {
+    axis: 'main',
+    mealName: 'ハンバーグ定食',
+    cleanName: 'ハンバーグ',
+    cuisineType: '洋食',
+  },
+  main_simmered_meat_potato: {
+    axis: 'main',
+    mealName: '肉じゃが・角煮定食',
+    cleanName: '肉じゃが',
+    cuisineType: '和食',
+  },
+  main_keema_curry: {
+    axis: 'main',
+    mealName: '特製キーマカレー',
+    cleanName: '特製キーマカレー',
+    cuisineType: '洋食',
+  },
+  main_curry_hayashi: {
+    axis: 'main',
+    mealName: 'カレー・ハヤシライス',
+    cleanName: 'カレーライス',
+    cuisineType: '洋食',
+  },
+  main_ethnic_gapao: {
+    axis: 'main',
+    mealName: 'ガパオ・エスニック',
+    cleanName: 'ガパオライス',
+    cuisineType: '洋食',
+  },
+  main_ramen: {
+    axis: 'main',
+    mealName: 'ラーメン・つけ麺',
+    cleanName: 'ラーメン',
+    cuisineType: '中華',
+  },
   main_udon: { axis: 'main', mealName: 'うどん', cleanName: 'うどん', cuisineType: '和食' },
   main_soba: { axis: 'main', mealName: 'そば', cleanName: 'そば', cuisineType: '和食' },
-  main_pasta: { axis: 'main', mealName: 'パスタ・スパゲッティ', cleanName: 'パスタ', cuisineType: '洋食' },
-  main_gyoza_dimsum: { axis: 'main', mealName: '焼き餃子・点心', cleanName: '焼き餃子', cuisineType: '中華' },
-  main_mapo_chuka: { axis: 'main', mealName: '麻婆豆腐・中華炒め', cleanName: '麻婆豆腐', cuisineType: '中華' },
-  main_hotpot: { axis: 'main', mealName: '卓上鍋・すき焼き', cleanName: '鍋料理', cuisineType: '和食' },
-  main_bal_ajillo: { axis: 'main', mealName: 'アヒージョ・バル主菜', cleanName: 'アヒージョ', cuisineType: '洋食' },
+  main_pasta: {
+    axis: 'main',
+    mealName: 'パスタ・スパゲッティ',
+    cleanName: 'パスタ',
+    cuisineType: '洋食',
+  },
+  main_gyoza_dimsum: {
+    axis: 'main',
+    mealName: '焼き餃子・点心',
+    cleanName: '焼き餃子',
+    cuisineType: '中華',
+  },
+  main_mapo_chuka: {
+    axis: 'main',
+    mealName: '麻婆豆腐・中華炒め',
+    cleanName: '麻婆豆腐',
+    cuisineType: '中華',
+  },
+  main_hotpot: {
+    axis: 'main',
+    mealName: '卓上鍋・すき焼き',
+    cleanName: '鍋料理',
+    cuisineType: '和食',
+  },
+  main_bal_ajillo: {
+    axis: 'main',
+    mealName: 'アヒージョ・バル主菜',
+    cleanName: 'アヒージョ',
+    cuisineType: '洋食',
+  },
   main_donburi: { axis: 'main', mealName: '丼もの', cleanName: '丼もの', cuisineType: 'その他' },
-  main_fried_rice: { axis: 'main', mealName: 'チャーハン・炒飯', cleanName: 'チャーハン', cuisineType: '中華' },
-  main_sashimi_seafood: { axis: 'main', mealName: 'お刺身・海鮮', cleanName: 'お刺身', cuisineType: '和食' },
+  main_fried_rice: {
+    axis: 'main',
+    mealName: 'チャーハン・炒飯',
+    cleanName: 'チャーハン',
+    cuisineType: '中華',
+  },
+  main_sashimi_seafood: {
+    axis: 'main',
+    mealName: 'お刺身・海鮮',
+    cleanName: 'お刺身',
+    cuisineType: '和食',
+  },
 
   // 2. Side Dish & Soup (14 tags)
   side_simmered_pumpkin: { axis: 'side', cleanName: 'かぼちゃの煮物' },
@@ -380,7 +465,11 @@ function normalizePersonal3AxisResult(
 
     // 3. Scene Axis
     if (mapping.axis === 'scene') {
-      if (category.score >= PERSONAL_SCENE_MIN_THRESHOLD && !detectedSceneClean && mapping.cleanName) {
+      if (
+        category.score >= PERSONAL_SCENE_MIN_THRESHOLD &&
+        !detectedSceneClean &&
+        mapping.cleanName
+      ) {
         detectedSceneClean = mapping.cleanName;
       }
     }
