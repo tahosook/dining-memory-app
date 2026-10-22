@@ -82,11 +82,13 @@ flowchart TD
   - `MediaPipeMealInputAssistModule.kt` は `filesDir/ai-models/` にモデルがない場合、同梱アセット（`assets/mediapipe/`）から自動シードコピーして `MappedByteBuffer` で安全にロードする仕組みを保持。
   - `MediaPipeMealInputAssistSupport.kt` およびモジュール本体にて、選択されたモデルID（`cooking_method_9class`、`universal_scene_7class`、`personal_household_8class`）ごとに `ImageClassifier` インスタンスをキャッシュ管理し、モデル切替時もメモリ効率と高速推論を両立。
   - `main` ブランチ上の既定ランタイムは `mediapipe-static-image`、既定モデルは `cooking_method_9class` に設定済み。
-  - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は以下の3体系の正規化マッピングを配備：
+  - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は以下の体系の正規化マッピングを配備：
     1. **調理法9クラス**（`curry_rice`, `drink`, `fish_dish`, `fried_dish`, `meat_dish`, `noodles`, `simmered_dish`, `stir_fry`, `other_or_exclude`）
     2. **汎用シーン7クラス**（`home_teishoku_set`, `one_plate_or_curry`, `izakaya_bistro_or_party`, `noodles_or_single_bowl`, `dining_out_or_tray_meal`, `drink_or_bottle_record`, `non_food_or_exclude`）
     3. **わたし専用8クラス**（`wife_multi_dish_teishoku`, `wife_nordic_one_plate`, `wife_curry_or_ethnic_plate`, `wife_morning_salmon_natto`, `wife_bistro_baguette_bal`, `wife_izakaya_small_dishes`, `household_pot_noodles_or_ramen_rice`, `special_takeout_party_feast`）
-  - 除外対象クラス（`other_or_exclude`、`non_food_or_exclude`）は `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
+    4. **汎用定番料理23クラス**（[Issue-24](../issues/issue-24-universal-dining-23class-model.md): 器情報を排除し焼き魚定食・生姜焼き・ラーメン・うどん・カレー等の純料理名サジェストに対応）
+    5. **わたし専用3軸マルチラベル44タグ**（[Issue-25](../issues/issue-25-personal-multilabel-3axis-model.md): 主菜20種・副菜汁物14種・シーン10種を同時分解し、軸別動的閾値によるチップ提示と `noteDraft` メモ下書きを自動合成）
+  - 除外対象クラス（`other_or_exclude`、`non_food_or_exclude`、`non_food_exclude`）は `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
 
 ### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
 - **ステータス**: **確認済み**

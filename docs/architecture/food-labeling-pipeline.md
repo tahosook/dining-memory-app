@@ -64,9 +64,11 @@ flowchart LR
 
 - **リリースタグ規則**: `mediapipe-model-vX.Y.Z`（例: `mediapipe-model-v0.1.0`）
 - **アセット構成**:
-  - `meal-input-assist.task`: MediaPipe Image Classifier モデルバイナリ（既存の `meal-input-assist.*` 命名規則に準拠）
-  - `meal-input-assist.task.sha256`: SHA256 ハッシュテキスト（`echo "<hash>  meal-input-assist.task" > meal-input-assist.task.sha256`）
-- **リリースノート記載要件**: 学習データセット件数、混同行列（Confusion Matrix）のサマリー、クラス一覧（9クラス）を明記。
+  - `meal-input-assist.task`: 標準調理法9クラスモデルバイナリ
+  - `universal_dining_23class.task`: 汎用定番料理23クラスモデルバイナリ（Issue-24）
+  - `personal_multilabel_44tag.task`: わたし専用3軸マルチラベル44タグモデルバイナリ（Issue-25）
+  - 各 `.task.sha256`: SHA256 ハッシュテキスト
+- **リリースノート記載要件**: 学習データセット件数、混同行列（Confusion Matrix）のサマリー、クラス/タグ一覧を明記。
 
 ---
 

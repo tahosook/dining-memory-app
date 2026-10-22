@@ -21,6 +21,8 @@ internal const val MEDIAPIPE_MEAL_INPUT_ASSIST_CLASSIFIER_NAME = "mediapipe-imag
 internal const val MODEL_ID_COOKING_METHOD_9CLASS = "cooking_method_9class"
 internal const val MODEL_ID_UNIVERSAL_SCENE_7CLASS = "universal_scene_7class"
 internal const val MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS = "personal_household_8class"
+internal const val MODEL_ID_UNIVERSAL_DINING_23CLASS = "universal_dining_23class"
+internal const val MODEL_ID_PERSONAL_MULTILABEL_44TAG = "personal_multilabel_44tag"
 
 internal data class MediaPipeModelSpec(
   val id: String,
@@ -43,6 +45,16 @@ internal val SUPPORTED_MODEL_SPECS = mapOf(
     id = MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS,
     fileName = "personal_household_8class.task",
     assetPath = "mediapipe/personal_household_8class.task",
+  ),
+  MODEL_ID_UNIVERSAL_DINING_23CLASS to MediaPipeModelSpec(
+    id = MODEL_ID_UNIVERSAL_DINING_23CLASS,
+    fileName = "universal_dining_23class.task",
+    assetPath = "mediapipe/universal_dining_23class.task",
+  ),
+  MODEL_ID_PERSONAL_MULTILABEL_44TAG to MediaPipeModelSpec(
+    id = MODEL_ID_PERSONAL_MULTILABEL_44TAG,
+    fileName = "personal_multilabel_44tag.task",
+    assetPath = "mediapipe/personal_multilabel_44tag.task",
   ),
 )
 
