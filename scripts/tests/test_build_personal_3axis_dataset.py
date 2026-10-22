@@ -14,8 +14,10 @@ from scripts.build_personal_3axis_dataset import (
     PERSONAL_MAIN_TAGS,
     PERSONAL_SCENE_TAGS,
     PERSONAL_SIDE_TAGS,
+    Personal3AxisDatasetError,
     assign_record_level_splits,
     build_personal_3axis_dataset,
+    collect_protected_golden_meshi_keys,
     export_multi_axis_directories,
     extract_meshi_key,
     extract_personal_3axis_tags,
@@ -121,6 +123,29 @@ class TestBuildPersonal3AxisDataset(unittest.TestCase):
             set(),
             "Data leakage detected between val and test!",
         )
+
+    def test_collect_protected_golden_fail_closed_when_missing_dir(self) -> None:
+        missing_dir = self.temp_dir / "non_existent_golden_dir"
+        with self.assertRaises(Personal3AxisDatasetError) as ctx:
+            collect_protected_golden_meshi_keys(missing_dir, allow_missing_golden=False)
+        self.assertIn("Golden Test Set directory not found", str(ctx.exception))
+
+    def test_collect_protected_golden_fail_closed_when_empty_dir(self) -> None:
+        empty_dir = self.temp_dir / "empty_golden_dir"
+        empty_dir.mkdir(parents=True)
+        with self.assertRaises(Personal3AxisDatasetError) as ctx:
+            collect_protected_golden_meshi_keys(empty_dir, allow_missing_golden=False)
+        self.assertIn("No valid protected MESHI keys found", str(ctx.exception))
+
+    def test_collect_protected_golden_allowed_with_explicit_flag(self) -> None:
+        missing_dir = self.temp_dir / "non_existent_golden_dir_2"
+        res = collect_protected_golden_meshi_keys(missing_dir, allow_missing_golden=True)
+        self.assertEqual(res, set())
+
+        empty_dir = self.temp_dir / "empty_golden_dir_2"
+        empty_dir.mkdir(parents=True)
+        res_empty = collect_protected_golden_meshi_keys(empty_dir, allow_missing_golden=True)
+        self.assertEqual(res_empty, set())
 
 
 if __name__ == "__main__":

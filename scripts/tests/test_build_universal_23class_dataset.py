@@ -11,9 +11,11 @@ from typing import Any, Dict, List
 
 from scripts.build_universal_23class_dataset import (
     UNIVERSAL_23_CLASSES,
+    Universal23ClassDatasetError,
     assign_stratified_splits,
     build_universal_23class_dataset,
     classify_universal_23class,
+    collect_protected_golden_meshi_keys,
     export_dataset_directories,
     extract_meshi_key,
 )
@@ -161,6 +163,29 @@ class TestBuildUniversal23ClassDataset(unittest.TestCase):
         test_files = list((dataset_dir / "test" / cls).glob("*.jpg"))
         self.assertEqual(len(test_files), 2)
         self.assertEqual(sum(1 for f in test_files if "_aug_" in f.name), 0)
+
+    def test_collect_protected_golden_fail_closed_when_missing_dir(self) -> None:
+        missing_dir = self.temp_dir / "non_existent_golden_dir"
+        with self.assertRaises(Universal23ClassDatasetError) as ctx:
+            collect_protected_golden_meshi_keys(missing_dir, allow_missing_golden=False)
+        self.assertIn("Golden Test Set directory not found", str(ctx.exception))
+
+    def test_collect_protected_golden_fail_closed_when_empty_dir(self) -> None:
+        empty_dir = self.temp_dir / "empty_golden_dir"
+        empty_dir.mkdir(parents=True)
+        with self.assertRaises(Universal23ClassDatasetError) as ctx:
+            collect_protected_golden_meshi_keys(empty_dir, allow_missing_golden=False)
+        self.assertIn("No valid protected MESHI keys found", str(ctx.exception))
+
+    def test_collect_protected_golden_allowed_with_explicit_flag(self) -> None:
+        missing_dir = self.temp_dir / "non_existent_golden_dir_2"
+        res = collect_protected_golden_meshi_keys(missing_dir, allow_missing_golden=True)
+        self.assertEqual(res, set())
+
+        empty_dir = self.temp_dir / "empty_golden_dir_2"
+        empty_dir.mkdir(parents=True)
+        res_empty = collect_protected_golden_meshi_keys(empty_dir, allow_missing_golden=True)
+        self.assertEqual(res_empty, set())
 
 
 if __name__ == "__main__":

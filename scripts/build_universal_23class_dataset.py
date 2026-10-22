@@ -318,9 +318,23 @@ def classify_universal_23class(record: Dict[str, Any]) -> str:
     return "teishoku_general_multi_dish"
 
 
-def collect_protected_golden_meshi_keys(golden_v1_dir: Optional[Path]) -> Set[str]:
-    """Collect MESHI_YYYYMMDD_HHMMSS keys belonging to Golden Test Set v1."""
+def collect_protected_golden_meshi_keys(
+    golden_v1_dir: Optional[Path],
+    allow_missing_golden: bool = False,
+) -> Set[str]:
+    """Collect MESHI_YYYYMMDD_HHMMSS keys belonging to Golden Test Set v1.
+
+    Fails closed if the directory is missing or empty unless allow_missing_golden is True.
+    """
     if golden_v1_dir is None or not golden_v1_dir.exists():
+        if not allow_missing_golden:
+            raise Universal23ClassDatasetError(
+                f"Golden Test Set directory not found: {golden_v1_dir}. "
+                "To skip golden leakage protection explicitly, specify allow_missing_golden=True or --allow-missing-golden."
+            )
+        sys.stderr.write(
+            f"WARNING: Golden Test Set directory missing ({golden_v1_dir}), continuing without protection due to allow_missing_golden=True\n"
+        )
         return set()
 
     protected: Set[str] = set()
@@ -330,6 +344,17 @@ def collect_protected_golden_meshi_keys(golden_v1_dir: Optional[Path]) -> Set[st
                 mk = extract_meshi_key(fname)
                 if mk.startswith("MESHI_"):
                     protected.add(mk)
+
+    if not protected:
+        if not allow_missing_golden:
+            raise Universal23ClassDatasetError(
+                f"No valid protected MESHI keys found in Golden Test Set directory: {golden_v1_dir}. "
+                "To skip golden leakage protection explicitly, specify allow_missing_golden=True or --allow-missing-golden."
+            )
+        sys.stderr.write(
+            f"WARNING: No protected MESHI keys found in ({golden_v1_dir}), continuing without protection due to allow_missing_golden=True\n"
+        )
+
     return protected
 
 
@@ -514,6 +539,7 @@ def build_universal_23class_dataset(
     export_dirs: bool = False,
     link_mode: str = "hardlink",
     augment_train_min_samples: int = 30,
+    allow_missing_golden: bool = False,
 ) -> Dict[str, Any]:
     """Build universal 23-class labeled JSONL, CSV manifest, and summary."""
     if not observations_jsonl.exists():
@@ -549,7 +575,9 @@ def build_universal_23class_dataset(
             rec["meshi_key"] = mk
             raw_records.append(rec)
 
-    protected_test_keys = collect_protected_golden_meshi_keys(golden_v1_dir)
+    protected_test_keys = collect_protected_golden_meshi_keys(
+        golden_v1_dir, allow_missing_golden=allow_missing_golden
+    )
 
     enriched: List[Dict[str, Any]] = []
     for rec in raw_records:
@@ -666,6 +694,11 @@ def main() -> None:
         default=30,
         help="Minimum target samples for train split minority classes via augmentation",
     )
+    parser.add_argument(
+        "--allow-missing-golden",
+        action="store_true",
+        help="Allow dataset generation to proceed even if Golden Test Set directory or images are missing",
+    )
     args = parser.parse_args()
 
     summary = build_universal_23class_dataset(
@@ -675,6 +708,7 @@ def main() -> None:
         export_dirs=args.export_image_dirs,
         link_mode=args.link_mode,
         augment_train_min_samples=args.augment_train_min_samples,
+        allow_missing_golden=args.allow_missing_golden,
     )
     print("=== Universal 23-Class Dataset Built Successfully ===")
     print(f"Total records: {summary['total_records']}")

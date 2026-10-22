@@ -2,7 +2,7 @@
 
 - **内部ドキュメントID**: issue-25
 - **対応 GitHub Issue**: 未起票
-- **対応 PR**: PR起票中 (`feat/issue-24-25-dining-models`)
+- **対応 PR**: PR #294 (`feat/issue-24-25-dining-models`)
 - **ステータス**: フェーズ1・3完了 (Phase 1 & 3 Completed, Phase 2 Training Next)
 - **作成日**: 2026-10-22
 - **関連ドキュメント**:
@@ -147,6 +147,7 @@ flowchart TD
 - [x] 全44タグについて、学習に十分なポジティブサンプルが存在することを確認すること。
 - [x] レコード単位スプリットにより、同一画像が異なるスプリットにまたがるデータリークを完全防止すること。
 - [x] Golden Test Set 該当画像が `train` / `val` に混入せず、`test` スプリットへ完全隔離されること。
+- [x] Golden Test Set ディレクトリの不在・読取失敗時に処理を fail-closed で即時中断し、意図的バイパスのみ明示オプションで許可すること。
 - [x] 抽出処理のユニットテストを作成・パスすること。
 
 ### フェーズ 2: MediaPipe マルチラベルモデル学習と評価
@@ -155,7 +156,8 @@ flowchart TD
 - [ ] 推論レイテンシがモバイル要件（< 30ms）を満たすこと。
 
 ### フェーズ 3: アプリ統合と UI 動作確認
-- [x] `modelConfig.ts` のわたし専用モデル設定を更新すること。
+- [x] `modelConfig.ts` のわたし専用モデル設定を更新すること（未配布時は `available: false`）。
 - [x] `mediapipeStaticImageNormalizer.ts` にマルチラベル出力のデコード、チップ生成、`noteDraft` 合成ロジックを実装すること。
-- [x] 関連する全ユニットテスト（`tests/mealInputAssist*.test.ts`）を更新・パスすること。
-- [ ] 画面上で主菜チップ、副菜チップ、メモ案が綺麗に表示され、タップ入力できることを確認すること。
+- [x] 実モデル未提供時は設定画面で選択不可（disabled & 準備中バッジ）とし、空の SHA-256 検証を拒否すること。
+- [x] 関連する全ユニットテスト（`tests/mealInputAssist*.test.ts`, `tests/StatsSettingsScreens.test.tsx`）を更新・パスすること。
+- [ ] 画面上で主菜チップ、副菜チップ、メモ案が綺麗に表示され、タップ入力できることを確認すること（Phase 2 モデル配布後に実施）。

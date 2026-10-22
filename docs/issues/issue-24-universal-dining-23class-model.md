@@ -2,7 +2,7 @@
 
 - **内部ドキュメントID**: issue-24
 - **対応 GitHub Issue**: 未起票
-- **対応 PR**: PR起票中 (`feat/issue-24-25-dining-models`)
+- **対応 PR**: PR #294 (`feat/issue-24-25-dining-models`)
 - **ステータス**: フェーズ1・3完了 (Phase 1 & 3 Completed, Phase 2 Training Next)
 - **作成日**: 2026-10-22
 - **関連ドキュメント**:
@@ -81,6 +81,7 @@
 - [x] `scripts/build_dual_taxonomy_dataset.py` を拡張または専用ビルダー（例: `scripts/build_universal_23class_dataset.py`）を作成し、1,007枚の観察データから上記23クラスを決定論的に抽出できること。
 - [x] 全23クラスについて、各クラス最低10枚以上の実画像が割り当てられること。
 - [x] Golden Test Set（回帰防止用）に含まれる画像が `train` / `val` に漏洩せず、厳格に `test` に固定されること。
+- [x] Golden Test Set ディレクトリの不在・読取失敗時に処理を fail-closed で即時中断し、意図的バイパスのみ明示オプションで許可すること。
 - [x] 抽出処理のユニットテストを作成・パスすること。
 
 ### フェーズ 2: MediaPipe モデル学習と精度評価
@@ -90,7 +91,8 @@
 - [ ] 推論レイテンシがモバイル要件（< 30ms）を満たすこと。
 
 ### フェーズ 3: アプリ統合と UI 動作検証
-- [x] `src/ai/mealInputAssist/modelConfig.ts` の汎用モデル定義を本23クラスモデルに更新すること。
+- [x] `src/ai/mealInputAssist/modelConfig.ts` の汎用モデル定義を本23クラスモデルに更新すること（未配布時は `available: false`）。
 - [x] `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` に23クラスの料理名・ジャンルマッピング（`non_food_exclude` の除外抑制含む）を追加すること。
-- [x] 既存のユニットテスト（`tests/mealInputAssist*.test.ts`）を更新・パスすること。
-- [ ] 設定画面で汎用モデルを選択した状態で、写真から具体的な料理名（「生姜焼き・豚肉炒め定食」「ラーメン・中華麺」等）がサジェストチップとして提示されることを確認すること。
+- [x] 実モデル未提供時は設定画面で選択不可（disabled & 準備中バッジ）とし、空の SHA-256 検証を拒否すること。
+- [x] 既存のユニットテスト（`tests/mealInputAssist*.test.ts`, `tests/StatsSettingsScreens.test.tsx`）を更新・パスすること。
+- [ ] 設定画面で汎用モデルを選択した状態で、写真から具体的な料理名（「生姜焼き・豚肉炒め定食」「ラーメン・中華麺」等）がサジェストチップとして提示されることを確認すること（Phase 2 モデル配布後に実施）。

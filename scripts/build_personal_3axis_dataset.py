@@ -255,9 +255,23 @@ def extract_personal_3axis_tags(record: Dict[str, Any]) -> Dict[str, List[str]]:
     return tags
 
 
-def collect_protected_golden_meshi_keys(golden_v1_dir: Optional[Path]) -> Set[str]:
-    """Collect MESHI_YYYYMMDD_HHMMSS keys belonging to Golden Test Set v1."""
+def collect_protected_golden_meshi_keys(
+    golden_v1_dir: Optional[Path],
+    allow_missing_golden: bool = False,
+) -> Set[str]:
+    """Collect MESHI_YYYYMMDD_HHMMSS keys belonging to Golden Test Set v1.
+
+    Fails closed if the directory is missing or empty unless allow_missing_golden is True.
+    """
     if golden_v1_dir is None or not golden_v1_dir.exists():
+        if not allow_missing_golden:
+            raise Personal3AxisDatasetError(
+                f"Golden Test Set directory not found: {golden_v1_dir}. "
+                "To skip golden leakage protection explicitly, specify allow_missing_golden=True or --allow-missing-golden."
+            )
+        sys.stderr.write(
+            f"WARNING: Golden Test Set directory missing ({golden_v1_dir}), continuing without protection due to allow_missing_golden=True\n"
+        )
         return set()
 
     protected: Set[str] = set()
@@ -267,6 +281,17 @@ def collect_protected_golden_meshi_keys(golden_v1_dir: Optional[Path]) -> Set[st
                 mk = extract_meshi_key(fname)
                 if mk.startswith("MESHI_"):
                     protected.add(mk)
+
+    if not protected:
+        if not allow_missing_golden:
+            raise Personal3AxisDatasetError(
+                f"No valid protected MESHI keys found in Golden Test Set directory: {golden_v1_dir}. "
+                "To skip golden leakage protection explicitly, specify allow_missing_golden=True or --allow-missing-golden."
+            )
+        sys.stderr.write(
+            f"WARNING: No protected MESHI keys found in ({golden_v1_dir}), continuing without protection due to allow_missing_golden=True\n"
+        )
+
     return protected
 
 
@@ -397,6 +422,7 @@ def build_personal_3axis_dataset(
     image_search_roots: Optional[List[Path]] = None,
     export_dirs: bool = False,
     link_mode: str = "hardlink",
+    allow_missing_golden: bool = False,
 ) -> Dict[str, Any]:
     """Build personal 3-axis multi-label dataset with strict record-level leakage prevention."""
     if not observations_jsonl.exists():
@@ -432,7 +458,9 @@ def build_personal_3axis_dataset(
             rec["meshi_key"] = mk
             raw_records.append(rec)
 
-    protected_test_keys = collect_protected_golden_meshi_keys(golden_v1_dir)
+    protected_test_keys = collect_protected_golden_meshi_keys(
+        golden_v1_dir, allow_missing_golden=allow_missing_golden
+    )
 
     enriched: List[Dict[str, Any]] = []
     for rec in raw_records:
@@ -571,6 +599,11 @@ def main() -> None:
         default="hardlink",
         help="File linking mode for image export",
     )
+    parser.add_argument(
+        "--allow-missing-golden",
+        action="store_true",
+        help="Allow dataset generation to proceed even if Golden Test Set directory or images are missing",
+    )
     args = parser.parse_args()
 
     summary = build_personal_3axis_dataset(
@@ -579,6 +612,7 @@ def main() -> None:
         golden_v1_dir=args.golden_v1_dir,
         export_dirs=args.export_image_dirs,
         link_mode=args.link_mode,
+        allow_missing_golden=args.allow_missing_golden,
     )
     print("=== Personal 3-Axis Dataset Built Successfully ===")
     print(f"Total records: {summary['total_records']}")
