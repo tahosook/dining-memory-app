@@ -249,4 +249,104 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       '焼き鮭＆納豆の和朝食',
     ]);
   });
+
+  test('normalizes universal dining 23 classes and suppresses non_food_exclude', () => {
+    const normalized = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/univ23-photo.jpg',
+      categories: [
+        { label: 'non_food_exclude', score: 0.98 },
+        { label: 'teishoku_pork_ginger_stirfry', score: 0.82 },
+        { label: 'teishoku_fish', score: 0.74 },
+        { label: 'noodles_ramen', score: 0.55 },
+      ],
+      classifierName: 'universal-23class-classifier',
+      modelVersion: 'v1.0.0',
+    });
+    const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
+
+    expect(normalized.providerResult).toEqual({
+      source: 'mediapipe-static-image',
+      mealNames: [
+        { value: '生姜焼き・豚肉炒め定食', confidence: 0.82 },
+        { value: '焼き魚定食', confidence: 0.74 },
+        { value: 'ラーメン・中華麺', confidence: 0.55 },
+      ],
+      cuisineTypes: [{ value: '和食', confidence: 0.82 }],
+    });
+    expect(normalized.metadata.topCategoryLabel).toBe('non_food_exclude');
+    expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual([
+      '生姜焼き・豚肉炒め定食',
+      '焼き魚定食',
+      'ラーメン・中華麺',
+    ]);
+    expect(reviewSuggestions.cuisineTypes.map(c => c.value)).toEqual(['和食']);
+  });
+
+  test('normalizes personal 3-axis multi-label categories and synthesizes noteDraft', () => {
+    const normalized = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/personal-3axis-photo.jpg',
+      categories: [
+        { label: 'main_pork_ginger_stirfry', score: 0.35 },
+        { label: 'side_simmered_pumpkin', score: 0.22 },
+        { label: 'side_tonjiru_soup', score: 0.18 },
+        { label: 'scene_teishoku_multi_dish', score: 0.25 },
+        // Below threshold category
+        { label: 'side_kinpira', score: 0.02 },
+      ],
+      classifierName: 'personal-44tag-classifier',
+      modelVersion: 'v1.0.0',
+    });
+    const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
+
+    expect(normalized.providerResult.mealNames).toEqual([
+      { value: '生姜焼き・豚肉炒め定食', confidence: 0.35 },
+    ]);
+    expect(normalized.providerResult.cuisineTypes).toEqual([{ value: '和食', confidence: 0.35 }]);
+    expect(normalized.providerResult.noteDraft).toEqual({
+      value:
+        'かぼちゃの煮物と具だくさん豚汁がついた生姜焼き。一汁三菜・夕定食スタイルのごはんです。',
+      confidence: 0.35,
+    });
+    expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual(['生姜焼き・豚肉炒め定食']);
+    expect(reviewSuggestions.noteDraft?.value).toBe(
+      'かぼちゃの煮物と具だくさん豚汁がついた生姜焼き。一汁三菜・夕定食スタイルのごはんです。'
+    );
+  });
+
+  test('synthesizes graceful noteDraft fallback when main dish is missing or side is missing', () => {
+    // Only side and scene
+    const sideOnly = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/side-only.jpg',
+      categories: [
+        { label: 'side_simmered_pumpkin', score: 0.45 },
+        { label: 'side_tonjiru_soup', score: 0.3 },
+        { label: 'scene_teishoku_multi_dish', score: 0.25 },
+      ],
+    });
+    expect(normalizeMealInputAssistResult(sideOnly.providerResult).noteDraft?.value).toBe(
+      'かぼちゃの煮物と具だくさん豚汁が並ぶ食卓。一汁三菜・夕定食スタイルのごはんです。'
+    );
+
+    // Only main dish
+    const mainOnly = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/main-only.jpg',
+      categories: [{ label: 'main_hamburg', score: 0.5 }],
+    });
+    expect(normalizeMealInputAssistResult(mainOnly.providerResult).noteDraft?.value).toBe(
+      'ハンバーグの食卓です。'
+    );
+
+    // Only side dishes (no main, no scene) -> must not produce "食卓の食卓"
+    const sideOnlyNoScene = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/side-no-scene.jpg',
+      categories: [
+        { label: 'side_miso_soup', score: 0.45 },
+        { label: 'side_kinpira', score: 0.35 },
+      ],
+    });
+    const sideDraft = normalizeMealInputAssistResult(sideOnlyNoScene.providerResult).noteDraft
+      ?.value;
+    expect(sideDraft).toBe('お味噌汁ときんぴらごぼうが並ぶ食卓です。');
+    expect(sideDraft).not.toContain('食卓の食卓');
+  });
 });

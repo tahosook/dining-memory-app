@@ -37,6 +37,7 @@ export interface MediaPipeClassifierModelMeta {
   fileName: string;
   assetPath: string;
   sha256: string;
+  available: boolean;
 }
 
 export const DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID: MediaPipeClassifierModelId =
@@ -55,6 +56,7 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     fileName: 'meal-input-assist.task',
     assetPath: 'mediapipe/meal-input-assist.task',
     sha256: '3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601',
+    available: true,
   },
   universal_scene_7class: {
     id: 'universal_scene_7class',
@@ -65,6 +67,7 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     fileName: 'universal_scene_7class.task',
     assetPath: 'mediapipe/universal_scene_7class.task',
     sha256: '6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1',
+    available: true,
   },
   personal_household_8class: {
     id: 'personal_household_8class',
@@ -75,6 +78,29 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     fileName: 'personal_household_8class.task',
     assetPath: 'mediapipe/personal_household_8class.task',
     sha256: '924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c',
+    available: true,
+  },
+  universal_dining_23class: {
+    id: 'universal_dining_23class',
+    label: '汎用（定番料理・23クラス）',
+    shortLabel: '定番料理',
+    description: '焼き魚・生姜焼き・ハンバーグ・ラーメン・うどん・カレーなど日本の定番料理で分類',
+    version: 'universal-dining-23class-v1.0.0',
+    fileName: 'universal_dining_23class.task',
+    assetPath: 'mediapipe/universal_dining_23class.task',
+    sha256: '',
+    available: false,
+  },
+  personal_multilabel_44tag: {
+    id: 'personal_multilabel_44tag',
+    label: 'わたし専用（食卓3軸マルチラベル）',
+    shortLabel: '食卓3軸',
+    description: '主菜20種・副菜汁物14種・シーン10種を同時分解し、メモ下書きまで自動生成',
+    version: 'personal-multilabel-44tag-v1.0.0',
+    fileName: 'personal_multilabel_44tag.task',
+    assetPath: 'mediapipe/personal_multilabel_44tag.task',
+    sha256: '',
+    available: false,
   },
 };
 
@@ -82,6 +108,8 @@ export const MEDIAPIPE_CLASSIFIER_MODEL_LIST: MediaPipeClassifierModelMeta[] = [
   MEDIAPIPE_CLASSIFIER_MODELS.cooking_method_9class,
   MEDIAPIPE_CLASSIFIER_MODELS.universal_scene_7class,
   MEDIAPIPE_CLASSIFIER_MODELS.personal_household_8class,
+  MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class,
+  MEDIAPIPE_CLASSIFIER_MODELS.personal_multilabel_44tag,
 ];
 
 const LOCAL_MODEL_DIRECTORY = 'ai-models';

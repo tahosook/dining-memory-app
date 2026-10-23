@@ -45,6 +45,16 @@ class MediaPipeMealInputAssistSupportTest {
     assertEquals("personal_household_8class.task", personalSpec?.fileName)
     assertEquals("mediapipe/personal_household_8class.task", personalSpec?.assetPath)
 
+    val universal23Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_DINING_23CLASS)
+    assertEquals(MODEL_ID_UNIVERSAL_DINING_23CLASS, universal23Spec?.id)
+    assertEquals("universal_dining_23class.task", universal23Spec?.fileName)
+    assertEquals("mediapipe/universal_dining_23class.task", universal23Spec?.assetPath)
+
+    val personal44Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_MULTILABEL_44TAG)
+    assertEquals(MODEL_ID_PERSONAL_MULTILABEL_44TAG, personal44Spec?.id)
+    assertEquals("personal_multilabel_44tag.task", personal44Spec?.fileName)
+    assertEquals("mediapipe/personal_multilabel_44tag.task", personal44Spec?.assetPath)
+
     assertNull(MediaPipeMealInputAssistSupport.resolveModelSpec("unknown_model_id"))
   }
 
@@ -56,6 +66,20 @@ class MediaPipeMealInputAssistSupportTest {
     assertEquals(
       File("/data/user/0/com.tahosook.diningmemory/files/ai-models/universal_scene_7class.task"),
       file,
+    )
+
+    val univ23Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_DINING_23CLASS)!!
+    val univ23File = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, univ23Spec)
+    assertEquals(
+      File("/data/user/0/com.tahosook.diningmemory/files/ai-models/universal_dining_23class.task"),
+      univ23File,
+    )
+
+    val pers44Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_MULTILABEL_44TAG)!!
+    val pers44File = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, pers44Spec)
+    assertEquals(
+      File("/data/user/0/com.tahosook.diningmemory/files/ai-models/personal_multilabel_44tag.task"),
+      pers44File,
     )
   }
 
