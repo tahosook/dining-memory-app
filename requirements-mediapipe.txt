@@ -21,7 +21,7 @@ tf-keras==2.16.0
 
 # Image Processing & Numerical Computations
 numpy==1.26.4
-pillow==12.3.0
+pillow==13.0.0
 opencv-python==4.11.0.86
 
 # Evaluation, Data Exploration & CLI Tooling
