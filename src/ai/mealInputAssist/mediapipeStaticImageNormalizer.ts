@@ -319,7 +319,11 @@ export function composeMultiAxisNoteDraft(
     return `${cleanScene}スタイルの食卓です。`;
   }
 
-  return sentenceBase ? `${sentenceBase}の食卓です。` : null;
+  if (!sentenceBase) {
+    return null;
+  }
+
+  return cleanMain ? `${sentenceBase}の食卓です。` : `${sentenceBase}です。`;
 }
 
 export function normalizeMediaPipeStaticImageResult(

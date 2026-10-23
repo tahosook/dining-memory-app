@@ -97,7 +97,6 @@ def extract_meshi_key(value: str) -> str:
 def _record_text(record: Dict[str, Any]) -> str:
     parts: List[str] = [
         str(record.get("short_caption", "")),
-        str(record.get("tableware_and_setting", "")),
         str(record.get("notable_characteristics", "")),
     ]
     for el in record.get("visual_elements", []) or []:

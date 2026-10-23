@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 from scripts.build_universal_23class_dataset import (
     UNIVERSAL_23_CLASSES,
     Universal23ClassDatasetError,
+    _record_text,
     assign_stratified_splits,
     build_universal_23class_dataset,
     classify_universal_23class,
@@ -94,6 +95,19 @@ class TestBuildUniversal23ClassDataset(unittest.TestCase):
             classify_universal_23class({"short_caption": "自家製手ごねハンバーグ"}),
             "teishoku_hamburg",
         )
+
+    def test_tableware_and_setting_excluded_from_classification_text(self) -> None:
+        rec = {
+            "short_caption": "日々の食卓",
+            "tableware_and_setting": "北欧大皿に盛られた特製ラーメンと染付小皿の焼き鮭",
+        }
+        text = _record_text(rec)
+        self.assertNotIn("北欧大皿", text)
+        self.assertNotIn("染付小皿", text)
+        self.assertNotIn("ラーメン", text)
+        self.assertNotIn("焼き鮭", text)
+        cls = classify_universal_23class(rec)
+        self.assertNotIn(cls, ("noodles_ramen", "teishoku_fish"))
 
     def test_golden_leakage_protection_and_splits(self) -> None:
         protected_key = "MESHI_20260420_120000"

@@ -15,6 +15,7 @@ from scripts.build_personal_3axis_dataset import (
     PERSONAL_SCENE_TAGS,
     PERSONAL_SIDE_TAGS,
     Personal3AxisDatasetError,
+    _record_text,
     assign_record_level_splits,
     build_personal_3axis_dataset,
     collect_protected_golden_meshi_keys,
@@ -54,6 +55,19 @@ class TestBuildPersonal3AxisDataset(unittest.TestCase):
         self.assertIn("side_simmered_pumpkin", tags["side"])
         self.assertIn("side_tonjiru_soup", tags["side"])
         self.assertIn("scene_teishoku_multi_dish", tags["scene"])
+
+    def test_tableware_and_setting_excluded_from_personal_tags(self) -> None:
+        rec = {
+            "short_caption": "日々の食事記録",
+            "tableware_and_setting": "北欧大皿に盛られた生姜焼きと具だくさん豚汁",
+        }
+        text = _record_text(rec)
+        self.assertNotIn("北欧大皿", text)
+        self.assertNotIn("生姜焼き", text)
+        self.assertNotIn("豚汁", text)
+        tags = extract_personal_3axis_tags(rec)
+        self.assertNotIn("main_pork_ginger_stirfry", tags["main"])
+        self.assertNotIn("side_tonjiru_soup", tags["side"])
 
     def test_strict_data_leakage_prevention_across_splits(self) -> None:
         """CRITICAL TEST: Multi-labeled image must have all its tag folder copies inside the SAME split."""

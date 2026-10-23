@@ -335,5 +335,18 @@ describe('normalizeMediaPipeStaticImageResult', () => {
     expect(normalizeMealInputAssistResult(mainOnly.providerResult).noteDraft?.value).toBe(
       'ハンバーグの食卓です。'
     );
+
+    // Only side dishes (no main, no scene) -> must not produce "食卓の食卓"
+    const sideOnlyNoScene = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/side-no-scene.jpg',
+      categories: [
+        { label: 'side_miso_soup', score: 0.45 },
+        { label: 'side_kinpira', score: 0.35 },
+      ],
+    });
+    const sideDraft = normalizeMealInputAssistResult(sideOnlyNoScene.providerResult).noteDraft
+      ?.value;
+    expect(sideDraft).toBe('お味噌汁ときんぴらごぼうが並ぶ食卓です。');
+    expect(sideDraft).not.toContain('食卓の食卓');
   });
 });
