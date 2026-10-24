@@ -152,7 +152,7 @@ flowchart TD
 - [x] 抽出処理のユニットテストを作成・パスすること。
 
 ### フェーズ 2a: MediaPipe ImageClassifier による 3軸動的閾値マルチラベル推論の実現（完了）
-- [x] 44タグ同時学習に対応した MediaPipe ImageClassifier 学習パイプライン（`scripts/train-mediapipe-model.py`）により MobileNetV2 バックボーンでモデル（`personal_multilabel_44tag.task` 9,092,455 bytes, SHA-256 `b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971`）を学習・エクスポートすること。
+- [x] 44クラス Softmax 分類モデルを MediaPipe ImageClassifier 学習パイプライン（`scripts/train-mediapipe-model.py`）で MobileNetV2 バックボーンにより学習・エクスポートし（`personal_multilabel_44tag.task` 9,092,455 bytes, SHA-256 `b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971`）、推論後処理で軸別閾値による疑似マルチラベル候補抽出を実装すること。
 - [x] Softmax 確率分散に対応した軸別動的閾値（主菜 $\ge 0.08$, 副菜 $\ge 0.05$, シーン $\ge 0.05$）により、主菜・副菜・シーンが同時に抽出され `noteDraft` が正しく合成されることを単体テスト（`mealInputAssistNormalizer.test.ts`）で検証すること。
 - [x] Held-out `test` / `val` / `train` スプリットにおいて全44クラスの評価（推論レイテンシ 15.6ms @ Apple M4、Top-3 32.5%〜43.3%）を実施し、評価レポート（[docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md)）を出力・記録すること。
 - [x] 推論レイテンシがモバイル要件（< 30ms）を満たすこと（実測 15.6ms）。

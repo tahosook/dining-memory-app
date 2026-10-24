@@ -134,7 +134,20 @@ b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971  personal_multi
 
 ---
 
-## 5. 結論と次期マイルストーン
+## 5. 検証範囲と未確認事項
+
+- **検証完了範囲**:
+  - Python / MediaPipe Tasks によるモデル学習・TFLite/Task エクスポート。
+  - Held-out test / val / train 全スプリットにおけるオフライン評価ベンチマーク（推論レイテンシ・Top-1/Top-3 精度）。
+  - GitHub Releases (`mediapipe-model-v0.1.0`) への正式アップロードと、クリーン環境（ローカルキャッシュなし）における `curl` フェッチおよび SHA-256 チェックサムの 100% 照合。
+  - TypeScript レイヤーでの 3軸動的閾値による擬似マルチラベル抽出・メモ案合成・UI 設定画面連携の単体テスト（`mealInputAssistNormalizer.test.ts`, `StatsSettingsScreens.test.tsx`）。
+  - Android Native Bridge の単体テスト（`tests/buildAndroidRelease.test.ts`）。
+- **未確認事項**:
+  - **Android 実機でのネイティブロード・エンドツーエンド動作**: モデルバイナリの配布およびチェックサム照合は検証済みですが、CI 環境では native changes なしとして Android Debug APK ビルドがスキップされており、実機上でのネイティブロードとリアルタイムカメラ/画像入力の結合動作は本 PR では未検証です（TypeScript 正規化層テストおよび Native Bridge 単体テストにより論理整合性を担保）。実機結合確認は次期リリース検証または Phase 3 の後続フェーズで実施します。
+
+---
+
+## 6. 結論と次期マイルストーン
 
 1. **Phase 2a の達成**:
    - 23クラス・44タグのモデルバイナリ生成、GitHub Releases 配布、実機・クリーン環境ダウンロード検証、実測レイテンシ（<16ms）の達成、および設定画面からの選択利用可能化（`available: true`）を完了。
