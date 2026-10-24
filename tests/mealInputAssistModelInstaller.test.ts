@@ -432,6 +432,26 @@ describe('MediaPipe model installer', () => {
     });
   });
 
+  test('rejects immediately without downloading when expectedSha256 is empty or whitespace', async () => {
+    await expect(
+      installMediaPipeModel({
+        expectedSha256: '',
+      })
+    ).rejects.toThrow(
+      'MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。'
+    );
+
+    await expect(
+      installMediaPipeModel({
+        expectedSha256: '   ',
+      })
+    ).rejects.toThrow(
+      'MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。'
+    );
+
+    expect(fileSystemMock.createDownloadResumable).not.toHaveBeenCalled();
+  });
+
   test('restores existing model file when new file placement fails during redownload', async () => {
     const targetPath = resolveMediaPipeModelPath()!;
     fileSystemMock.__mock.existingFiles.add(targetPath);

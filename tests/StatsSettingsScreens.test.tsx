@@ -960,14 +960,46 @@ describe('SettingsScreen', () => {
     const cookingOption = getByTestId('mediapipe-model-option-cooking_method_9class');
     const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
     const personalOption = getByTestId('mediapipe-model-option-personal_household_8class');
+    const universal23Option = getByTestId('mediapipe-model-option-universal_dining_23class');
+    const personal44Option = getByTestId('mediapipe-model-option-personal_multilabel_44tag');
 
     expect(cookingOption).toBeTruthy();
     expect(universalOption).toBeTruthy();
     expect(personalOption).toBeTruthy();
+    expect(universal23Option).toBeTruthy();
+    expect(personal44Option).toBeTruthy();
 
     expect(cookingOption.props.accessibilityState).toEqual({ selected: true });
     expect(universalOption.props.accessibilityState).toEqual({ selected: false });
     expect(personalOption.props.accessibilityState).toEqual({ selected: false });
+    expect(universal23Option.props.accessibilityState).toEqual({ selected: false });
+    expect(personal44Option.props.accessibilityState).toEqual({ selected: false });
+  });
+
+  test('switches to universal_dining_23class and personal_multilabel_44tag models when tapped', async () => {
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'cooking_method_9class'
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'ready',
+      mode: 'mediapipe-static-image',
+      description: 'MediaPipe static-image meal input assist provider',
+      provider: { suggest: jest.fn() },
+    });
+
+    const { getByTestId, findByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    expect(await findByText('分類モデル')).toBeTruthy();
+    const universal23Option = getByTestId('mediapipe-model-option-universal_dining_23class');
+
+    fireEvent.press(universal23Option);
+
+    await waitFor(() => {
+      expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
+        'universal_dining_23class'
+      );
+    });
   });
 
   test('switches MediaPipe model, persists to AppSettingsService, and re-checks availability on tap', async () => {

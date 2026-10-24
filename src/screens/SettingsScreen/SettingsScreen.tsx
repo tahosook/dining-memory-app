@@ -21,6 +21,7 @@ import {
 } from '../../utils/buildInfo';
 import {
   DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
+  MEDIAPIPE_CLASSIFIER_MODELS,
   MEDIAPIPE_CLASSIFIER_MODEL_LIST,
   getMealInputAssistManagedFiles,
   getMediaPipeStaticImageAvailability,
@@ -121,9 +122,17 @@ export default function SettingsScreen() {
     setLocalAiRuntimeStatusLoading(true);
 
     try {
-      const currentModelId =
+      let currentModelId =
         (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
         DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+
+      if (!MEDIAPIPE_CLASSIFIER_MODELS[currentModelId]?.available) {
+        currentModelId = DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+        await AppSettingsService.setMediaPipeClassifierModelId?.(
+          DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID
+        ).catch(() => {});
+      }
+
       setSelectedMediaPipeModelId(currentModelId);
 
       const [snapshot, nextMediaPipeAvailability] = await Promise.all([
@@ -156,6 +165,10 @@ export default function SettingsScreen() {
 
   const handleSelectMediaPipeModel = useCallback(
     async (nextModelId: MediaPipeClassifierModelId) => {
+      if (!MEDIAPIPE_CLASSIFIER_MODELS[nextModelId]?.available) {
+        return;
+      }
+
       if (
         nextModelId === selectedMediaPipeModelId &&
         mediaPipeRuntimeAvailability?.kind === 'ready'
@@ -624,37 +637,59 @@ export default function SettingsScreen() {
                 ) : null}
                 {MEDIAPIPE_CLASSIFIER_MODEL_LIST.map(model => {
                   const isSelected = selectedMediaPipeModelId === model.id;
+                  const isAvailable = model.available !== false;
                   return (
                     <TouchableOpacity
                       key={model.id}
                       style={[
                         styles.modelOptionCard,
                         isSelected ? styles.modelOptionCardSelected : null,
+                        !isAvailable ? styles.modelOptionCardDisabled : null,
                       ]}
-                      onPress={() => handleSelectMediaPipeModel(model.id)}
+                      onPress={isAvailable ? () => handleSelectMediaPipeModel(model.id) : undefined}
                       testID={`mediapipe-model-option-${model.id}`}
                       accessibilityRole="radio"
-                      accessibilityState={{ selected: isSelected }}
+                      accessibilityState={
+                        isAvailable
+                          ? { selected: isSelected }
+                          : { selected: isSelected, disabled: true }
+                      }
                     >
                       <View style={styles.modelOptionHeader}>
-                        <Text
-                          style={[
-                            styles.modelOptionLabel,
-                            isSelected ? styles.modelOptionLabelSelected : null,
-                          ]}
-                        >
-                          {model.label}
-                        </Text>
+                        <View style={styles.modelOptionTitleRow}>
+                          <Text
+                            style={[
+                              styles.modelOptionLabel,
+                              isSelected ? styles.modelOptionLabelSelected : null,
+                              !isAvailable ? styles.modelOptionLabelDisabled : null,
+                            ]}
+                          >
+                            {model.label}
+                          </Text>
+                          {!isAvailable ? (
+                            <View style={styles.modelUnavailableBadge}>
+                              <Text style={styles.modelUnavailableBadgeText}>準備中</Text>
+                            </View>
+                          ) : null}
+                        </View>
                         <View
                           style={[
                             styles.radioIndicator,
                             isSelected ? styles.radioIndicatorSelected : null,
+                            !isAvailable ? styles.radioIndicatorDisabled : null,
                           ]}
                         >
                           {isSelected ? <View style={styles.radioIndicatorInner} /> : null}
                         </View>
                       </View>
-                      <Text style={styles.modelOptionDescription}>{model.description}</Text>
+                      <Text
+                        style={[
+                          styles.modelOptionDescription,
+                          !isAvailable ? styles.modelOptionDescriptionDisabled : null,
+                        ]}
+                      >
+                        {model.description}
+                      </Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -1287,10 +1322,20 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     backgroundColor: '#f5f8ff',
   },
+  modelOptionCardDisabled: {
+    opacity: 0.55,
+    backgroundColor: '#fafafa',
+    borderColor: '#e5e5e5',
+  },
   modelOptionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  modelOptionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   modelOptionLabel: {
     fontSize: 14,
@@ -1300,10 +1345,27 @@ const styles = StyleSheet.create({
   modelOptionLabelSelected: {
     color: Colors.primary,
   },
+  modelOptionLabelDisabled: {
+    color: Colors.gray,
+  },
+  modelUnavailableBadge: {
+    backgroundColor: '#e8e8e8',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  modelUnavailableBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#666666',
+  },
   modelOptionDescription: {
     fontSize: 12,
     lineHeight: 17,
     color: Colors.gray,
+  },
+  modelOptionDescriptionDisabled: {
+    color: '#a0a0a0',
   },
   radioIndicator: {
     width: 20,
@@ -1316,6 +1378,10 @@ const styles = StyleSheet.create({
   },
   radioIndicatorSelected: {
     borderColor: Colors.primary,
+  },
+  radioIndicatorDisabled: {
+    borderColor: '#d0d0d0',
+    backgroundColor: '#f0f0f0',
   },
   radioIndicatorInner: {
     width: 10,

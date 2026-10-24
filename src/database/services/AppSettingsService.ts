@@ -128,7 +128,9 @@ export class AppSettingsService {
     if (
       value === 'cooking_method_9class' ||
       value === 'universal_scene_7class' ||
-      value === 'personal_household_8class'
+      value === 'personal_household_8class' ||
+      value === 'universal_dining_23class' ||
+      value === 'personal_multilabel_44tag'
     ) {
       return value;
     }
@@ -138,6 +140,62 @@ export class AppSettingsService {
   static async setMediaPipeClassifierModelId(modelId: MediaPipeClassifierModelId): Promise<void> {
     await this.setString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, modelId);
     invalidateMealInputAssistEnvironment();
+  }
+
+  static async getMediaPipeModelStatusForModel(
+    modelId: MediaPipeClassifierModelId
+  ): Promise<MediaPipeModelStatusSetting> {
+    const value = await this.getString(`mediapipe_model_${modelId}_status`, null);
+    if (value === 'ready' || value === 'error') {
+      return value;
+    }
+    return 'not_installed';
+  }
+
+  static async setMediaPipeModelStatusForModel(
+    modelId: MediaPipeClassifierModelId,
+    status: MediaPipeModelStatusSetting
+  ): Promise<void> {
+    await this.setString(`mediapipe_model_${modelId}_status`, status);
+  }
+
+  static async getMediaPipeModelVersionForModel(
+    modelId: MediaPipeClassifierModelId
+  ): Promise<string | null> {
+    return this.getString(`mediapipe_model_${modelId}_version`, null);
+  }
+
+  static async setMediaPipeModelVersionForModel(
+    modelId: MediaPipeClassifierModelId,
+    version: string | null
+  ): Promise<void> {
+    await this.setString(`mediapipe_model_${modelId}_version`, version);
+  }
+
+  static async getMediaPipeModelDownloadedAtForModel(
+    modelId: MediaPipeClassifierModelId
+  ): Promise<number | null> {
+    return this.getNumber(`mediapipe_model_${modelId}_downloaded_at`, null);
+  }
+
+  static async setMediaPipeModelDownloadedAtForModel(
+    modelId: MediaPipeClassifierModelId,
+    downloadedAt: number | null
+  ): Promise<void> {
+    await this.setNumber(`mediapipe_model_${modelId}_downloaded_at`, downloadedAt);
+  }
+
+  static async getMediaPipeModelErrorMessageForModel(
+    modelId: MediaPipeClassifierModelId
+  ): Promise<string | null> {
+    return this.getString(`mediapipe_model_${modelId}_error_message`, null);
+  }
+
+  static async setMediaPipeModelErrorMessageForModel(
+    modelId: MediaPipeClassifierModelId,
+    errorMessage: string | null
+  ): Promise<void> {
+    await this.setString(`mediapipe_model_${modelId}_error_message`, errorMessage);
   }
 
   static async getBoolean(key: string, defaultValue: boolean): Promise<boolean> {

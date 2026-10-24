@@ -126,4 +126,20 @@ MODEL_3_LOCAL="$ROOT_DIR/state/mediapipe_models/dual_taxonomy_issue23/personal_h
 
 ensure_single_model "$MODEL_3_FILE" "$MODEL_3_SHA" "$MODEL_3_URL" "$MODEL_3_LOCAL"
 
+# Model 4: Universal Dining 23-class
+MODEL_4_FILE="universal_dining_23class.task"
+MODEL_4_SHA="${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_SHA256:-39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b}"
+MODEL_4_URL="${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_URL:-}"
+MODEL_4_LOCAL="$ROOT_DIR/state/mediapipe_models/universal_dining_23class/universal_dining_23class.task"
+
+ensure_single_model "$MODEL_4_FILE" "$MODEL_4_SHA" "$MODEL_4_URL" "$MODEL_4_LOCAL"
+
+# Model 5: Personal Multi-Label 44-tag
+MODEL_5_FILE="personal_multilabel_44tag.task"
+MODEL_5_SHA="${MEDIAPIPE_PERSONAL_44TAG_MODEL_SHA256:-b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971}"
+MODEL_5_URL="${MEDIAPIPE_PERSONAL_44TAG_MODEL_URL:-}"
+MODEL_5_LOCAL="$ROOT_DIR/state/mediapipe_models/personal_multilabel_44tags/personal_multilabel_44tag.task"
+
+ensure_single_model "$MODEL_5_FILE" "$MODEL_5_SHA" "$MODEL_5_URL" "$MODEL_5_LOCAL"
+
 exit 0

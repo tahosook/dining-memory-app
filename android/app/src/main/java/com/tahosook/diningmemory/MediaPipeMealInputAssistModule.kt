@@ -21,7 +21,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 private const val MODULE_NAME = "MediaPipeMealInputAssist"
-private const val CLASSIFIER_MAX_RESULTS = 10
+private const val CLASSIFIER_MAX_RESULTS = 30
 
 class MediaPipeMealInputAssistModule(
   reactContext: ReactApplicationContext,
