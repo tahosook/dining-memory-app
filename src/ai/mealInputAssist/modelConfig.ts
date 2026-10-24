@@ -88,8 +88,8 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     version: 'universal-dining-23class-v1.0.0',
     fileName: 'universal_dining_23class.task',
     assetPath: 'mediapipe/universal_dining_23class.task',
-    sha256: '',
-    available: false,
+    sha256: '39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b',
+    available: true,
   },
   personal_multilabel_44tag: {
     id: 'personal_multilabel_44tag',
@@ -99,8 +99,8 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     version: 'personal-multilabel-44tag-v1.0.0',
     fileName: 'personal_multilabel_44tag.task',
     assetPath: 'mediapipe/personal_multilabel_44tag.task',
-    sha256: '',
-    available: false,
+    sha256: 'b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971',
+    available: true,
   },
 };
 
