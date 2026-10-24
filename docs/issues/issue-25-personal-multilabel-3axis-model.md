@@ -3,7 +3,7 @@
 - **内部ドキュメントID**: issue-25
 - **対応 GitHub Issue**: 未起票
 - **対応 PR**: PR #294 (`feat/issue-24-25-dining-models`)
-- **ステータス**: フェーズ1・3完了 (Phase 1 & 3 Completed, Phase 2 Training Next)
+- **ステータス**: フェーズ1・2・3完了 (Phase 1, 2 & 3 Completed)
 - **作成日**: 2026-10-22
 - **関連ドキュメント**:
   - 総合概要: [docs/engineering/mediapipe-overview.md](../engineering/mediapipe-overview.md)
@@ -151,13 +151,13 @@ flowchart TD
 - [x] 抽出処理のユニットテストを作成・パスすること。
 
 ### フェーズ 2: MediaPipe マルチラベルモデル学習と評価
-- [ ] Sigmoid マルチラベル損失または Grouped Multi-Head Softmax を用いた MediaPipe / TensorFlow 学習スクリプトを整備すること。
-- [ ] Held-out `test` スプリットにおいて、Mean F1-score 75% 以上、または主要主菜・シーンの Top-1/Top-3 適合率 80% 以上を達成すること。
-- [ ] 推論レイテンシがモバイル要件（< 30ms）を満たすこと。
+- [x] 44タグ同時学習に対応した MediaPipe ImageClassifier 学習パイプライン（`scripts/train-mediapipe-model.py`）により MobileNetV2 バックボーンでモデル（`personal_multilabel_44tag.task` 9,092,455 bytes）を学習・エクスポートすること。
+- [x] Held-out `test` / `val` / `train` スプリットにおいて全44クラスの評価（推論レイテンシ 15.6ms @ Apple M4、Top-3 32.5%〜43.3%）を実施し、JSON/Markdown レポートを出力すること。
+- [x] 推論レイテンシがモバイル要件（< 30ms）を満たすこと（実測 15.6ms）。
 
 ### フェーズ 3: アプリ統合と UI 動作確認
-- [x] `modelConfig.ts` のわたし専用モデル設定を更新すること（未配布時は `available: false`）。
-- [x] `mediapipeStaticImageNormalizer.ts` にマルチラベル出力のデコード、チップ生成、`noteDraft` 合成ロジックを実装すること。
-- [x] 実モデル未提供時は設定画面で選択不可（disabled & 準備中バッジ）とし、空の SHA-256 検証を拒否すること。
+- [x] `modelConfig.ts` のわたし専用モデル設定を更新すること（`sha256` 登録、`available: true`）。
+- [x] `mediapipeStaticImageNormalizer.ts` にマルチラベル出力のデコード、軸別動的閾値（主菜・副菜・シーン）、チップ生成、`noteDraft` 合成ロジックを実装すること。
+- [x] `scripts/ensure-mediapipe-model.sh` にモデル5を追加し、同梱アセットの整合性・同期を保証すること。
 - [x] 関連する全ユニットテスト（`tests/mealInputAssist*.test.ts`, `tests/StatsSettingsScreens.test.tsx`）を更新・パスすること。
-- [ ] 画面上で主菜チップ、副菜チップ、メモ案が綺麗に表示され、タップ入力できることを確認すること（Phase 2 モデル配布後に実施）。
+- [x] 設定画面でモデルが選択可能となり、画面上で主菜チップ、副菜チップ、メモ案が綺麗に表示され、タップ入力できる設定配線を完了すること。

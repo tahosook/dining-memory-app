@@ -972,11 +972,11 @@ describe('SettingsScreen', () => {
     expect(cookingOption.props.accessibilityState).toEqual({ selected: true });
     expect(universalOption.props.accessibilityState).toEqual({ selected: false });
     expect(personalOption.props.accessibilityState).toEqual({ selected: false });
-    expect(universal23Option.props.accessibilityState).toEqual({ selected: false, disabled: true });
-    expect(personal44Option.props.accessibilityState).toEqual({ selected: false, disabled: true });
+    expect(universal23Option.props.accessibilityState).toEqual({ selected: false });
+    expect(personal44Option.props.accessibilityState).toEqual({ selected: false });
   });
 
-  test('prevents switching to unavailable (upcoming) models when tapped', async () => {
+  test('switches to universal_dining_23class and personal_multilabel_44tag models when tapped', async () => {
     (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
       'cooking_method_9class'
     );
@@ -995,9 +995,11 @@ describe('SettingsScreen', () => {
 
     fireEvent.press(universal23Option);
 
-    // Must not call setMediaPipeClassifierModelId for unavailable model
-    expect(AppSettingsService.setMediaPipeClassifierModelId).not.toHaveBeenCalled();
-    expect(universal23Option.props.accessibilityState.selected).toBe(false);
+    await waitFor(() => {
+      expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
+        'universal_dining_23class'
+      );
+    });
   });
 
   test('switches MediaPipe model, persists to AppSettingsService, and re-checks availability on tap', async () => {
