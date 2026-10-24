@@ -87,6 +87,11 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     expect(buildGradleContent).toMatch(
       /tasks\.matching\s*\{\s*it\.name\s*==\s*"mergeReleaseAssets"\s*\}\.configureEach\s*\{\s*dependsOn\s*"verifyReleaseMediaPipeModelAsset"\s*\}/
     );
+
+    // verifyReleaseMediaPipeModelAsset must run after syncRNLlamaHtpAssets to prevent Gradle implicit dependency error
+    expect(buildGradleContent).toMatch(
+      /mustRunAfter\s*\(\s*tasks\.matching\s*\{\s*it\.name\s*==\s*"syncRNLlamaHtpAssets"\s*\}\s*\)/
+    );
   });
 
   interface MockEnvOptions {
