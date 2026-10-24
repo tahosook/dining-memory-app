@@ -151,10 +151,16 @@ flowchart TD
 - [x] Golden Test Set ディレクトリの不在・読取失敗時に処理を fail-closed で即時中断し、意図的バイパスのみ明示オプションで許可すること。
 - [x] 抽出処理のユニットテストを作成・パスすること。
 
-### フェーズ 2: MediaPipe マルチラベルモデル学習と評価
-- [x] 44タグ同時学習に対応した MediaPipe ImageClassifier 学習パイプライン（`scripts/train-mediapipe-model.py`）により MobileNetV2 バックボーンでモデル（`personal_multilabel_44tag.task` 9,092,455 bytes）を学習・エクスポートすること。
+### フェーズ 2a: MediaPipe ImageClassifier による 3軸動的閾値マルチラベル推論の実現（完了）
+- [x] 44タグ同時学習に対応した MediaPipe ImageClassifier 学習パイプライン（`scripts/train-mediapipe-model.py`）により MobileNetV2 バックボーンでモデル（`personal_multilabel_44tag.task` 9,092,455 bytes, SHA-256 `b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971`）を学習・エクスポートすること。
+- [x] Softmax 確率分散に対応した軸別動的閾値（主菜 $\ge 0.08$, 副菜 $\ge 0.05$, シーン $\ge 0.05$）により、主菜・副菜・シーンが同時に抽出され `noteDraft` が正しく合成されることを単体テスト（`mealInputAssistNormalizer.test.ts`）で検証すること。
 - [x] Held-out `test` / `val` / `train` スプリットにおいて全44クラスの評価（推論レイテンシ 15.6ms @ Apple M4、Top-3 32.5%〜43.3%）を実施し、評価レポート（[docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md)）を出力・記録すること。
 - [x] 推論レイテンシがモバイル要件（< 30ms）を満たすこと（実測 15.6ms）。
+- [x] GitHub Releases (`mediapipe-model-v0.1.0`) へモデルバイナリをアップロードし、クリーン環境からのフェッチ・SHA-256 検証が 100% 成功すること。
+
+### フェーズ 2b: 真の Sigmoid Multi-Head マルチラベル学習パイプラインの構築（次期課題）
+- [ ] TensorFlow / Keras による Sigmoid 損失または Grouped Multi-Head モデルの直接学習と MediaPipe Task パッケージング。
+- [ ] Held-out `test` スプリットでの Mean F1-score 75% 以上の達成。
 
 ### フェーズ 3: アプリ統合と UI 動作確認
 - [x] `modelConfig.ts` のわたし専用モデル設定を更新すること（`sha256` 登録、`available: true`）。

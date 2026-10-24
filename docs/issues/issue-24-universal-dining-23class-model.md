@@ -85,11 +85,16 @@
 - [x] Golden Test Set ディレクトリの不在・読取失敗時に処理を fail-closed で即時中断し、意図的バイパスのみ明示オプションで許可すること。
 - [x] 抽出処理のユニットテストを作成・パスすること。
 
-### フェーズ 2: MediaPipe モデル学習と精度評価
-- [x] `scripts/train-mediapipe-model.py` を用いて、MobileNetV2 バックボーンで 23クラス分類モデル（`.task`）を学習すること（`universal_dining_23class.task` 8,984,478 bytes）。
+### フェーズ 2a: 初期モデル学習とベースライン評価（v1.0.0 先行提供）
+- [x] `scripts/train-mediapipe-model.py` を用いて、MobileNetV2 バックボーンで 23クラス分類モデル（`.task`）を学習すること（`universal_dining_23class.task` 8,984,478 bytes, SHA-256 `39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b`）。
 - [x] 少数クラスの均等化（Data Augmentation）を train 限定で適用し、学習が安定して収束すること（Train Top-3 74.7%）。
-- [x] Held-out `test` / `val` スプリットにおいて精度評価を実施し、v1.0.0 実力値として Overall Top-3 72.1%（Test 64.0%, Val 55.9%）を達成・記録すること（[docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md) 参照）。継続学習で 80% を目指す。
+- [x] 初期バージョン（v1.0.0）として、Held-out test スプリットでの Top-3 64.0%、Overall Top-3 72.1%（ランダム推測 13.0% の約 5.5 倍）を達成し、tap-to-apply 候補提示用として利用可能化すること（受入基準マイルストーン変更を正式合意記録、[docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md) 参照）。
 - [x] 推論レイテンシがモバイル要件（< 30ms）を満たすこと（実測 15.7ms @ Apple M4）。
+- [x] GitHub Releases (`mediapipe-model-v0.1.0`) へモデルバイナリをアップロードし、クリーン環境からのフェッチ・SHA-256 検証が 100% 成功すること。
+
+### フェーズ 2b: 継続データ拡充と精度 80% 達成（次期改善マイルストーン）
+- [ ] 誤分類の多い定食系主菜クラス（鶏肉・煮物・炒め物等）の実写真データを拡充すること。
+- [ ] ハイパーパラメータ最適化により、Held-out test スプリットでの Top-3 精度 80% 以上を達成すること。
 
 ### フェーズ 3: アプリ統合と UI 動作検証
 - [x] `src/ai/mealInputAssist/modelConfig.ts` の汎用モデル定義を本23クラスモデルに更新すること（`sha256` 登録、`available: true`）。

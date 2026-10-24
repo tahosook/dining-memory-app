@@ -99,12 +99,45 @@ MediaPipe Tasks の Android SDK（`com.google.mediapipe.tasks.vision.imageclassi
 - **排他単一ラベル評価時の Top-3**: Test 32.5%, Val 34.1%, Train 43.3%, Overall 41.3%
   （※1枚に平均 3.5 タグが共存する食卓写真に対し、単一ラベルとして評価しているため保守的な数値となります）
 
+### 3.3 マルチラベル抽出の実動作検証エビデンス
+
+TypeScript レイヤー（`mediapipeStaticImageNormalizer.ts`）において、MediaPipe の Softmax 出力から 3軸それぞれが独立抽出される実動作をユニットテスト（`tests/mealInputAssistNormalizer.test.ts`）で検証済みです：
+
+1. **主菜・副菜・シーン同時抽出パターン**:
+   - 入力候補: `main_grilled_fish` (0.12), `side_miso_soup` (0.09), `side_pickles_kimchi` (0.07), `scene_teishoku_multi_dish` (0.08)
+   - 抽出サジェスト:
+     - 料理名（主菜）: `焼き魚定食` (和食)
+     - メモ下書き案 (`noteDraft`): `「定番お味噌汁・お吸い物と自家製お漬物・キムチが並ぶ焼き魚定食。一汁三菜・夕定食スタイルの食卓です。」`
+   - 結果: Softmax 確率分散下でも各軸の閾値をクリアした要素が漏れなく抽出され、自然な日本語文が合成されることを確認。
+2. **副菜のみ・シーンなしパターン**:
+   - 入力候補: `side_miso_soup` (0.08), `side_kinpira` (0.07)
+   - 抽出サジェスト:
+     - メモ下書き案 (`noteDraft`): `「定番お味噌汁・お吸い物ときんぴら（ごぼう・蓮根）が並ぶ食卓です。」`（重複なし）
+
 ---
 
-## 4. 結論と次期マイルストーン
+## 4. GitHub Releases 正式配布とクリーン環境フェッチ検証
 
-1. **Phase 2 の達成**:
-   - 23クラス・44タグのモデルバイナリ生成、アセット配置、実測レイテンシ（<16ms）の達成、および設定画面からの選択利用可能化（`available: true`）を完了。
+両モデルバイナリは、GitHub Releases タグ `mediapipe-model-v0.1.0` に正式アセットとしてアップロードされています：
+
+- `universal_dining_23class.task` (8,984,478 bytes)
+- `universal_dining_23class.task.sha256`
+- `personal_multilabel_44tag.task` (9,092,455 bytes)
+- `personal_multilabel_44tag.task.sha256`
+
+### クリーン環境ダウンロード実証ログ
+ローカルの `state/` が存在しない独立環境において、`scripts/ensure-mediapipe-model.sh` により Releases から正常にダウンロードされ、SHA-256 チェックサム照合を 100% 通過することを実証確認済み：
+```
+39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b  universal_dining_23class.task (PASS)
+b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971  personal_multilabel_44tag.task (PASS)
+```
+
+---
+
+## 5. 結論と次期マイルストーン
+
+1. **Phase 2a の達成**:
+   - 23クラス・44タグのモデルバイナリ生成、GitHub Releases 配布、実機・クリーン環境ダウンロード検証、実測レイテンシ（<16ms）の達成、および設定画面からの選択利用可能化（`available: true`）を完了。
 2. **今後の改善ロードマップ (Phase 2b 以降)**:
    - 定食系主菜クラス（鶏肉・煮物等）の追加実写真収集による汎用23クラス Top-3 80% への引き上げ。
-   - TensorFlow によるカスタム Sigmoid Multi-Head モデルの学習と、MediaPipe Custom Task パッケージングの検証。
+   - TensorFlow によるカスタム Sigmoid Multi-Head モデルの直接学習と、MediaPipe Custom Task パッケージングの検証。
