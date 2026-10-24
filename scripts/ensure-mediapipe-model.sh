@@ -30,6 +30,7 @@ ensure_single_model() {
   local expected_sha="$2"
   local custom_url="${3:-}"
   local local_source_path="${4:-}"
+  local allow_missing="${5:-false}"
 
   local target_file="$TARGET_DIR/$filename"
   local download_url="${custom_url:-https://github.com/tahosook/dining-memory-app/releases/download/${MODEL_TAG}/${filename}}"
@@ -68,9 +69,13 @@ ensure_single_model() {
   CURRENT_TEMP_FILE="$TARGET_DIR/$filename.download-$(date +%s%N 2>/dev/null || date +%s)"
 
   if ! curl -fL --retry 3 --retry-delay 2 -o "$CURRENT_TEMP_FILE" "$download_url"; then
-    echo "error: failed to download MediaPipe model from $download_url" >&2
     rm -f "$CURRENT_TEMP_FILE"
     CURRENT_TEMP_FILE=""
+    if [[ "$allow_missing" == "true" ]]; then
+      echo "warning: model asset ($filename) not yet published to remote releases ($download_url). Continuing for locally managed model." >&2
+      return 0
+    fi
+    echo "error: failed to download MediaPipe model from $download_url" >&2
     exit 1
   fi
 
@@ -132,7 +137,7 @@ MODEL_4_SHA="${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_SHA256:-39c14ffa40a53c6e23aa53c
 MODEL_4_URL="${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_URL:-}"
 MODEL_4_LOCAL="$ROOT_DIR/state/mediapipe_models/universal_dining_23class/universal_dining_23class.task"
 
-ensure_single_model "$MODEL_4_FILE" "$MODEL_4_SHA" "$MODEL_4_URL" "$MODEL_4_LOCAL"
+ensure_single_model "$MODEL_4_FILE" "$MODEL_4_SHA" "$MODEL_4_URL" "$MODEL_4_LOCAL" "true"
 
 # Model 5: Personal Multi-Label 44-tag
 MODEL_5_FILE="personal_multilabel_44tag.task"
@@ -140,6 +145,6 @@ MODEL_5_SHA="${MEDIAPIPE_PERSONAL_44TAG_MODEL_SHA256:-b6cb09574bd034cef43546d380
 MODEL_5_URL="${MEDIAPIPE_PERSONAL_44TAG_MODEL_URL:-}"
 MODEL_5_LOCAL="$ROOT_DIR/state/mediapipe_models/personal_multilabel_44tags/personal_multilabel_44tag.task"
 
-ensure_single_model "$MODEL_5_FILE" "$MODEL_5_SHA" "$MODEL_5_URL" "$MODEL_5_LOCAL"
+ensure_single_model "$MODEL_5_FILE" "$MODEL_5_SHA" "$MODEL_5_URL" "$MODEL_5_LOCAL" "true"
 
 exit 0

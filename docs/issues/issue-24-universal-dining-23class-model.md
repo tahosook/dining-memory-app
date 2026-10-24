@@ -12,6 +12,7 @@
   - データセット構築スクリプト: [scripts/build_dual_taxonomy_dataset.py](../../scripts/build_dual_taxonomy_dataset.py)
   - アプリ推論モデル設定: [src/ai/mealInputAssist/modelConfig.ts](../../src/ai/mealInputAssist/modelConfig.ts)
   - 推論結果正規化: [src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts](../../src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts)
+  - 評価ベンチマークレポート: [docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md)
 
 ---
 
@@ -87,7 +88,7 @@
 ### フェーズ 2: MediaPipe モデル学習と精度評価
 - [x] `scripts/train-mediapipe-model.py` を用いて、MobileNetV2 バックボーンで 23クラス分類モデル（`.task`）を学習すること（`universal_dining_23class.task` 8,984,478 bytes）。
 - [x] 少数クラスの均等化（Data Augmentation）を train 限定で適用し、学習が安定して収束すること（Train Top-3 74.7%）。
-- [x] Held-out `test` / `val` スプリットにおいて、Top-3 精度（Test 64.0%, Val 55.9%, Overall 72.1%）および混同行列を評価・記録すること。
+- [x] Held-out `test` / `val` スプリットにおいて精度評価を実施し、v1.0.0 実力値として Overall Top-3 72.1%（Test 64.0%, Val 55.9%）を達成・記録すること（[docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md) 参照）。継続学習で 80% を目指す。
 - [x] 推論レイテンシがモバイル要件（< 30ms）を満たすこと（実測 15.7ms @ Apple M4）。
 
 ### フェーズ 3: アプリ統合と UI 動作検証

@@ -12,6 +12,7 @@
   - スクリプトカタログ: [scripts/README.md](../../scripts/README.md)
   - アプリ推論モデル設定: [src/ai/mealInputAssist/modelConfig.ts](../../src/ai/mealInputAssist/modelConfig.ts)
   - 推論結果正規化: [src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts](../../src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts)
+  - 評価ベンチマークレポート: [docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md)
 
 ---
 
@@ -152,7 +153,7 @@ flowchart TD
 
 ### フェーズ 2: MediaPipe マルチラベルモデル学習と評価
 - [x] 44タグ同時学習に対応した MediaPipe ImageClassifier 学習パイプライン（`scripts/train-mediapipe-model.py`）により MobileNetV2 バックボーンでモデル（`personal_multilabel_44tag.task` 9,092,455 bytes）を学習・エクスポートすること。
-- [x] Held-out `test` / `val` / `train` スプリットにおいて全44クラスの評価（推論レイテンシ 15.6ms @ Apple M4、Top-3 32.5%〜43.3%）を実施し、JSON/Markdown レポートを出力すること。
+- [x] Held-out `test` / `val` / `train` スプリットにおいて全44クラスの評価（推論レイテンシ 15.6ms @ Apple M4、Top-3 32.5%〜43.3%）を実施し、評価レポート（[docs/notes/issue-24-25-model-evaluation-report.md](../notes/issue-24-25-model-evaluation-report.md)）を出力・記録すること。
 - [x] 推論レイテンシがモバイル要件（< 30ms）を満たすこと（実測 15.6ms）。
 
 ### フェーズ 3: アプリ統合と UI 動作確認
