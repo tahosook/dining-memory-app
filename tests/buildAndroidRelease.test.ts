@@ -36,22 +36,22 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
       new RegExp(`"meal-input-assist\\.task"\\)[\\s\\S]*?${expectedModel1Sha}`)
     );
 
-    // 2. Model 2: universal_scene_7class.task (universal_scene_7class)
-    const expectedModel2Sha = MEDIAPIPE_CLASSIFIER_MODELS.universal_scene_7class.sha256;
+    // 2. Model 2: universal_dining_23class.task (universal_dining_23class)
+    const expectedModel2Sha = MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class.sha256;
     expect(ensureScriptContent).toMatch(
-      new RegExp(`MODEL_2_FILE="universal_scene_7class\\.task"[\\s\\S]*?${expectedModel2Sha}`)
+      new RegExp(`MODEL_2_FILE="universal_dining_23class\\.task"[\\s\\S]*?${expectedModel2Sha}`)
     );
     expect(releaseScriptContent).toMatch(
-      new RegExp(`"universal_scene_7class\\.task"\\)[\\s\\S]*?${expectedModel2Sha}`)
+      new RegExp(`"universal_dining_23class\\.task"\\)[\\s\\S]*?${expectedModel2Sha}`)
     );
 
-    // 3. Model 3: personal_household_8class.task (personal_household_8class)
-    const expectedModel3Sha = MEDIAPIPE_CLASSIFIER_MODELS.personal_household_8class.sha256;
+    // 3. Model 3: personal_multilabel_44tag.task (personal_multilabel_44tag)
+    const expectedModel3Sha = MEDIAPIPE_CLASSIFIER_MODELS.personal_multilabel_44tag.sha256;
     expect(ensureScriptContent).toMatch(
-      new RegExp(`MODEL_3_FILE="personal_household_8class\\.task"[\\s\\S]*?${expectedModel3Sha}`)
+      new RegExp(`MODEL_3_FILE="personal_multilabel_44tag\\.task"[\\s\\S]*?${expectedModel3Sha}`)
     );
     expect(releaseScriptContent).toMatch(
-      new RegExp(`"personal_household_8class\\.task"\\)[\\s\\S]*?${expectedModel3Sha}`)
+      new RegExp(`"personal_multilabel_44tag\\.task"\\)[\\s\\S]*?${expectedModel3Sha}`)
     );
   });
 
@@ -70,12 +70,12 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     );
     expect(buildGradleContent).toMatch(
       new RegExp(
-        `name:\\s*"universal_scene_7class\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.universal_scene_7class.sha256}`
+        `name:\\s*"universal_dining_23class\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class.sha256}`
       )
     );
     expect(buildGradleContent).toMatch(
       new RegExp(
-        `name:\\s*"personal_household_8class\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.personal_household_8class.sha256}`
+        `name:\\s*"personal_multilabel_44tag\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.personal_multilabel_44tag.sha256}`
       )
     );
 
@@ -114,8 +114,8 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     // Dummy payloads for the 3 models
     const dummyPayloads: Record<string, string> = {
       'meal-input-assist.task': 'test-dummy-binary-content-for-model-1',
-      'universal_scene_7class.task': 'test-dummy-binary-content-for-model-2',
-      'personal_household_8class.task': 'test-dummy-binary-content-for-model-3',
+      'universal_dining_23class.task': 'test-dummy-binary-content-for-model-2',
+      'personal_multilabel_44tag.task': 'test-dummy-binary-content-for-model-3',
     };
 
     const expectedHashes: Record<string, string> = {};
@@ -181,8 +181,8 @@ ${
       BUILD_ANDROID_OUTPUT_TYPE: 'release',
       REQUIRE_BUNDLED_MODEL: 'true',
       MEDIAPIPE_MODEL_SHA256: expectedHashes['meal-input-assist.task'],
-      MEDIAPIPE_UNIVERSAL_MODEL_SHA256: expectedHashes['universal_scene_7class.task'],
-      MEDIAPIPE_PERSONAL_MODEL_SHA256: expectedHashes['personal_household_8class.task'],
+      MEDIAPIPE_UNIVERSAL_MODEL_SHA256: expectedHashes['universal_dining_23class.task'],
+      MEDIAPIPE_PERSONAL_MODEL_SHA256: expectedHashes['personal_multilabel_44tag.task'],
     };
 
     return {
@@ -210,10 +210,10 @@ ${
       'Bundled model verified in APK: assets/mediapipe/meal-input-assist.task'
     );
     expect(res.stdout).toContain(
-      'Bundled model verified in APK: assets/mediapipe/universal_scene_7class.task'
+      'Bundled model verified in APK: assets/mediapipe/universal_dining_23class.task'
     );
     expect(res.stdout).toContain(
-      'Bundled model verified in APK: assets/mediapipe/personal_household_8class.task'
+      'Bundled model verified in APK: assets/mediapipe/personal_multilabel_44tag.task'
     );
     expect(res.stdout).toContain('Build complete.');
 
@@ -244,7 +244,7 @@ ${
     const testCaseDir = path.join(tempTestDir, 'prebuild-empty-test');
     const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
       preBuildAssetOverrides: {
-        'universal_scene_7class.task': { content: '' },
+        'universal_dining_23class.task': { content: '' },
       },
     });
 
@@ -255,14 +255,14 @@ ${
 
     expect(res.status).toBe(1);
     expect(res.stderr).toContain('error: MediaPipe model asset is missing or empty');
-    expect(res.stderr).toContain('universal_scene_7class.task');
+    expect(res.stderr).toContain('universal_dining_23class.task');
   });
 
   test('build-android-release.sh fails pre-build check when bundled model asset has mismatched SHA-256 checksum', () => {
     const testCaseDir = path.join(tempTestDir, 'prebuild-corrupt-test');
     const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
       preBuildAssetOverrides: {
-        'personal_household_8class.task': { content: 'unexpected-tampered-content' },
+        'personal_multilabel_44tag.task': { content: 'unexpected-tampered-content' },
       },
     });
 
@@ -273,7 +273,7 @@ ${
 
     expect(res.status).toBe(1);
     expect(res.stderr).toContain(
-      'error: SHA256 checksum mismatch for bundled model personal_household_8class.task'
+      'error: SHA256 checksum mismatch for bundled model personal_multilabel_44tag.task'
     );
   });
 
@@ -300,7 +300,7 @@ ${
     const testCaseDir = path.join(tempTestDir, 'postbuild-corrupt-in-apk-test');
     const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
       apkAssetOverrides: {
-        'universal_scene_7class.task': { content: 'corrupted-inside-apk' },
+        'universal_dining_23class.task': { content: 'corrupted-inside-apk' },
       },
     });
 
@@ -311,7 +311,7 @@ ${
 
     expect(res.status).toBe(1);
     expect(res.stderr).toContain(
-      "error: APK verification failed - SHA256 checksum mismatch for 'assets/mediapipe/universal_scene_7class.task'"
+      "error: APK verification failed - SHA256 checksum mismatch for 'assets/mediapipe/universal_dining_23class.task'"
     );
   });
 

@@ -58,28 +58,6 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     sha256: '3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601',
     available: true,
   },
-  universal_scene_7class: {
-    id: 'universal_scene_7class',
-    label: '食卓シーン（汎用・7クラス）',
-    shortLabel: '食卓シーン',
-    description: 'おうち定食・ワンプレート・晩酌バル・麺類単品・外食トレイなどシーンで分類',
-    version: 'universal-scene-7class-v1.0.0',
-    fileName: 'universal_scene_7class.task',
-    assetPath: 'mediapipe/universal_scene_7class.task',
-    sha256: '6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1',
-    available: true,
-  },
-  personal_household_8class: {
-    id: 'personal_household_8class',
-    label: 'わたし専用（我が家の食卓・8クラス）',
-    shortLabel: 'わたし専用',
-    description: '夕定食・北欧大皿合盛り・特製カレー・鮭納豆朝食・染付晩酌膳など我が家の定番で分類',
-    version: 'personal-household-8class-v1.0.0',
-    fileName: 'personal_household_8class.task',
-    assetPath: 'mediapipe/personal_household_8class.task',
-    sha256: '924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c',
-    available: true,
-  },
   universal_dining_23class: {
     id: 'universal_dining_23class',
     label: '汎用（定番料理・23クラス）',
@@ -106,8 +84,6 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
 
 export const MEDIAPIPE_CLASSIFIER_MODEL_LIST: MediaPipeClassifierModelMeta[] = [
   MEDIAPIPE_CLASSIFIER_MODELS.cooking_method_9class,
-  MEDIAPIPE_CLASSIFIER_MODELS.universal_scene_7class,
-  MEDIAPIPE_CLASSIFIER_MODELS.personal_household_8class,
   MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class,
   MEDIAPIPE_CLASSIFIER_MODELS.personal_multilabel_44tag,
 ];

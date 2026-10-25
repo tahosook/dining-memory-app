@@ -683,9 +683,9 @@ describe('meal input assist runtime availability', () => {
     const getStatusForModel = jest.fn().mockResolvedValue({ kind: 'ready' });
     const classifyWithModel = jest.fn().mockResolvedValue({
       photoUri: 'file:///tmp/mock-scene.jpg',
-      categories: [{ label: 'home_teishoku_set', score: 0.92 }],
-      classifierName: 'universal-scene-classifier',
-      modelVersion: 'universal_scene_7class',
+      categories: [{ label: 'curry_rice', score: 0.92 }],
+      classifierName: 'universal-dining-classifier',
+      modelVersion: 'universal_dining_23class',
     });
     NativeModules.MediaPipeMealInputAssist = {
       getClassifierStatusForModel: getStatusForModel,
@@ -695,11 +695,11 @@ describe('meal input assist runtime availability', () => {
     };
 
     const { getMediaPipeStaticImageAvailability } = require('../src/ai/mealInputAssist');
-    const availability = await getMediaPipeStaticImageAvailability('universal_scene_7class');
+    const availability = await getMediaPipeStaticImageAvailability('universal_dining_23class');
 
     expect(availability.kind).toBe('ready');
-    expect(availability.description).toContain('食卓シーン');
-    expect(getStatusForModel).toHaveBeenCalledWith('universal_scene_7class');
+    expect(availability.description).toContain('定番料理');
+    expect(getStatusForModel).toHaveBeenCalledWith('universal_dining_23class');
 
     if (availability.kind !== 'ready') {
       throw new Error('Expected ready availability');
@@ -716,9 +716,9 @@ describe('meal input assist runtime availability', () => {
 
     expect(classifyWithModel).toHaveBeenCalledWith(
       'file:///tmp/mock-scene.jpg',
-      'universal_scene_7class'
+      'universal_dining_23class'
     );
-    expect(rawResult.mealNames).toEqual([{ value: 'おうち定食', confidence: 0.92 }]);
+    expect(rawResult.mealNames).toEqual([{ value: 'カレーライス', confidence: 0.92 }]);
   });
 
   test('returns unsupported_architecture on Android when only unsupported ABIs are exposed', async () => {

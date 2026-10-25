@@ -864,7 +864,7 @@ describe('useMealInputAssist', () => {
     expect(resolveRuntimeAvailability).toHaveBeenCalledTimes(1);
 
     // Switch model setting in Settings screen (triggers invalidation)
-    currentModel = 'universal_scene_7class';
+    currentModel = 'universal_dining_23class';
     act(() => {
       invalidateMealInputAssistEnvironment();
     });

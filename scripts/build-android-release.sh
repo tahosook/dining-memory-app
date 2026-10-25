@@ -100,8 +100,8 @@ compute_sha256_stream() {
 
 MODEL_FILENAMES=(
   "meal-input-assist.task"
-  "universal_scene_7class.task"
-  "personal_household_8class.task"
+  "universal_dining_23class.task"
+  "personal_multilabel_44tag.task"
 )
 expected_sha256_for_model() {
   local model_file="$1"
@@ -109,11 +109,11 @@ expected_sha256_for_model() {
     "meal-input-assist.task")
       echo "${MEDIAPIPE_MODEL_SHA256:-3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601}"
       ;;
-    "universal_scene_7class.task")
-      echo "${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1}"
+    "universal_dining_23class.task")
+      echo "${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b}"
       ;;
-    "personal_household_8class.task")
-      echo "${MEDIAPIPE_PERSONAL_MODEL_SHA256:-924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c}"
+    "personal_multilabel_44tag.task")
+      echo "${MEDIAPIPE_PERSONAL_MODEL_SHA256:-b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971}"
       ;;
     *)
       echo "error: unknown MediaPipe model file: $model_file" >&2

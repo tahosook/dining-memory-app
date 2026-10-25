@@ -98,6 +98,15 @@ ensure_single_model() {
   return 0
 }
 
+# Cleanup retired legacy models from target directory if present (reduces APK size by ~18MB)
+RETIRED_MODELS=("universal_scene_7class.task" "personal_household_8class.task")
+for retired_model in "${RETIRED_MODELS[@]}"; do
+  if [[ -f "$TARGET_DIR/$retired_model" ]]; then
+    rm -f "$TARGET_DIR/$retired_model"
+    echo "Removed retired MediaPipe model asset: $TARGET_DIR/$retired_model"
+  fi
+done
+
 # Model 1: Cooking Method 9-class (standard baseline)
 MODEL_1_FILE="meal-input-assist.task"
 MODEL_1_SHA="${MEDIAPIPE_MODEL_SHA256:-3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601}"
@@ -110,36 +119,20 @@ if [[ -n "$MODEL_1_URL" && "${MEDIAPIPE_ENSURE_ALL_MODELS:-false}" != "true" ]];
   exit 0
 fi
 
-# Model 2: Universal Scene 7-class
-MODEL_2_FILE="universal_scene_7class.task"
-MODEL_2_SHA="${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-6dae435d14bd3a7db9c1ea14dde61286f51bb36d52400ebdaf28f4a8bcad3fa1}"
-MODEL_2_URL="${MEDIAPIPE_UNIVERSAL_MODEL_URL:-}"
-MODEL_2_LOCAL="$ROOT_DIR/state/mediapipe_models/dual_taxonomy_issue23/universal_scene_7class/universal_scene_7class.task"
+# Model 2: Universal Dining 23-class (universal dishes)
+MODEL_2_FILE="universal_dining_23class.task"
+MODEL_2_SHA="${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_SHA256:-39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b}}"
+MODEL_2_URL="${MEDIAPIPE_UNIVERSAL_MODEL_URL:-${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_URL:-}}"
+MODEL_2_LOCAL="$ROOT_DIR/state/mediapipe_models/universal_dining_23class/universal_dining_23class.task"
 
 ensure_single_model "$MODEL_2_FILE" "$MODEL_2_SHA" "$MODEL_2_URL" "$MODEL_2_LOCAL"
 
-# Model 3: Personal Household 8-class
-MODEL_3_FILE="personal_household_8class.task"
-MODEL_3_SHA="${MEDIAPIPE_PERSONAL_MODEL_SHA256:-924a9782aa374278d8521e74a4a814398fd24cfefd0b6e0f2354235b428de15c}"
-MODEL_3_URL="${MEDIAPIPE_PERSONAL_MODEL_URL:-}"
-MODEL_3_LOCAL="$ROOT_DIR/state/mediapipe_models/dual_taxonomy_issue23/personal_household_8class/personal_household_8class.task"
+# Model 3: Personal Multi-Label 44-tag (personal 3-axis table)
+MODEL_3_FILE="personal_multilabel_44tag.task"
+MODEL_3_SHA="${MEDIAPIPE_PERSONAL_MODEL_SHA256:-${MEDIAPIPE_PERSONAL_44TAG_MODEL_SHA256:-b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971}}"
+MODEL_3_URL="${MEDIAPIPE_PERSONAL_MODEL_URL:-${MEDIAPIPE_PERSONAL_44TAG_MODEL_URL:-}}"
+MODEL_3_LOCAL="$ROOT_DIR/state/mediapipe_models/personal_multilabel_44tags/personal_multilabel_44tag.task"
 
 ensure_single_model "$MODEL_3_FILE" "$MODEL_3_SHA" "$MODEL_3_URL" "$MODEL_3_LOCAL"
-
-# Model 4: Universal Dining 23-class
-MODEL_4_FILE="universal_dining_23class.task"
-MODEL_4_SHA="${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_SHA256:-39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b}"
-MODEL_4_URL="${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_URL:-}"
-MODEL_4_LOCAL="$ROOT_DIR/state/mediapipe_models/universal_dining_23class/universal_dining_23class.task"
-
-ensure_single_model "$MODEL_4_FILE" "$MODEL_4_SHA" "$MODEL_4_URL" "$MODEL_4_LOCAL"
-
-# Model 5: Personal Multi-Label 44-tag
-MODEL_5_FILE="personal_multilabel_44tag.task"
-MODEL_5_SHA="${MEDIAPIPE_PERSONAL_44TAG_MODEL_SHA256:-b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971}"
-MODEL_5_URL="${MEDIAPIPE_PERSONAL_44TAG_MODEL_URL:-}"
-MODEL_5_LOCAL="$ROOT_DIR/state/mediapipe_models/personal_multilabel_44tags/personal_multilabel_44tag.task"
-
-ensure_single_model "$MODEL_5_FILE" "$MODEL_5_SHA" "$MODEL_5_URL" "$MODEL_5_LOCAL"
 
 exit 0

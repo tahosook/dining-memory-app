@@ -121,4 +121,54 @@ describe('AppSettingsService', () => {
     await expect(AppSettingsService.getMediaPipeModelStatus()).resolves.toBe('not_installed');
     await expect(AppSettingsService.getMediaPipeModelVersion()).resolves.toBe('mediapipe-v1');
   });
+
+  test('defaults MediaPipe classifier model ID to cooking_method_9class', async () => {
+    // Clear any prior set value by setting a non-existent or reset key
+    await AppSettingsService.setString('mediapipe_classifier_model_id', '');
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'cooking_method_9class'
+    );
+  });
+
+  test('persists and retrieves valid MediaPipe classifier model IDs', async () => {
+    await AppSettingsService.setMediaPipeClassifierModelId('universal_dining_23class');
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'universal_dining_23class'
+    );
+
+    await AppSettingsService.setMediaPipeClassifierModelId('personal_multilabel_44tag');
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'personal_multilabel_44tag'
+    );
+
+    await AppSettingsService.setMediaPipeClassifierModelId('cooking_method_9class');
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'cooking_method_9class'
+    );
+  });
+
+  test('migrates legacy model IDs to direct successors for backward compatibility', async () => {
+    await AppSettingsService.setString('mediapipe_classifier_model_id', 'universal_scene_7class');
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'universal_dining_23class'
+    );
+
+    await AppSettingsService.setString(
+      'mediapipe_classifier_model_id',
+      'personal_household_8class'
+    );
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'personal_multilabel_44tag'
+    );
+  });
+
+  test('falls back to cooking_method_9class for unknown model ID', async () => {
+    await AppSettingsService.setString(
+      'mediapipe_classifier_model_id',
+      'unknown_future_or_corrupt_id'
+    );
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'cooking_method_9class'
+    );
+  });
 });

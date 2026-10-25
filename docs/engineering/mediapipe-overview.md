@@ -77,22 +77,21 @@ flowchart TD
 
 ### 3.1 アプリ推論 & UI (Runtime)
 - **ステータス**: **確認済み**
-- **役割**: Android Native Bridge（MediaPipe Tasks Vision）を介してローカルの `.task` ファイルから推論を実行し、TS 層で料理名・ジャンルに正規化して Review 画面に tap-to-apply 提示する。設定画面（`SettingsScreen`）から分類モデル（3種類）の切り替えに対応。
+- **役割**: Android Native Bridge（MediaPipe Tasks Vision）を介してローカルの `.task` ファイルから推論を実行し、TS 層で料理名・ジャンルに正規化して Review 画面に tap-to-apply 提示する。設定画面（`SettingsScreen`）から分類モデル（3種類: 標準9クラス、汎用23クラス、わたし専用44タグ）の切り替えに対応。
 - **確認済み事実**:
   - `MediaPipeMealInputAssistModule.kt` は `filesDir/ai-models/` にモデルがない場合、同梱アセット（`assets/mediapipe/`）から自動シードコピーして `MappedByteBuffer` で安全にロードする仕組みを保持。
-  - `MediaPipeMealInputAssistSupport.kt` およびモジュール本体にて、選択されたモデルID（`cooking_method_9class`、`universal_scene_7class`、`personal_household_8class`）ごとに `ImageClassifier` インスタンスをキャッシュ管理し、モデル切替時もメモリ効率と高速推論を両立。
+  - `MediaPipeMealInputAssistSupport.kt` およびモジュール本体にて、選択されたモデルID（`cooking_method_9class`、`universal_dining_23class`、`personal_multilabel_44tag`）ごとに `ImageClassifier` インスタンスをキャッシュ管理し、モデル切替時もメモリ効率と高速推論を両立。旧モデルID（`universal_scene_7class`, `personal_household_8class`）からの自動移行・フォールバックも配備。
   - `main` ブランチ上の既定ランタイムは `mediapipe-static-image`、既定モデルは `cooking_method_9class` に設定済み。
   - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は以下の体系の正規化マッピングを配備：
     1. **調理法9クラス**（`curry_rice`, `drink`, `fish_dish`, `fried_dish`, `meat_dish`, `noodles`, `simmered_dish`, `stir_fry`, `other_or_exclude`）
-    2. **汎用シーン7クラス**（`home_teishoku_set`, `one_plate_or_curry`, `izakaya_bistro_or_party`, `noodles_or_single_bowl`, `dining_out_or_tray_meal`, `drink_or_bottle_record`, `non_food_or_exclude`）
-    3. **わたし専用8クラス**（`wife_multi_dish_teishoku`, `wife_nordic_one_plate`, `wife_curry_or_ethnic_plate`, `wife_morning_salmon_natto`, `wife_bistro_baguette_bal`, `wife_izakaya_small_dishes`, `household_pot_noodles_or_ramen_rice`, `special_takeout_party_feast`）
-    4. **汎用定番料理23クラス**（[Issue-24](../issues/issue-24-universal-dining-23class-model.md): 器情報を排除し焼き魚定食・生姜焼き・ラーメン・うどん・カレー等の純料理名サジェストに対応）
-    5. **わたし専用3軸マルチラベル44タグ**（[Issue-25](../issues/issue-25-personal-multilabel-3axis-model.md): 主菜20種・副菜汁物14種・シーン10種を同時分解し、軸別動的閾値によるチップ提示と `noteDraft` メモ下書きを自動合成）
+    2. **汎用定番料理23クラス**（[Issue-24](../issues/issue-24-universal-dining-23class-model.md): 器情報を排除し焼き魚定食・生姜焼き・ラーメン・うどん・カレー等の純料理名サジェストに対応）
+    3. **わたし専用3軸マルチラベル44タグ**（[Issue-25](../issues/issue-25-personal-multilabel-3axis-model.md): 主菜20種・副菜汁物14種・シーン10種を同時分解し、軸別動的閾値によるチップ提示と `noteDraft` メモ下書きを自動合成）
+    4. （後方互換用）旧汎用シーン7クラスおよび旧わたし専用8クラスのマッピング保持
   - 除外対象クラス（`other_or_exclude`、`non_food_or_exclude`、`non_food_exclude`）は `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
 
 ### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
 - **ステータス**: **確認済み**
-- **役割**: `scripts/ensure-mediapipe-model.sh` により、GitHub Releases (`mediapipe-model-v0.1.0`) から `.task` ファイルを取得・SHA-256 検証して同梱アセットに配置するとともに、ローカル学習済みの追加モデル（`universal_scene_7class.task`, `personal_household_8class.task`）を自動検証・同期する。また、アプリ側のオンデマンドダウンロード設定（`src/ai/mealInputAssist/modelConfig.ts`）とも整合している。
+- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`scripts/ensure-mediapipe-model.sh` は Releases から 3 モデルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
 
 ### 3.3 モデル学習 & 二段階昇格判定 (Training & Two-Tier Gate)
 - **ステータス**: **確認済み**
