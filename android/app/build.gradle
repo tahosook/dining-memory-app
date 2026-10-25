@@ -215,6 +215,7 @@ dependencies {
 
 // Verify required bundled MediaPipe model assets and SHA-256 checksums before packaging release builds
 tasks.register("verifyReleaseMediaPipeModelAsset") {
+    mustRunAfter(tasks.matching { it.name == "syncRNLlamaHtpAssets" })
     inputs.files("src/main/assets/mediapipe/meal-input-assist.task",
                  "src/main/assets/mediapipe/universal_scene_7class.task",
                  "src/main/assets/mediapipe/personal_household_8class.task")
