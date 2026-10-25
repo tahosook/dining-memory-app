@@ -35,16 +35,6 @@ class MediaPipeMealInputAssistSupportTest {
     val blankSpec = MediaPipeMealInputAssistSupport.resolveModelSpec("   ")
     assertEquals(MODEL_ID_COOKING_METHOD_9CLASS, blankSpec?.id)
 
-    val sceneSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_SCENE_7CLASS)
-    assertEquals(MODEL_ID_UNIVERSAL_SCENE_7CLASS, sceneSpec?.id)
-    assertEquals("universal_scene_7class.task", sceneSpec?.fileName)
-    assertEquals("mediapipe/universal_scene_7class.task", sceneSpec?.assetPath)
-
-    val personalSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS)
-    assertEquals(MODEL_ID_PERSONAL_HOUSEHOLD_8CLASS, personalSpec?.id)
-    assertEquals("personal_household_8class.task", personalSpec?.fileName)
-    assertEquals("mediapipe/personal_household_8class.task", personalSpec?.assetPath)
-
     val universal23Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_DINING_23CLASS)
     assertEquals(MODEL_ID_UNIVERSAL_DINING_23CLASS, universal23Spec?.id)
     assertEquals("universal_dining_23class.task", universal23Spec?.fileName)
@@ -55,18 +45,19 @@ class MediaPipeMealInputAssistSupportTest {
     assertEquals("personal_multilabel_44tag.task", personal44Spec?.fileName)
     assertEquals("mediapipe/personal_multilabel_44tag.task", personal44Spec?.assetPath)
 
+    // Backward compatibility: legacy model IDs fall back to their direct successors
+    val legacyUniversalSpec = MediaPipeMealInputAssistSupport.resolveModelSpec("universal_scene_7class")
+    assertEquals(MODEL_ID_UNIVERSAL_DINING_23CLASS, legacyUniversalSpec?.id)
+
+    val legacyPersonalSpec = MediaPipeMealInputAssistSupport.resolveModelSpec("personal_household_8class")
+    assertEquals(MODEL_ID_PERSONAL_MULTILABEL_44TAG, legacyPersonalSpec?.id)
+
     assertNull(MediaPipeMealInputAssistSupport.resolveModelSpec("unknown_model_id"))
   }
 
   @Test
   fun `resolves model file location for each model spec`() {
     val baseDir = File("/data/user/0/com.tahosook.diningmemory/files")
-    val sceneSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_SCENE_7CLASS)!!
-    val file = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, sceneSpec)
-    assertEquals(
-      File("/data/user/0/com.tahosook.diningmemory/files/ai-models/universal_scene_7class.task"),
-      file,
-    )
 
     val univ23Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_UNIVERSAL_DINING_23CLASS)!!
     val univ23File = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, univ23Spec)

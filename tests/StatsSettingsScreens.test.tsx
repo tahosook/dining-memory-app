@@ -958,20 +958,14 @@ describe('SettingsScreen', () => {
     expect(getByTestId('mediapipe-model-selection-section')).toBeTruthy();
 
     const cookingOption = getByTestId('mediapipe-model-option-cooking_method_9class');
-    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
-    const personalOption = getByTestId('mediapipe-model-option-personal_household_8class');
     const universal23Option = getByTestId('mediapipe-model-option-universal_dining_23class');
     const personal44Option = getByTestId('mediapipe-model-option-personal_multilabel_44tag');
 
     expect(cookingOption).toBeTruthy();
-    expect(universalOption).toBeTruthy();
-    expect(personalOption).toBeTruthy();
     expect(universal23Option).toBeTruthy();
     expect(personal44Option).toBeTruthy();
 
     expect(cookingOption.props.accessibilityState).toEqual({ selected: true });
-    expect(universalOption.props.accessibilityState).toEqual({ selected: false });
-    expect(personalOption.props.accessibilityState).toEqual({ selected: false });
     expect(universal23Option.props.accessibilityState).toEqual({ selected: false });
     expect(personal44Option.props.accessibilityState).toEqual({ selected: false });
   });
@@ -1000,6 +994,15 @@ describe('SettingsScreen', () => {
         'universal_dining_23class'
       );
     });
+
+    const personal44Option = getByTestId('mediapipe-model-option-personal_multilabel_44tag');
+    fireEvent.press(personal44Option);
+
+    await waitFor(() => {
+      expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
+        'personal_multilabel_44tag'
+      );
+    });
   });
 
   test('switches MediaPipe model, persists to AppSettingsService, and re-checks availability on tap', async () => {
@@ -1019,12 +1022,12 @@ describe('SettingsScreen', () => {
 
     expect(await findByText('分類モデル')).toBeTruthy();
 
-    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
+    const universalOption = getByTestId('mediapipe-model-option-universal_dining_23class');
     fireEvent.press(universalOption);
 
     await waitFor(() => {
       expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
-        'universal_scene_7class'
+        'universal_dining_23class'
       );
     });
 
@@ -1033,11 +1036,11 @@ describe('SettingsScreen', () => {
     });
 
     await waitFor(() => {
-      expect(getMediaPipeStaticImageAvailability).toHaveBeenCalledWith('universal_scene_7class');
+      expect(getMediaPipeStaticImageAvailability).toHaveBeenCalledWith('universal_dining_23class');
     });
 
     expect(
-      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+      getByTestId('mediapipe-model-option-universal_dining_23class').props.accessibilityState
     ).toEqual({
       selected: true,
     });
@@ -1069,7 +1072,7 @@ describe('SettingsScreen', () => {
     );
     (getMediaPipeStaticImageAvailability as jest.Mock).mockImplementation(
       async (modelId?: string) => {
-        if (modelId === 'universal_scene_7class') {
+        if (modelId === 'universal_dining_23class') {
           return {
             kind: 'unavailable',
             mode: 'mediapipe-static-image',
@@ -1091,7 +1094,7 @@ describe('SettingsScreen', () => {
 
     expect(await findByText('分類モデル')).toBeTruthy();
 
-    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
+    const universalOption = getByTestId('mediapipe-model-option-universal_dining_23class');
     fireEvent.press(universalOption);
 
     await waitFor(() => {
@@ -1108,7 +1111,7 @@ describe('SettingsScreen', () => {
       selected: true,
     });
     expect(
-      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+      getByTestId('mediapipe-model-option-universal_dining_23class').props.accessibilityState
     ).toEqual({
       selected: false,
     });
@@ -1136,7 +1139,7 @@ describe('SettingsScreen', () => {
 
     expect(await findByText('分類モデル')).toBeTruthy();
 
-    const universalOption = getByTestId('mediapipe-model-option-universal_scene_7class');
+    const universalOption = getByTestId('mediapipe-model-option-universal_dining_23class');
     fireEvent.press(universalOption);
 
     await waitFor(() => {
@@ -1152,7 +1155,7 @@ describe('SettingsScreen', () => {
       selected: true,
     });
     expect(
-      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+      getByTestId('mediapipe-model-option-universal_dining_23class').props.accessibilityState
     ).toEqual({
       selected: false,
     });
@@ -1162,11 +1165,11 @@ describe('SettingsScreen', () => {
 
   test('allows recovery to default model when saved non-default model is unavailable on startup', async () => {
     (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
-      'universal_scene_7class'
+      'universal_dining_23class'
     );
     (getMediaPipeStaticImageAvailability as jest.Mock).mockImplementation(
       async (modelId?: string) => {
-        if (modelId === 'universal_scene_7class') {
+        if (modelId === 'universal_dining_23class') {
           return {
             kind: 'unavailable',
             mode: 'mediapipe-static-image',
@@ -1189,7 +1192,7 @@ describe('SettingsScreen', () => {
     expect(await findByText('分類モデル')).toBeTruthy();
     expect(getByTestId('mediapipe-model-recovery-notice')).toBeTruthy();
     expect(
-      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+      getByTestId('mediapipe-model-option-universal_dining_23class').props.accessibilityState
     ).toEqual({
       selected: true,
     });
@@ -1210,7 +1213,7 @@ describe('SettingsScreen', () => {
       selected: true,
     });
     expect(
-      getByTestId('mediapipe-model-option-universal_scene_7class').props.accessibilityState
+      getByTestId('mediapipe-model-option-universal_dining_23class').props.accessibilityState
     ).toEqual({
       selected: false,
     });

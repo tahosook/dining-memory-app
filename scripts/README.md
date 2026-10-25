@@ -1,7 +1,7 @@
 # Scripts Catalog (scripts/)
 
 ## Meta
-- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 24 本および共通・ツール 10 本、計 34 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
+- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 25 本および共通・ツール 10 本、計 35 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
 - Audience: ML/パイプライン開発者、保守者、AI エージェント。
 - Update trigger: `scripts/` 配下にスクリプトやテストを追加・変更・削除したとき。
 - Related docs: [docs/engineering/mediapipe-overview.md](../docs/engineering/mediapipe-overview.md), [docs/engineering/context-map.md](../docs/engineering/context-map.md), [docs/engineering/golden-test-set-v2-specification.md](../docs/engineering/golden-test-set-v2-specification.md)
@@ -10,7 +10,7 @@
 
 ## 1. 概要
 
-`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、およびラベル探索を行うためのスクリプト群（計 24 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 10 本）の合計 34 本が配置されています。
+`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、およびラベル探索を行うためのスクリプト群（計 25 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 10 本）の合計 35 本が配置されています。
 
 ---
 
@@ -27,11 +27,12 @@
 
 ---
 
-### 2.2 モデル配布 & アセット取得 (1 本)
+### 2.2 モデル配布 & アセット取得 (2 本)
 
 | スクリプト名 | 役割 / 責務 | 主要な入力 | 主要な出力 | 実行コマンド例 | 対応テスト |
 |---|---|---|---|---|---|
-| `ensure-mediapipe-model.sh` | GitHub Releases から MediaPipe モデルバイナリ（`meal-input-assist.task`）を取得し、SHA-256 検証を経てアセットディレクトリへ配置する。 | GitHub Releases, 環境変数 | `android/app/src/main/assets/mediapipe/meal-input-assist.task` | `./scripts/ensure-mediapipe-model.sh` | `tests/buildAndroidRelease.test.ts` (Jest) |
+| `ensure-mediapipe-model.sh` | GitHub Releases から MediaPipe モデルバイナリ（標準9クラス、汎用23クラス、わたし専用44タグ）を取得し、SHA-256 検証を経てアセットディレクトリへ配置・旧モデルをクリーンアップする。 | GitHub Releases, 環境変数 | `android/app/src/main/assets/mediapipe/*.task` | `./scripts/ensure-mediapipe-model.sh` | `tests/buildAndroidRelease.test.ts` (Jest) |
+| `publish_mediapipe_model.py` | MediaPipe モデルのバイナリ検証、GitHub Releases への正式アップロード、DL検証、および4 canonical ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `build.gradle`）の SHA-256 チェックサム一括更新を自動化する。 | `--model-id`, `--model-path`, `--release-tag` | GitHub Releases アセット、4ファイル更新 | `python3 scripts/publish_mediapipe_model.py --model-id universal_dining_23class --model-path model.task` | `test_publish_mediapipe_model.py` |
 
 ---
 
@@ -94,10 +95,11 @@
 
 ## 4. テスト対応表 (`scripts/tests/`)
 
-`scripts/tests/` 配下に実在する **全 22 テストスイート（全 295 件のテストケース）** の一覧です。
+`scripts/tests/` 配下に実在する **全 23 テストスイート（全 303 件のテストケース）** の一覧です。
 
 | テストスクリプト名 | テスト件数 | テスト対象スクリプト / モジュール | 主な検証内容 |
 |---|:---:|---|---|
+| `test_publish_mediapipe_model.py` | 8 | `publish_mediapipe_model.py` | モデルバイナリ妥当性検査、4ファイル一括 SHA-256 更新ロジック、部分更新安全性 |
 | `test_promotion_gate_v2.py` | 33 | `run-autonomous-model-improvement.sh` | 二段階昇格判定、Golden Set v2 フェイルクローズ検証、メトリクス完全性、鮮度保証、ディレクトリ整合性 |
 | `test_verify_golden_dataset_v2.py` | 22 | `verify-golden-dataset-v2.py` | Golden Set v2 のマニフェスト整合性、画像破損、SHA256、学習漏洩検知 |
 | `test_reconcile_sample_a_audit.py` | 13 | `reconcile_sample_a_audit.py` | アンブラインド照合、超幾何分布厳密信頼区間、二層採用レジストリ生成 |

@@ -127,12 +127,17 @@ export class AppSettingsService {
     const value = await this.getString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, 'cooking_method_9class');
     if (
       value === 'cooking_method_9class' ||
-      value === 'universal_scene_7class' ||
-      value === 'personal_household_8class' ||
       value === 'universal_dining_23class' ||
       value === 'personal_multilabel_44tag'
     ) {
       return value;
+    }
+    // Backward compatibility: migrate legacy 7/8 class models to their direct successors
+    if (value === 'universal_scene_7class') {
+      return 'universal_dining_23class';
+    }
+    if (value === 'personal_household_8class') {
+      return 'personal_multilabel_44tag';
     }
     return 'cooking_method_9class';
   }

@@ -15,6 +15,7 @@
     "install:android:release": "bash ./scripts/install-android-artifact.sh",
     "install:android:debug": "INSTALL_ANDROID_VARIANT=debug bash ./scripts/install-android-artifact.sh",
     "release:android": "npm run build:android:release && npm run install:android:release",
+    "publish:model": "python3 ./scripts/publish_mediapipe_model.py",
     "android:gradle": "cd android && ./gradlew",
     "clean": "rm -rf node_modules package-lock.json yarn.lock && echo 'cleaned node_modules and lockfiles'",
     "install:fresh": "npm run clean && npm install",
