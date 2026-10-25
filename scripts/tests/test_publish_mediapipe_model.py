@@ -11,6 +11,7 @@ from pathlib import Path
 
 from scripts.publish_mediapipe_model import (
     compute_sha256,
+    prepare_release_assets,
     update_build_android_release_sh,
     update_build_gradle,
     update_ensure_script_sh,
@@ -51,6 +52,34 @@ class TestPublishMediaPipeModel(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             validate_model_file(tiny_path, "tiny.task")
         self.assertIn("Invalid model file size", str(ctx.exception))
+
+    def test_validate_model_file_missing_tflite_in_zip(self) -> None:
+        target = self.test_dir / "labels_only.task"
+        with zipfile.ZipFile(target, "w") as z:
+            z.writestr("labels.txt", "label1\nlabel2\n")
+            z.writestr("padding.bin", b"0" * (2 * 1024 * 1024))
+        with self.assertRaises(ValueError) as ctx:
+            validate_model_file(target, "labels_only.task")
+        self.assertIn("does not contain a .tflite model", str(ctx.exception))
+
+    def test_prepare_release_assets_canonicalizes_filename(self) -> None:
+        source_model = self.create_dummy_task_file("arbitrary_model_name.task")
+        sha256 = compute_sha256(source_model)
+        staging_dir = self.test_dir / "staging"
+
+        canonical_model, canonical_sha = prepare_release_assets(
+            source_model, "universal_dining_23class.task", sha256, staging_dir
+        )
+
+        self.assertEqual(canonical_model.name, "universal_dining_23class.task")
+        self.assertEqual(canonical_sha.name, "universal_dining_23class.task.sha256")
+        self.assertTrue(canonical_model.is_file())
+        self.assertTrue(canonical_sha.is_file())
+        self.assertEqual(compute_sha256(canonical_model), sha256)
+        self.assertEqual(
+            canonical_sha.read_text(encoding="utf-8"),
+            f"{sha256}  universal_dining_23class.task\n",
+        )
 
     def test_validate_model_file_invalid_signature(self) -> None:
         invalid_path = self.test_dir / "invalid.task"

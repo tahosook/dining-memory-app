@@ -22,6 +22,7 @@ import argparse
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -89,9 +90,8 @@ def validate_model_file(file_path: Path, expected_filename: str) -> None:
             with zipfile.ZipFile(file_path, "r") as z:
                 names = z.namelist()
                 has_model = any(n.endswith(".tflite") for n in names)
-                has_labels = any("labels" in n or n.endswith(".txt") for n in names)
-                if not has_model and not has_labels:
-                    raise ValueError(f"Task ZIP archive does not contain expected model or labels: {names}")
+                if not has_model:
+                    raise ValueError(f"Task ZIP archive does not contain a .tflite model: {names}")
         except zipfile.BadZipFile as e:
             raise ValueError(f"Corrupted ZIP task archive: {e}") from e
 
@@ -197,6 +197,22 @@ def sync_all_files(root: Path, model_id: str, new_sha: str, dry_run: bool = Fals
         print(f"  ✓ {name}")
 
 
+def prepare_release_assets(
+    model_path: Path, expected_filename: str, sha256: str, staging_dir: Path
+) -> Tuple[Path, Path]:
+    """
+    Ensures release assets always match the canonical model file name and SHA-256 file name,
+    regardless of what input filename the user supplied.
+    """
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    canonical_model = staging_dir / expected_filename
+    if model_path != canonical_model:
+        shutil.copy2(model_path, canonical_model)
+    canonical_sha = staging_dir / f"{expected_filename}.sha256"
+    canonical_sha.write_text(f"{sha256}  {expected_filename}\n", encoding="utf-8")
+    return canonical_model, canonical_sha
+
+
 def upload_to_github_releases(model_file: Path, sha_file: Path, release_tag: str) -> None:
     print(f"Uploading {model_file.name} to GitHub Releases ({release_tag})...")
     cmd = [
@@ -275,15 +291,24 @@ def main() -> None:
     sha256 = compute_sha256(model_path)
     print(f"✓ Binary validated: size={model_path.stat().st_size} bytes, sha256={sha256}")
 
-    sha_file = model_path.parent / f"{model_path.name}.sha256"
-    if not args.dry_run:
-        sha_file.write_text(f"{sha256}  {model_path.name}\n", encoding="utf-8")
+    # Optionally persist .sha256 next to the source file for convenience
+    try:
+        source_sha_file = model_path.parent / f"{model_path.name}.sha256"
+        if not args.dry_run:
+            source_sha_file.write_text(f"{sha256}  {model_path.name}\n", encoding="utf-8")
+    except OSError:
+        pass
 
     # Step 2: Upload to Releases & Verify fetch
     download_url = f"https://github.com/tahosook/dining-memory-app/releases/download/{args.release_tag}/{expected_filename}"
     if not args.skip_upload and not args.dry_run:
-        upload_to_github_releases(model_path, sha_file, args.release_tag)
-        verify_clean_fetch(download_url, sha256)
+        with tempfile.TemporaryDirectory() as staging_tmp:
+            staging_dir = Path(staging_tmp)
+            canonical_model, canonical_sha = prepare_release_assets(
+                model_path, expected_filename, sha256, staging_dir
+            )
+            upload_to_github_releases(canonical_model, canonical_sha, args.release_tag)
+            verify_clean_fetch(download_url, sha256)
     else:
         print("[INFO] Skipping remote upload & fetch verification.")
 
