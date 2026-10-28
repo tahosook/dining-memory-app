@@ -7,8 +7,21 @@
 # For more details, see
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
-# react-native-reanimated
+# react-native-reanimated & worklets & fabric
 -keep class com.swmansion.reanimated.** { *; }
+-keep class com.swmansion.worklets.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
+-keep class com.facebook.react.fabric.** { *; }
 
-# Add any project specific keep options here:
+# llama.rn (JNI & fbjni bindings)
+-keep class com.rnllama.** { *; }
+-keep class com.facebook.jni.** { *; }
+
+# MediaPipe Tasks Vision & Protocol Buffers (JNI reflection)
+-keep class com.google.mediapipe.** { *; }
+-keep class * implements com.google.mediapipe.** { *; }
+-keep class com.google.protobuf.** { *; }
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite { *; }
+
+# Dining Memory custom native modules
+-keep class com.tahosook.diningmemory.** { *; }

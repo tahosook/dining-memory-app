@@ -7,7 +7,7 @@
 - Related docs: [AGENTS.md](../../AGENTS.md), [docs/index.md](../index.md), [docs/domain/database-design.md](../domain/database-design.md)
 
 ## Current Stack
-- Expo SDK 57 on React Native 0.86 / React 19.2
+- Expo SDK 58 on React Native 0.88 / React 19.3
 - TypeScript 6.0.x
 - Android Bare Workflow (`android/` is tracked in Git with custom Kotlin modules, MediaPipe, llama.rn)
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
@@ -34,7 +34,7 @@
 
 ## Runtime Assumptions
 - Local development uses Node.js 25.9.x as the recommended runtime; CI currently runs Node.js 25.9.0.
-- Expo SDK 57 keeps the New Architecture enabled at all times.
+- Expo SDK 58 keeps the New Architecture enabled at all times.
 - Android uses Bare Workflow where `android/` is git-tracked. `npx expo prebuild --clean` is prohibited in normal operation to preserve custom native modules (`MealShare*`, `MediaPipe*`) and build configurations. When updating Expo SDK or native dependencies, generate prebuild outputs into a separate workspace and manually merge necessary diffs into `android/`.
 - iOS native builds target iOS 16.4 or newer.
 - App data lives primarily on the device.
@@ -101,6 +101,6 @@
 - Camera is the main entry point for the app.
 - Search and stats exist as first-class tabs rather than hidden tools.
 - The project keeps a strong privacy and local-storage bias.
-- The current app supports local ZIP backup export and restore, while cloud backup, external export, and remote AI sync remain out of scope. In Expo SDK 52/57, staging and file operations utilize `expo-file-system/legacy`; non-legacy FileSystem migration is planned for a future release.
+- The current app supports local ZIP backup export and restore, while cloud backup, external export, and remote AI sync remain out of scope. In Expo SDK 52-58, staging and file operations utilize `expo-file-system/legacy`; non-legacy FileSystem migration is planned for a future release.
 - AI 入力補助は save / update flow の外側に置き、失敗時でも手入力保存を妨げない。
 - local AI runtime が未組み込みの build では、review に disabled reason を出し、mock 候補で自動的に置き換えない。

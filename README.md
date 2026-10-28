@@ -67,7 +67,7 @@ dining-memory-app/
 
 ### システム要件
 - Node.js 24.x LTS 推奨
-- Expo SDK 57.x
+- Expo SDK 58.x
 - Expo CLI（`npx expo` 推奨）
 - iOS 開発: Xcode
 - Android 開発: Android Studio（任意）
@@ -83,8 +83,8 @@ npx expo start --dev-client
 ```
 
 ### 実行時前提
-- React Native 0.86 系 / React 19.2 系を前提としています
-- Expo SDK 57 の New Architecture は常時有効です
+- React Native 0.88 系 / React 19.3 系を前提としています
+- Expo SDK 58 の New Architecture は常時有効です
 - Android Native プロジェクトは **Bare Workflow** として `android/` を Git 管理しています
   - `llama.rn`、MediaPipe Tasks Vision、カスタム Kotlin Native Module（`MealShareModule` 等）を直接保持しています
   - `npx expo prebuild --clean` は `MainApplication.kt` や `build.gradle` などのカスタム Native 実装を上書き・破壊するため、通常運用では実行しないでください（Expo SDK 更新時などは差分マージで追従します）

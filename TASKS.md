@@ -13,7 +13,6 @@
 
 ## Next
 ### Investigation / evaluation candidates（調査・評価候補）
-- Expo SDK 57 → 58 アップグレード対応: 次期実装候補。整合した多エージェント開発ワークフロー（計画=Argon＋Museレビュー、実装=Gemini 3.8 Flash High、レビュー=ChatGPT/Grok、仲介・検証=Muse、マージ=オーナー判断・Muse実行）に従い、dependency-policy.md の 15-Step Protocol に基づいて計画・実装・検証（`npm run verify` ＋ `npm run build:android:debug`）を実施予定。
 - 統計画面の改善: 候補。period tabs / reflection / balance bar / Top 3 ranking は実装済み。次は calendar、曜日 / 時間帯 trend、photo highlights など深い insight を検討する。
 - 食事ラベルレビューHTMLの改善: 候補。`build-review-gallery.py` は教師データ化支援が主責務で、アプリ本体 UX の再現は対象外。
 - MediaPipe 食事分類モデルのリモートオンデマンド配布・端末内ローカル読み込みパイプライン（GitHub Issue #120、内部ドキュメント issue-13）: 次期実装候補。バイナリ同梱を廃止し、GitHub Releases 等からオンデマンド配布して MappedByteBuffer 経由でローカル推論するアーキテクチャおよびタスク仕様を策定済み（[docs/architecture/food-labeling-pipeline.md](docs/architecture/food-labeling-pipeline.md)、[docs/issues/issue-13-mediapipe-remote-model-pipeline.md](docs/issues/issue-13-mediapipe-remote-model-pipeline.md)）。
@@ -33,6 +32,7 @@
 - 検索 quality 改善: 候補。current scope は text/filter path。semantic search は current scope ではない。
 
 ## Done / Historical Notes
+- Expo SDK 57 → 58 アップグレード対応（React Native 0.88 / React 19.3）: 完了。多エージェント開発ワークフロー（計画=Argon＋Museレビュー、実装=Gemini 3.8 Flash High、レビュー=ChatGPT/Grok、仲介・検証=Muse、マージ=オーナー判断・Muse実行）および dependency-policy.md の 15-Step Protocol に基づき、SDK 58 への移行を実施。Bare Workflow 差分マージ（Gradle 9.4.1、minify: false 維持、カスタムモジュール保持）、RN 0.88 Strict API / React 19.3 / InteractionManager 削除への最小型追従、全フル検証ゲート（`npm run verify` 10項目）通過、および Android Debug ビルド（`npm run build:android:debug`）の成功を確認。
 - 多エージェント開発ワークフロー（Argon / Muse / Gemini 3.8 Flash High / ChatGPT / Grok / オーナー）への文書整合: 完了。AGENTS.md、development-workflow.md、dependency-policy.md に5フェーズの役割分担（計画=Argon＋Museレビュー、実装=Gemini 3.8 Flash High でマージ禁止、レビュー=ChatGPT/Grok、仲介・検証=Muse、マージ=オーナー判断・Muse実行・完了報告）、レビューの場（ChatGPT/Grok プロジェクト `dining-memory-app`）、PR 本文への設計条件チェックリスト義務化、および PR 作成時の標準検証コマンド `npm run verify`（フルゲート）と2段階検証運用の維持を明文化。コード・設定・テストは一切変更なし。
 - MediaPipe 食事分類モデルの 3 枠（標準9クラス・汎用23クラス・わたし専用44タグ）統合とモデル配布自動化（内部ドキュメント issue-26）: 完了。旧 7 クラス（`universal_scene_7class`）および旧 8 クラス（`personal_household_8class`）モデルを正式退役とし、標準（調理法・9クラス）、汎用（定番料理・23クラス）、わたし専用（食卓3軸・44タグマルチラベル）の 3 モデル体制に集約。DB / Android Native Bridge での旧モデルID自動マイグレーション、学習後の配布・Releases アップロード・ハッシュ一括自動更新スクリプト（`scripts/publish_mediapipe_model.py`）を導入。同梱アセットから旧モデルを自動クリーンアップし、APK サイズを約 18MB 削減。Jest / Kotlin / Python 単体テスト全件 PASS。
 - 汎用23クラスおよびわたし専用3軸マルチラベル（44タグ）分類モデルの学習・評価・実機バイナリ配布とアプリ利用可能化（内部ドキュメント issue-24, issue-25 Phase 2）: 完了。オープン視覚観察データ（1,007枚）からエクスポートした純料理特化23クラス（train 930枚）および3軸44タグ（train 2,789枚）データセットを用い、MediaPipe Model Maker (MobileNetV2) により2種類の分類モデル（`universal_dining_23class.task` 8,984,478 bytes, `personal_multilabel_44tag.task` 9,092,455 bytes）を学習・エクスポート。Held-out スプリット評価（23クラス: 推論15.7ms、44タグ: 推論15.6ms）を実施。`scripts/ensure-mediapipe-model.sh` にモデル4・5を追加してアセット整合性・同期を配備し、`modelConfig.ts` で SHA-256 登録および `available: true` 化。設定画面での選択・利用を有効化。Python / Jest 単体テスト全件 PASS（[docs/issues/issue-24-universal-dining-23class-model.md](docs/issues/issue-24-universal-dining-23class-model.md), [docs/issues/issue-25-personal-multilabel-3axis-model.md](docs/issues/issue-25-personal-multilabel-3axis-model.md)）。

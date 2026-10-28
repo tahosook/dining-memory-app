@@ -1,5 +1,4 @@
 import React from 'react';
-import { InteractionManager } from 'react-native';
 import { CameraView } from '../../components/screens/camera';
 import {
   useCameraCapture,
@@ -47,7 +46,8 @@ const CameraScreenContainer: React.FC = () => {
 
     let cancelled = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
-    const interaction = InteractionManager.runAfterInteractions(() => {
+    let frameId: number | null = null;
+    frameId = requestAnimationFrame(() => {
       timeout = setTimeout(() => {
         if (!cancelled) {
           prewarmMealInputAssist();
@@ -60,7 +60,9 @@ const CameraScreenContainer: React.FC = () => {
       if (timeout) {
         clearTimeout(timeout);
       }
-      interaction.cancel?.();
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId);
+      }
     };
   }, [
     cameraPermissionState.permission?.granted,

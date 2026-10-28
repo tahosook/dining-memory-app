@@ -400,7 +400,7 @@ export const SearchScreen: React.FC = () => {
               <View style={styles.loadingMoreContainer} testID="search-loading-more">
                 <ActivityIndicator size="small" color={Colors.primary} />
               </View>
-            ) : null
+            ) : undefined
           }
           renderItem={renderItem}
         />
