@@ -66,6 +66,79 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
         - 関連する内部 Issue Doc（`docs/issues/issue-XX.md`）、実測ノート（`docs/notes/*.md`）、関連 Issue / PR へのハイパーリンクを必ず記載する。
    - これにより、再開条件が曖昧なまま不完全な PR が再提案されるループを防止し、後続のエージェントや開発者が判断根拠を即座に辿れるようにする（例: PR #220 のクローズコメントおよび [docs/issues/issue-14-backup-restore-concurrency-criteria.md](../issues/issue-14-backup-restore-concurrency-criteria.md)）。
 
+## Multi-Agent Roles & End-to-End Workflow (多エージェント開発ワークフローと役割分担)
+本リポジトリでは、自律的かつ安全に高品質な開発を推進するため、以下の5つの役割分担・責任境界に基づいてエンドツーエンドで開発を回します。
+
+```mermaid
+flowchart TD
+    subgraph P1["1. 計画フェーズ"]
+        A["Antigravity Argon (/plan)<br/>計画作成"] --> M1["Muse<br/>計画レビュー・合意"]
+    end
+    subgraph P2["2. 実装・検証・PR起票フェーズ"]
+        G["Gemini 3.8 Flash High<br/>トピックブランチ作成・実装・npm run verify・PR作成<br/>（※マージ禁止）"]
+    end
+    subgraph P3["3. 外部レビューフェーズ"]
+        R1["ChatGPT (dining-memory-app)<br/>設計条件チェックリスト＆diff照合"]
+        R2["Grok (dining-memory-app)<br/>設計条件チェックリスト＆diff照合"]
+    end
+    subgraph P4["4. 仲介・コード裏取りフェーズ"]
+        M2["Muse<br/>指摘を実コードで裏取り・修正方針整理"] --> O1["オーナー<br/>修正方針承認"]
+    end
+    subgraph P5["5. マージ・完了連絡フェーズ"]
+        O2["オーナー<br/>マージ判断（専権）"] --> M3["Muse<br/>GitHub経由マージ実行＆<br/>Antigravity会話へ完了一報"]
+    end
+
+    M1 --> G
+    G -->|"PR作成 (設計条件チェックリスト + 差分)"| R1
+    G -->|"PR作成 (設計条件チェックリスト + 差分)"| R2
+    R1 -->|"PRへ直接コメント"| M2
+    R2 -->|"PRへ直接コメント"| M2
+    O1 -->|"修正指示"| G
+    O1 -->|"全指摘解消"| O2
+```
+
+### 1. 計画フェーズ (Planning)
+- **担当**: Antigravity の **Argon**（`/plan`）が作成し、**Muse** がレビューする。
+- **責務**:
+  - 現状の課題と客観的事実の調査。
+  - 設計条件チェックリスト（Design Criteria Checklist）、スコープ境界、検証方針の策定。
+  - 変更対象ファイルと具体的な変更方針の明確化。
+  - 計画合意後、実装フェーズへハンドオフする。
+
+### 2. 実装フェーズ (Implementation)
+- **担当**: **Gemini 3.8 Flash High**
+- **責務**:
+  - トピックブランチ（`feat/*`, `fix/*`, `docs/*` 等）の作成。
+  - 計画で合意された設計条件に従ったコード・ドキュメントの実装。
+  - PR 作成前のローカル標準検証（**`npm run verify`**）の実行と exit 0 の確認（ネイティブ変更時は加えて `npm run build:android:debug`）。
+  - 後述の規約に従い、必須 4 セクションと設計条件チェックリストを含む PR の作成。
+- **責任境界（厳守）**:
+  - **実装担当はマージを行わない（マージ禁止）**。PR の作成までを担当し、マージ操作は一切行わない。
+
+### 3. レビューフェーズ (Review)
+- **担当**: **ChatGPT** および **Grok**
+- **レビューの場**:
+  - ChatGPT プロジェクト: **`dining-memory-app`**
+  - Grok プロジェクト: **`dining-memory-app`**
+- **責務**:
+  - PR 本文に記載された「設計条件チェックリスト」とコード差分（diff）を 1 項目ずつ照合。
+  - 要件漏れ、境界値の不備、既存規約（機械的ゲート、型安全性、プライバシー等）との整合性を検証。
+  - レビュー結果および指摘事項を GitHub PR へ直接コメントとして投稿する。
+
+### 4. 仲介・検証フェーズ (Mediation & Verification)
+- **担当**: **Muse**
+- **責務**:
+  - ChatGPT および Grok から PR に投稿された各指摘事項について、実際のコードベースおよびテストと照合して裏取り（事実確認・妥当性検証）を行う。
+  - 修正が必要な論点・対応方針を整理し、**オーナーの承認**を得る。
+  - オーナー承認を得た修正方針を実装担当（Gemini 3.8 Flash High）へ伝達し、修正と再検証（`npm run verify`）を指示する。
+
+### 5. マージフェーズ (Merge)
+- **マージ判断（厳守）**: **マージ判断はオーナーのみが行う（オーナー専権）**。AI エージェントが自律的にマージ判断を下すことは禁止。
+- **実行担当**: **Muse**
+- **責務**:
+  - オーナーによるマージ承認を受けた後、Muse が GitHub 経由で PR をマージする。
+  - マージ完了後、Muse は当該機能・タスクを扱っている Antigravity 会話へ完了を一報する。
+
 ## Before Editing
 - Identify the canonical doc and the implementation files that are the source of truth.
 - Prefer `src/` and current canonical docs over deprecated docs and historical notes.
@@ -85,10 +158,34 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
 - **「変更しないこと」の成功定義 (No actionable finding, stop)**: 調査の結果、対処すべき問題がなければ無理にコード変更を捏造せず、レポートを残して「変更なし」で終了することを成功とする。
 - **ブランチ保護と直接プッシュ禁止の機械的強制**: main ブランチへの直接コミットおよび force-push は GitHub Ruleset（ID 19937013）によって例外なく（Bypass 不可）物理的にブロックされている。ドキュメント単独更新を含むすべての変更はトピックブランチから PR を作成し、必須ステータスチェックを通過させてマージする（詳細は [docs/notes/git-branching-and-ci-governance.md](../notes/git-branching-and-ci-governance.md) 参照）。
 
-## PR Eligibility Criteria
+## PR Eligibility Criteria & PR Description Rules
+詳細は [.jules/rules.md](../../.jules/rules.md) を参照してください。
 - **Problem**: 現行コードベースにおける具体的な事実（破損、脆弱性、測定されたボトルネック、明示された要件）。
 - **Evidence**: 客観的証拠（失敗テストログ、実測ベンチマーク、EXPLAIN 結果等）。
 - **Scope**: 課題解決に直結する最小限の変更（スコープ外の周辺コードを触らない）。
+
+### PR 本文の標準構成（必須4セクション＋設計条件チェックリスト）
+PR を起票する際は、CI の Evidence Gate（`verify:pr-gates`）で検査される以下の必須 4 セクションを必ず含め、さらに外部レビュー（ChatGPT / Grok）との照合基準となる **「設計条件チェックリスト (Design Criteria Checklist)」** を明記します。
+
+```markdown
+### 具体的な問題 (Problem)
+現行コードベースにおける具体的な事実、不具合、測定されたボトルネック、または要求仕様。
+
+### 客観的証拠 (Evidence)
+客観的証拠（失敗テストログ、実測値、プロファイル結果、または仕様/Issue/受入基準の参照）。
+※空欄や「TODO」「なし」等のプレースホルダーは不可。
+
+### 期待される効果 (Expected Impact)
+変更によって得られる具体的な成果や改善点。
+
+### 意図して変更しなかったこと (Out of Scope)
+意図的に今回の変更に含めなかった関連領域、不要なリファクタリングの排除。
+
+### 設計条件チェックリスト (Design Criteria Checklist)
+- [ ] 条件1: 計画で合意された仕様・境界条件
+- [ ] 条件2: レビュアー（ChatGPT/Grok）が差分と照合して確認すべき具体項目
+- [ ] 条件3: ガバナンス・テスト・ドキュメント整合性
+```
 
 ## Verification Rules
 - **2段階検証運用 (Two-Phase Verification)**:
@@ -97,14 +194,27 @@ To prevent double-maintenance overhead and synchronization drift between GitHub 
      - コード変更時は `verify:quick`（`--onlyChanged`）で対象テストが 0 件だった場合を含め、必ず該当の単一テストを明示指定して実行するか、該当テストが存在しない理由を報告する。
      - 動作確認前の段階で、全件テスト（`npm test` / `test:python:fast`）や台帳同期を毎回回してユーザーを待たせない。
   2. **コミット・PR作成時 (Commit / PR Gate)**:
-     - ユーザーが手元で動作を確認し、コミットや PR 作成へ進む段階で、以下の標準 Review Gate（全件テスト `npm test`、Python テスト、PR Gates 等）および台帳更新を実施する。
+     - ユーザーが手元で動作を確認し、コミットや PR 作成へ進む段階で、**本リポジトリの標準検証コマンド `npm run verify`（フルゲート）** を実行し、全チェックが PASS（exit 0）することを確認する。
+     - ネイティブ変更や Expo SDK 変更時は加えて `npm run build:android:debug` を実行する。
+     - 同時に対応する `TASKS.md` や `docs/issues/` の台帳更新を実施する。
 - Run the most relevant checks for the change.
 - For behavior changes, verify the affected path with tests.
 - For type or interface changes, run type checking or the narrowest equivalent validation.
-- For docs-only changes, confirm links and structure are correct.
+- For docs-only changes, confirm links and structure are correct (`npm run check:docs`).
 
 ## Review Gate
-- Standard gate for code changes (PR submission): `npm run lint`, `npm run type-check`, `npm test` (CI runs `test:coverage`).
+- **PR 作成時の標準検証コマンド (Standard PR Gate)**: **`npm run verify`**
+  - PR 作成前に手元で必ず実行し、以下の全 10 ゲートが exit 0 でパスすることを確認する:
+    1. `npm run verify:pr-gates`（Machine gate: 差分ゼロ、eslint-disable、テスト削除・弱体化、.jules/ 保護、PR 本文 Evidence Gate）
+    2. `npm run check:react-versions`（React / React Native バージョン整合性）
+    3. `npm run check:deps`（Knip による依存関係チェック）
+    4. `npm run check:docs`（ドキュメント整合性・リンク切れチェック）
+    5. `npm run format:check`（Prettier フォーマットチェック）
+    6. `npm run lint`（ESLint 静的解析・型安全性）
+    7. `npm run type-check`（TypeScript 型チェック）
+    8. `npm run check:expo-doctor`（Expo プロジェクト健全性）
+    9. `npm test`（Jest フルテストスイート）
+    10. `npm run test:python:fast`（Python 単体テスト）
 - Test-only PR gate: PRs that add or update tests must pass the full test suite (`npm test`) across the entire repository. Running only the single targeted test file (e.g. `npx jest tests/myTest.test.ts`) is strictly insufficient to prevent Jest global mock collisions and cross-suite regressions.
 - Machine gate for PRs: `npm run verify:pr-gates` (`bash scripts/verify-pr-gates.sh`). Automatically enforced in CI for pull requests (zero diff check, test protection, and PR body Evidence Gate).
 - The same standard gate should stay mirrored in GitHub Actions CI for `main` pushes and pull requests.
