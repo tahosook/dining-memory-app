@@ -157,7 +157,14 @@ CI の単体テストを通過してもネイティブ連携や間接的な依�
 
 ## 4. Expo SDK Upgrade Playbook (15-Step Protocol)
 
-Expo SDK のメジャーバージョンアップ（例: SDK 57 → SDK 58）は、Dependabot ではなく **開発者 + AI coding agent による計画的メンテナンスタスク** として実行します。
+Expo SDK のメジャーバージョンアップ（例: SDK 57 → SDK 58）は、Dependabot ではなく **多エージェント開発ワークフロー（[AGENTS.md](../../AGENTS.md) および [docs/engineering/development-workflow.md](development-workflow.md)）に基づく計画的メンテナンスタスク** として実行します。
+
+### 多エージェント分担と進行体制
+- **計画 (Planning)**: Antigravity の **Argon**（`/plan`）が本手順書とリリースノートに基づき計画を策定し、**Muse** がレビュー・合意する。
+- **実装・検証・PR起票 (Implementation)**: **Gemini 3.8 Flash High** が以下の手順書（Steps 1〜14）に沿って作業ブランチでアップグレードと検証（`npm run verify` および `npm run build:android:debug`）を実施し、PR 本文に必須 4 セクションと設計条件チェックリストを記載して PR を起票する（**実装担当はマージを行わない**）。
+- **外部レビュー (Review)**: **ChatGPT** および **Grok**（プロジェクト: `dining-memory-app`）が PR 本文の設計条件チェックリストとコード・依存差分を照合して PR へ直接レビューを投稿する。
+- **仲介・検証 (Mediation & Verification)**: **Muse** が指摘を実コード・ビルドログで裏取りし、修正方針をまとめてオーナー承認を得てから実装側へ修正指示を伝達する。
+- **マージ (Merge)**: **オーナー判断**のもと、**Muse** が GitHub 経由でマージを実行し、当該機能の Antigravity 会話へ完了を一報する。
 
 ### 前提条件
 - リリース検知: GitHub の [expo/expo Releases](https://github.com/expo/expo/releases)（Releases only Watch）または [Expo Changelog](https://expo.dev/changelog)。
@@ -214,11 +221,15 @@ npm run build:android:debug
 #     - ローカル AI 推論 (llama.rn)
 #     - バックアップ / リストア (expo-file-system, react-native-zip-archive)
 
-# 14. 変更差分の確認と PR 作成
+# 14. 変更差分の確認と PR 作成 (Gemini 3.8 Flash High)
 #     - package.json / package-lock.json / android/ 設定差分を確認
-#     - PR 本文に検証結果（CI結果、ビルドログ、実機確認項目）を記載
+#     - ローカル標準フルゲート (npm run verify) およびネイティブ検証 (npm run build:android:debug) の exit 0 を確認
+#     - PR 本文に必須 4 セクション（Problem / Evidence / Expected Impact / Out of Scope）および「設計条件チェックリスト」を記載して PR を起票（※マージは行わない）
 
-# 15. レビューとマージ
+# 15. 多エージェントレビューとマージ (ChatGPT / Grok / Muse / オーナー)
+#     - ChatGPT / Grok (dining-memory-app) が設計条件チェックリストと diff を照合して PR へ直接レビュー
+#     - Muse が指摘をコードで裏取りし、修正方針をオーナー承認の上で実装側へ伝達
+#     - オーナーのマージ判断に基づき、Muse が GitHub 経由でマージを実行し Antigravity 会話へ完了報告
 ```
 
 ---
