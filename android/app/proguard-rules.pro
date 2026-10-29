@@ -23,5 +23,17 @@
 -keep class com.google.protobuf.** { *; }
 -keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite { *; }
 
+# Google Flogger (used by MediaPipe Tasks Vision / Graph for stack-based caller discovery)
+-keep class com.google.common.flogger.** { *; }
+-dontwarn com.google.common.flogger.**
+
+# MediaPipe internal optional protobuf references not bundled in Tasks Vision AAR
+-dontwarn com.google.mediapipe.proto.CalculatorProfileProto$CalculatorProfile
+-dontwarn com.google.mediapipe.proto.GraphTemplateProto$CalculatorGraphTemplate
+
+# Native modules without bundled consumer rules (ImageResizer, RNZipArchive)
+-keep class com.reactnativeimageresizer.** { *; }
+-keep class com.rnziparchive.** { *; }
+
 # Dining Memory custom native modules
 -keep class com.tahosook.diningmemory.** { *; }
