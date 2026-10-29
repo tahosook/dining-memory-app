@@ -103,6 +103,9 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     };
     skipApkCreation?: boolean;
     skipMappingCreation?: boolean;
+    mappingOverrides?: {
+      [filename: string]: { content?: string; delete?: boolean };
+    };
   }
 
   const setupMockBuildEnvironment = (testCaseDir: string, options: MockEnvOptions = {}) => {
@@ -161,20 +164,37 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
       }
     }
 
+    let mappingScriptCommands = '';
+    if (!options.skipMappingCreation) {
+      mappingScriptCommands += `mkdir -p "${mockMappingOutputDir}"\n`;
+      const defaultMappingFiles: Record<string, string> = {
+        'mapping.txt': 'mock-obfuscation-mapping',
+        'seeds.txt': 'mock-seeds-content',
+        'configuration.txt': 'mock-configuration-content',
+      };
+      for (const [filename, defaultPayload] of Object.entries(defaultMappingFiles)) {
+        const override = options.mappingOverrides?.[filename];
+        if (override?.delete) {
+          continue;
+        }
+        const content = override?.content !== undefined ? override.content : defaultPayload;
+        if (content === '') {
+          mappingScriptCommands += `> "${mockMappingOutputDir}/${filename}"\n`;
+        } else {
+          mappingScriptCommands += `printf '%s' "${content}" > "${mockMappingOutputDir}/${filename}"\n`;
+        }
+      }
+    }
+
     const gradlewScriptContent = `#!/usr/bin/env bash
 set -euo pipefail
 mkdir -p "${mockApkOutputDir}"
 echo '{"version": 1}' > "${mockApkOutputDir}/output-metadata.json"
-${
-  options.skipMappingCreation
-    ? ''
-    : `mkdir -p "${mockMappingOutputDir}"\necho "mock-obfuscation-mapping" > "${mockMappingOutputDir}/mapping.txt"`
-}
-${
-  options.skipApkCreation
-    ? 'echo "skipping APK creation as requested"'
-    : `(cd "${mockApkStagingDir}" && zip -qr "${mockApkOutputDir}/app-release.apk" assets)`
-}
+${mappingScriptCommands}${
+      options.skipApkCreation
+        ? 'echo "skipping APK creation as requested"'
+        : `(cd "${mockApkStagingDir}" && zip -qr "${mockApkOutputDir}/app-release.apk" assets)`
+    }
 `;
     fs.writeFileSync(mockGradlew, gradlewScriptContent);
     fs.chmodSync(mockGradlew, 0o755);
@@ -243,6 +263,14 @@ ${
     expect(fs.readFileSync(path.join(mockArtifactDir, 'mapping/mapping.txt'), 'utf-8').trim()).toBe(
       'mock-obfuscation-mapping'
     );
+    expect(fs.existsSync(path.join(mockArtifactDir, 'mapping/seeds.txt'))).toBe(true);
+    expect(fs.readFileSync(path.join(mockArtifactDir, 'mapping/seeds.txt'), 'utf-8').trim()).toBe(
+      'mock-seeds-content'
+    );
+    expect(fs.existsSync(path.join(mockArtifactDir, 'mapping/configuration.txt'))).toBe(true);
+    expect(
+      fs.readFileSync(path.join(mockArtifactDir, 'mapping/configuration.txt'), 'utf-8').trim()
+    ).toBe('mock-configuration-content');
   });
 
   test('build-android-release.sh fails release build when mapping directory is missing', () => {
@@ -258,6 +286,74 @@ ${
 
     expect(res.status).toBe(1);
     expect(res.stderr).toContain('error: release mapping directory is missing');
+  });
+
+  test('build-android-release.sh fails release build when mapping.txt is missing', () => {
+    const testCaseDir = path.join(tempTestDir, 'mapping-txt-missing-test');
+    const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
+      mappingOverrides: {
+        'mapping.txt': { delete: true },
+      },
+    });
+
+    const res = spawnSync('bash', [releaseScript], {
+      env: baseEnv,
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: release mapping.txt is missing');
+  });
+
+  test('build-android-release.sh fails release build when mapping.txt is empty (0 bytes)', () => {
+    const testCaseDir = path.join(tempTestDir, 'mapping-txt-empty-test');
+    const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
+      mappingOverrides: {
+        'mapping.txt': { content: '' },
+      },
+    });
+
+    const res = spawnSync('bash', [releaseScript], {
+      env: baseEnv,
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: release mapping.txt is empty');
+  });
+
+  test('build-android-release.sh fails release build when seeds.txt is missing', () => {
+    const testCaseDir = path.join(tempTestDir, 'seeds-txt-missing-test');
+    const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
+      mappingOverrides: {
+        'seeds.txt': { delete: true },
+      },
+    });
+
+    const res = spawnSync('bash', [releaseScript], {
+      env: baseEnv,
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: release seeds.txt is missing');
+  });
+
+  test('build-android-release.sh fails release build when configuration.txt is missing', () => {
+    const testCaseDir = path.join(tempTestDir, 'configuration-txt-missing-test');
+    const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
+      mappingOverrides: {
+        'configuration.txt': { delete: true },
+      },
+    });
+
+    const res = spawnSync('bash', [releaseScript], {
+      env: baseEnv,
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: release configuration.txt is missing');
   });
 
   test('build-android-release.sh fails pre-build check when bundled model asset is missing', () => {

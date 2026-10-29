@@ -209,6 +209,24 @@ if [[ "$BUILD_OUTPUT_TYPE" == "release" ]]; then
     echo "error: failed to copy mapping directory from $MAPPING_DIR to $ARTIFACT_DIR/mapping" >&2
     exit 1
   fi
+
+  SAVED_MAPPING_DIR="$ARTIFACT_DIR/mapping"
+  if [[ ! -f "$SAVED_MAPPING_DIR/mapping.txt" ]]; then
+    echo "error: release mapping.txt is missing at $SAVED_MAPPING_DIR/mapping.txt" >&2
+    exit 1
+  fi
+  if [[ ! -s "$SAVED_MAPPING_DIR/mapping.txt" ]]; then
+    echo "error: release mapping.txt is empty at $SAVED_MAPPING_DIR/mapping.txt" >&2
+    exit 1
+  fi
+  if [[ ! -f "$SAVED_MAPPING_DIR/seeds.txt" ]]; then
+    echo "error: release seeds.txt is missing at $SAVED_MAPPING_DIR/seeds.txt" >&2
+    exit 1
+  fi
+  if [[ ! -f "$SAVED_MAPPING_DIR/configuration.txt" ]]; then
+    echo "error: release configuration.txt is missing at $SAVED_MAPPING_DIR/configuration.txt" >&2
+    exit 1
+  fi
 fi
 
 echo "Build complete."
