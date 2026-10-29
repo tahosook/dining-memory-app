@@ -103,11 +103,6 @@
       "appConfigFieldsNotSyncedCheck": {
         "enabled": false
       }
-    },
-    "install": {
-      "exclude": [
-        "react-native"
-      ]
     }
   },
   "overrides": {

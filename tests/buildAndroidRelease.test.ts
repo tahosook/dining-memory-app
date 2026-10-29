@@ -102,6 +102,7 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
       [filename: string]: { content?: string; delete?: boolean };
     };
     skipApkCreation?: boolean;
+    skipMappingCreation?: boolean;
   }
 
   const setupMockBuildEnvironment = (testCaseDir: string, options: MockEnvOptions = {}) => {
@@ -144,6 +145,7 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     // Mock gradlew script that builds a fake app-release.apk zip archive containing requested assets
     const mockGradlew = path.join(mockAndroidDir, 'gradlew');
     const mockApkOutputDir = path.join(mockAndroidDir, 'app/build/outputs/apk/release');
+    const mockMappingOutputDir = path.join(mockAndroidDir, 'app/build/outputs/mapping/release');
     const mockApkStagingDir = path.join(testCaseDir, 'apk-staging');
     const mockApkAssetsDir = path.join(mockApkStagingDir, 'assets/mediapipe');
     fs.mkdirSync(mockApkAssetsDir, { recursive: true });
@@ -163,6 +165,11 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
 set -euo pipefail
 mkdir -p "${mockApkOutputDir}"
 echo '{"version": 1}' > "${mockApkOutputDir}/output-metadata.json"
+${
+  options.skipMappingCreation
+    ? ''
+    : `mkdir -p "${mockMappingOutputDir}"\necho "mock-obfuscation-mapping" > "${mockMappingOutputDir}/mapping.txt"`
+}
 ${
   options.skipApkCreation
     ? 'echo "skipping APK creation as requested"'
@@ -224,12 +231,7 @@ ${
 
   test('copies mapping directory to artifacts when outputs/mapping/release exists', () => {
     const testCaseDir = path.join(tempTestDir, 'mapping-dir-copy-test');
-    const { baseEnv, mockAndroidDir, mockArtifactDir } = setupMockBuildEnvironment(testCaseDir);
-
-    // Create mock mapping directory and file in app/build/outputs/mapping/release
-    const mockMappingDir = path.join(mockAndroidDir, 'app/build/outputs/mapping/release');
-    fs.mkdirSync(mockMappingDir, { recursive: true });
-    fs.writeFileSync(path.join(mockMappingDir, 'mapping.txt'), 'mock-obfuscation-mapping');
+    const { baseEnv, mockArtifactDir } = setupMockBuildEnvironment(testCaseDir);
 
     const res = spawnSync('bash', [releaseScript], {
       env: baseEnv,
@@ -238,9 +240,24 @@ ${
 
     expect(res.status).toBe(0);
     expect(fs.existsSync(path.join(mockArtifactDir, 'mapping/mapping.txt'))).toBe(true);
-    expect(fs.readFileSync(path.join(mockArtifactDir, 'mapping/mapping.txt'), 'utf-8')).toBe(
+    expect(fs.readFileSync(path.join(mockArtifactDir, 'mapping/mapping.txt'), 'utf-8').trim()).toBe(
       'mock-obfuscation-mapping'
     );
+  });
+
+  test('build-android-release.sh fails release build when mapping directory is missing', () => {
+    const testCaseDir = path.join(tempTestDir, 'mapping-dir-missing-test');
+    const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
+      skipMappingCreation: true,
+    });
+
+    const res = spawnSync('bash', [releaseScript], {
+      env: baseEnv,
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('error: release mapping directory is missing');
   });
 
   test('build-android-release.sh fails pre-build check when bundled model asset is missing', () => {

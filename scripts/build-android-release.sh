@@ -199,9 +199,16 @@ if [[ -f "$OUTPUT_METADATA_PATH" ]]; then
   cp "$OUTPUT_METADATA_PATH" "$ARTIFACT_DIR/output-metadata.json"
 fi
 
-MAPPING_DIR="$ANDROID_DIR/app/build/outputs/mapping/$BUILD_OUTPUT_TYPE"
-if [[ -d "$MAPPING_DIR" ]]; then
-  cp -R "$MAPPING_DIR" "$ARTIFACT_DIR/mapping"
+if [[ "$BUILD_OUTPUT_TYPE" == "release" ]]; then
+  MAPPING_DIR="$ANDROID_DIR/app/build/outputs/mapping/$BUILD_OUTPUT_TYPE"
+  if [[ ! -d "$MAPPING_DIR" ]]; then
+    echo "error: release mapping directory is missing at $MAPPING_DIR" >&2
+    exit 1
+  fi
+  if ! cp -R "$MAPPING_DIR" "$ARTIFACT_DIR/mapping"; then
+    echo "error: failed to copy mapping directory from $MAPPING_DIR to $ARTIFACT_DIR/mapping" >&2
+    exit 1
+  fi
 fi
 
 echo "Build complete."
