@@ -67,20 +67,20 @@ Dependabot の通常更新からは **完全に `ignore`** します。
 | `expo` | Expo Core | Expo SDK の基盤。個別更新不可。`npx expo upgrade` で管理。 |
 | `expo-*` (全15パッケージ)<br>*(camera, file-system, image-picker, sqlite 等)* | Expo Native Modules | Expo SDK と 1対1 でネイティブ実装が結合。メジャー更新は新 SDK 向け。 |
 | `@expo/vector-icons` | Expo Asset | Expo SDK のバンドルアイコンアセット。 |
-| `react`, `react-dom` | Core Runtime | Expo SDK 57 が指定する React 19.2.3 に固定。 |
-| `react-native` | Core Runtime | Expo SDK 57 が指定する React Native 0.86.3 に固定。 |
-| `react-test-renderer` | React Testing | `react` と同一バージョン（19.2.3）である必要あり。 |
+| `react`, `react-dom` | Core Runtime | Expo SDK 58 が指定する React 19.3.0 に固定。 |
+| `react-native` | Core Runtime | Expo SDK 58 が指定する React Native 0.88.0 に固定。 |
+| `react-test-renderer` | React Testing | `react` と同一バージョン（19.3.0）である必要あり。 |
 | `@types/react` | Type Definitions | `react` バージョンと整合させる必要あり。 |
 | `react-native-web` | Web Runtime | Expo / React Native Web 実装。Expo SDK バージョンに追従。 |
-| `react-native-gesture-handler` | Bundled Native Module | Expo SDK 57 では `~2.32.0` に固定。3.x はネイティブ破壊的変更。 |
-| `react-native-reanimated` | Bundled Native Module | Expo SDK 57 では `4.5.1` に固定。C++ ネイティブランタイム含む。 |
-| `react-native-screens` | Bundled Native Module | Expo SDK 57 では `~4.26.0` に固定。Fragment / Activity ネイティブ連携。 |
-| `react-native-safe-area-context` | Bundled Native Module | Expo SDK 57 では `~5.7.0` に固定。ネイティブ Inset 連携。 |
-| `react-native-worklets` | Bundled Native Module | Expo SDK 57 では `0.10.1` に固定。Reanimated 依存。 |
+| `react-native-gesture-handler` | Bundled Native Module | Expo SDK 58 では `~3.3.0` に固定。 |
+| `react-native-reanimated` | Bundled Native Module | Expo SDK 58 では `4.7.1` に固定。C++ ネイティブランタイム含む。 |
+| `react-native-screens` | Bundled Native Module | Expo SDK 58 では `~4.30.0` に固定。Fragment / Activity ネイティブ連携。 |
+| `react-native-safe-area-context` | Bundled Native Module | Expo SDK 58 では `~5.10.1` に固定。ネイティブ Inset 連携。 |
+| `react-native-worklets` | Bundled Native Module | Expo SDK 58 では `0.13.0` に固定。Reanimated 依存。 |
 | `llama.rn` | Out-of-tree Native Module | ローカル AI 推論用 C++ / CMake / NDK ネイティブライブラリ。 |
 | `react-native-zip-archive` | Out-of-tree Native Module | モデル展開用ネイティブ ZIP ライブラリ。 |
 | `@bam.tech/react-native-image-resizer` | Out-of-tree Native Module | 画像回転・リサイズ用 Android/iOS ネイティブコード含む。 |
-| `jest-expo` | Expo Testing Preset | Expo SDK 57 バンドル。Jest 29 / RN preset と厳格に結合。 |
+| `jest-expo` | Expo Testing Preset | Expo SDK 58 バンドル。Jest 30 / RN preset と厳格に結合。 |
 
 ### Tier 2: Ecosystem Tooling with Strict Compatibility Bounds (メジャー手動管理)
 React Native や Expo の公式プリセットが特定のメジャーバージョンに依存しているため、メジャーアップデートを自動化できないツール群です。
@@ -88,7 +88,7 @@ React Native や Expo の公式プリセットが特定のメジャーバージ�
 | パッケージ名 | 分類 | 判断理由 |
 | :--- | :--- | :--- |
 | `eslint` | Linter Core | `@react-native/eslint-config` が `eslint: ^8.0.0 \|\| ^9.0.0` を要求。v10 は peerDependency 破壊となるため **メジャー更新 ignore**。9.x 内の minor/patch は可。 |
-| `jest`, `@types/jest` | Test Runner & Types | `jest-expo` および `@react-native/jest-preset` が Jest 29 系に依存。v30 はロックファイル肥大化と二重管理を招くため **メジャー更新 ignore**。 |
+| `jest`, `@types/jest` | Test Runner & Types | `jest-expo` および `@react-native/jest-preset` が Jest 30 系に依存。v31 はロックファイル肥大化と二重管理を招くため **メジャー更新 ignore**。 |
 | `@react-native/eslint-config` | RN Tooling | React Native 公式 ESLint 設定。React Native 本体更新時に手動追従。 |
 | `@react-native/jest-preset` | RN Tooling | `jest-expo` から厳格に peerDependency 指定されているため手動管理。 |
 | `@testing-library/react-native` | Testing Tooling | React Native テストユーティリティ（非ネイティブ）。メジャー更新は React / RN 互換境界を跨ぐ可能性があるため **メジャー更新 ignore**。minor / patch は `tooling` グループで安全に自動配信。 |
@@ -141,7 +141,7 @@ CI の単体テストを通過してもネイティブ連携や間接的な依�
      ```bash
      npx expo install --check
      ```
-   - Expo SDK 57 の範囲内でパッチ（例: `~57.0.24`）が提供されていれば、`npx expo install <package>` で安全に適用。
+   - Expo SDK の範囲内でパッチ（例: `~58.0.x`）が提供されていれば、`npx expo install <package>` で安全に適用。
 4. **ワークアラウンドまたは overrides の検討**:
    - Expo SDK 側の公式パッチが未提供で緊急性が高い場合、`package.json` の `overrides` 等によるピンポイント対処が可能か検証。
 5. **検証ゲートの実行**:

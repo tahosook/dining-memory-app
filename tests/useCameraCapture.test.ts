@@ -1,6 +1,8 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { Alert, BackHandler, Linking, Platform, type HardwareBackPressEvent } from 'react-native';
+import { Alert, BackHandler, Linking, Platform } from 'react-native';
 import type { PermissionResponse } from 'expo-camera';
+
+type HardwareBackPressEvent = Parameters<Parameters<typeof BackHandler.addEventListener>[1]>[0];
 import { useCameraCapture } from '../src/hooks/cameraCapture/useCameraCapture';
 import { MealService } from '../src/database/services/MealService';
 import * as MediaLibrary from 'expo-media-library';

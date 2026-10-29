@@ -408,7 +408,7 @@ export const RecordsScreen: React.FC = () => {
                 <View style={styles.loadingMoreContainer} testID="records-loading-more">
                   <ActivityIndicator size="small" color="#007AFF" />
                 </View>
-              ) : null
+              ) : undefined
             }
             showsVerticalScrollIndicator={false}
           />

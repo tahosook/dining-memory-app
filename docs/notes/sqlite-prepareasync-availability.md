@@ -17,9 +17,9 @@ PR #197（`app_settings` の fallback バッチインサート化）および PR
 ## 調査・固定結果
 
 ### 1. 確認対象バージョン
-- **Expo SDK**: 57 (`expo: ~57.0.26`)
-- **expo-sqlite**: `~57.0.3`
-- **React Native**: `0.81.5` / **React**: `19.2.3`
+- **Expo SDK**: 58 (`expo: ~58.0.0`)（※初版確認: SDK 57 `expo: ~57.0.26`）
+- **expo-sqlite**: `~58.0.14`（※初版確認: `~57.0.3`）
+- **React Native**: `0.88.0` / **React**: `19.3.0`
 
 ### 2. prepareAsync 常時利用可能の客観的根拠
 
@@ -81,6 +81,12 @@ grep -q "prepareAsync(source: string): Promise<SQLiteStatement>" node_modules/ex
 ```
 
 上記トリガーにより、万一将来のバージョンで API 破壊的変更（例: prepared statement の非推奨化や同期専用化など）が発生した場合に即座に検知します。
+
+### アップグレード時の再確認実績
+- **2026-10-29 (Expo SDK 58 アップグレード時)**:
+  - 対象: `expo-sqlite@~58.0.14`
+  - 静的確認: `prepareAsync(source: string): Promise<SQLiteStatement>;` が `node_modules/expo-sqlite/build/SQLiteDatabase.d.ts` (L42) に引き続き存在し、シグネチャの互換性が完全に維持されていることを確認（Verified exit 0）。
+  - 判断: `replaceDatabaseWithBackup` 内の `prepareAsync` 分岐は引き続き本番ランタイムで真であり、コード変更は不要。
 
 ---
 

@@ -1,5 +1,4 @@
 import React from 'react';
-import { InteractionManager } from 'react-native';
 import { CameraView } from '../../components/screens/camera';
 import {
   useCameraCapture,
@@ -47,20 +46,30 @@ const CameraScreenContainer: React.FC = () => {
 
     let cancelled = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
-    const interaction = InteractionManager.runAfterInteractions(() => {
+    let idleHandle: number | null = null;
+
+    const schedulePrewarm = () => {
       timeout = setTimeout(() => {
         if (!cancelled) {
           prewarmMealInputAssist();
         }
       }, 1500);
-    });
+    };
+
+    if (typeof requestIdleCallback === 'function') {
+      idleHandle = requestIdleCallback(schedulePrewarm);
+    } else {
+      schedulePrewarm();
+    }
 
     return () => {
       cancelled = true;
       if (timeout) {
         clearTimeout(timeout);
       }
-      interaction.cancel?.();
+      if (idleHandle !== null && typeof cancelIdleCallback === 'function') {
+        cancelIdleCallback(idleHandle);
+      }
     };
   }, [
     cameraPermissionState.permission?.granted,

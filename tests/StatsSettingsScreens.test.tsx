@@ -850,7 +850,7 @@ describe('SettingsScreen', () => {
   test('deletes MediaPipe model when delete button is confirmed', async () => {
     (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(createMediaPipeModelStatus('ready'));
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
-      if (title.includes(`${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除`)) {
+      if (title?.includes(`${MEDIAPIPE_MODEL_DISPLAY_NAME} を削除`)) {
         const deleteButton = buttons?.find(b => b.text === '削除する');
         deleteButton?.onPress?.();
       }

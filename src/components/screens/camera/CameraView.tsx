@@ -8,6 +8,7 @@ import {
   TextInput,
   Switch,
   ScrollView,
+  type ScrollViewInstance,
   Platform,
   ActivityIndicator,
   type LayoutChangeEvent,
@@ -255,7 +256,7 @@ const CaptureReview: React.FC<CaptureReviewProps> = ({
     Boolean(captureReview.locationName.trim())
   );
   const [showNotesInput, setShowNotesInput] = React.useState(Boolean(captureReview.notes.trim()));
-  const reviewScrollViewRef = React.useRef<ScrollView | null>(null);
+  const reviewScrollViewRef = React.useRef<ScrollViewInstance | null>(null);
   const [sectionOffsets, setSectionOffsets] = React.useState({ location: 0, notes: 0 });
 
   React.useEffect(() => {

@@ -189,6 +189,7 @@ describe('MealDetailScreen', () => {
     jest.spyOn(console, 'error').mockImplementation(jest.fn());
     jest.spyOn(Share, 'share').mockResolvedValue({
       action: Share.sharedAction,
+      activityType: undefined,
     });
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(true);
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
