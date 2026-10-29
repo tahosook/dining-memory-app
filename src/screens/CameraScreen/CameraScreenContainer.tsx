@@ -46,22 +46,29 @@ const CameraScreenContainer: React.FC = () => {
 
     let cancelled = false;
     let timeout: ReturnType<typeof setTimeout> | null = null;
-    let frameId: number | null = null;
-    frameId = requestAnimationFrame(() => {
+    let idleHandle: number | null = null;
+
+    const schedulePrewarm = () => {
       timeout = setTimeout(() => {
         if (!cancelled) {
           prewarmMealInputAssist();
         }
       }, 1500);
-    });
+    };
+
+    if (typeof requestIdleCallback === 'function') {
+      idleHandle = requestIdleCallback(schedulePrewarm);
+    } else {
+      schedulePrewarm();
+    }
 
     return () => {
       cancelled = true;
       if (timeout) {
         clearTimeout(timeout);
       }
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId);
+      if (idleHandle !== null && typeof cancelIdleCallback === 'function') {
+        cancelIdleCallback(idleHandle);
       }
     };
   }, [

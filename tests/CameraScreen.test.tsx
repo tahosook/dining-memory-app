@@ -457,6 +457,57 @@ describe('CameraScreen', () => {
       expect(prewarm).toHaveBeenCalledTimes(1);
       jest.useRealTimers();
     });
+
+    test('prewarms AI input assist using requestIdleCallback and cancels it on unmount', async () => {
+      jest.useFakeTimers();
+      const mockRequestIdleCallback = jest.fn((cb: () => void) => {
+        cb();
+        return 42;
+      });
+      const mockCancelIdleCallback = jest.fn();
+      const originalRequestIdleCallback = (global as unknown as { requestIdleCallback?: unknown })
+        .requestIdleCallback;
+      const originalCancelIdleCallback = (global as unknown as { cancelIdleCallback?: unknown })
+        .cancelIdleCallback;
+
+      (global as unknown as { requestIdleCallback: unknown }).requestIdleCallback =
+        mockRequestIdleCallback;
+      (global as unknown as { cancelIdleCallback: unknown }).cancelIdleCallback =
+        mockCancelIdleCallback;
+
+      const prewarm = jest.fn().mockResolvedValue(undefined);
+      (useMealInputAssist as jest.Mock).mockReturnValue(
+        createAiAssistState({
+          prewarm,
+        })
+      );
+
+      const { unmount } = render(<CameraScreen />);
+      expect(mockRequestIdleCallback).toHaveBeenCalledTimes(1);
+
+      unmount();
+      expect(mockCancelIdleCallback).toHaveBeenCalledWith(42);
+
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
+      expect(prewarm).not.toHaveBeenCalled();
+
+      // restore globals
+      if (originalRequestIdleCallback !== undefined) {
+        (global as unknown as { requestIdleCallback: unknown }).requestIdleCallback =
+          originalRequestIdleCallback;
+      } else {
+        delete (global as unknown as { requestIdleCallback?: unknown }).requestIdleCallback;
+      }
+      if (originalCancelIdleCallback !== undefined) {
+        (global as unknown as { cancelIdleCallback: unknown }).cancelIdleCallback =
+          originalCancelIdleCallback;
+      } else {
+        delete (global as unknown as { cancelIdleCallback?: unknown }).cancelIdleCallback;
+      }
+      jest.useRealTimers();
+    });
   });
 
   describe('Navigation', () => {
