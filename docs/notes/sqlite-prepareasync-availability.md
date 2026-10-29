@@ -19,7 +19,7 @@ PR #197（`app_settings` の fallback バッチインサート化）および PR
 ### 1. 確認対象バージョン
 - **Expo SDK**: 58 (`expo: ~58.0.0`)（※初版確認: SDK 57 `expo: ~57.0.26`）
 - **expo-sqlite**: `~58.0.14`（※初版確認: `~57.0.3`）
-- **React Native**: `0.88.0` / **React**: `19.3.0`
+- **React Native**: `0.88.1` / **React**: `19.3.0`
 
 ### 2. prepareAsync 常時利用可能の客観的根拠
 

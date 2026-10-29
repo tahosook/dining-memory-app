@@ -68,7 +68,7 @@ Dependabot の通常更新からは **完全に `ignore`** します。
 | `expo-*` (全15パッケージ)<br>*(camera, file-system, image-picker, sqlite 等)* | Expo Native Modules | Expo SDK と 1対1 でネイティブ実装が結合。メジャー更新は新 SDK 向け。 |
 | `@expo/vector-icons` | Expo Asset | Expo SDK のバンドルアイコンアセット。 |
 | `react`, `react-dom` | Core Runtime | Expo SDK 58 が指定する React 19.3.0 に固定。 |
-| `react-native` | Core Runtime | Expo SDK 58 が指定する React Native 0.88.0 に固定。 |
+| `react-native` | Core Runtime | Expo SDK 58 が指定する React Native 0.88.1 に固定。 |
 | `react-test-renderer` | React Testing | `react` と同一バージョン（19.3.0）である必要あり。 |
 | `@types/react` | Type Definitions | `react` バージョンと整合させる必要あり。 |
 | `react-native-web` | Web Runtime | Expo / React Native Web 実装。Expo SDK バージョンに追従。 |
