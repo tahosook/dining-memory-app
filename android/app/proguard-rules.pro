@@ -23,5 +23,13 @@
 -keep class com.google.protobuf.** { *; }
 -keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite { *; }
 
+# MediaPipe internal optional protobuf references not bundled in Tasks Vision AAR
+-dontwarn com.google.mediapipe.proto.CalculatorProfileProto$CalculatorProfile
+-dontwarn com.google.mediapipe.proto.GraphTemplateProto$CalculatorGraphTemplate
+
+# Native modules without bundled consumer rules (ImageResizer, RNZipArchive)
+-keep class com.reactnativeimageresizer.** { *; }
+-keep class com.rnziparchive.** { *; }
+
 # Dining Memory custom native modules
 -keep class com.tahosook.diningmemory.** { *; }

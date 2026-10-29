@@ -222,6 +222,27 @@ ${
     expect(fs.existsSync(path.join(mockArtifactDir, 'app-release.apk.sha256'))).toBe(true);
   });
 
+  test('copies mapping directory to artifacts when outputs/mapping/release exists', () => {
+    const testCaseDir = path.join(tempTestDir, 'mapping-dir-copy-test');
+    const { baseEnv, mockAndroidDir, mockArtifactDir } = setupMockBuildEnvironment(testCaseDir);
+
+    // Create mock mapping directory and file in app/build/outputs/mapping/release
+    const mockMappingDir = path.join(mockAndroidDir, 'app/build/outputs/mapping/release');
+    fs.mkdirSync(mockMappingDir, { recursive: true });
+    fs.writeFileSync(path.join(mockMappingDir, 'mapping.txt'), 'mock-obfuscation-mapping');
+
+    const res = spawnSync('bash', [releaseScript], {
+      env: baseEnv,
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(0);
+    expect(fs.existsSync(path.join(mockArtifactDir, 'mapping/mapping.txt'))).toBe(true);
+    expect(fs.readFileSync(path.join(mockArtifactDir, 'mapping/mapping.txt'), 'utf-8')).toBe(
+      'mock-obfuscation-mapping'
+    );
+  });
+
   test('build-android-release.sh fails pre-build check when bundled model asset is missing', () => {
     const testCaseDir = path.join(tempTestDir, 'prebuild-missing-test');
     const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {

@@ -199,6 +199,11 @@ if [[ -f "$OUTPUT_METADATA_PATH" ]]; then
   cp "$OUTPUT_METADATA_PATH" "$ARTIFACT_DIR/output-metadata.json"
 fi
 
+MAPPING_DIR="$ANDROID_DIR/app/build/outputs/mapping/$BUILD_OUTPUT_TYPE"
+if [[ -d "$MAPPING_DIR" ]]; then
+  cp -R "$MAPPING_DIR" "$ARTIFACT_DIR/mapping"
+fi
+
 echo "Build complete."
 echo "APK: $ARTIFACT_DIR/$APK_NAME"
 echo "Log: $LOG_FILE"
