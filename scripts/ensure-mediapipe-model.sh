@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="${ROOT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 TARGET_DIR="${MEDIAPIPE_MODEL_DIR:-$ROOT_DIR/android/app/src/main/assets/mediapipe}"
-MODEL_TAG="${MEDIAPIPE_MODEL_TAG:-mediapipe-model-v0.1.0}"
+MODEL_TAG="${MEDIAPIPE_MODEL_TAG:-mediapipe-model-v0.2.0}"
 
 CURRENT_TEMP_FILE=""
 cleanup_temp() {
@@ -99,7 +99,7 @@ ensure_single_model() {
 }
 
 # Cleanup retired legacy models from target directory if present (reduces APK size by ~18MB)
-RETIRED_MODELS=("universal_scene_7class.task" "personal_household_8class.task")
+RETIRED_MODELS=("universal_scene_7class.task" "personal_household_8class.task" "personal_multilabel_44tag.task")
 for retired_model in "${RETIRED_MODELS[@]}"; do
   if [[ -f "$TARGET_DIR/$retired_model" ]]; then
     rm -f "$TARGET_DIR/$retired_model"
@@ -119,20 +119,28 @@ if [[ -n "$MODEL_1_URL" && "${MEDIAPIPE_ENSURE_ALL_MODELS:-false}" != "true" ]];
   exit 0
 fi
 
-# Model 2: Universal Dining 23-class (universal dishes)
+# Model 2: Universal Dining 23-class (universal dishes - Step 2 Lite2)
 MODEL_2_FILE="universal_dining_23class.task"
-MODEL_2_SHA="${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_SHA256:-39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b}}"
+MODEL_2_SHA="${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_SHA256:-37fb1f5a8580ef53cdcd813495c9fccee383145076ded003abed5373a0092df2}}"
 MODEL_2_URL="${MEDIAPIPE_UNIVERSAL_MODEL_URL:-${MEDIAPIPE_UNIVERSAL_23CLASS_MODEL_URL:-}}"
-MODEL_2_LOCAL="$ROOT_DIR/state/mediapipe_models/universal_dining_23class/universal_dining_23class.task"
+MODEL_2_LOCAL="$ROOT_DIR/state/mediapipe_models/refresh_step2/universal_dining_23class/lite2/universal_dining_23class_lite2.task"
 
 ensure_single_model "$MODEL_2_FILE" "$MODEL_2_SHA" "$MODEL_2_URL" "$MODEL_2_LOCAL"
 
-# Model 3: Personal Multi-Label 44-tag (personal 3-axis table)
-MODEL_3_FILE="personal_multilabel_44tag.task"
-MODEL_3_SHA="${MEDIAPIPE_PERSONAL_MODEL_SHA256:-${MEDIAPIPE_PERSONAL_44TAG_MODEL_SHA256:-b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971}}"
-MODEL_3_URL="${MEDIAPIPE_PERSONAL_MODEL_URL:-${MEDIAPIPE_PERSONAL_44TAG_MODEL_URL:-}}"
-MODEL_3_LOCAL="$ROOT_DIR/state/mediapipe_models/personal_multilabel_44tags/personal_multilabel_44tag.task"
+# Model 3: Personal Main Dish (personal main dish - Step 2 Lite0)
+MODEL_3_FILE="personal_main_dish.task"
+MODEL_3_SHA="${MEDIAPIPE_PERSONAL_MAIN_MODEL_SHA256:-2559d4cf62558ac7e736ea7c261382038eec5b0547bed7911c9b92ea4ee11bf9}"
+MODEL_3_URL="${MEDIAPIPE_PERSONAL_MAIN_MODEL_URL:-}"
+MODEL_3_LOCAL="$ROOT_DIR/state/mediapipe_models/refresh_step2/personal_main_dish/lite0/personal_main_dish_lite0.task"
 
 ensure_single_model "$MODEL_3_FILE" "$MODEL_3_SHA" "$MODEL_3_URL" "$MODEL_3_LOCAL"
+
+# Model 4: Personal Side Dish (personal side dish - Step 2 Lite2)
+MODEL_4_FILE="personal_side_dish.task"
+MODEL_4_SHA="${MEDIAPIPE_PERSONAL_SIDE_MODEL_SHA256:-703b45489b434634b48a5b2358f880876c4db791a90258e5781c977a8d34967b}"
+MODEL_4_URL="${MEDIAPIPE_PERSONAL_SIDE_MODEL_URL:-}"
+MODEL_4_LOCAL="$ROOT_DIR/state/mediapipe_models/refresh_step2/personal_side_dish/lite2/personal_side_dish_lite2.task"
+
+ensure_single_model "$MODEL_4_FILE" "$MODEL_4_SHA" "$MODEL_4_URL" "$MODEL_4_LOCAL"
 
 exit 0

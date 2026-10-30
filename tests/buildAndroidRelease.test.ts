@@ -3,7 +3,6 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { spawnSync } from 'child_process';
-import { MEDIAPIPE_CLASSIFIER_MODELS } from '../src/ai/mealInputAssist/modelConfig';
 
 describe('build-android-release.sh and MediaPipe Model Bundling Verification', () => {
   const tempTestDir = path.resolve(__dirname, '../node_modules/.cache/build-script-test');
@@ -23,12 +22,12 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     return crypto.createHash('sha256').update(data).digest('hex');
   };
 
-  test('verifies SHA-256 constants consistency and model mapping across modelConfig, ensure-script, and build-script', () => {
+  test('verifies SHA-256 constants consistency and model mapping across ensure-script and build-script', () => {
     const ensureScriptContent = fs.readFileSync(ensureScript, 'utf-8');
     const releaseScriptContent = fs.readFileSync(releaseScript, 'utf-8');
 
     // 1. Model 1: meal-input-assist.task (cooking_method_9class)
-    const expectedModel1Sha = MEDIAPIPE_CLASSIFIER_MODELS.cooking_method_9class.sha256;
+    const expectedModel1Sha = '3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601';
     expect(ensureScriptContent).toMatch(
       new RegExp(`MODEL_1_FILE="meal-input-assist\\.task"[\\s\\S]*?${expectedModel1Sha}`)
     );
@@ -36,8 +35,8 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
       new RegExp(`"meal-input-assist\\.task"\\)[\\s\\S]*?${expectedModel1Sha}`)
     );
 
-    // 2. Model 2: universal_dining_23class.task (universal_dining_23class)
-    const expectedModel2Sha = MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class.sha256;
+    // 2. Model 2: universal_dining_23class.task (universal_dining_23class - Step 2 Lite2)
+    const expectedModel2Sha = '37fb1f5a8580ef53cdcd813495c9fccee383145076ded003abed5373a0092df2';
     expect(ensureScriptContent).toMatch(
       new RegExp(`MODEL_2_FILE="universal_dining_23class\\.task"[\\s\\S]*?${expectedModel2Sha}`)
     );
@@ -45,38 +44,49 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
       new RegExp(`"universal_dining_23class\\.task"\\)[\\s\\S]*?${expectedModel2Sha}`)
     );
 
-    // 3. Model 3: personal_multilabel_44tag.task (personal_multilabel_44tag)
-    const expectedModel3Sha = MEDIAPIPE_CLASSIFIER_MODELS.personal_multilabel_44tag.sha256;
+    // 3. Model 3: personal_main_dish.task (personal_main_dish - Step 2 Lite0)
+    const expectedModel3Sha = '2559d4cf62558ac7e736ea7c261382038eec5b0547bed7911c9b92ea4ee11bf9';
     expect(ensureScriptContent).toMatch(
-      new RegExp(`MODEL_3_FILE="personal_multilabel_44tag\\.task"[\\s\\S]*?${expectedModel3Sha}`)
+      new RegExp(`MODEL_3_FILE="personal_main_dish\\.task"[\\s\\S]*?${expectedModel3Sha}`)
     );
     expect(releaseScriptContent).toMatch(
-      new RegExp(`"personal_multilabel_44tag\\.task"\\)[\\s\\S]*?${expectedModel3Sha}`)
+      new RegExp(`"personal_main_dish\\.task"\\)[\\s\\S]*?${expectedModel3Sha}`)
+    );
+
+    // 4. Model 4: personal_side_dish.task (personal_side_dish - Step 2 Lite2)
+    const expectedModel4Sha = '703b45489b434634b48a5b2358f880876c4db791a90258e5781c977a8d34967b';
+    expect(ensureScriptContent).toMatch(
+      new RegExp(`MODEL_4_FILE="personal_side_dish\\.task"[\\s\\S]*?${expectedModel4Sha}`)
+    );
+    expect(releaseScriptContent).toMatch(
+      new RegExp(`"personal_side_dish\\.task"\\)[\\s\\S]*?${expectedModel4Sha}`)
     );
   });
 
-  test('verifies android/app/build.gradle verifyReleaseMediaPipeModelAsset task checks all 3 models and SHA-256 checksums', () => {
+  test('verifies android/app/build.gradle verifyReleaseMediaPipeModelAsset task checks all 4 models and SHA-256 checksums', () => {
     const buildGradlePath = path.resolve(__dirname, '../android/app/build.gradle');
     const buildGradleContent = fs.readFileSync(buildGradlePath, 'utf-8');
 
     // Task must be registered
     expect(buildGradleContent).toContain('tasks.register("verifyReleaseMediaPipeModelAsset")');
 
-    // All 3 models and expected SHA-256 checksums must be configured
+    // All 4 models and expected SHA-256 checksums must be configured
+    const expectedModel1Sha = '3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601';
+    const expectedModel2Sha = '37fb1f5a8580ef53cdcd813495c9fccee383145076ded003abed5373a0092df2';
+    const expectedModel3Sha = '2559d4cf62558ac7e736ea7c261382038eec5b0547bed7911c9b92ea4ee11bf9';
+    const expectedModel4Sha = '703b45489b434634b48a5b2358f880876c4db791a90258e5781c977a8d34967b';
+
     expect(buildGradleContent).toMatch(
-      new RegExp(
-        `name:\\s*"meal-input-assist\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.cooking_method_9class.sha256}`
-      )
+      new RegExp(`name:\\s*"meal-input-assist\\.task"[\\s\\S]*?${expectedModel1Sha}`)
     );
     expect(buildGradleContent).toMatch(
-      new RegExp(
-        `name:\\s*"universal_dining_23class\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class.sha256}`
-      )
+      new RegExp(`name:\\s*"universal_dining_23class\\.task"[\\s\\S]*?${expectedModel2Sha}`)
     );
     expect(buildGradleContent).toMatch(
-      new RegExp(
-        `name:\\s*"personal_multilabel_44tag\\.task"[\\s\\S]*?${MEDIAPIPE_CLASSIFIER_MODELS.personal_multilabel_44tag.sha256}`
-      )
+      new RegExp(`name:\\s*"personal_main_dish\\.task"[\\s\\S]*?${expectedModel3Sha}`)
+    );
+    expect(buildGradleContent).toMatch(
+      new RegExp(`name:\\s*"personal_side_dish\\.task"[\\s\\S]*?${expectedModel4Sha}`)
     );
 
     // MessageDigest SHA-256 and checksum verification logic
@@ -111,11 +121,12 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     fs.mkdirSync(mockAssetsDir, { recursive: true });
     fs.mkdirSync(mockArtifactDir, { recursive: true });
 
-    // Dummy payloads for the 3 models
+    // Dummy payloads for the 4 models
     const dummyPayloads: Record<string, string> = {
       'meal-input-assist.task': 'test-dummy-binary-content-for-model-1',
       'universal_dining_23class.task': 'test-dummy-binary-content-for-model-2',
-      'personal_multilabel_44tag.task': 'test-dummy-binary-content-for-model-3',
+      'personal_main_dish.task': 'test-dummy-binary-content-for-model-3',
+      'personal_side_dish.task': 'test-dummy-binary-content-for-model-4',
     };
 
     const expectedHashes: Record<string, string> = {};
@@ -182,7 +193,8 @@ ${
       REQUIRE_BUNDLED_MODEL: 'true',
       MEDIAPIPE_MODEL_SHA256: expectedHashes['meal-input-assist.task'],
       MEDIAPIPE_UNIVERSAL_MODEL_SHA256: expectedHashes['universal_dining_23class.task'],
-      MEDIAPIPE_PERSONAL_MODEL_SHA256: expectedHashes['personal_multilabel_44tag.task'],
+      MEDIAPIPE_PERSONAL_MAIN_MODEL_SHA256: expectedHashes['personal_main_dish.task'],
+      MEDIAPIPE_PERSONAL_SIDE_MODEL_SHA256: expectedHashes['personal_side_dish.task'],
     };
 
     return {
@@ -213,7 +225,10 @@ ${
       'Bundled model verified in APK: assets/mediapipe/universal_dining_23class.task'
     );
     expect(res.stdout).toContain(
-      'Bundled model verified in APK: assets/mediapipe/personal_multilabel_44tag.task'
+      'Bundled model verified in APK: assets/mediapipe/personal_main_dish.task'
+    );
+    expect(res.stdout).toContain(
+      'Bundled model verified in APK: assets/mediapipe/personal_side_dish.task'
     );
     expect(res.stdout).toContain('Build complete.');
 
@@ -262,7 +277,7 @@ ${
     const testCaseDir = path.join(tempTestDir, 'prebuild-corrupt-test');
     const { baseEnv } = setupMockBuildEnvironment(testCaseDir, {
       preBuildAssetOverrides: {
-        'personal_multilabel_44tag.task': { content: 'unexpected-tampered-content' },
+        'personal_main_dish.task': { content: 'unexpected-tampered-content' },
       },
     });
 
@@ -273,7 +288,7 @@ ${
 
     expect(res.status).toBe(1);
     expect(res.stderr).toContain(
-      'error: SHA256 checksum mismatch for bundled model personal_multilabel_44tag.task'
+      'error: SHA256 checksum mismatch for bundled model personal_main_dish.task'
     );
   });
 

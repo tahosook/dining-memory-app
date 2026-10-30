@@ -21,6 +21,8 @@ internal const val MEDIAPIPE_MEAL_INPUT_ASSIST_CLASSIFIER_NAME = "mediapipe-imag
 internal const val MODEL_ID_COOKING_METHOD_9CLASS = "cooking_method_9class"
 internal const val MODEL_ID_UNIVERSAL_DINING_23CLASS = "universal_dining_23class"
 internal const val MODEL_ID_PERSONAL_MULTILABEL_44TAG = "personal_multilabel_44tag"
+internal const val MODEL_ID_PERSONAL_MAIN_DISH = "personal_main_dish"
+internal const val MODEL_ID_PERSONAL_SIDE_DISH = "personal_side_dish"
 
 internal data class MediaPipeModelSpec(
   val id: String,
@@ -39,10 +41,15 @@ internal val SUPPORTED_MODEL_SPECS = mapOf(
     fileName = "universal_dining_23class.task",
     assetPath = "mediapipe/universal_dining_23class.task",
   ),
-  MODEL_ID_PERSONAL_MULTILABEL_44TAG to MediaPipeModelSpec(
-    id = MODEL_ID_PERSONAL_MULTILABEL_44TAG,
-    fileName = "personal_multilabel_44tag.task",
-    assetPath = "mediapipe/personal_multilabel_44tag.task",
+  MODEL_ID_PERSONAL_MAIN_DISH to MediaPipeModelSpec(
+    id = MODEL_ID_PERSONAL_MAIN_DISH,
+    fileName = "personal_main_dish.task",
+    assetPath = "mediapipe/personal_main_dish.task",
+  ),
+  MODEL_ID_PERSONAL_SIDE_DISH to MediaPipeModelSpec(
+    id = MODEL_ID_PERSONAL_SIDE_DISH,
+    fileName = "personal_side_dish.task",
+    assetPath = "mediapipe/personal_side_dish.task",
   ),
 )
 
@@ -72,8 +79,8 @@ internal object MediaPipeMealInputAssistSupport {
     if (trimmed == "universal_scene_7class") {
       return SUPPORTED_MODEL_SPECS[MODEL_ID_UNIVERSAL_DINING_23CLASS]
     }
-    if (trimmed == "personal_household_8class") {
-      return SUPPORTED_MODEL_SPECS[MODEL_ID_PERSONAL_MULTILABEL_44TAG]
+    if (trimmed == "personal_household_8class" || trimmed == MODEL_ID_PERSONAL_MULTILABEL_44TAG) {
+      return SUPPORTED_MODEL_SPECS[MODEL_ID_PERSONAL_MAIN_DISH]
     }
     return SUPPORTED_MODEL_SPECS[trimmed]
   }

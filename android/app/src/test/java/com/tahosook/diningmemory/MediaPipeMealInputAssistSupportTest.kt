@@ -40,17 +40,25 @@ class MediaPipeMealInputAssistSupportTest {
     assertEquals("universal_dining_23class.task", universal23Spec?.fileName)
     assertEquals("mediapipe/universal_dining_23class.task", universal23Spec?.assetPath)
 
-    val personal44Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_MULTILABEL_44TAG)
-    assertEquals(MODEL_ID_PERSONAL_MULTILABEL_44TAG, personal44Spec?.id)
-    assertEquals("personal_multilabel_44tag.task", personal44Spec?.fileName)
-    assertEquals("mediapipe/personal_multilabel_44tag.task", personal44Spec?.assetPath)
+    val personalMainSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_MAIN_DISH)
+    assertEquals(MODEL_ID_PERSONAL_MAIN_DISH, personalMainSpec?.id)
+    assertEquals("personal_main_dish.task", personalMainSpec?.fileName)
+    assertEquals("mediapipe/personal_main_dish.task", personalMainSpec?.assetPath)
+
+    val personalSideSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_SIDE_DISH)
+    assertEquals(MODEL_ID_PERSONAL_SIDE_DISH, personalSideSpec?.id)
+    assertEquals("personal_side_dish.task", personalSideSpec?.fileName)
+    assertEquals("mediapipe/personal_side_dish.task", personalSideSpec?.assetPath)
 
     // Backward compatibility: legacy model IDs fall back to their direct successors
     val legacyUniversalSpec = MediaPipeMealInputAssistSupport.resolveModelSpec("universal_scene_7class")
     assertEquals(MODEL_ID_UNIVERSAL_DINING_23CLASS, legacyUniversalSpec?.id)
 
-    val legacyPersonalSpec = MediaPipeMealInputAssistSupport.resolveModelSpec("personal_household_8class")
-    assertEquals(MODEL_ID_PERSONAL_MULTILABEL_44TAG, legacyPersonalSpec?.id)
+    val legacyHouseholdSpec = MediaPipeMealInputAssistSupport.resolveModelSpec("personal_household_8class")
+    assertEquals(MODEL_ID_PERSONAL_MAIN_DISH, legacyHouseholdSpec?.id)
+
+    val legacy44TagSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_MULTILABEL_44TAG)
+    assertEquals(MODEL_ID_PERSONAL_MAIN_DISH, legacy44TagSpec?.id)
 
     assertNull(MediaPipeMealInputAssistSupport.resolveModelSpec("unknown_model_id"))
   }
@@ -66,11 +74,18 @@ class MediaPipeMealInputAssistSupportTest {
       univ23File,
     )
 
-    val pers44Spec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_MULTILABEL_44TAG)!!
-    val pers44File = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, pers44Spec)
+    val persMainSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_MAIN_DISH)!!
+    val persMainFile = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, persMainSpec)
     assertEquals(
-      File("/data/user/0/com.tahosook.diningmemory/files/ai-models/personal_multilabel_44tag.task"),
-      pers44File,
+      File("/data/user/0/com.tahosook.diningmemory/files/ai-models/personal_main_dish.task"),
+      persMainFile,
+    )
+
+    val persSideSpec = MediaPipeMealInputAssistSupport.resolveModelSpec(MODEL_ID_PERSONAL_SIDE_DISH)!!
+    val persSideFile = MediaPipeMealInputAssistSupport.resolveModelFile(baseDir, persSideSpec)
+    assertEquals(
+      File("/data/user/0/com.tahosook.diningmemory/files/ai-models/personal_side_dish.task"),
+      persSideFile,
     )
   }
 
