@@ -335,9 +335,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
     });
     const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
 
-    expect(normalized.providerResult.mealNames).toEqual([
-      { value: 'サラダ', confidence: 0.4 },
-    ]);
+    expect(normalized.providerResult.mealNames).toEqual([{ value: 'サラダ', confidence: 0.4 }]);
     expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual(['サラダ']);
     expect(normalized.providerResult.cuisineTypes).toEqual([]);
     expect(reviewSuggestions.noteDraft?.value).toBe('サラダが並ぶ食卓です。');

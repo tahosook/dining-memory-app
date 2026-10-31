@@ -155,9 +155,7 @@ async function persistMediaPipeErrorStateForModel(
   }
 }
 
-async function persistMediaPipeNotInstalledStateForModel(
-  modelId: MediaPipeClassifierModelId
-) {
+async function persistMediaPipeNotInstalledStateForModel(modelId: MediaPipeClassifierModelId) {
   await Promise.all([
     AppSettingsService.setMediaPipeModelVersionForModel(modelId, null),
     AppSettingsService.setMediaPipeModelStatusForModel(modelId, 'not_installed'),
@@ -696,10 +694,7 @@ export async function installMediaPipeModelForModel(
 
     await persistMediaPipeReadyStateForModel(modelId, version);
   } catch (error) {
-    const message = toErrorMessage(
-      error,
-      `${modelLabel} model のダウンロードに失敗しました`
-    );
+    const message = toErrorMessage(error, `${modelLabel} model のダウンロードに失敗しました`);
     await persistMediaPipeErrorStateForModel(modelId, message, version);
     throw new Error(message);
   } finally {

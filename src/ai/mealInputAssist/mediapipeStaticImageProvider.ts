@@ -96,10 +96,7 @@ export class MediaPipeStaticImageNativeModuleClassifier implements MediaPipeStat
         );
         return {
           photoUri,
-          categories: [
-            ...(mainResult?.categories ?? []),
-            ...(sideResult?.categories ?? []),
-          ],
+          categories: [...(mainResult?.categories ?? []), ...(sideResult?.categories ?? [])],
           classifierName: 'personal-dual-dish-classifier',
           modelVersion: 'mediapipe-model-v0.2.0',
           timestamp: Date.now(),

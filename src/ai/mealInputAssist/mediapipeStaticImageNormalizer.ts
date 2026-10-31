@@ -406,9 +406,7 @@ export function deriveSceneFromDishes(input: SceneDerivationInput): string | nul
 
   // 7. 一汁三菜・夕定食: 主菜あり ＋ 汁物（味噌汁/豚汁/野菜スープ） ＋ 汁物以外の小鉢
   const hasSoup =
-    sides.has('side_miso_soup') ||
-    sides.has('side_tonjiru_soup') ||
-    sides.has('side_veggie_soup');
+    sides.has('side_miso_soup') || sides.has('side_tonjiru_soup') || sides.has('side_veggie_soup');
   const nonSoupSidesCount = Array.from(sides).filter(
     s => s !== 'side_miso_soup' && s !== 'side_tonjiru_soup' && s !== 'side_veggie_soup'
   ).length;

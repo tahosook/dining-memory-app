@@ -76,7 +76,8 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     id: 'universal_dining_23class',
     label: '汎用（定番料理・23クラス）',
     shortLabel: '定番料理',
-    description: '焼き魚・生姜焼き・ハンバーグ・ラーメン・うどん・カレーなど日本の定番料理で分類（高精度Lite2版）',
+    description:
+      '焼き魚・生姜焼き・ハンバーグ・ラーメン・うどん・カレーなど日本の定番料理で分類（高精度Lite2版）',
     version: 'mediapipe-model-v0.2.0',
     fileName: 'universal_dining_23class.task',
     assetPath: 'mediapipe/universal_dining_23class.task',
@@ -88,7 +89,8 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
     id: 'personal_dual_dish',
     label: 'わたし専用（主菜＋副菜ペア）',
     shortLabel: '主菜・副菜',
-    description: '主菜（16種）と副菜（14種）を高精度に分離推論し、シーン導出とメモ下書きまで自動生成',
+    description:
+      '主菜（16種）と副菜（14種）を高精度に分離推論し、シーン導出とメモ下書きまで自動生成',
     version: 'mediapipe-model-v0.2.0',
     fileName: 'personal_main_dish.task',
     assetPath: 'mediapipe/personal_main_dish.task',

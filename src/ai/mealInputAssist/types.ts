@@ -147,14 +147,10 @@ export interface MediaPipeModelInstallerOptions {
 }
 
 export type MediaPipeClassifierModelId =
-  | 'cooking_method_9class'
-  | 'universal_dining_23class'
-  | 'personal_dual_dish';
+  'cooking_method_9class' | 'universal_dining_23class' | 'personal_dual_dish';
 
 export type LegacyMediaPipeClassifierModelId =
-  | 'personal_multilabel_44tag'
-  | 'personal_household_8class'
-  | 'universal_scene_7class';
+  'personal_multilabel_44tag' | 'personal_household_8class' | 'universal_scene_7class';
 
 export type MealInputAssistProviderMode =
   'mock' | 'local-runtime-prototype' | 'mediapipe-static-image' | 'override';
