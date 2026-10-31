@@ -12,6 +12,7 @@ export interface MediaPipeStaticImageRawResult {
   categories: Array<MediaPipeStaticImageCategory | null | undefined>;
   classifierName?: string | null;
   modelVersion?: string | null;
+  timestamp?: number | Date | null;
 }
 
 export interface MediaPipeStaticImageClassifierStatus {

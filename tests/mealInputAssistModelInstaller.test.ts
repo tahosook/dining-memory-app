@@ -85,15 +85,20 @@ import {
   resolveMealInputAssistModelPath,
   resolveMealInputAssistProjectorPath,
   resolveMediaPipeModelPath,
+  resolveMediaPipeModelPaths,
 } from '../src/ai/mealInputAssist';
 import {
+  cleanupRetiredMediaPipeModels,
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
   deleteMediaPipeModel,
+  deleteMediaPipeModelForModel,
   getMealInputAssistModelStatus,
   getMediaPipeModelStatus,
+  getMediaPipeModelStatusForModel,
   installMealInputAssistModel,
   installMediaPipeModel,
+  installMediaPipeModelForModel,
   redownloadMealInputAssistModel,
   redownloadMediaPipeModel,
 } from '../src/ai/mealInputAssist/modelInstaller';
@@ -539,6 +544,172 @@ describe('MediaPipe model installer', () => {
       kind: 'ready',
       version: 'v2',
       modelExists: true,
+    });
+  });
+
+  describe('personal_dual_dish pair atomic installation and lifecycle', () => {
+    test('atomically downloads and verifies both main and side dish models', async () => {
+      await installMediaPipeModelForModel('personal_dual_dish');
+
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      expect(expectedPaths).toHaveLength(2);
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[0])).toBe(true);
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[1])).toBe(true);
+
+      const status = await getMediaPipeModelStatusForModel('personal_dual_dish');
+      expect(status).toMatchObject({
+        kind: 'ready',
+        modelExists: true,
+      });
+    });
+
+    test('handles one-lung state: cleans up orphaned single file and reports error prompting redownload', async () => {
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      fileSystemMock.__mock.existingFiles.add(expectedPaths[0]); // Only main exists
+      await AppSettingsService.setMediaPipeModelStatusForModel('personal_dual_dish', 'ready');
+
+      const status = await getMediaPipeModelStatusForModel('personal_dual_dish');
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[0])).toBe(false);
+      expect(status).toMatchObject({
+        kind: 'error',
+        modelExists: false,
+        errorMessage: expect.stringContaining('再ダウンロード'),
+      });
+    });
+
+    test('cleans up orphaned side dish when main dish is missing and reports error', async () => {
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      fileSystemMock.__mock.existingFiles.add(expectedPaths[1]); // Only side exists
+      await AppSettingsService.setMediaPipeModelStatusForModel('personal_dual_dish', 'ready');
+
+      const status = await getMediaPipeModelStatusForModel('personal_dual_dish');
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[1])).toBe(false);
+      expect(status).toMatchObject({
+        kind: 'error',
+        modelExists: false,
+        errorMessage: expect.stringContaining('再ダウンロード'),
+      });
+    });
+
+    test('restores both existing files from backups when dual model replacement fails during side dish placement', async () => {
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      const targetMain = expectedPaths[0];
+      const targetSide = expectedPaths[1];
+
+      // Simulate existing healthy pair
+      fileSystemMock.__mock.existingFiles.add(targetMain);
+      fileSystemMock.__mock.existingFiles.add(targetSide);
+      await AppSettingsService.setMediaPipeModelStatusForModel('personal_dual_dish', 'ready');
+
+      // Fail when placing targetSide
+      fileSystemMock.moveAsync.mockImplementation(
+        async ({ from, to }: { from: string; to: string }) => {
+          if (to === targetSide && !from.includes('.backup-')) {
+            throw new Error('disk error on side placement');
+          }
+          return defaultMoveAsync({ from, to });
+        }
+      );
+
+      try {
+        await expect(installMediaPipeModelForModel('personal_dual_dish')).rejects.toThrow(
+          'disk error on side placement'
+        );
+
+        // Both original files must be restored
+        expect(fileSystemMock.__mock.existingFiles.has(targetMain)).toBe(true);
+        expect(fileSystemMock.__mock.existingFiles.has(targetSide)).toBe(true);
+        // Backups and temp files must be cleaned up
+        expect(
+          Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))
+        ).toBe(false);
+        expect(fileSystemMock.__mock.downloads.size).toBe(0);
+      } finally {
+        fileSystemMock.moveAsync.mockImplementation(defaultMoveAsync);
+      }
+    });
+
+    test('restores both existing files when ready state persistence fails during dual model replacement', async () => {
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      const targetMain = expectedPaths[0];
+      const targetSide = expectedPaths[1];
+
+      // Simulate existing healthy pair
+      fileSystemMock.__mock.existingFiles.add(targetMain);
+      fileSystemMock.__mock.existingFiles.add(targetSide);
+      await AppSettingsService.setMediaPipeModelStatusForModel('personal_dual_dish', 'ready');
+
+      // Force failure in setMediaPipeModelStatusForModel
+      const originalSetStatus = AppSettingsService.setMediaPipeModelStatusForModel;
+      jest
+        .spyOn(AppSettingsService, 'setMediaPipeModelStatusForModel')
+        .mockRejectedValueOnce(new Error('sqlite error on ready status'));
+
+      try {
+        await expect(installMediaPipeModelForModel('personal_dual_dish')).rejects.toThrow(
+          'sqlite error on ready status'
+        );
+
+        // Both original files must be restored
+        expect(fileSystemMock.__mock.existingFiles.has(targetMain)).toBe(true);
+        expect(fileSystemMock.__mock.existingFiles.has(targetSide)).toBe(true);
+        // Backups must be cleaned up
+        expect(
+          Array.from(fileSystemMock.__mock.existingFiles).some(path => path.includes('.backup-'))
+        ).toBe(false);
+      } finally {
+        AppSettingsService.setMediaPipeModelStatusForModel = originalSetStatus;
+      }
+    });
+
+    test('fails atomically and leaves no files when second file verification fails', async () => {
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      let callCount = 0;
+      NativeModules.MediaPipeMealInputAssist.verifyFileSha256 = jest
+        .fn()
+        .mockImplementation(async () => {
+          callCount += 1;
+          return callCount === 1; // First succeeds, second fails
+        });
+
+      await expect(installMediaPipeModelForModel('personal_dual_dish')).rejects.toThrow(
+        'SHA256 不一致'
+      );
+
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[0])).toBe(false);
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[1])).toBe(false);
+      expect(fileSystemMock.__mock.downloads.size).toBe(0);
+
+      const status = await getMediaPipeModelStatusForModel('personal_dual_dish');
+      expect(status.kind).toBe('error');
+    });
+
+    test('deletes both model files when deleteMediaPipeModelForModel is called', async () => {
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      fileSystemMock.__mock.existingFiles.add(expectedPaths[0]);
+      fileSystemMock.__mock.existingFiles.add(expectedPaths[1]);
+      await AppSettingsService.setMediaPipeModelStatusForModel('personal_dual_dish', 'ready');
+
+      await deleteMediaPipeModelForModel('personal_dual_dish');
+
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[0])).toBe(false);
+      expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[1])).toBe(false);
+
+      const status = await getMediaPipeModelStatusForModel('personal_dual_dish');
+      expect(status).toMatchObject({
+        kind: 'not_installed',
+        modelExists: false,
+      });
+    });
+
+    test('cleanupRetiredMediaPipeModels removes legacy 44tag model file from device storage', async () => {
+      const dir = resolveMealInputAssistModelDirectoryPath()!;
+      const retired44Path = `${dir}/personal_multilabel_44tag.task`;
+      fileSystemMock.__mock.existingFiles.add(retired44Path);
+
+      await cleanupRetiredMediaPipeModels();
+
+      expect(fileSystemMock.__mock.existingFiles.has(retired44Path)).toBe(false);
     });
   });
 });

@@ -136,9 +136,9 @@ describe('AppSettingsService', () => {
       'universal_dining_23class'
     );
 
-    await AppSettingsService.setMediaPipeClassifierModelId('personal_multilabel_44tag');
+    await AppSettingsService.setMediaPipeClassifierModelId('personal_dual_dish');
     await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
-      'personal_multilabel_44tag'
+      'personal_dual_dish'
     );
 
     await AppSettingsService.setMediaPipeClassifierModelId('cooking_method_9class');
@@ -158,7 +158,15 @@ describe('AppSettingsService', () => {
       'personal_household_8class'
     );
     await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'personal_dual_dish'
+    );
+
+    await AppSettingsService.setString(
+      'mediapipe_classifier_model_id',
       'personal_multilabel_44tag'
+    );
+    await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
+      'personal_dual_dish'
     );
   });
 

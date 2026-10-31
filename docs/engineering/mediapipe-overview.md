@@ -37,18 +37,18 @@ flowchart TD
   end
 
   subgraph Distribution ["3. モデル配布基盤 (Network)"]
-    Asset -.-> Release["GitHub Releases\n(meal-input-assist.task + SHA256)"]
-    Release --> Downloader["modelInstaller.ts\n(端末オンデマンドダウンロード)"]
-    Downloader --> LocalModel["filesDir/ai-models/\nmeal-input-assist.task"]
+    Asset -.-> Release["GitHub Releases\n(mediapipe-model-v0.2.0\n.task + SHA256)"]
+    Release --> Downloader["modelInstaller.ts\n(端末オンデマンドダウンロード\nペア不可分トランザクション)"]
+    Downloader --> LocalModel["filesDir/ai-models/\n*.task"]
   end
 
   subgraph AppInference ["4. アプリ推論 & UI (App Runtime)"]
     Settings["設定画面 (SettingsScreen)\n3モデル選択 & 永続化"] --> AppSettings["AppSettingsService\n(modelId 永続化)"]
-    AppSettings --> Provider["mediapipeStaticImageProvider.ts\n(modelId 指定ルーティング)"]
-    LocalModel --> Bridge["Android Native Bridge\n(MediaPipeMealInputAssistModule.kt)\nモデル別インスタンスキャッシュ"]
+    AppSettings --> Provider["mediapipeStaticImageProvider.ts\n(personal_dual_dish 時は主菜・副菜を順次推論)"]
+    LocalModel --> Bridge["Android Native Bridge\n(MediaPipeMealInputAssistModule.kt)\n主菜・副菜 2インスタンス保持 & 排他制御"]
     Asset -->|自動シードコピー| LocalModel
     Provider --> Bridge
-    Bridge --> Norm["mediapipeStaticImageNormalizer.ts\n(9クラス / 7クラス / 8クラス正規化 & 除外抑制)"]
+    Bridge --> Norm["mediapipeStaticImageNormalizer.ts\n(主菜τ=0.30 / 副菜τ=0.20 Top-2 / side_none 抑制 / ルールベースシーン導出 & noteDraft 合成)"]
     Norm --> UI["Review UI (tap-to-apply)\n(MealInputAssistSection)"]
   end
 ```
@@ -62,7 +62,7 @@ flowchart TD
 | 情報項目 | 正本ファイル / エビデンス | 概要 |
 |---|---|---|
 | **Champion モデルバイナリ** | `android/app/src/main/assets/mediapipe/meal-input-assist.task`<br>[docs/issues/issue-22-integrate-agreed-pending-and-promote-challenger.md](../issues/issue-22-integrate-agreed-pending-and-promote-challenger.md) | Promotion Gate を突破し本番アセットへ昇格された最新モデルバイナリとハッシュ記録。 |
-| **マルチモデル仕様・定義** | `src/ai/mealInputAssist/modelConfig.ts`<br>`android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssistSupport.kt`<br>[docs/issues/issue-23-dual-dining-classification-models.md](../issues/issue-23-dual-dining-classification-models.md) | 3モデル（調理法9クラス、汎用シーン7クラス、わたし専用8クラス）のID、ラベル、説明、SHA-256、アセット名。 |
+| **マルチモデル仕様・定義** | `src/ai/mealInputAssist/modelConfig.ts`<br>`android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssistSupport.kt`<br>[docs/issues/issue-27-refresh-step3-app-integration.md](../issues/issue-27-refresh-step3-app-integration.md) | 3モデル枠（調理法9クラス、汎用23クラス Lite2、わたし専用ペア[主菜 Lite0・副菜 Lite2]）のID、ラベル、説明、SHA-256、アセット名。 |
 | **Golden Test Set v2** | `docs/engineering/golden-test-set-v2-specification.md`<br>`state/mediapipe-dataset/golden_eval_v2/manifest.jsonl` | 106枚・9クラスの包括的ベンチマークデータセット仕様およびマニフェスト。 |
 | **現行 Promotion Gate 回帰ガード (旧Golden 7枚)** | `state/mediapipe-dataset/golden_eval/test/`<br>`scripts/run-autonomous-model-improvement.sh` | 自律改善ループで回帰防止ガードとして参照される少数固定データセット（N=7）。 |
 | **データセット外部保管 & 復元手順** | [docs/engineering/mediapipe-dataset-recovery.md](mediapipe-dataset-recovery.md) | `.gitignore` 対象の実画像データセット構成、外部保管方針、復元手順 Runbook。 |
@@ -77,21 +77,21 @@ flowchart TD
 
 ### 3.1 アプリ推論 & UI (Runtime)
 - **ステータス**: **確認済み**
-- **役割**: Android Native Bridge（MediaPipe Tasks Vision）を介してローカルの `.task` ファイルから推論を実行し、TS 層で料理名・ジャンルに正規化して Review 画面に tap-to-apply 提示する。設定画面（`SettingsScreen`）から分類モデル（3種類: 標準9クラス、汎用23クラス、わたし専用44タグ）の切り替えに対応。
+- **役割**: Android Native Bridge（MediaPipe Tasks Vision）を介してローカルの `.task` ファイルから推論を実行し、TS 層で料理名・ジャンルに正規化して Review 画面に tap-to-apply 提示する。設定画面（`SettingsScreen`）から分類モデル（3枠: 標準9クラス、汎用23クラス、わたし専用ペア）の切り替えに対応。
 - **確認済み事実**:
   - `MediaPipeMealInputAssistModule.kt` は `filesDir/ai-models/` にモデルがない場合、同梱アセット（`assets/mediapipe/`）から自動シードコピーして `MappedByteBuffer` で安全にロードする仕組みを保持。
-  - `MediaPipeMealInputAssistSupport.kt` およびモジュール本体にて、選択されたモデルID（`cooking_method_9class`、`universal_dining_23class`、`personal_multilabel_44tag`）ごとに `ImageClassifier` インスタンスをキャッシュ管理し、モデル切替時もメモリ効率と高速推論を両立。旧モデルID（`universal_scene_7class`, `personal_household_8class`）からの自動移行・フォールバックも配備。
+  - `MediaPipeMealInputAssistSupport.kt` およびモジュール本体にて、単一モデルID（`cooking_method_9class`、`universal_dining_23class`）に加えてペアモデル（`personal_dual_dish` = `personal_main_dish` + `personal_side_dish`）の2つの `ImageClassifier` インスタンスを同時に保持し、TS からの順次推論および `@Synchronized` による排他的ライフサイクル管理（close・再生成）を両立。旧モデルID（`personal_multilabel_44tag`, `personal_household_8class` 等）からの自動移行・フォールバックも配備。
   - `main` ブランチ上の既定ランタイムは `mediapipe-static-image`、既定モデルは `cooking_method_9class` に設定済み。
   - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は以下の体系の正規化マッピングを配備：
     1. **調理法9クラス**（`curry_rice`, `drink`, `fish_dish`, `fried_dish`, `meat_dish`, `noodles`, `simmered_dish`, `stir_fry`, `other_or_exclude`）
-    2. **汎用定番料理23クラス**（[Issue-24](../issues/issue-24-universal-dining-23class-model.md): 器情報を排除し焼き魚定食・生姜焼き・ラーメン・うどん・カレー等の純料理名サジェストに対応）
-    3. **わたし専用3軸マルチラベル44タグ**（[Issue-25](../issues/issue-25-personal-multilabel-3axis-model.md): 主菜20種・副菜汁物14種・シーン10種を同時分解し、軸別動的閾値によるチップ提示と `noteDraft` メモ下書きを自動合成）
-    4. （後方互換用）旧汎用シーン7クラスおよび旧わたし専用8クラスのマッピング保持
-  - 除外対象クラス（`other_or_exclude`、`non_food_or_exclude`、`non_food_exclude`）は `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
+    2. **汎用定番料理23クラス**（[Issue-24](../issues/issue-24-universal-dining-23class-model.md): 器情報を排除し焼き魚定食・生姜焼き・ラーメン・うどん・カレー等の純料理名サジェストに対応、Step 2 Lite2 へ更新）
+    3. **わたし専用ペア（主菜16クラス＋副菜15クラス）＆ルールベースシーン導出**（[Issue-27](../issues/issue-27-refresh-step3-app-integration.md): 主菜 $\tau \ge 0.30$ Top-1、副菜 $\tau \ge 0.20$ Top-2 チップ提示、`side_none` 抑制、料理組み合わせ・時間帯からのルールベースシーン判定（8シーン対応、主菜のみ時のサクッと平日飯補完、料理・時間帯だけでは判定できない `scene_party_feast` / `scene_weekend_bal` は導出対象外）、および `noteDraft` メモ下書きを自動合成）
+    4. （後方互換用）旧44タグ・旧汎用シーン7クラスおよび旧わたし専用8クラスのマッピング保持
+  - 除外対象クラス（`other_or_exclude`、`non_food_or_exclude`、`non_food_exclude`、`side_none`）は `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
 
 ### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
 - **ステータス**: **確認済み**
-- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`scripts/ensure-mediapipe-model.sh` は Releases から 3 モデルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
+- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード（Release タグ `mediapipe-model-v0.2.0`）、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`modelInstaller.ts` では `personal_dual_dish` の2ファイルを2ファイル単位のトランザクション処理（バックアップ退避・ロールバック・片肺状態検知時の自動掃除と再ダウンロード案内付き）および旧退役モデルファイルの安全削除を実装。`scripts/ensure-mediapipe-model.sh` は Releases から 4 モデルファイルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
 
 ### 3.3 モデル学習 & 二段階昇格判定 (Training & Two-Tier Gate)
 - **ステータス**: **確認済み**
