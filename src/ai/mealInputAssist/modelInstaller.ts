@@ -24,7 +24,6 @@ import {
   resolveMealInputAssistModelPath,
   resolveMealInputAssistProjectorPath,
   resolveMediaPipeModelPath,
-  resolveMediaPipeModelPaths,
 } from './modelConfig';
 import { getMediaPipeMealInputAssistNativeModule } from './mediapipeStaticImageProvider';
 import type {
