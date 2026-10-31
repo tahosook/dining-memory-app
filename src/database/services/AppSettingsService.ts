@@ -128,18 +128,39 @@ export class AppSettingsService {
     if (
       value === 'cooking_method_9class' ||
       value === 'universal_dining_23class' ||
-      value === 'personal_multilabel_44tag'
+      value === 'personal_dual_dish'
     ) {
       return value;
     }
-    // Backward compatibility: migrate legacy 7/8 class models to their direct successors
+    // Backward compatibility: migrate legacy models to their direct successors
     if (value === 'universal_scene_7class') {
+      await this.setMediaPipeClassifierModelId('universal_dining_23class').catch(() => {});
       return 'universal_dining_23class';
     }
-    if (value === 'personal_household_8class') {
-      return 'personal_multilabel_44tag';
+    if (value === 'personal_household_8class' || value === 'personal_multilabel_44tag') {
+      await this.setMediaPipeClassifierModelId('personal_dual_dish').catch(() => {});
+      await this.cleanupLegacyMediaPipeModelSettings().catch(() => {});
+      return 'personal_dual_dish';
     }
     return 'cooking_method_9class';
+  }
+
+  static async cleanupLegacyMediaPipeModelSettings(): Promise<void> {
+    const legacyKeys = [
+      'mediapipe_model_personal_multilabel_44tag_status',
+      'mediapipe_model_personal_multilabel_44tag_version',
+      'mediapipe_model_personal_multilabel_44tag_downloaded_at',
+      'mediapipe_model_personal_multilabel_44tag_error_message',
+      'mediapipe_model_personal_household_8class_status',
+      'mediapipe_model_personal_household_8class_version',
+      'mediapipe_model_personal_household_8class_downloaded_at',
+      'mediapipe_model_personal_household_8class_error_message',
+      'mediapipe_model_universal_scene_7class_status',
+      'mediapipe_model_universal_scene_7class_version',
+      'mediapipe_model_universal_scene_7class_downloaded_at',
+      'mediapipe_model_universal_scene_7class_error_message',
+    ];
+    await Promise.all(legacyKeys.map(key => this.setString(key, null)));
   }
 
   static async setMediaPipeClassifierModelId(modelId: MediaPipeClassifierModelId): Promise<void> {

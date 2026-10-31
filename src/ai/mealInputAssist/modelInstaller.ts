@@ -15,13 +15,16 @@ import {
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
   MEAL_INPUT_ASSIST_MODEL_CONFIG,
   type MealInputAssistManagedFile,
+  DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
   MEDIAPIPE_MODEL_CONFIG,
   MEDIAPIPE_MODEL_DISPLAY_NAME,
   MEDIAPIPE_CLASSIFIER_MODELS,
+  resolveMealInputAssistFilePath,
   resolveMealInputAssistModelDirectoryPath,
   resolveMealInputAssistModelPath,
   resolveMealInputAssistProjectorPath,
   resolveMediaPipeModelPath,
+  resolveMediaPipeModelPaths,
 } from './modelConfig';
 import { getMediaPipeMealInputAssistNativeModule } from './mediapipeStaticImageProvider';
 import type {
@@ -116,6 +119,54 @@ async function persistMediaPipeNotInstalledState() {
     AppSettingsService.setMediaPipeModelDownloadedAt(null),
     AppSettingsService.setMediaPipeModelErrorMessage(null),
   ]);
+}
+
+async function persistMediaPipeReadyStateForModel(
+  modelId: MediaPipeClassifierModelId,
+  version: string
+) {
+  await Promise.all([
+    AppSettingsService.setMediaPipeModelVersionForModel(modelId, version),
+    AppSettingsService.setMediaPipeModelStatusForModel(modelId, 'ready'),
+    AppSettingsService.setMediaPipeModelDownloadedAtForModel(modelId, Date.now()),
+    AppSettingsService.setMediaPipeModelErrorMessageForModel(modelId, null),
+  ]);
+  if (modelId === DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID) {
+    await persistMediaPipeReadyState(version);
+  }
+}
+
+async function persistMediaPipeErrorStateForModel(
+  modelId: MediaPipeClassifierModelId,
+  message: string,
+  version?: string | null
+) {
+  const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[modelId];
+  await Promise.all([
+    AppSettingsService.setMediaPipeModelVersionForModel(
+      modelId,
+      version ?? modelMeta?.version ?? MEDIAPIPE_MODEL_CONFIG.version
+    ),
+    AppSettingsService.setMediaPipeModelStatusForModel(modelId, 'error'),
+    AppSettingsService.setMediaPipeModelErrorMessageForModel(modelId, message),
+  ]);
+  if (modelId === DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID) {
+    await persistMediaPipeErrorState(message, version);
+  }
+}
+
+async function persistMediaPipeNotInstalledStateForModel(
+  modelId: MediaPipeClassifierModelId
+) {
+  await Promise.all([
+    AppSettingsService.setMediaPipeModelVersionForModel(modelId, null),
+    AppSettingsService.setMediaPipeModelStatusForModel(modelId, 'not_installed'),
+    AppSettingsService.setMediaPipeModelDownloadedAtForModel(modelId, null),
+    AppSettingsService.setMediaPipeModelErrorMessageForModel(modelId, null),
+  ]);
+  if (modelId === DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID) {
+    await persistMediaPipeNotInstalledState();
+  }
 }
 
 async function replaceFile(from: string, to: string) {
@@ -416,41 +467,55 @@ export async function deleteAllDownloadedLocalAiModels(): Promise<void> {
     await Promise.all(entries.map(entry => cleanupFile(`${directoryPath}/${entry}`)));
   }
 
-  await Promise.all([persistNotInstalledState(), persistMediaPipeNotInstalledState()]);
+  await Promise.all([
+    persistNotInstalledState(),
+    persistMediaPipeNotInstalledState(),
+    persistMediaPipeNotInstalledStateForModel('cooking_method_9class'),
+    persistMediaPipeNotInstalledStateForModel('universal_dining_23class'),
+    persistMediaPipeNotInstalledStateForModel('personal_dual_dish'),
+  ]);
 }
 
-export async function installMediaPipeModel(
-  options?: MediaPipeModelInstallerOptions
-): Promise<void> {
+export async function cleanupRetiredMediaPipeModels(): Promise<void> {
   const directoryPath = resolveMealInputAssistModelDirectoryPath();
-  const targetPath = resolveMediaPipeModelPath();
-  if (!directoryPath || !targetPath) {
-    throw new Error('MediaPipe model path could not be resolved.');
+  if (!directoryPath) {
+    return;
   }
+  const retiredFiles = [
+    'personal_multilabel_44tag.task',
+    'personal_household_8class.task',
+    'universal_scene_7class.task',
+  ];
+  await Promise.all(retiredFiles.map(file => cleanupFile(`${directoryPath}/${file}`)));
+  await AppSettingsService.cleanupLegacyMediaPipeModelSettings().catch(() => {});
+}
 
-  await makeDirectoryAsync(directoryPath, { intermediates: true });
-
-  const url = options?.url ?? MEDIAPIPE_MODEL_CONFIG.url;
-  const expectedSha256 = options?.expectedSha256 ?? MEDIAPIPE_MODEL_CONFIG.sha256;
-  if (!expectedSha256 || expectedSha256.trim() === '') {
-    throw new Error(
-      'MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。'
-    );
-  }
-  const version = options?.version ?? MEDIAPIPE_MODEL_CONFIG.version;
-
-  const temporaryPath = `${directoryPath}/${MEDIAPIPE_MODEL_CONFIG.fileName}.download-${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
-
-  options?.onProgress?.({
-    phase: 'preparing',
-    bytesWritten: 0,
-    bytesExpected: null,
-    progress: null,
-  });
-
-  let downloadedTemporaryPath: string | null = null;
+async function downloadAndVerifyModelFile({
+  directoryPath,
+  fileName,
+  url,
+  expectedSha256,
+  options,
+  label,
+}: {
+  directoryPath: string;
+  fileName: string;
+  url: string;
+  expectedSha256: string;
+  options?: MediaPipeModelInstallerOptions;
+  label: string;
+}): Promise<string> {
+  const temporaryPath = `${directoryPath}/${fileName}.download-${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
+  let shouldCleanup = true;
 
   try {
+    options?.onProgress?.({
+      phase: 'preparing',
+      bytesWritten: 0,
+      bytesExpected: null,
+      progress: null,
+    });
+
     const downloadTask = createDownloadResumable(
       url,
       temporaryPath,
@@ -476,10 +541,8 @@ export async function installMediaPipeModel(
 
     const result = await downloadTask.downloadAsync();
     if (!result) {
-      throw new Error(`${MEDIAPIPE_MODEL_DISPLAY_NAME} のダウンロードが完了しませんでした。`);
+      throw new Error(`${label} のダウンロードが完了しませんでした。`);
     }
-
-    downloadedTemporaryPath = temporaryPath;
 
     options?.onProgress?.({
       phase: 'verifying',
@@ -495,10 +558,131 @@ export async function installMediaPipeModel(
 
     const isValid = await nativeModule.verifyFileSha256(temporaryPath, expectedSha256);
     if (!isValid) {
-      throw new Error(
-        `${MEDIAPIPE_MODEL_DISPLAY_NAME} のハッシュ検証に失敗しました (SHA256 不一致)。`
-      );
+      throw new Error(`${label} のハッシュ検証に失敗しました (SHA256 不一致)。`);
     }
+
+    shouldCleanup = false;
+    return temporaryPath;
+  } finally {
+    if (shouldCleanup) {
+      await cleanupFile(temporaryPath);
+    }
+  }
+}
+
+export async function installMediaPipeModelForModel(
+  modelId: MediaPipeClassifierModelId,
+  options?: MediaPipeModelInstallerOptions
+): Promise<void> {
+  const directoryPath = resolveMealInputAssistModelDirectoryPath();
+  if (!directoryPath) {
+    throw new Error('MediaPipe model path could not be resolved.');
+  }
+
+  await makeDirectoryAsync(directoryPath, { intermediates: true });
+
+  const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[modelId];
+  if (!modelMeta) {
+    throw new Error(`Unknown MediaPipe classifier model: ${modelId}`);
+  }
+
+  const version = options?.version ?? modelMeta.version;
+
+  if (modelMeta.isDual && modelMeta.files) {
+    const mainFile = modelMeta.files.personal_main_dish;
+    const sideFile = modelMeta.files.personal_side_dish;
+
+    const targetMainPath = resolveMealInputAssistFilePath(mainFile.fileName);
+    const targetSidePath = resolveMealInputAssistFilePath(sideFile.fileName);
+
+    if (!targetMainPath || !targetSidePath) {
+      throw new Error('Dual MediaPipe model paths could not be resolved.');
+    }
+
+    let tempMainPath: string | null = null;
+    let tempSidePath: string | null = null;
+
+    try {
+      tempMainPath = await downloadAndVerifyModelFile({
+        directoryPath,
+        fileName: mainFile.fileName,
+        url: options?.url ?? mainFile.url,
+        expectedSha256: options?.expectedSha256 ?? mainFile.sha256,
+        options,
+        label: `${modelMeta.label} (主菜)`,
+      });
+
+      tempSidePath = await downloadAndVerifyModelFile({
+        directoryPath,
+        fileName: sideFile.fileName,
+        url: sideFile.url,
+        expectedSha256: sideFile.sha256,
+        options,
+        label: `${modelMeta.label} (副菜)`,
+      });
+
+      options?.onProgress?.({
+        phase: 'installing',
+        bytesWritten: 0,
+        bytesExpected: null,
+        progress: 1,
+      });
+
+      await safelyReplaceMediaPipeModelFile(tempMainPath, targetMainPath);
+      tempMainPath = null;
+
+      try {
+        await safelyReplaceMediaPipeModelFile(tempSidePath, targetSidePath);
+        tempSidePath = null;
+      } catch (sideError) {
+        await cleanupFile(targetMainPath);
+        throw sideError;
+      }
+
+      await persistMediaPipeReadyStateForModel(modelId, version);
+    } catch (error) {
+      const message = toErrorMessage(
+        error,
+        `${modelMeta.label} model のダウンロードに失敗しました`
+      );
+      await persistMediaPipeErrorStateForModel(modelId, message, version);
+      throw new Error(message);
+    } finally {
+      await Promise.all([cleanupFile(tempMainPath), cleanupFile(tempSidePath)]);
+    }
+    return;
+  }
+
+  const url = options?.url ?? modelMeta.url ?? MEDIAPIPE_MODEL_CONFIG.url;
+  const expectedSha256 =
+    options?.expectedSha256 ?? modelMeta.sha256 ?? MEDIAPIPE_MODEL_CONFIG.sha256;
+  if (!expectedSha256 || expectedSha256.trim() === '') {
+    throw new Error(
+      'MediaPipe model SHA-256 が定義されていないためダウンロード検証を実行できません。'
+    );
+  }
+
+  const targetPath = resolveMediaPipeModelPath(modelId);
+  if (!targetPath) {
+    throw new Error('MediaPipe model path could not be resolved.');
+  }
+
+  const modelLabel =
+    modelId === DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID
+      ? MEDIAPIPE_MODEL_DISPLAY_NAME
+      : modelMeta.label;
+
+  let downloadedTemporaryPath: string | null = null;
+
+  try {
+    downloadedTemporaryPath = await downloadAndVerifyModelFile({
+      directoryPath,
+      fileName: modelMeta.fileName,
+      url,
+      expectedSha256,
+      options,
+      label: modelLabel,
+    });
 
     options?.onProgress?.({
       phase: 'installing',
@@ -507,92 +691,113 @@ export async function installMediaPipeModel(
       progress: 1,
     });
 
-    await safelyReplaceMediaPipeModelFile(temporaryPath, targetPath);
+    await safelyReplaceMediaPipeModelFile(downloadedTemporaryPath, targetPath);
     downloadedTemporaryPath = null;
 
-    await persistMediaPipeReadyState(version);
+    await persistMediaPipeReadyStateForModel(modelId, version);
   } catch (error) {
     const message = toErrorMessage(
       error,
-      `${MEDIAPIPE_MODEL_DISPLAY_NAME} model のダウンロードに失敗しました`
+      `${modelLabel} model のダウンロードに失敗しました`
     );
-    await persistMediaPipeErrorState(message, version);
+    await persistMediaPipeErrorStateForModel(modelId, message, version);
     throw new Error(message);
   } finally {
     await cleanupFile(downloadedTemporaryPath);
   }
 }
 
+export async function installMediaPipeModel(
+  options?: MediaPipeModelInstallerOptions & { modelId?: MediaPipeClassifierModelId }
+): Promise<void> {
+  const modelId = options?.modelId ?? DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+  await installMediaPipeModelForModel(modelId, options);
+}
+
 export async function getMediaPipeModelStatus(): Promise<MediaPipeModelStatus> {
-  const targetPath = resolveMediaPipeModelPath();
-  const [persistedStatus, persistedVersion, downloadedAt, persistedErrorMessage, fileInfo] =
-    await Promise.all([
-      AppSettingsService.getMediaPipeModelStatus(),
-      AppSettingsService.getMediaPipeModelVersion(),
-      AppSettingsService.getMediaPipeModelDownloadedAt(),
-      AppSettingsService.getMediaPipeModelErrorMessage(),
-      targetPath ? getInfoAsync(targetPath) : Promise.resolve({ exists: false }),
-    ]);
-
-  const modelExists = Boolean(fileInfo.exists);
-
-  if (modelExists) {
-    return {
-      kind: 'ready',
-      version: persistedVersion ?? MEDIAPIPE_MODEL_CONFIG.version,
-      downloadedAt,
-      errorMessage: null,
-      expectedPath: targetPath,
-      modelExists: true,
-    };
-  }
-
-  if (persistedStatus === 'error') {
-    return {
-      kind: 'error',
-      version: persistedVersion,
-      downloadedAt,
-      errorMessage: persistedErrorMessage ?? 'MediaPipe model のダウンロード状態が不正です。',
-      expectedPath: targetPath,
-      modelExists: false,
-    };
-  }
-
-  return {
-    kind: 'not_installed',
-    version: persistedVersion,
-    downloadedAt,
-    errorMessage: null,
-    expectedPath: targetPath,
-    modelExists: false,
-  };
+  return getMediaPipeModelStatusForModel(DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID);
 }
 
 export async function deleteMediaPipeModel(): Promise<void> {
-  await cleanupFile(resolveMediaPipeModelPath());
-  await persistMediaPipeNotInstalledState();
+  await deleteMediaPipeModelForModel(DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID);
 }
 
 export async function redownloadMediaPipeModel(
-  options?: MediaPipeModelInstallerOptions
+  options?: MediaPipeModelInstallerOptions & { modelId?: MediaPipeClassifierModelId }
 ): Promise<void> {
   await installMediaPipeModel(options);
+}
+
+export async function redownloadMediaPipeModelForModel(
+  modelId: MediaPipeClassifierModelId,
+  options?: MediaPipeModelInstallerOptions
+): Promise<void> {
+  await installMediaPipeModelForModel(modelId, options);
 }
 
 export async function getMediaPipeModelStatusForModel(
   modelId: MediaPipeClassifierModelId
 ): Promise<MediaPipeModelStatus> {
+  await cleanupRetiredMediaPipeModels().catch(() => {});
+
   const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[modelId];
-  const targetPath = resolveMediaPipeModelPath(modelId);
-  const [persistedStatus, persistedVersion, downloadedAt, persistedErrorMessage, fileInfo] =
+  const [persistedStatus, persistedVersion, downloadedAt, persistedErrorMessage] =
     await Promise.all([
       AppSettingsService.getMediaPipeModelStatusForModel(modelId),
       AppSettingsService.getMediaPipeModelVersionForModel(modelId),
       AppSettingsService.getMediaPipeModelDownloadedAtForModel(modelId),
       AppSettingsService.getMediaPipeModelErrorMessageForModel(modelId),
-      targetPath ? getInfoAsync(targetPath) : Promise.resolve({ exists: false }),
     ]);
 
+  if (modelMeta?.isDual && modelMeta.files) {
+    const mainPath = resolveMealInputAssistFilePath(modelMeta.files.personal_main_dish.fileName);
+    const sidePath = resolveMealInputAssistFilePath(modelMeta.files.personal_side_dish.fileName);
+    const expectedPaths = [mainPath, sidePath].filter((p): p is string => Boolean(p));
+
+    const [mainInfo, sideInfo] = await Promise.all([
+      mainPath ? getInfoAsync(mainPath) : Promise.resolve({ exists: false }),
+      sidePath ? getInfoAsync(sidePath) : Promise.resolve({ exists: false }),
+    ]);
+
+    const modelExists = Boolean(mainInfo.exists && sideInfo.exists);
+
+    if (modelExists) {
+      return {
+        kind: 'ready',
+        version: persistedVersion ?? modelMeta.version,
+        downloadedAt,
+        errorMessage: null,
+        expectedPath: mainPath,
+        expectedPaths,
+        modelExists: true,
+      };
+    }
+
+    if (persistedStatus === 'error') {
+      return {
+        kind: 'error',
+        version: persistedVersion,
+        downloadedAt,
+        errorMessage: persistedErrorMessage ?? 'MediaPipe model のダウンロード状態が不正です。',
+        expectedPath: mainPath,
+        expectedPaths,
+        modelExists: false,
+      };
+    }
+
+    return {
+      kind: 'not_installed',
+      version: persistedVersion,
+      downloadedAt,
+      errorMessage: null,
+      expectedPath: mainPath,
+      expectedPaths,
+      modelExists: false,
+    };
+  }
+
+  const targetPath = resolveMediaPipeModelPath(modelId);
+  const fileInfo = targetPath ? await getInfoAsync(targetPath) : { exists: false };
   const modelExists = Boolean(fileInfo.exists);
 
   if (modelExists) {
@@ -602,6 +807,7 @@ export async function getMediaPipeModelStatusForModel(
       downloadedAt,
       errorMessage: null,
       expectedPath: targetPath,
+      expectedPaths: targetPath ? [targetPath] : [],
       modelExists: true,
     };
   }
@@ -613,6 +819,7 @@ export async function getMediaPipeModelStatusForModel(
       downloadedAt,
       errorMessage: persistedErrorMessage ?? 'MediaPipe model のダウンロード状態が不正です。',
       expectedPath: targetPath,
+      expectedPaths: targetPath ? [targetPath] : [],
       modelExists: false,
     };
   }
@@ -623,6 +830,7 @@ export async function getMediaPipeModelStatusForModel(
     downloadedAt,
     errorMessage: null,
     expectedPath: targetPath,
+    expectedPaths: targetPath ? [targetPath] : [],
     modelExists: false,
   };
 }
@@ -630,11 +838,13 @@ export async function getMediaPipeModelStatusForModel(
 export async function deleteMediaPipeModelForModel(
   modelId: MediaPipeClassifierModelId
 ): Promise<void> {
-  await cleanupFile(resolveMediaPipeModelPath(modelId));
-  await Promise.all([
-    AppSettingsService.setMediaPipeModelVersionForModel(modelId, null),
-    AppSettingsService.setMediaPipeModelStatusForModel(modelId, 'not_installed'),
-    AppSettingsService.setMediaPipeModelDownloadedAtForModel(modelId, null),
-    AppSettingsService.setMediaPipeModelErrorMessageForModel(modelId, null),
-  ]);
+  const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[modelId];
+  if (modelMeta?.isDual && modelMeta.files) {
+    const mainPath = resolveMealInputAssistFilePath(modelMeta.files.personal_main_dish.fileName);
+    const sidePath = resolveMealInputAssistFilePath(modelMeta.files.personal_side_dish.fileName);
+    await Promise.all([cleanupFile(mainPath), cleanupFile(sidePath)]);
+  } else {
+    await cleanupFile(resolveMediaPipeModelPath(modelId));
+  }
+  await persistMediaPipeNotInstalledStateForModel(modelId);
 }

@@ -959,18 +959,18 @@ describe('SettingsScreen', () => {
 
     const cookingOption = getByTestId('mediapipe-model-option-cooking_method_9class');
     const universal23Option = getByTestId('mediapipe-model-option-universal_dining_23class');
-    const personal44Option = getByTestId('mediapipe-model-option-personal_multilabel_44tag');
+    const personalDualOption = getByTestId('mediapipe-model-option-personal_dual_dish');
 
     expect(cookingOption).toBeTruthy();
     expect(universal23Option).toBeTruthy();
-    expect(personal44Option).toBeTruthy();
+    expect(personalDualOption).toBeTruthy();
 
     expect(cookingOption.props.accessibilityState).toEqual({ selected: true });
     expect(universal23Option.props.accessibilityState).toEqual({ selected: false });
-    expect(personal44Option.props.accessibilityState).toEqual({ selected: false });
+    expect(personalDualOption.props.accessibilityState).toEqual({ selected: false });
   });
 
-  test('switches to universal_dining_23class and personal_multilabel_44tag models when tapped', async () => {
+  test('switches to universal_dining_23class and personal_dual_dish models when tapped', async () => {
     (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
       'cooking_method_9class'
     );
@@ -995,12 +995,12 @@ describe('SettingsScreen', () => {
       );
     });
 
-    const personal44Option = getByTestId('mediapipe-model-option-personal_multilabel_44tag');
-    fireEvent.press(personal44Option);
+    const personalDualOption = getByTestId('mediapipe-model-option-personal_dual_dish');
+    fireEvent.press(personalDualOption);
 
     await waitFor(() => {
       expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
-        'personal_multilabel_44tag'
+        'personal_dual_dish'
       );
     });
   });
