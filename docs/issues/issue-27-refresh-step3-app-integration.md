@@ -61,7 +61,7 @@ flowchart TD
 
   subgraph AppTSLayer ["TypeScript 推論・正規化・UI (TS Layer & UI)"]
     Provider["mediapipeStaticImageProvider.ts\npersonal_dual_dish 選択時は\n主菜 -> 副菜 を順次呼び出し"]
-    Normalizer["mediapipeStaticImageNormalizer.ts\n・主菜 τ >= 0.30 (Top-1)\n・副菜 τ >= 0.20 (Top-2, side_none 抑制)\n・ルールベースシーン導出エンジン (10シーン)\n・noteDraft 自動合成"]
+    Normalizer["mediapipeStaticImageNormalizer.ts\n・主菜 τ >= 0.30 (Top-1)\n・副菜 τ >= 0.20 (Top-2, side_none 抑制)\n・ルールベースシーン導出エンジン (8シーン対応、party/bal除外)\n・noteDraft 自動合成"]
     Settings["SettingsScreen\n3モデル枠ラジオ選択\n(personal_dual_dish)"]
     ReviewUI["Review UI (tap-to-apply)\n料理名チップ・副菜チップ・noteDraft"]
 
@@ -74,7 +74,8 @@ flowchart TD
 ```
 
 ### 2.1 不可分ペアダウンロード・片肺防止トランザクション (modelInstaller.ts)
-`personal_dual_dish` のインストールでは、主菜（`personal_main_dish.task`）と副菜（`personal_side_dish.task`）の双方を一時ディレクトリにダウンロードし、それぞれの SHA-256 チェックサムを検証した上で、双方が合格した場合のみ本配置（`filesDir/ai-models/`）へ移動する。途中でエラーまたは検証不一致が発生した場合は、双方の一時ファイルおよびターゲット配置ファイルをロールバック削除し、不完全な状態での推論実行を遮断する。
+`personal_dual_dish` のインストールでは、主菜（`personal_main_dish.task`）と副菜（`personal_side_dish.task`）の双方を一時ディレクトリにダウンロードし、それぞれの SHA-256 チェックサムを検証した上で、2ファイル単位の不可分トランザクションとして配置する。既存ファイルが存在する場合は両方をバックアップへ退避し、新ファイルの配置および `ready` 状態の永続化が完全に成功するまでバックアップを保持する。途中でエラーが発生した場合は新規配置ファイルを削除して旧ファイルを両方復元し、既存の正常なペアを破壊しない設計としている。
+また、端末内のファイル状態を確認する `getMediaPipeModelStatusForModel` において、主菜・副菜の片方のみが存在する「片肺」状態を検知した場合は、未インストール扱いとせず残存ファイルを即座に掃除した上で、再ダウンロードを促すエラー状態（`kind: 'error'`）を返す。
 
 ### 2.2 Android Native Bridge 2インスタンス保持 (PR 1 / #307)
 `MediaPipeMealInputAssistModule.kt` において、`personal_dual_dish` で使用される `personal_main_dish` と `personal_side_dish` の2つの `ImageClassifier` インスタンスを同時に保持し、TS レイヤーからの順次推論要求に高速に応答する。モデル切り替えや解放時には `@Synchronized` により排他制御を行い、リソースリークや競合状態を防止する。
@@ -86,14 +87,17 @@ flowchart TD
 - **低信頼度フォールバック**: 主菜・副菜ともに閾値未満の場合は、無理な提案を行わず `suggestions` は空配列、`noteDraft` は `null` としてフォールバック。
 
 ### 2.4 ルールベース食卓シーン判定 (deriveSceneFromDishes)
-モデル学習から除外されたシーン分類を、主菜・副菜の組み合わせと時刻（朝・昼・夜）から決定論的に導出するルールエンジンを実装。以下の既存 10 シーンに対応付け、一致しない場合は `null` を返す：
-- `scene_tabletop_hotpot`: 主菜または副菜に `鍋`、`すき焼き`、`しゃぶしゃぶ` 等を含む場合。
-- `scene_holiday_noodles`: 主菜が麺類（ラーメン、うどん、パスタ等）の場合。
-- `scene_izakaya_night`: 夜帯（17時以降）で酒・つまみ・居酒屋料理に該当する場合。
-- `scene_japanese_breakfast`: 朝帯（11時前）で焼き魚や和定食構成の場合。
-- `scene_western_breakfast`: 朝帯（11時前）でパン、目玉焼き、トースト等の場合。
-- `scene_one_plate`: ワンプレート料理（カレー、丼もの等）の場合。
-- `scene_teishoku_multi_dish`: 主菜があり副菜が1品以上揃っている場合。
+モデル学習から除外されたシーン分類を、主菜・副菜の組み合わせと時刻（朝・昼・夜）から決定論的に導出するルールエンジンを実装。以下の 8 シーンに対応付け、一致しない場合は `null` を返す：
+- `scene_tabletop_hotpot`（冬の団らん卓上鍋）: 主菜または副菜に鍋料理を含む場合。
+- `scene_holiday_noodles`（休日のあつあつ麺）: 主菜がラーメン・中華麺、うどん・そば、和風麺類の場合。
+- `scene_izakaya_night`（おうち居酒屋・晩酌）: おつまみ小鉢・刺身、または夜帯（18時以降または早朝4時前）の冷奴等の晩酌膳の場合。
+- `scene_japanese_breakfast`（定番の和朝食）: 納豆、または朝帯（4〜11時）の焼き魚・たまご料理の場合。
+- `scene_western_breakfast`（パンの洋朝食）: 朝帯（4〜11時）かつ主菜なしでサラダ・カットフルーツ・たまご料理等の洋風副菜の場合。
+- `scene_one_plate`（ワンプレート）: カレー、ハヤシ、キーマ、ガパオ、炒飯、丼もの等のワンプレート料理の場合。
+- `scene_teishoku_multi_dish`（一汁三菜・夕定食）: 主菜があり、汁物（味噌汁/豚汁/スープ）＋汁物以外の小鉢が1品以上揃っている場合。
+- `scene_quick_single_meal`（サクッと平日飯）: 主菜のみ（定食などの副菜条件に合わない・副菜なし等）の場合。
+
+※なお、`scene_party_feast`（ごちそう宴席パーティー）および `scene_weekend_bal`（週末おうちバル）の2シーンは、料理・副菜・時刻情報だけでは決定論的に判定できないため、自動ルール導出の対象外としている。
 
 ---
 
@@ -113,8 +117,8 @@ GitHub Releases タグ: `mediapipe-model-v0.2.0`
 ## 4. Verification & Quality Assurance (検証と品質保証)
 
 1. **ユニットテスト網羅性**:
-   - `tests/mealInputAssistModelInstaller.test.ts`: ペアの同時ダウンロード、SHA-256 破損時のロールバック、片肺防止（1ファイル欠落時の not_ready 判定）、一括削除、退役モデルファイル回収（26件 PASS）。
-   - `tests/mealInputAssistNormalizer.test.ts`: 新閾値較正（主菜 $\ge 0.30$、副菜 $\ge 0.20$）、`side_none` 抑制、ルールベースシーン判定（朝食・定食・鍋等）、noteDraft 合成、低信頼度フォールバック（15件 PASS）。
+   - `tests/mealInputAssistModelInstaller.test.ts`: ペアの同時ダウンロード、SHA-256 破損時のロールバック、2ファイル単位のトランザクション復元、片肺状態の自動掃除とエラー返却、一括削除、退役モデルファイル回収（29件 PASS）。
+   - `tests/mealInputAssistNormalizer.test.ts`: 新閾値較正（主菜 $\ge 0.30$、副菜 $\ge 0.20$）、`side_none` 抑制、8食卓シーン判定ルール（サクッと平日飯の補完含む）、決定論的固定タイムスタンプ、noteDraft 合成、低信頼度フォールバック（16件 PASS）。
    - `tests/AppSettingsService.test.ts`: `personal_dual_dish` の保存と取得、旧モデル（`personal_multilabel_44tag`, `personal_household_8class`）からの自動移行、旧ステータスキーの削除（15件 PASS）。
    - `tests/StatsSettingsScreens.test.tsx`: 設定画面での 3 選択肢レンダリング、モデル切替・保存・ステータス再取得（35件 PASS）。
 2. **型検査**:

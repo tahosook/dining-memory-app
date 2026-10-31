@@ -85,13 +85,13 @@ flowchart TD
   - `src/ai/mealInputAssist/mediapipeStaticImageNormalizer.ts` は以下の体系の正規化マッピングを配備：
     1. **調理法9クラス**（`curry_rice`, `drink`, `fish_dish`, `fried_dish`, `meat_dish`, `noodles`, `simmered_dish`, `stir_fry`, `other_or_exclude`）
     2. **汎用定番料理23クラス**（[Issue-24](../issues/issue-24-universal-dining-23class-model.md): 器情報を排除し焼き魚定食・生姜焼き・ラーメン・うどん・カレー等の純料理名サジェストに対応、Step 2 Lite2 へ更新）
-    3. **わたし専用ペア（主菜16クラス＋副菜15クラス）＆ルールベースシーン導出**（[Issue-27](../issues/issue-27-refresh-step3-app-integration.md): 主菜 $\tau \ge 0.30$ Top-1、副菜 $\tau \ge 0.20$ Top-2 チップ提示、`side_none` 抑制、料理組み合わせ・時間帯からのルールベースシーン判定、および `noteDraft` メモ下書きを自動合成）
+    3. **わたし専用ペア（主菜16クラス＋副菜15クラス）＆ルールベースシーン導出**（[Issue-27](../issues/issue-27-refresh-step3-app-integration.md): 主菜 $\tau \ge 0.30$ Top-1、副菜 $\tau \ge 0.20$ Top-2 チップ提示、`side_none` 抑制、料理組み合わせ・時間帯からのルールベースシーン判定（8シーン対応、主菜のみ時のサクッと平日飯補完、料理・時間帯だけでは判定できない `scene_party_feast` / `scene_weekend_bal` は導出対象外）、および `noteDraft` メモ下書きを自動合成）
     4. （後方互換用）旧44タグ・旧汎用シーン7クラスおよび旧わたし専用8クラスのマッピング保持
   - 除外対象クラス（`other_or_exclude`、`non_food_or_exclude`、`non_food_exclude`、`side_none`）は `excludeFromSuggestions: true` により、UI サジェスト候補（`mealNames` / `cuisineTypes`）から明示的に除外（非表示）され、モデルの推論確信度・メタデータのみに記録される。
 
 ### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
 - **ステータス**: **確認済み**
-- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード（Release タグ `mediapipe-model-v0.2.0`）、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`modelInstaller.ts` では `personal_dual_dish` の2ファイルを原子的一括ダウンロード・検証・配置するトランザクション処理（片肺防止ロールバック付き）および旧退役モデルファイルの安全削除を実装。`scripts/ensure-mediapipe-model.sh` は Releases から 4 モデルファイルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
+- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード（Release タグ `mediapipe-model-v0.2.0`）、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`modelInstaller.ts` では `personal_dual_dish` の2ファイルを2ファイル単位のトランザクション処理（バックアップ退避・ロールバック・片肺状態検知時の自動掃除と再ダウンロード案内付き）および旧退役モデルファイルの安全削除を実装。`scripts/ensure-mediapipe-model.sh` は Releases から 4 モデルファイルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
 
 ### 3.3 モデル学習 & 二段階昇格判定 (Training & Two-Tier Gate)
 - **ステータス**: **確認済み**

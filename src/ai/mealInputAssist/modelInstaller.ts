@@ -598,6 +598,10 @@ export async function installMediaPipeModelForModel(
 
     let tempMainPath: string | null = null;
     let tempSidePath: string | null = null;
+    let backupMainPath: string | null = null;
+    let backupSidePath: string | null = null;
+    let mainPlaced = false;
+    let sidePlaced = false;
 
     try {
       tempMainPath = await downloadAndVerifyModelFile({
@@ -625,19 +629,56 @@ export async function installMediaPipeModelForModel(
         progress: 1,
       });
 
-      await safelyReplaceMediaPipeModelFile(tempMainPath, targetMainPath);
-      tempMainPath = null;
+      // 1. バックアップ退避: 既存の主菜・副菜ファイルが存在する場合は両方を退避
+      const [existingMain, existingSide] = await Promise.all([
+        getInfoAsync(targetMainPath),
+        getInfoAsync(targetSidePath),
+      ]);
 
-      try {
-        await safelyReplaceMediaPipeModelFile(tempSidePath, targetSidePath);
-        tempSidePath = null;
-      } catch (sideError) {
-        await cleanupFile(targetMainPath);
-        throw sideError;
+      if (existingMain.exists) {
+        backupMainPath = `${targetMainPath}.backup-${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
+        await moveAsync({ from: targetMainPath, to: backupMainPath });
       }
 
+      if (existingSide.exists) {
+        backupSidePath = `${targetSidePath}.backup-${Date.now()}-${Crypto.randomUUID().slice(0, 8)}`;
+        await moveAsync({ from: targetSidePath, to: backupSidePath });
+      }
+
+      // 2. 新ファイルの配置
+      await moveAsync({ from: tempMainPath, to: targetMainPath });
+      mainPlaced = true;
+      tempMainPath = null;
+
+      await moveAsync({ from: tempSidePath, to: targetSidePath });
+      sidePlaced = true;
+      tempSidePath = null;
+
+      // 3. 状態の永続化（両ファイル配置後に ready を記録）
       await persistMediaPipeReadyStateForModel(modelId, version);
+
+      // 4. トランザクション完了: すべて成功したため旧ファイルのバックアップを削除
+      await Promise.all([cleanupFile(backupMainPath), cleanupFile(backupSidePath)]);
+      backupMainPath = null;
+      backupSidePath = null;
     } catch (error) {
+      // ロールバック: 新規配置したファイルを削除し、退避した旧ファイルを復元
+      if (mainPlaced) {
+        await cleanupFile(targetMainPath);
+      }
+      if (sidePlaced) {
+        await cleanupFile(targetSidePath);
+      }
+
+      if (backupMainPath) {
+        await moveAsync({ from: backupMainPath, to: targetMainPath }).catch(() => {});
+        backupMainPath = null;
+      }
+      if (backupSidePath) {
+        await moveAsync({ from: backupSidePath, to: targetSidePath }).catch(() => {});
+        backupSidePath = null;
+      }
+
       const message = toErrorMessage(
         error,
         `${modelMeta.label} model のダウンロードに失敗しました`
@@ -645,7 +686,12 @@ export async function installMediaPipeModelForModel(
       await persistMediaPipeErrorStateForModel(modelId, message, version);
       throw new Error(message);
     } finally {
-      await Promise.all([cleanupFile(tempMainPath), cleanupFile(tempSidePath)]);
+      await Promise.all([
+        cleanupFile(tempMainPath),
+        cleanupFile(tempSidePath),
+        cleanupFile(backupMainPath),
+        cleanupFile(backupSidePath),
+      ]);
     }
     return;
   }
@@ -753,9 +799,9 @@ export async function getMediaPipeModelStatusForModel(
       sidePath ? getInfoAsync(sidePath) : Promise.resolve({ exists: false }),
     ]);
 
-    const modelExists = Boolean(mainInfo.exists && sideInfo.exists);
+    const bothExist = Boolean(mainInfo.exists && sideInfo.exists);
 
-    if (modelExists) {
+    if (bothExist) {
       return {
         kind: 'ready',
         version: persistedVersion ?? modelMeta.version,
@@ -764,6 +810,32 @@ export async function getMediaPipeModelStatusForModel(
         expectedPath: mainPath,
         expectedPaths,
         modelExists: true,
+      };
+    }
+
+    // 片肺状態（片方のみ存在）の処理: 残存ファイルを掃除したうえで kind: 'error'（再ダウンロード案内）を返す
+    const isOneMissing =
+      (mainInfo.exists && !sideInfo.exists) || (!mainInfo.exists && sideInfo.exists);
+    if (isOneMissing) {
+      await Promise.all([
+        mainInfo.exists && mainPath ? cleanupFile(mainPath) : Promise.resolve(),
+        sideInfo.exists && sidePath ? cleanupFile(sidePath) : Promise.resolve(),
+      ]);
+
+      const errorMessage =
+        '主菜・副菜モデルの片方のみが端末に残っていたためクリーンアップしました。モデルを再ダウンロードしてください。';
+      await persistMediaPipeErrorStateForModel(modelId, errorMessage, persistedVersion).catch(
+        () => {}
+      );
+
+      return {
+        kind: 'error',
+        version: persistedVersion,
+        downloadedAt,
+        errorMessage,
+        expectedPath: mainPath,
+        expectedPaths,
+        modelExists: false,
       };
     }
 

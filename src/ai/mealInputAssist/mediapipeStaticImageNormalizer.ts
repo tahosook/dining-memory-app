@@ -340,8 +340,11 @@ export interface SceneDerivationInput {
 }
 
 /**
- * Deterministically derives a scene label from detected main dish and side dishes,
- * mapping to one of the 10 canonical scene types defined in the app.
+ * Deterministically derives a scene label from detected main dish and side dishes.
+ * Matches canonical scene types defined in the app (e.g. 冬の団らん卓上鍋, 休日のあつあつ麺,
+ * おうち居酒屋・晩酌, 定番の和朝食, パンの洋朝食, ワンプレート, 一汁三菜・夕定食, サクッと平日飯).
+ * Note: scene_party_feast (ごちそう宴席パーティー) and scene_weekend_bal (週末おうちバル)
+ * cannot be determined from dishes, sides, and time alone, and are excluded from automatic rule derivation.
  * Returns null if no rule matches.
  */
 export function deriveSceneFromDishes(input: SceneDerivationInput): string | null {
@@ -413,6 +416,11 @@ export function deriveSceneFromDishes(input: SceneDerivationInput): string | nul
 
   if (main && hasSoup && nonSoupSidesCount >= 1) {
     return '一汁三菜・夕定食';
+  }
+
+  // 8. サクッと平日飯: 主菜のみ（該当する副菜の条件に合わない・副菜なし等）
+  if (main) {
+    return 'サクッと平日飯';
   }
 
   return null;
