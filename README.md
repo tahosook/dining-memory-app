@@ -66,7 +66,7 @@ dining-memory-app/
 ## 開発環境セットアップ
 
 ### システム要件
-- Node.js 24.x LTS 推奨
+- Node.js 26.x LTS 推奨
 - Expo SDK 58.x
 - Expo CLI（`npx expo` 推奨）
 - iOS 開発: Xcode

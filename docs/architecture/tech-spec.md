@@ -33,7 +33,7 @@
 - `MealDetail` is a root stack route above the tab shell so Records and Search can open the same detail screen without changing tabs unnecessarily.
 
 ## Runtime Assumptions
-- Local development uses Node.js 24.x LTS as the recommended runtime; CI currently runs Node.js 24.x.
+- Local development uses Node.js 26.x LTS as the recommended runtime; CI currently runs Node.js 26.x.
 - Expo SDK 58 keeps the New Architecture enabled at all times.
 - Android uses Bare Workflow where `android/` is git-tracked. `npx expo prebuild --clean` is prohibited in normal operation to preserve custom native modules (`MealShare*`, `MediaPipe*`) and build configurations. When updating Expo SDK or native dependencies, generate prebuild outputs into a separate workspace and manually merge necessary diffs into `android/`.
 - iOS native builds target iOS 16.4 or newer.
