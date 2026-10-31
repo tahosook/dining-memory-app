@@ -115,12 +115,16 @@ export const MEDIAPIPE_CLASSIFIER_MODELS = {
         # Ensure other model was NOT modified
         self.assertIn("sha256: '2222222222222222222222222222222222222222222222222222222222222222'", updated)
 
-    def test_update_model_config_ts_skips_when_missing(self) -> None:
+    def test_update_model_config_ts_raises_when_missing(self) -> None:
         sample_ts = "export const MEDIAPIPE_CLASSIFIER_MODELS = {};"
         ts_path = self.test_dir / "modelConfig_empty.ts"
         ts_path.write_text(sample_ts, encoding="utf-8")
-        updated = update_model_config_ts(ts_path, "personal_main_dish", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-        self.assertEqual(updated, sample_ts)
+        with self.assertRaises(ValueError):
+            update_model_config_ts(
+                ts_path,
+                "personal_main_dish",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            )
 
     def test_update_ensure_script_sh(self) -> None:
         sample_sh = """

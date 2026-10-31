@@ -109,8 +109,7 @@ def update_model_config_ts(ts_path: Path, model_id: str, new_sha: str) -> str:
         re.DOTALL,
     )
     if not pattern.search(content):
-        print(f"[WARN] Could not find model block for '{model_id}' in {ts_path}. Skipping modelConfig.ts update.")
-        return content
+        raise ValueError(f"Could not find model block for '{model_id}' in {ts_path}")
 
     updated = pattern.sub(rf"\g<1>{new_sha}\g<2>", content)
     return updated
