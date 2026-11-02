@@ -29,18 +29,28 @@ class MediaPipeMealInputAssistModule(
   private val worker: ExecutorService = Executors.newSingleThreadExecutor()
 
   @Volatile
-  private var classifier: ImageClassifier? = null
+  private var classifierSingle: ImageClassifier? = null
 
   @Volatile
-  private var activeModelId: String? = null
+  private var activeSingleModelId: String? = null
+
+  @Volatile
+  private var classifierMain: ImageClassifier? = null
+
+  @Volatile
+  private var classifierSide: ImageClassifier? = null
 
   override fun getName(): String = MODULE_NAME
 
   override fun invalidate() {
     synchronized(this) {
-      classifier?.close()
-      classifier = null
-      activeModelId = null
+      classifierSingle?.close()
+      classifierSingle = null
+      activeSingleModelId = null
+      classifierMain?.close()
+      classifierMain = null
+      classifierSide?.close()
+      classifierSide = null
     }
     worker.shutdown()
     super.invalidate()
@@ -249,19 +259,55 @@ class MediaPipeMealInputAssistModule(
     val spec = MediaPipeMealInputAssistSupport.resolveModelSpec(modelId)
       ?: throw IllegalArgumentException("Unknown MediaPipe model ID: $modelId")
 
-    classifier?.let { existingClassifier ->
-      if (activeModelId == spec.id) {
-        return existingClassifier
+    when (spec.id) {
+      MODEL_ID_PERSONAL_MAIN_DISH -> {
+        classifierSingle?.let {
+          try { it.close() } catch (_: Exception) {}
+          classifierSingle = null
+          activeSingleModelId = null
+        }
+        classifierMain?.let { return it }
+        val created = createClassifier(spec)
+        classifierMain = created
+        return created
       }
-      try {
-        existingClassifier.close()
-      } catch (_: Exception) {
-        // ignore close error
+      MODEL_ID_PERSONAL_SIDE_DISH -> {
+        classifierSingle?.let {
+          try { it.close() } catch (_: Exception) {}
+          classifierSingle = null
+          activeSingleModelId = null
+        }
+        classifierSide?.let { return it }
+        val created = createClassifier(spec)
+        classifierSide = created
+        return created
       }
-      classifier = null
-      activeModelId = null
+      else -> {
+        classifierMain?.let {
+          try { it.close() } catch (_: Exception) {}
+          classifierMain = null
+        }
+        classifierSide?.let {
+          try { it.close() } catch (_: Exception) {}
+          classifierSide = null
+        }
+        if (classifierSingle != null && activeSingleModelId == spec.id) {
+          return classifierSingle!!
+        }
+        classifierSingle?.let {
+          try { it.close() } catch (_: Exception) {}
+          classifierSingle = null
+          activeSingleModelId = null
+        }
+        val created = createClassifier(spec)
+        classifierSingle = created
+        activeSingleModelId = spec.id
+        return created
+      }
     }
+  }
 
+  private fun createClassifier(spec: MediaPipeModelSpec): ImageClassifier {
     val modelFile = MediaPipeMealInputAssistSupport.resolveModelFile(reactApplicationContext, spec)
     if (!modelFile.exists() || !modelFile.isFile || modelFile.length() <= 0L) {
       val seeded = MediaPipeMealInputAssistSupport.copyBundledModelAssetIfAvailable(
@@ -311,10 +357,7 @@ class MediaPipeMealInputAssistModule(
       .setMaxResults(CLASSIFIER_MAX_RESULTS)
       .build()
 
-    return ImageClassifier.createFromOptions(reactApplicationContext, classifierOptions).also { createdClassifier ->
-      classifier = createdClassifier
-      activeModelId = spec.id
-    }
+    return ImageClassifier.createFromOptions(reactApplicationContext, classifierOptions)
   }
 
   private fun buildClassificationResultMap(

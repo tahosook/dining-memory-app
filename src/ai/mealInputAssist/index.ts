@@ -2,6 +2,7 @@ export { defaultMealInputAssistProvider, MockMealInputAssistProvider } from './p
 export { normalizeMealInputAssistResult } from './normalizer';
 export {
   MEDIAPIPE_STATIC_IMAGE_SOURCE,
+  deriveSceneFromDishes,
   normalizeMediaPipeStaticImageResult,
 } from './mediapipeStaticImageNormalizer';
 export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
@@ -33,19 +34,25 @@ export {
   resolveMealInputAssistModelPath,
   resolveMealInputAssistProjectorPath,
   resolveMediaPipeModelPath,
+  resolveMediaPipeModelPaths,
 } from './modelConfig';
 export type { MediaPipeClassifierModelMeta } from './modelConfig';
 
 export {
+  cleanupRetiredMediaPipeModels,
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
   deleteMediaPipeModel,
+  deleteMediaPipeModelForModel,
   getMealInputAssistModelStatus,
   getMediaPipeModelStatus,
+  getMediaPipeModelStatusForModel,
   installMealInputAssistModel,
   installMediaPipeModel,
+  installMediaPipeModelForModel,
   redownloadMealInputAssistModel,
   redownloadMediaPipeModel,
+  redownloadMediaPipeModelForModel,
 } from './modelInstaller';
 export {
   createNoopRuntimeAvailability,

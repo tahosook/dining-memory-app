@@ -43,14 +43,19 @@ CANONICAL_MODELS: Dict[str, Dict[str, str]] = {
         "env_var": "MEDIAPIPE_UNIVERSAL_MODEL_SHA256",
         "gradle_property": "expectedShaUniversal",
     },
-    "personal_multilabel_44tag": {
-        "file_name": "personal_multilabel_44tag.task",
-        "env_var": "MEDIAPIPE_PERSONAL_MODEL_SHA256",
-        "gradle_property": "expectedShaPersonal",
+    "personal_main_dish": {
+        "file_name": "personal_main_dish.task",
+        "env_var": "MEDIAPIPE_PERSONAL_MAIN_MODEL_SHA256",
+        "gradle_property": "expectedShaPersonalMain",
+    },
+    "personal_side_dish": {
+        "file_name": "personal_side_dish.task",
+        "env_var": "MEDIAPIPE_PERSONAL_SIDE_MODEL_SHA256",
+        "gradle_property": "expectedShaPersonalSide",
     },
 }
 
-DEFAULT_RELEASE_TAG = "mediapipe-model-v0.1.0"
+DEFAULT_RELEASE_TAG = "mediapipe-model-v0.2.0"
 MIN_MODEL_BYTES = 1024 * 1024  # 1 MB
 MAX_MODEL_BYTES = 25 * 1024 * 1024  # 25 MB
 

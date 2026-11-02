@@ -84,6 +84,26 @@ export class MediaPipeStaticImageNativeModuleClassifier implements MediaPipeStat
       (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
       DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
 
+    if (activeModelId === 'personal_dual_dish') {
+      if (typeof this.nativeModule.classifyStaticImageWithModel === 'function') {
+        const mainResult = await this.nativeModule.classifyStaticImageWithModel(
+          photoUri,
+          'personal_main_dish'
+        );
+        const sideResult = await this.nativeModule.classifyStaticImageWithModel(
+          photoUri,
+          'personal_side_dish'
+        );
+        return {
+          photoUri,
+          categories: [...(mainResult?.categories ?? []), ...(sideResult?.categories ?? [])],
+          classifierName: 'personal-dual-dish-classifier',
+          modelVersion: 'mediapipe-model-v0.2.0',
+          timestamp: Date.now(),
+        };
+      }
+    }
+
     if (typeof this.nativeModule.classifyStaticImageWithModel === 'function') {
       return this.nativeModule.classifyStaticImageWithModel(photoUri, activeModelId);
     }
@@ -127,18 +147,39 @@ export async function getMediaPipeStaticImageAvailability(
     (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
     DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
 
-  const classifierStatus =
-    typeof nativeModule.getClassifierStatusForModel === 'function'
-      ? await nativeModule.getClassifierStatusForModel(resolvedModelId)
-      : typeof nativeModule.getClassifierStatus === 'function'
-        ? await nativeModule.getClassifierStatus()
-        : { kind: 'unavailable' as const, reason: getMissingBridgeReason() };
+  if (resolvedModelId === 'personal_dual_dish') {
+    if (typeof nativeModule.getClassifierStatusForModel === 'function') {
+      const [statusMain, statusSide] = await Promise.all([
+        nativeModule.getClassifierStatusForModel('personal_main_dish'),
+        nativeModule.getClassifierStatusForModel('personal_side_dish'),
+      ]);
+      if (statusMain.kind === 'unavailable') {
+        return createUnavailableAvailability(
+          getUnavailableCode(statusMain),
+          statusMain.reason ?? getMissingBridgeReason()
+        );
+      }
+      if (statusSide.kind === 'unavailable') {
+        return createUnavailableAvailability(
+          getUnavailableCode(statusSide),
+          statusSide.reason ?? getMissingBridgeReason()
+        );
+      }
+    }
+  } else {
+    const classifierStatus =
+      typeof nativeModule.getClassifierStatusForModel === 'function'
+        ? await nativeModule.getClassifierStatusForModel(resolvedModelId)
+        : typeof nativeModule.getClassifierStatus === 'function'
+          ? await nativeModule.getClassifierStatus()
+          : { kind: 'unavailable' as const, reason: getMissingBridgeReason() };
 
-  if (classifierStatus.kind === 'unavailable') {
-    return createUnavailableAvailability(
-      getUnavailableCode(classifierStatus),
-      classifierStatus.reason ?? getMissingBridgeReason()
-    );
+    if (classifierStatus.kind === 'unavailable') {
+      return createUnavailableAvailability(
+        getUnavailableCode(classifierStatus),
+        classifierStatus.reason ?? getMissingBridgeReason()
+      );
+    }
   }
 
   const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[resolvedModelId];

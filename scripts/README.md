@@ -1,7 +1,7 @@
 # Scripts Catalog (scripts/)
 
 ## Meta
-- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 25 本および共通・ツール 10 本、計 35 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
+- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 32 本および共通・ツール 10 本、計 42 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
 - Audience: ML/パイプライン開発者、保守者、AI エージェント。
 - Update trigger: `scripts/` 配下にスクリプトやテストを追加・変更・削除したとき。
 - Related docs: [docs/engineering/mediapipe-overview.md](../docs/engineering/mediapipe-overview.md), [docs/engineering/context-map.md](../docs/engineering/context-map.md), [docs/engineering/golden-test-set-v2-specification.md](../docs/engineering/golden-test-set-v2-specification.md)
@@ -10,11 +10,11 @@
 
 ## 1. 概要
 
-`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、およびラベル探索を行うためのスクリプト群（計 25 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 10 本）の合計 35 本が配置されています。
+`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、ラベル探索、および食事分類刷新（Step 1 & Step 2）を行うためのスクリプト群（計 32 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 10 本）の合計 42 本が配置されています。
 
 ---
 
-## 2. MediaPipe 関連スクリプト カタログ (全 24 本)
+## 2. MediaPipe 関連スクリプト カタログ (全 32 本)
 
 ### 2.1 モデル学習 & Promotion Gate (4 本)
 
@@ -36,7 +36,7 @@
 
 ---
 
-### 2.3 データ監査 & 採用レジストリ・データセット構築 (9 本)
+### 2.3 データ監査 & 採用レジストリ・データセット構築 (11 本)
 
 | スクリプト名 | 役割 / 責務 | 主要な入力 | 主要な出力 | 実行コマンド例 | 対応テスト |
 |---|---|---|---|---|---|
@@ -49,6 +49,8 @@
 | `integrate_eligible_pseudo_labels.py` | 確定採用疑似ラベル (74枚) を正規学習データセットスプリットへ安全に統合する。 | ベースデータセット、抽出済み疑似ラベル | 統合データセット | `python3 scripts/integrate_eligible_pseudo_labels.py` | `test_integrate_eligible_pseudo_labels.py` |
 | `integrate_agreed_pending_samples.py` | Sample A で両モデル合意した少数クラス実写真 (54枚) を訓練スプリットへ安全に統合する。 | ベースデータセット、Sample A パッケージ | 統合データセット | `python3 scripts/integrate_agreed_pending_samples.py` | `test_integrate_agreed_pending_samples.py` |
 | `build_dual_taxonomy_dataset.py` | 1,007枚の先入観なし視覚観察ログから、①汎用シーン7クラス、②わたし専用8クラス＋11シグネチャタグのデータセットを決定論的構築する。 | オープン観察 JSONL、Golden Test Set | デュアルラベル JSONL/CSV、サマリー JSON、スプリット画像ツリー | `python3 scripts/build_dual_taxonomy_dataset.py` | `test_build_dual_taxonomy_dataset.py` |
+| `build_universal_23class_dataset.py` | オープン観察ログから汎用23クラス分類データセットを構築する。 | 観察ログ JSONL | 23クラス データセット | `python3 scripts/build_universal_23class_dataset.py` | `test_build_universal_23class_dataset.py` |
+| `build_personal_3axis_dataset.py` | 3軸分類（主菜・副菜・主食）データセットを構築する。 | 観察ログ JSONL | 3軸 データセット | `python3 scripts/build_personal_3axis_dataset.py` | `test_build_personal_3axis_dataset.py` |
 
 ---
 
@@ -76,6 +78,18 @@
 
 ---
 
+### 2.6 食事分類刷新パイプライン (Step 1 & Step 2) (5 本)
+
+| スクリプト名 | 役割 / 責務 | 主要な入力 | 主要な出力 | 実行コマンド例 | 対応テスト |
+|---|---|---|---|---|---|
+| `refresh_food_classification_step1.py` | オープン観察ログ (3,391件) から料理名辞書・セッション分割・主菜/副菜マッピングを構築し、未解決候補を決定論的に分類する。 | `observations_all_3391.jsonl`, `mapping_dictionary.json` | `session_splits_manifest.json`, `mapping_dictionary.json` (v2.0.0) | `python3 scripts/refresh_food_classification_step1.py` | `test_refresh_food_classification_step1.py` |
+| `build_personal_dual_dataset.py` | セッション分割マニフェストに基づき、汎用23クラス、主菜16クラス、副菜15クラスの学習・評価用ディレクトリ構造データセットを生成する。 | `session_splits_manifest.json`, `observations_all_3391.jsonl` | `dataset_v2/{universal_dining_23class,personal_main_dish,personal_side_dish}/` | `python3 scripts/build_personal_dual_dataset.py` | `test_build_personal_dual_dataset.py` |
+| `train_refresh_step2_models.py` | MediaPipe Model Maker で EfficientNet-Lite0 / Lite2 をベースに 3 タスク×2 バックボーン（計6モデル）を学習・量子化エクスポートする。 | `dataset_v2/` 配下のデータセット | `.task` モデルバイナリ群 (`state/mediapipe_models/refresh_step2/`) | `python3 scripts/train_refresh_step2_models.py` | `test_train_mediapipe_model.py` 等 |
+| `evaluate_refresh_step2.py` | 学習済み 6 モデルの Test Split および人手確認評価セットに対する Top-1/Top-3 精度、混同行列、閾値キャリブレーション曲線を算出しレポート出力する。 | `.task` モデル群、評価画像群 | `evaluation_results.json`, 混同行列 CSV/MD | `python3 scripts/evaluate_refresh_step2.py` | `test_build_personal_dual_dataset.py` 等 |
+| `verify_observations_integration.py` | 統合観察ログ `observations_all_3391.jsonl` の 13 フィールド完全性、連番連続性、重複排除、画像パス実在性を機械的検証する。 | `observations_all_3391.jsonl`, `blind_w2_mapping.json` | 検証結果 JSON (stdout) | `python3 scripts/verify_observations_integration.py` | `test_verify_observations_integration.py` |
+
+---
+
 ## 3. プロジェクト共通 / ガバナンス / ビルド / ツール関連スクリプト (参考・10 本)
 
 | スクリプト名 | 役割 / 責務 | 主要な用途 | 実行コマンド例 |
@@ -95,11 +109,11 @@
 
 ## 4. テスト対応表 (`scripts/tests/`)
 
-`scripts/tests/` 配下に実在する **全 23 テストスイート（全 303 件のテストケース）** の一覧です。
+`scripts/tests/` 配下に実在する **全 28 テストスイート（全 332 件のテストケース）** の一覧です。
 
 | テストスクリプト名 | テスト件数 | テスト対象スクリプト / モジュール | 主な検証内容 |
 |---|:---:|---|---|
-| `test_publish_mediapipe_model.py` | 8 | `publish_mediapipe_model.py` | モデルバイナリ妥当性検査、4ファイル一括 SHA-256 更新ロジック、部分更新安全性 |
+| `test_publish_mediapipe_model.py` | 11 | `publish_mediapipe_model.py` | モデルバイナリ妥当性検査、4ファイル一括 SHA-256 更新ロジック、部分更新安全性 |
 | `test_promotion_gate_v2.py` | 33 | `run-autonomous-model-improvement.sh` | 二段階昇格判定、Golden Set v2 フェイルクローズ検証、メトリクス完全性、鮮度保証、ディレクトリ整合性 |
 | `test_verify_golden_dataset_v2.py` | 22 | `verify-golden-dataset-v2.py` | Golden Set v2 のマニフェスト整合性、画像破損、SHA256、学習漏洩検知 |
 | `test_reconcile_sample_a_audit.py` | 13 | `reconcile_sample_a_audit.py` | アンブラインド照合、超幾何分布厳密信頼区間、二層採用レジストリ生成 |
@@ -112,6 +126,11 @@
 | `test_integrate_eligible_pseudo_labels.py` | 12 | `integrate_eligible_pseudo_labels.py` | 疑似ラベルのデータセット統合、スプリット保護 |
 | `test_integrate_agreed_pending_samples.py` | 14 | `integrate_agreed_pending_samples.py` | 合意保留 54 枚の統合、Golden Set 漏洩ゼロ検証 |
 | `test_build_dual_taxonomy_dataset.py` | 25 | `build_dual_taxonomy_dataset.py` | 汎用7クラス・わたし専用8クラス＋11シグネチャタグ構築、重複拒否、Golden Set フェイルクローズ検証（トラバーサルエラー・不正 split 検知・漏洩防止） |
+| `test_build_universal_23class_dataset.py` | 8 | `build_universal_23class_dataset.py` | 汎用23クラスデータセット生成、クラス分類、ディレクトリ構造検証 |
+| `test_build_personal_3axis_dataset.py` | 7 | `build_personal_3axis_dataset.py` | 3軸（主菜・副菜・主食）データセット生成、アノテーション分割検証 |
+| `test_refresh_food_classification_step1.py` | 5 | `refresh_food_classification_step1.py` | 料理名正規化、セッションクラスタリング、主菜・副菜ルール分類、25件未解決分類 |
+| `test_build_personal_dual_dataset.py` | 3 | `build_personal_dual_dataset.py` | 汎用23・主菜16・副菜15データセット生成、holdout 除外、シンボリックリンク/コピー整合性 |
+| `test_verify_observations_integration.py` | 3 | `verify_observations_integration.py` | 観察ログ13フィールド完全性、ID連続性、重複検知、パス存在検証 |
 | `test_dataset_safety_guards.py` | 17 | `dataset_safety_guards.py` | パストラバーサル拒否、アトミックスワップ、削除保護 |
 | `test_explore_food_labels.py` | 36 | `explore-food-labels.py` | プロンプト生成、主料理抽出、crop refinement ロジック |
 | `test_analyze_food_labels.py` | 4 | `analyze-food-labels.py` | レポート集計、未知・不均衡の検出、CSV 出力 |
@@ -122,13 +141,13 @@
 | `test_mediapipe_labeling_loop.py` | 12 | `mediapipe_labeling_loop.py` | ループ制御、executor 連携、停止条件 |
 | `test_generate_github_status.py` | 14 | `generate_github_status.py` | GitHub ステータス生成ユーティリティ |
 | `test_train_mediapipe_model.py` | 4 | `train-mediapipe-model.py` | MobileNet V2 仕様生成、KerasLayer ハンドリング、パラメータ検証 |
-| **合計** | **295** | — | — |
+| **合計** | **332** | — | — |
 
 ---
 
 ## 5. テスト実行方法
 
-Python テストスイート（全 295 件）は、標準ライブラリ `unittest` で実行可能です。
+Python テストスイート（全 332 件）は、標準ライブラリ `unittest` で実行可能です。
 ```bash
 python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 # または npm スクリプト
@@ -136,5 +155,5 @@ npm run test:python:fast
 ```
 
 > **Note**:
-> - `npm run test:python:fast` は標準ライブラリのみで動作する軽量テスト群（全 295 件）を実行し、CI（GitHub Actions）および `npm run verify` で自動実行されます。`npm run test:python` は将来の重い ML 統合テストの拡張用に準備されています。
+> - `npm run test:python:fast` は標準ライブラリのみで動作する軽量テスト群（全 332 件）を実行し、CI（GitHub Actions）および `npm run verify` で自動実行されます。`npm run test:python` は将来の重い ML 統合テストの拡張用に準備されています。
 > - `run-autonomous-model-improvement.sh` 内の評価コマンドは `EVALUATE_MODEL_CMD`（デフォルト: `uv run --python .venv_mediapipe python scripts/evaluate-mediapipe-model.py`）で制御されます。テスト時は環境変数でモック評価スクリプトを注入できるため、CI 上で `.venv_mediapipe` や重い ML 依存関係がなくても独立してゲート検証が可能です。

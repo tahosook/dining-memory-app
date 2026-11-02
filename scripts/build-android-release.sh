@@ -101,7 +101,8 @@ compute_sha256_stream() {
 MODEL_FILENAMES=(
   "meal-input-assist.task"
   "universal_dining_23class.task"
-  "personal_multilabel_44tag.task"
+  "personal_main_dish.task"
+  "personal_side_dish.task"
 )
 expected_sha256_for_model() {
   local model_file="$1"
@@ -110,10 +111,13 @@ expected_sha256_for_model() {
       echo "${MEDIAPIPE_MODEL_SHA256:-3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601}"
       ;;
     "universal_dining_23class.task")
-      echo "${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-39c14ffa40a53c6e23aa53c6e0d2ec5a45cce9d4e4f5543cc35c1b2509686e4b}"
+      echo "${MEDIAPIPE_UNIVERSAL_MODEL_SHA256:-37fb1f5a8580ef53cdcd813495c9fccee383145076ded003abed5373a0092df2}"
       ;;
-    "personal_multilabel_44tag.task")
-      echo "${MEDIAPIPE_PERSONAL_MODEL_SHA256:-b6cb09574bd034cef43546d3808f82ff28b3a67369f19069aa5c7cbb61e9c971}"
+    "personal_main_dish.task")
+      echo "${MEDIAPIPE_PERSONAL_MAIN_MODEL_SHA256:-2559d4cf62558ac7e736ea7c261382038eec5b0547bed7911c9b92ea4ee11bf9}"
+      ;;
+    "personal_side_dish.task")
+      echo "${MEDIAPIPE_PERSONAL_SIDE_MODEL_SHA256:-703b45489b434634b48a5b2358f880876c4db791a90258e5781c977a8d34967b}"
       ;;
     *)
       echo "error: unknown MediaPipe model file: $model_file" >&2

@@ -1,4 +1,5 @@
 import {
+  deriveSceneFromDishes,
   normalizeMealInputAssistResult,
   normalizeMediaPipeStaticImageResult,
 } from '../src/ai/mealInputAssist';
@@ -285,21 +286,24 @@ describe('normalizeMediaPipeStaticImageResult', () => {
   test('normalizes personal 3-axis multi-label categories and synthesizes noteDraft', () => {
     const normalized = normalizeMediaPipeStaticImageResult({
       photoUri: 'file:///tmp/personal-3axis-photo.jpg',
+      timestamp: new Date(2026, 9, 31, 19, 0, 0),
       categories: [
         { label: 'main_pork_ginger_stirfry', score: 0.35 },
-        { label: 'side_simmered_pumpkin', score: 0.22 },
-        { label: 'side_tonjiru_soup', score: 0.18 },
-        { label: 'scene_teishoku_multi_dish', score: 0.25 },
-        // Below threshold category
-        { label: 'side_kinpira', score: 0.02 },
+        { label: 'side_simmered_pumpkin', score: 0.28 },
+        { label: 'side_tonjiru_soup', score: 0.24 },
+        { label: 'side_none', score: 0.15 },
+        // Below threshold category (< 0.20)
+        { label: 'side_kinpira', score: 0.12 },
       ],
-      classifierName: 'personal-44tag-classifier',
-      modelVersion: 'v1.0.0',
+      classifierName: 'personal-dual-dish-classifier',
+      modelVersion: 'v2.0.0',
     });
     const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
 
     expect(normalized.providerResult.mealNames).toEqual([
       { value: '生姜焼き・豚肉炒め定食', confidence: 0.35 },
+      { value: 'かぼちゃの煮物', confidence: 0.28 },
+      { value: '具だくさん豚汁', confidence: 0.24 },
     ]);
     expect(normalized.providerResult.cuisineTypes).toEqual([{ value: '和食', confidence: 0.35 }]);
     expect(normalized.providerResult.noteDraft).toEqual({
@@ -307,9 +311,141 @@ describe('normalizeMediaPipeStaticImageResult', () => {
         'かぼちゃの煮物と具だくさん豚汁がついた生姜焼き。一汁三菜・夕定食スタイルのごはんです。',
       confidence: 0.35,
     });
-    expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual(['生姜焼き・豚肉炒め定食']);
+    expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual([
+      '生姜焼き・豚肉炒め定食',
+      'かぼちゃの煮物',
+      '具だくさん豚汁',
+    ]);
     expect(reviewSuggestions.noteDraft?.value).toBe(
       'かぼちゃの煮物と具だくさん豚汁がついた生姜焼き。一汁三菜・夕定食スタイルのごはんです。'
+    );
+  });
+
+  test('excludes side_none and enforces side threshold 0.20 and main threshold 0.30', () => {
+    const normalized = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/threshold-test.jpg',
+      timestamp: new Date(2026, 9, 31, 12, 0, 0),
+      categories: [
+        // Main below threshold (< 0.30)
+        { label: 'main_hamburg', score: 0.28 },
+        // Side none should be completely excluded even with high confidence
+        { label: 'side_none', score: 0.85 },
+        // Side dish above threshold (>= 0.20)
+        { label: 'side_salad_greens', score: 0.4 },
+        // Side dish below threshold (< 0.20)
+        { label: 'side_cut_fruit', score: 0.18 },
+      ],
+    });
+    const reviewSuggestions = normalizeMealInputAssistResult(normalized.providerResult);
+
+    expect(normalized.providerResult.mealNames).toEqual([{ value: 'サラダ', confidence: 0.4 }]);
+    expect(reviewSuggestions.mealNames.map(c => c.value)).toEqual(['サラダ']);
+    expect(normalized.providerResult.cuisineTypes).toEqual([]);
+    expect(reviewSuggestions.noteDraft?.value).toBe('サラダが並ぶ食卓です。');
+  });
+
+  test('falls back safely to empty suggestions when both main and side are below threshold', () => {
+    const lowConfidence = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/low-confidence.jpg',
+      timestamp: new Date(2026, 9, 31, 12, 0, 0),
+      categories: [
+        { label: 'main_ramen', score: 0.25 },
+        { label: 'side_miso_soup', score: 0.15 },
+        { label: 'side_none', score: 0.4 },
+      ],
+    });
+
+    expect(lowConfidence.providerResult.mealNames).toEqual([]);
+    expect(lowConfidence.providerResult.cuisineTypes).toEqual([]);
+    expect(lowConfidence.providerResult.noteDraft).toBeUndefined();
+
+    const reviewSuggestions = normalizeMealInputAssistResult(lowConfidence.providerResult);
+    expect(reviewSuggestions.mealNames).toEqual([]);
+    expect(reviewSuggestions.cuisineTypes).toEqual([]);
+    expect(reviewSuggestions.noteDraft).toBeNull();
+  });
+
+  test('derives scene deterministically from dishes according to rule engine', () => {
+    // 1. Hotpot
+    const hotpot = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/hotpot.jpg',
+      timestamp: new Date(2026, 9, 31, 19, 0, 0),
+      categories: [{ label: 'main_hotpot', score: 0.6 }],
+    });
+    expect(normalizeMealInputAssistResult(hotpot.providerResult).noteDraft?.value).toBe(
+      '鍋料理。冬の団らん卓上鍋スタイルのごはんです。'
+    );
+
+    // 2. Noodles
+    const ramen = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/ramen.jpg',
+      timestamp: new Date(2026, 9, 31, 12, 0, 0),
+      categories: [{ label: 'main_ramen', score: 0.7 }],
+    });
+    expect(normalizeMealInputAssistResult(ramen.providerResult).noteDraft?.value).toBe(
+      'ラーメン。休日のあつあつ麺スタイルのごはんです。'
+    );
+
+    // 3. One plate curry
+    const curry = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/curry.jpg',
+      timestamp: new Date(2026, 9, 31, 12, 0, 0),
+      categories: [
+        { label: 'main_curry_hayashi', score: 0.8 },
+        { label: 'side_salad_greens', score: 0.3 },
+      ],
+    });
+    expect(normalizeMealInputAssistResult(curry.providerResult).noteDraft?.value).toBe(
+      'サラダがついたカレーライス。ワンプレートスタイルのごはんです。'
+    );
+
+    // 4. Izakaya
+    const izakaya = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/izakaya.jpg',
+      timestamp: new Date(2026, 9, 31, 20, 0, 0),
+      categories: [
+        { label: 'main_sashimi_seafood', score: 0.65 },
+        { label: 'side_izakaya_appetizer', score: 0.4 },
+      ],
+    });
+    expect(normalizeMealInputAssistResult(izakaya.providerResult).noteDraft?.value).toBe(
+      'おつまみ小鉢がついたお刺身。おうち居酒屋・晩酌スタイルのごはんです。'
+    );
+
+    // 5. Japanese breakfast
+    const breakfast = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/breakfast.jpg',
+      timestamp: new Date(2026, 9, 31, 8, 0, 0),
+      categories: [
+        { label: 'main_grilled_fish', score: 0.5 },
+        { label: 'side_natto_pack', score: 0.45 },
+      ],
+    });
+    expect(normalizeMealInputAssistResult(breakfast.providerResult).noteDraft?.value).toBe(
+      '納豆がついた焼き魚。定番の和朝食スタイルのごはんです。'
+    );
+
+    // 6. Western breakfast (morning, side_salad_greens, no main)
+    const westernBreakfast = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/western-breakfast.jpg',
+      timestamp: new Date(2026, 9, 31, 8, 0, 0),
+      categories: [
+        { label: 'side_salad_greens', score: 0.45 },
+        { label: 'side_cut_fruit', score: 0.35 },
+      ],
+    });
+    expect(normalizeMealInputAssistResult(westernBreakfast.providerResult).noteDraft?.value).toBe(
+      'サラダとカットフルーツが並ぶ食卓。パンの洋朝食スタイルのごはんです。'
+    );
+
+    // 7. Quick single meal (main only, no sides)
+    const quickSingle = normalizeMediaPipeStaticImageResult({
+      photoUri: 'file:///tmp/quick-single.jpg',
+      timestamp: new Date(2026, 9, 31, 12, 0, 0),
+      categories: [{ label: 'main_pork_ginger_stirfry', score: 0.45 }],
+    });
+    expect(normalizeMealInputAssistResult(quickSingle.providerResult).noteDraft?.value).toBe(
+      '生姜焼き。サクッと平日飯スタイルのごはんです。'
     );
   });
 
@@ -317,6 +453,7 @@ describe('normalizeMediaPipeStaticImageResult', () => {
     // Only side and scene
     const sideOnly = normalizeMediaPipeStaticImageResult({
       photoUri: 'file:///tmp/side-only.jpg',
+      timestamp: new Date(2026, 9, 31, 19, 0, 0),
       categories: [
         { label: 'side_simmered_pumpkin', score: 0.45 },
         { label: 'side_tonjiru_soup', score: 0.3 },
@@ -327,18 +464,20 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       'かぼちゃの煮物と具だくさん豚汁が並ぶ食卓。一汁三菜・夕定食スタイルのごはんです。'
     );
 
-    // Only main dish
+    // Only main dish (resolves to quick_single_meal scene)
     const mainOnly = normalizeMediaPipeStaticImageResult({
       photoUri: 'file:///tmp/main-only.jpg',
+      timestamp: new Date(2026, 9, 31, 12, 0, 0),
       categories: [{ label: 'main_hamburg', score: 0.5 }],
     });
     expect(normalizeMealInputAssistResult(mainOnly.providerResult).noteDraft?.value).toBe(
-      'ハンバーグの食卓です。'
+      'ハンバーグ。サクッと平日飯スタイルのごはんです。'
     );
 
     // Only side dishes (no main, no scene) -> must not produce "食卓の食卓"
     const sideOnlyNoScene = normalizeMediaPipeStaticImageResult({
       photoUri: 'file:///tmp/side-no-scene.jpg',
+      timestamp: new Date(2026, 9, 31, 12, 0, 0),
       categories: [
         { label: 'side_miso_soup', score: 0.45 },
         { label: 'side_kinpira', score: 0.35 },
@@ -348,5 +487,75 @@ describe('normalizeMediaPipeStaticImageResult', () => {
       ?.value;
     expect(sideDraft).toBe('お味噌汁ときんぴらごぼうが並ぶ食卓です。');
     expect(sideDraft).not.toContain('食卓の食卓');
+  });
+});
+
+describe('deriveSceneFromDishes', () => {
+  test('derives 8 supported scene types and returns null for unmatched or excluded scenes', () => {
+    // 1. Hotpot
+    expect(deriveSceneFromDishes({ mainDishLabel: 'main_hotpot' })).toBe('冬の団らん卓上鍋');
+
+    // 2. Noodles
+    expect(deriveSceneFromDishes({ mainDishLabel: 'main_ramen' })).toBe('休日のあつあつ麺');
+    expect(deriveSceneFromDishes({ mainDishLabel: 'main_japanese_noodles' })).toBe(
+      '休日のあつあつ麺'
+    );
+
+    // 3. Izakaya
+    expect(deriveSceneFromDishes({ mainDishLabel: 'main_sashimi_seafood' })).toBe(
+      'おうち居酒屋・晩酌'
+    );
+    expect(
+      deriveSceneFromDishes({
+        sideDishLabels: ['side_tofu_hiyayakko'],
+        timestamp: new Date(2026, 9, 31, 20, 0, 0),
+      })
+    ).toBe('おうち居酒屋・晩酌');
+
+    // 4. Japanese breakfast
+    expect(
+      deriveSceneFromDishes({
+        mainDishLabel: 'main_grilled_fish',
+        timestamp: new Date(2026, 9, 31, 8, 0, 0),
+      })
+    ).toBe('定番の和朝食');
+    expect(deriveSceneFromDishes({ sideDishLabels: ['side_natto_pack'] })).toBe('定番の和朝食');
+
+    // 5. Western breakfast
+    expect(
+      deriveSceneFromDishes({
+        sideDishLabels: ['side_salad_greens'],
+        timestamp: new Date(2026, 9, 31, 8, 0, 0),
+      })
+    ).toBe('パンの洋朝食');
+
+    // 6. One plate
+    expect(deriveSceneFromDishes({ mainDishLabel: 'main_curry_hayashi' })).toBe('ワンプレート');
+
+    // 7. Teishoku multi dish
+    expect(
+      deriveSceneFromDishes({
+        mainDishLabel: 'main_grilled_fish',
+        sideDishLabels: ['side_miso_soup', 'side_kinpira'],
+        timestamp: new Date(2026, 9, 31, 19, 0, 0),
+      })
+    ).toBe('一汁三菜・夕定食');
+
+    // 8. Quick single meal (main only or sides not matching teishoku conditions)
+    expect(
+      deriveSceneFromDishes({
+        mainDishLabel: 'main_pork_ginger_stirfry',
+        timestamp: new Date(2026, 9, 31, 12, 0, 0),
+      })
+    ).toBe('サクッと平日飯');
+
+    // Excluded or unmatched (e.g. side only not matching breakfast/izakaya, scene_party_feast/scene_weekend_bal)
+    expect(
+      deriveSceneFromDishes({
+        sideDishLabels: ['side_miso_soup'],
+        timestamp: new Date(2026, 9, 31, 12, 0, 0),
+      })
+    ).toBeNull();
+    expect(deriveSceneFromDishes({})).toBeNull();
   });
 });
