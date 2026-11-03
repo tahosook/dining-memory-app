@@ -156,6 +156,56 @@ if [[ "$REQUIRE_BUNDLED_MODEL" == "true" ]]; then
   done
 fi
 
+if [[ "$BUILD_OUTPUT_TYPE" == "release" || "$BUILD_TASK" == *"Release"* ]]; then
+  echo "Verifying EAS Update configuration and runtimeVersion alignment..."
+  APP_JSON_PATH="$ROOT_DIR/app.json"
+  STRINGS_XML_PATH="$ANDROID_DIR/app/src/main/res/values/strings.xml"
+  MANIFEST_PATH="$ANDROID_DIR/app/src/main/AndroidManifest.xml"
+
+  if [[ ! -f "$APP_JSON_PATH" ]]; then
+    echo "error: app.json is missing at $APP_JSON_PATH" >&2
+    exit 1
+  fi
+  APP_RUNTIME_VERSION="$(node -e 'const c = require(process.argv[1]); process.stdout.write(String(c?.expo?.runtimeVersion ?? ""));' "$APP_JSON_PATH")"
+  if [[ -z "$APP_RUNTIME_VERSION" ]]; then
+    echo "error: 'expo.runtimeVersion' is missing or empty in $APP_JSON_PATH" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$STRINGS_XML_PATH" ]]; then
+    echo "error: strings.xml is missing at $STRINGS_XML_PATH" >&2
+    exit 1
+  fi
+  STRINGS_RUNTIME_VERSION="$(grep -E '<string[^>]*name="expo_runtime_version"[^>]*>' "$STRINGS_XML_PATH" | sed -E 's/.*<string[^>]*>([^<]+)<\/string>.*/\1/' | tr -d '[:space:]')"
+  if [[ -z "$STRINGS_RUNTIME_VERSION" ]]; then
+    echo "error: 'expo_runtime_version' string resource is missing in $STRINGS_XML_PATH" >&2
+    exit 1
+  fi
+
+  if [[ "$APP_RUNTIME_VERSION" != "$STRINGS_RUNTIME_VERSION" ]]; then
+    echo "error: runtimeVersion mismatch! app.json ($APP_RUNTIME_VERSION) != strings.xml ($STRINGS_RUNTIME_VERSION)" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$MANIFEST_PATH" ]]; then
+    echo "error: AndroidManifest.xml is missing at $MANIFEST_PATH" >&2
+    exit 1
+  fi
+  if ! grep -q 'android:name="expo.modules.updates.ENABLED" android:value="true"' "$MANIFEST_PATH"; then
+    echo "error: 'expo.modules.updates.ENABLED' must be 'true' in $MANIFEST_PATH" >&2
+    exit 1
+  fi
+  if ! grep -q 'android:name="expo.modules.updates.EXPO_UPDATE_URL"' "$MANIFEST_PATH"; then
+    echo "error: 'expo.modules.updates.EXPO_UPDATE_URL' meta-data is missing in $MANIFEST_PATH" >&2
+    exit 1
+  fi
+  if ! grep -q 'android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"' "$MANIFEST_PATH"; then
+    echo "error: 'expo.modules.updates.EXPO_RUNTIME_VERSION' must reference '@string/expo_runtime_version' in $MANIFEST_PATH" >&2
+    exit 1
+  fi
+  echo "  ✓ EAS Update configuration and runtimeVersion verified ($APP_RUNTIME_VERSION)"
+fi
+
 echo "Building Android $BUILD_VARIANT_LABEL APK..."
 echo "Artifacts will be stored in: $ARTIFACT_DIR"
 

@@ -27,6 +27,7 @@
 - [開発ワークフロー](docs/engineering/development-workflow.md): review and verification workflow
 - [GitHub セキュリティ設定](docs/engineering/github-security-settings.md): CodeQL、Dependabot、Secret scanning、branch protection、Actions permissions の運用手順
 - [リリース署名鍵ガイドライン](docs/engineering/release-keystore-guidelines.md): Android 本番リリース署名鍵の生成・保管・注入手順
+- [EAS Update ガイドライン](docs/engineering/eas-update-guidelines.md): OTA (EAS Update) 緊急配信の運用基準、公開・ロールバック手順、互換性保護
 - [依存関係管理ポリシー](docs/engineering/dependency-policy.md): 依存関係の4層分類、Expo SDK アップグレード手順、Dependabot 運用方針、ネイティブ互換性ゲート
 - [MediaPipe システム概要](docs/engineering/mediapipe-overview.md): MediaPipe 食事分類システム全体の鳥瞰図、正本管理、開発者 Runbook
 - [Golden Test Set v2 仕様](docs/engineering/golden-test-set-v2-specification.md): MediaPipe 食事分類 Golden Test Set v2 (106枚) の仕様と運用方法
@@ -210,3 +211,19 @@ npm run install:android:release
 ```
 
 ✅ どちらも一度端末にインストールすれば USB ケーブル不要で単体で動作します。開発サーバーなしでも全機能が利用可能です。
+
+## OTA アップデート（EAS Update）
+JS/TS のみの修正や文言・スタイル修正は、160MB の APK を再ビルド・再インストールすることなく、EAS Update（無料枠 1,000 MAU / 月）経由で OTA 配信できます。
+詳細な運用基準やロールバック手順は [EAS Update ガイドライン](docs/engineering/eas-update-guidelines.md) を参照してください。
+
+### 配信前チェック
+```bash
+npm run update:check
+```
+※ ネイティブコード（`android/`）やネイティブ依存パッケージ（Tier 1）が変更されている場合は自動的にエラーとなり、配信がブロックされます。
+
+### アップデート公開
+```bash
+npm run update:publish -- --message "Fix: 食事詳細画面のメモ下書きプレビュー修正"
+```
+端末側では次回起動時にバックグラウンドで自動適用されるほか、「設定」画面 ＞「アプリ情報」セクションの「アプリの更新を確認」ボタンから即座に適用することも可能です。

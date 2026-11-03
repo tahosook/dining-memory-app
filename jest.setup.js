@@ -79,5 +79,61 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+// Expo Updates mock
+const mockUpdatesState = {
+  isEnabled: false,
+  isEmbeddedLaunch: true,
+  updateId: null,
+  channel: null,
+  runtimeVersion: null,
+};
+
+jest.mock('expo-updates', () => ({
+  get isEnabled() {
+    return mockUpdatesState.isEnabled;
+  },
+  set isEnabled(val) {
+    mockUpdatesState.isEnabled = val;
+  },
+  get isEmbeddedLaunch() {
+    return mockUpdatesState.isEmbeddedLaunch;
+  },
+  set isEmbeddedLaunch(val) {
+    mockUpdatesState.isEmbeddedLaunch = val;
+  },
+  get updateId() {
+    return mockUpdatesState.updateId;
+  },
+  set updateId(val) {
+    mockUpdatesState.updateId = val;
+  },
+  get channel() {
+    return mockUpdatesState.channel;
+  },
+  set channel(val) {
+    mockUpdatesState.channel = val;
+  },
+  get runtimeVersion() {
+    return mockUpdatesState.runtimeVersion;
+  },
+  set runtimeVersion(val) {
+    mockUpdatesState.runtimeVersion = val;
+  },
+  checkForUpdateAsync: jest.fn(async () => ({ isAvailable: false })),
+  fetchUpdateAsync: jest.fn(async () => ({ isNew: false })),
+  reloadAsync: jest.fn(async () => {}),
+  __setMockUpdates: (overrides) => {
+    Object.assign(mockUpdatesState, overrides);
+  },
+  __resetMockUpdates: () => {
+    mockUpdatesState.isEnabled = false;
+    mockUpdatesState.isEmbeddedLaunch = true;
+    mockUpdatesState.updateId = null;
+    mockUpdatesState.channel = null;
+    mockUpdatesState.runtimeVersion = null;
+  },
+}));
+
+
 
 

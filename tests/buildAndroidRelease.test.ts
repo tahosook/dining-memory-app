@@ -122,8 +122,32 @@ describe('build-android-release.sh and MediaPipe Model Bundling Verification', (
     const mockAndroidDir = path.join(testCaseDir, 'android');
     const mockAssetsDir = path.join(mockAndroidDir, 'app/src/main/assets/mediapipe');
     const mockArtifactDir = path.join(testCaseDir, 'artifacts');
+    const mockValuesDir = path.join(mockAndroidDir, 'app/src/main/res/values');
+    const mockManifestDir = path.join(mockAndroidDir, 'app/src/main');
     fs.mkdirSync(mockAssetsDir, { recursive: true });
     fs.mkdirSync(mockArtifactDir, { recursive: true });
+    fs.mkdirSync(mockValuesDir, { recursive: true });
+    fs.mkdirSync(mockManifestDir, { recursive: true });
+
+    // Mock app.json, strings.xml, and AndroidManifest.xml for EAS Update verification
+    fs.writeFileSync(
+      path.join(testCaseDir, 'app.json'),
+      JSON.stringify({ expo: { runtimeVersion: '1.0.0' } })
+    );
+    fs.writeFileSync(
+      path.join(mockValuesDir, 'strings.xml'),
+      '<resources><string name="expo_runtime_version">1.0.0</string></resources>'
+    );
+    fs.writeFileSync(
+      path.join(mockManifestDir, 'AndroidManifest.xml'),
+      `<manifest package="com.anonymous.diningmemory">
+        <application>
+          <meta-data android:name="expo.modules.updates.ENABLED" android:value="true" />
+          <meta-data android:name="expo.modules.updates.EXPO_UPDATE_URL" android:value="https://u.expo.dev/mock" />
+          <meta-data android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version" />
+        </application>
+      </manifest>`
+    );
 
     // Dummy payloads for the 4 models
     const dummyPayloads: Record<string, string> = {
@@ -534,5 +558,68 @@ ${mappingScriptCommands}${
     // Verify no temporary files or corrupted model remain
     const remainingFiles = fs.readdirSync(mockModelDir);
     expect(remainingFiles).toHaveLength(0);
+  });
+
+  describe('EAS Update configuration verification in build scripts and Gradle', () => {
+    test('verifies android/app/build.gradle registers verifyReleaseExpoUpdatesConfig and connects to mergeReleaseAssets', () => {
+      const buildGradlePath = path.resolve(__dirname, '../android/app/build.gradle');
+      const buildGradleContent = fs.readFileSync(buildGradlePath, 'utf-8');
+
+      expect(buildGradleContent).toContain('tasks.register("verifyReleaseExpoUpdatesConfig")');
+      expect(buildGradleContent).toContain('expo_runtime_version');
+      expect(buildGradleContent).toContain('app.json');
+      expect(buildGradleContent).toContain('runtimeVersion');
+      expect(buildGradleContent).toMatch(
+        /tasks\.matching\s*\{\s*it\.name\s*==\s*"mergeReleaseAssets"\s*\}\.configureEach\s*\{\s*dependsOn\s*"verifyReleaseExpoUpdatesConfig"\s*\}/
+      );
+    });
+
+    test('verifies proguard-rules.pro preserves expo.modules.updates classes', () => {
+      const proguardPath = path.resolve(__dirname, '../android/app/proguard-rules.pro');
+      const proguardContent = fs.readFileSync(proguardPath, 'utf-8');
+
+      expect(proguardContent).toContain('-keep class expo.modules.updates.** { *; }');
+    });
+
+    test('verifies build-android-release.sh validates runtimeVersion synchronization', () => {
+      const releaseScriptContent = fs.readFileSync(releaseScript, 'utf-8');
+
+      expect(releaseScriptContent).toContain(
+        'Verifying EAS Update configuration and runtimeVersion alignment'
+      );
+      expect(releaseScriptContent).toContain('expo_runtime_version');
+      expect(releaseScriptContent).toContain('runtimeVersion mismatch! app.json');
+    });
+
+    test('fails verification when app.json and strings.xml runtimeVersion do not match', () => {
+      const mockProjectDir = path.join(tempTestDir, 'mismatch-test');
+      const mockAndroidRes = path.join(mockProjectDir, 'android/app/src/main/res/values');
+      fs.mkdirSync(mockAndroidRes, { recursive: true });
+
+      fs.writeFileSync(
+        path.join(mockProjectDir, 'app.json'),
+        JSON.stringify({ expo: { runtimeVersion: '1.0.0' } })
+      );
+      fs.writeFileSync(
+        path.join(mockAndroidRes, 'strings.xml'),
+        '<resources><string name="expo_runtime_version">2.0.0</string></resources>'
+      );
+
+      // Run inline bash snippet matching build-android-release.sh logic
+      const checkScript = `
+        APP_JSON="${mockProjectDir}/app.json"
+        STRINGS_XML="${mockAndroidRes}/strings.xml"
+        APP_JSON_RUNTIME=$(node -e "const c = require('$APP_JSON'); console.log(c.expo?.runtimeVersion || '');")
+        STRINGS_RUNTIME=$(grep -o '<string name="expo_runtime_version"[^>]*>[^<]*</string>' "$STRINGS_XML" | sed -e 's/<[^>]*>//g' | tr -d '[:space:]')
+        if [ "$APP_JSON_RUNTIME" != "$STRINGS_RUNTIME" ]; then
+          echo "error: runtimeVersion mismatch" >&2
+          exit 1
+        fi
+      `;
+
+      const res = spawnSync('bash', ['-c', checkScript], { encoding: 'utf-8' });
+      expect(res.status).toBe(1);
+      expect(res.stderr).toContain('error: runtimeVersion mismatch');
+    });
   });
 });

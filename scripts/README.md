@@ -1,7 +1,7 @@
 # Scripts Catalog (scripts/)
 
 ## Meta
-- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 32 本および共通・ツール 10 本、計 42 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
+- Purpose: `scripts/` 配下に実在する全スクリプト群（MediaPipe 関連 32 本および共通・ツール 11 本、計 43 本）の役割、入出力、実行例、および対応テストスイートを一覧化するカタログ。
 - Audience: ML/パイプライン開発者、保守者、AI エージェント。
 - Update trigger: `scripts/` 配下にスクリプトやテストを追加・変更・削除したとき。
 - Related docs: [docs/engineering/mediapipe-overview.md](../docs/engineering/mediapipe-overview.md), [docs/engineering/context-map.md](../docs/engineering/context-map.md), [docs/engineering/golden-test-set-v2-specification.md](../docs/engineering/golden-test-set-v2-specification.md)
@@ -10,7 +10,7 @@
 
 ## 1. 概要
 
-`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、ラベル探索、および食事分類刷新（Step 1 & Step 2）を行うためのスクリプト群（計 32 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 10 本）の合計 42 本が配置されています。
+`scripts/` には、MediaPipe 食事分類モデルの学習・評価・配布、疑似ラベルのブラインド監査・採用、データセット検証、ラベル探索、および食事分類刷新（Step 1 & Step 2）を行うためのスクリプト群（計 32 本）と、プロジェクト共通の CI・ガバナンス・ビルド・保守用スクリプト群（計 11 本）の合計 43 本が配置されています。
 
 ---
 
@@ -90,11 +90,12 @@
 
 ---
 
-## 3. プロジェクト共通 / ガバナンス / ビルド / ツール関連スクリプト (参考・10 本)
+## 3. プロジェクト共通 / ガバナンス / ビルド / ツール関連スクリプト (参考・11 本)
 
 | スクリプト名 | 役割 / 責務 | 主要な用途 | 実行コマンド例 |
 |---|---|---|---|
 | `verify-pr-gates.sh` | PR 作成時の機械的ガバナンス（差分ゼロ拒否、テスト削除拒否、Evidence Gate 等）を検証する。 | CI / ローカル PR 事前検査 | `bash ./scripts/verify-pr-gates.sh` |
+| `verify-ota-compatibility.sh` | OTA (EAS Update) 配信前にネイティブファイル変更やネイティブ依存を検査し、不適合な更新を遮断する。 | CI / OTA 配信事前検査 (`npm run update:check`) | `bash ./scripts/verify-ota-compatibility.sh` |
 | `check-docs.cjs` | ドキュメントのリンク切れ、メタ情報、Canonical docs 整合性を機械的検査する。 | CI (`npm run check:docs`) | `node ./scripts/check-docs.cjs` |
 | `check-react-versions.cjs` | `react` と `react-dom` のバージョン一致を機械的検査する。 | CI (`npm run check:react-versions`) | `node ./scripts/check-react-versions.cjs` |
 | `build-android-release.sh` | Android リリース APK のビルドと同梱モデル検証を行う。 | ローカル / CI ビルド (`npm run build:android:release`) | `bash ./scripts/build-android-release.sh` |

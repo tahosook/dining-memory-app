@@ -34,7 +34,9 @@
     "type-check": "tsc --noEmit",
     "verify:quick": "npm run type-check && npm run lint && jest --onlyChanged --passWithNoTests",
     "verify:pr-gates": "bash ./scripts/verify-pr-gates.sh",
-    "verify": "npm run verify:pr-gates && npm run check:react-versions && npm run check:deps && npm run check:docs && npm run format:check && npm run lint && npm run type-check && npm run check:expo-doctor && npm test && npm run test:python:fast"
+    "verify": "npm run verify:pr-gates && npm run check:react-versions && npm run check:deps && npm run check:docs && npm run format:check && npm run lint && npm run type-check && npm run check:expo-doctor && npm test && npm run test:python:fast",
+    "update:check": "bash ./scripts/verify-ota-compatibility.sh",
+    "update:publish": "bash ./scripts/verify-ota-compatibility.sh && npx --yes eas-cli update --branch production --platform android"
   },
   "dependencies": {
     "@bam.tech/react-native-image-resizer": "^3.0.11",
@@ -59,6 +61,7 @@
     "expo-sqlite": "~58.0.15",
     "expo-status-bar": "~58.0.4",
     "expo-system-ui": "~58.0.7",
+    "expo-updates": "~58.0.20",
     "llama.rn": "^0.12.9",
     "piexifjs": "^1.0.6",
     "react": "19.3.0",

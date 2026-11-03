@@ -1,4 +1,5 @@
 import Constants, { ExecutionEnvironment } from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { Platform } from 'react-native';
 
 // Build environment detection
@@ -77,4 +78,65 @@ function formatBuildDate(date: Date): string {
   const hour = String(date.getHours()).padStart(2, '0');
   const minute = String(date.getMinutes()).padStart(2, '0');
   return `${year}-${month}-${day} ${hour}:${minute}`;
+}
+
+// EAS Update runtime version
+export function getRuntimeVersion(): string | null {
+  if (Updates.runtimeVersion) {
+    return Updates.runtimeVersion;
+  }
+  const configRuntime = Constants.expoConfig?.runtimeVersion;
+  if (typeof configRuntime === 'string') {
+    return configRuntime;
+  }
+  return null;
+}
+
+// EAS Update channel
+export function getUpdateChannel(): string | null {
+  return Updates.channel || null;
+}
+
+// EAS Update launch summary
+export function getUpdateSummary(): string {
+  if (__DEV__ || !Updates.isEnabled) {
+    return 'Disabled (開発環境)';
+  }
+  if (Updates.isEmbeddedLaunch) {
+    return 'Embedded (ビルド同梱)';
+  }
+  if (Updates.updateId) {
+    return `OTA (${Updates.updateId.substring(0, 8)})`;
+  }
+  return 'Embedded (ビルド同梱)';
+}
+
+// Check if OTA update is enabled in current runtime
+export function isUpdatesEnabled(): boolean {
+  return Updates.isEnabled && !__DEV__;
+}
+
+// Manual check and apply OTA update helper
+export async function checkAndApplyOtaUpdate(): Promise<{
+  status: 'no_update' | 'applied' | 'disabled' | 'error';
+  error?: string;
+}> {
+  if (!isUpdatesEnabled()) {
+    return { status: 'disabled' };
+  }
+
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (!update.isAvailable) {
+      return { status: 'no_update' };
+    }
+    await Updates.fetchUpdateAsync();
+    await Updates.reloadAsync();
+    return { status: 'applied' };
+  } catch (error) {
+    return {
+      status: 'error',
+      error: error instanceof Error ? error.message : '更新の確認中にエラーが発生しました。',
+    };
+  }
 }

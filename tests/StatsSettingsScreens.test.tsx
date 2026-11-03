@@ -33,6 +33,12 @@ import {
 } from '../src/ai/mealInputAssist/modelConfig';
 import { getMediaPipeStaticImageAvailability } from '../src/ai/mealInputAssist/mediapipeStaticImageProvider';
 import { getMealInputAssistEnvironmentRevision } from '../src/ai/mealInputAssist/environment';
+import {
+  checkAndApplyOtaUpdate,
+  isUpdatesEnabled,
+  getRuntimeVersion,
+  getUpdateSummary,
+} from '../src/utils/buildInfo';
 
 let consoleErrorSpy: jest.SpiedFunction<typeof console.error>;
 
@@ -89,6 +95,10 @@ jest.mock('../src/utils/buildInfo', () => ({
   getExpoSdkVersion: jest.fn(() => '56.0.0'),
   getGitCommitHash: jest.fn(() => 'a1b2c3d'),
   getIosBuildNumber: jest.fn(() => null),
+  getRuntimeVersion: jest.fn(() => '1.0.0'),
+  getUpdateSummary: jest.fn(() => 'Embedded (ビルド同梱)'),
+  isUpdatesEnabled: jest.fn(() => false),
+  checkAndApplyOtaUpdate: jest.fn(async () => ({ status: 'no_update' })),
 }));
 
 function createDeferred<T>() {
@@ -1218,5 +1228,81 @@ describe('SettingsScreen', () => {
       selected: false,
     });
     expect(queryByTestId('mediapipe-model-recovery-notice')).toBeNull();
+  });
+
+  describe('EAS Update UI in SettingsScreen', () => {
+    test('displays Runtime Version and Update summary in App Info section', async () => {
+      (getRuntimeVersion as jest.Mock).mockReturnValue('1.0.0-ota-test');
+      (getUpdateSummary as jest.Mock).mockReturnValue('OTA (a1b2c3d4)');
+      (isUpdatesEnabled as jest.Mock).mockReturnValue(false);
+
+      const { findByText, queryByTestId } = render(<SettingsScreen />);
+      await triggerLatestFocus();
+
+      expect(await findByText('アプリ情報')).toBeTruthy();
+      expect(await findByText('Runtime Version')).toBeTruthy();
+      expect(await findByText('1.0.0-ota-test')).toBeTruthy();
+      expect(await findByText('Update')).toBeTruthy();
+      expect(await findByText('OTA (a1b2c3d4)')).toBeTruthy();
+      expect(queryByTestId('settings-check-update-button')).toBeNull();
+    });
+
+    test('renders manual check button and updates successfully when updates enabled', async () => {
+      (getRuntimeVersion as jest.Mock).mockReturnValue('1.0.0');
+      (getUpdateSummary as jest.Mock).mockReturnValue('Embedded (ビルド同梱)');
+      (isUpdatesEnabled as jest.Mock).mockReturnValue(true);
+      (checkAndApplyOtaUpdate as jest.Mock).mockResolvedValue({ status: 'applied' });
+
+      const { getByTestId, findByText } = render(<SettingsScreen />);
+      await triggerLatestFocus();
+
+      const button = getByTestId('settings-check-update-button');
+      expect(button).toBeTruthy();
+      expect(await findByText('アプリの更新を確認')).toBeTruthy();
+
+      fireEvent.press(button);
+
+      await waitFor(() => {
+        expect(checkAndApplyOtaUpdate).toHaveBeenCalledTimes(1);
+        expect(Alert.alert).toHaveBeenCalledWith('更新完了', '新しいアップデートを適用しました。');
+      });
+    });
+
+    test('notifies user when app is already up to date', async () => {
+      (isUpdatesEnabled as jest.Mock).mockReturnValue(true);
+      (checkAndApplyOtaUpdate as jest.Mock).mockResolvedValue({ status: 'no_update' });
+
+      const { getByTestId } = render(<SettingsScreen />);
+      await triggerLatestFocus();
+
+      fireEvent.press(getByTestId('settings-check-update-button'));
+
+      await waitFor(() => {
+        expect(checkAndApplyOtaUpdate).toHaveBeenCalledTimes(1);
+        expect(Alert.alert).toHaveBeenCalledWith(
+          '最新の状態です',
+          '利用可能なアップデートはありません。'
+        );
+      });
+    });
+
+    test('handles check update error alert', async () => {
+      (isUpdatesEnabled as jest.Mock).mockReturnValue(true);
+      (checkAndApplyOtaUpdate as jest.Mock).mockResolvedValue({
+        status: 'error',
+        error: 'Network timeout',
+      });
+
+      const { getByTestId } = render(<SettingsScreen />);
+      await triggerLatestFocus();
+
+      fireEvent.press(getByTestId('settings-check-update-button'));
+
+      await waitFor(() => {
+        expect(checkAndApplyOtaUpdate).toHaveBeenCalledTimes(1);
+        expect(Alert.alert).toHaveBeenCalledWith('更新確認エラー', 'Network timeout');
+        expect(Alert.alert).not.toHaveBeenCalledWith('最新の状態です', expect.anything());
+      });
+    });
   });
 });
