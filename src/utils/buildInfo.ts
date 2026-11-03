@@ -118,7 +118,7 @@ export function isUpdatesEnabled(): boolean {
 
 // Manual check and apply OTA update helper
 export async function checkAndApplyOtaUpdate(): Promise<{
-  status: 'no_update' | 'applied' | 'disabled';
+  status: 'no_update' | 'applied' | 'disabled' | 'error';
   error?: string;
 }> {
   if (!isUpdatesEnabled()) {
@@ -135,7 +135,7 @@ export async function checkAndApplyOtaUpdate(): Promise<{
     return { status: 'applied' };
   } catch (error) {
     return {
-      status: 'no_update',
+      status: 'error',
       error: error instanceof Error ? error.message : '更新の確認中にエラーが発生しました。',
     };
   }

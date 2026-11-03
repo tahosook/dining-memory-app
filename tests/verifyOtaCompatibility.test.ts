@@ -166,6 +166,38 @@ describe('verify-ota-compatibility.sh', () => {
     expect(res.stderr).toContain('eas.json');
   });
 
+  test('fails when app.json native configuration is modified', () => {
+    const repoDir = setupTestRepo('app-json-change-test');
+    fs.writeFileSync(
+      path.join(repoDir, 'app.json'),
+      JSON.stringify(
+        {
+          expo: {
+            name: 'dining-memory',
+            runtimeVersion: '1.0.0',
+            plugins: ['expo-camera'],
+          },
+        },
+        null,
+        2
+      )
+    );
+    spawnSync('git', ['commit', '-am', 'add plugin in app.json'], {
+      cwd: repoDir,
+      encoding: 'utf-8',
+    });
+
+    const res = spawnSync('bash', [scriptPath, '--base', 'HEAD~1'], {
+      cwd: repoDir,
+      env: { ...process.env, ROOT_DIR: repoDir },
+      encoding: 'utf-8',
+    });
+
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Native-sensitive files were modified');
+    expect(res.stderr).toContain('app.json');
+  });
+
   test('fails when native dependency is added or modified in package.json', () => {
     const repoDir = setupTestRepo('native-dep-test');
     fs.writeFileSync(

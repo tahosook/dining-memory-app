@@ -113,7 +113,7 @@ if [[ -z "$CHANGED_FILES" ]]; then
 fi
 
 # 4. Check for static native file changes
-STATIC_NATIVE_PATTERN='^(android/|package-lock\.json$|app\.config\..*|babel\.config\..*|metro\.config\..*|eas\.json$)'
+STATIC_NATIVE_PATTERN='^(android/|package-lock\.json$|app\.json$|app\.config\..*|babel\.config\..*|metro\.config\..*|eas\.json$)'
 NATIVE_MATCHES="$(echo "$CHANGED_FILES" | grep -E "$STATIC_NATIVE_PATTERN" || true)"
 
 if [[ -n "$NATIVE_MATCHES" ]]; then
@@ -163,7 +163,7 @@ if echo "$CHANGED_FILES" | grep -q '^package\.json$'; then
 
     let baseObj = {};
     try {
-      const baseRaw = cp.execSync(`git -C "${root}" show "${baseRef}:package.json"`, { encoding: "utf8" });
+      const baseRaw = cp.execFileSync("git", ["-C", root, "show", `${baseRef}:package.json`], { encoding: "utf8" });
       baseObj = JSON.parse(baseRaw);
     } catch (_) {
       baseObj = {};

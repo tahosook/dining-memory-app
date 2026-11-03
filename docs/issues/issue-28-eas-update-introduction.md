@@ -76,10 +76,10 @@ flowchart TD
    - EAS Build を使わないローカル Gradle ビルドではビルド時に動的チャンネル注入が行われないため、`android/app/src/main/AndroidManifest.xml` の meta-data `expo.modules.updates.UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY` に `{"expo-channel-name":"production"}` を明示指定。
 2. **2重の整合性検証ゲート**:
    - ビルド時: `android/app/build.gradle` の `verifyReleaseExpoUpdatesConfig` タスクおよび `scripts/build-android-release.sh` により、`app.json` と `strings.xml` の `runtimeVersion` 一致を検証。
-   - 配信時: `scripts/verify-ota-compatibility.sh`（`npm run update:check`）により、差分内の `android/`、`package-lock.json`、Tier 1 ネイティブパッケージ混入を物理的にブロック。
+   - 配信時: `scripts/verify-ota-compatibility.sh`（`npm run update:check`）により、差分内の `android/`、`package-lock.json`、`app.json`、Tier 1 ネイティブパッケージ混入を物理的にブロック。
 3. **ユーザー体験への配慮**:
    - `fallbackToCacheTimeout: 0` により、起動時のネットワーク待機によるブラックスクリーンを回避。
-   - 設定画面の「アプリ情報」セクションに `Runtime Version`、`Update`（Embedded または OTA ID）、および手動更新確認ボタンを追加。
+   - 設定画面の「アプリ情報」セクションに `Runtime Version`、`Update`（Embedded または OTA ID）、および手動更新確認ボタンを追加（更新確認エラー時は排他的にエラーアラートのみを表示し、最新状態との重複表示を防止）。
 
 ---
 
@@ -106,7 +106,7 @@ flowchart TD
   - `tests/buildInfo.test.ts`: EAS Update ヘルパーテスト（35件 PASS）。
   - `tests/StatsSettingsScreens.test.tsx`: 設定画面 EAS Update 表示・更新確認テスト（39件 PASS）。
   - `tests/buildAndroidRelease.test.ts`: Gradle タスクおよびリリーススクリプト同期テスト（21件 PASS）。
-  - `tests/verifyOtaCompatibility.test.ts`: OTA 互換性ゲートのユニットテスト（8件 PASS）。
+  - `tests/verifyOtaCompatibility.test.ts`: OTA 互換性ゲートのユニットテスト（9件 PASS）。
 - **ドキュメント**:
   - `docs/engineering/eas-update-guidelines.md`: 運用 Runbook・線引き基準。
   - `docs/issues/issue-28-eas-update-introduction.md`: 本仕様書。
@@ -120,7 +120,7 @@ flowchart TD
 - `npx jest tests/buildInfo.test.ts`: 35 passed, 0 failed (PASS)
 - `npx jest tests/StatsSettingsScreens.test.tsx`: 39 passed, 0 failed (PASS)
 - `npx jest tests/buildAndroidRelease.test.ts`: 21 passed, 0 failed (PASS)
-- `npx jest tests/verifyOtaCompatibility.test.ts`: 8 passed, 0 failed (PASS)
+- `npx jest tests/verifyOtaCompatibility.test.ts`: 9 passed, 0 failed (PASS)
 
 ---
 

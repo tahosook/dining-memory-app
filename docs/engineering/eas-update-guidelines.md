@@ -29,7 +29,7 @@ EAS Update は JavaScript / TypeScript コードおよび Metro がバンドル�
 | **ネイティブ依存の追加・変更** (`expo-*`, `react-native-*`, `llama.rn`) | ❌ **不可** | `runtimeVersion` をバンプし、APK ローカル再ビルド |
 | **Android 設定変更** (`android/*`, `AndroidManifest.xml`, `build.gradle`) | ❌ **不可** | `runtimeVersion` をバンプし、APK ローカル再ビルド |
 | **Expo SDK バージョンアップ** | ❌ **不可** | `runtimeVersion` をバンプし、APK ローカル再ビルド |
-| **ビルド設定** (`app.config.js`, `babel.config.js`, `metro.config.js`) | ❌ **不可** | `runtimeVersion` をバンプし、APK ローカル再ビルド |
+| **ビルド設定・ネイティブ構成** (`app.json`, `app.config.js`, `babel.config.js`, `metro.config.js`, `eas.json`) | ❌ **不可** | `runtimeVersion` をバンプし、APK ローカル再ビルド |
 | **AI モデルファイル更新** (`assets/mediapipe/*.task`) | ❌ **不可** | APK 同梱アセットまたはリモートモデル配布パイプライン |
 
 > [!WARNING]

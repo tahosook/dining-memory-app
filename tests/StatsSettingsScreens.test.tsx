@@ -1289,7 +1289,7 @@ describe('SettingsScreen', () => {
     test('handles check update error alert', async () => {
       (isUpdatesEnabled as jest.Mock).mockReturnValue(true);
       (checkAndApplyOtaUpdate as jest.Mock).mockResolvedValue({
-        status: 'no_update',
+        status: 'error',
         error: 'Network timeout',
       });
 
@@ -1301,6 +1301,7 @@ describe('SettingsScreen', () => {
       await waitFor(() => {
         expect(checkAndApplyOtaUpdate).toHaveBeenCalledTimes(1);
         expect(Alert.alert).toHaveBeenCalledWith('更新確認エラー', 'Network timeout');
+        expect(Alert.alert).not.toHaveBeenCalledWith('最新の状態です', expect.anything());
       });
     });
   });

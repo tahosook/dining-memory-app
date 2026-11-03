@@ -394,7 +394,7 @@ describe('buildInfo utilities', () => {
           );
 
           const res = await checkAndApplyOtaUpdate();
-          expect(res).toEqual({ status: 'no_update', error: 'Network offline' });
+          expect(res).toEqual({ status: 'error', error: 'Network offline' });
         } finally {
           (global as any).__DEV__ = originalDev;
         }
