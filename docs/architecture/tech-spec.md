@@ -12,7 +12,7 @@
 - Android Bare Workflow (`android/` is tracked in Git with custom Kotlin modules, MediaPipe, llama.rn)
 - Local SQLite storage with a lightweight in-memory fallback for web and tests
 - React Navigation bottom tabs
-- Expo Camera, expo-image-picker, expo-file-system, expo-location, expo-media-library, and related native modules
+- Expo Camera, expo-image-picker, expo-file-system, expo-location, expo-media-library, expo-updates, and related native modules
 
 ## Architecture Principles
 - Offline-first by default.
@@ -68,6 +68,7 @@
 - UI should remain usable on both iOS and Android without platform-specific forks unless necessary.
 - Search, records, and stats should refresh when a tab regains focus so the capture flow never leaves stale data on screen.
 - 内部バックアップ・復元（Issue #63）は、大容量写真によるメモリ圧迫を避けるためネイティブストリーミング ZIP 圧縮・解凍（`react-native-zip-archive`）を採用し、OS 共有シート（`expo-sharing`）およびファイル選択（`expo-document-picker`）を介して端末ローカルで完結する。復元時は一時ディレクトリでのマニフェスト・データ・写真ファイルの完全検証を行い、ユーザー確認後にのみ SQLite トランザクションで既存データを置換する。
+- EAS Update（`expo-updates` / Issue #52）は、JS/TS のみの緊急修正を 160MB の APK 再ビルド・再インストールなしに OTA 配信するために導入する。ビルドはローカル Gradle（EAS Build 非利用）を維持し、EAS Update Free Plan（月間 1,000 MAU 枠）内で運用する。Bare Workflow 環境でのネイティブ互換性保護のため、`runtimeVersion`（`app.json` と `strings.xml`）の完全一致、`scripts/verify-ota-compatibility.sh` によるネイティブ変更の自動ブロック、および `fallbackToCacheTimeout: 0` による起動時ブラックアウト防止を徹底する。設定画面には Runtime Version・Update 状態表示および手動更新確認ボタンを備える。運用詳細は [docs/engineering/eas-update-guidelines.md](../engineering/eas-update-guidelines.md) を参照。
 
 ## Security and Privacy Defaults
 - Prefer local storage and local processing unless a feature clearly needs external transfer.

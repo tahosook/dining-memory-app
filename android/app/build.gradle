@@ -276,3 +276,58 @@ tasks.register("verifyReleaseMediaPipeModelAsset") {
 tasks.matching { it.name == "mergeReleaseAssets" }.configureEach {
     dependsOn "verifyReleaseMediaPipeModelAsset"
 }
+tasks.matching { it.name == "mergeReleaseAssets" }.configureEach {
+    dependsOn "verifyReleaseExpoUpdatesConfig"
+}
+
+// Verify EAS Update configuration and runtimeVersion alignment before packaging release builds
+tasks.register("verifyReleaseExpoUpdatesConfig") {
+    def appJsonFile = file("${projectRoot}/app.json")
+    def stringsXmlFile = file("src/main/res/values/strings.xml")
+    def manifestFile = file("src/main/AndroidManifest.xml")
+
+    inputs.files(appJsonFile, stringsXmlFile, manifestFile)
+    outputs.file(layout.buildDirectory.file("intermediates/expo-updates-verified.marker"))
+
+    doLast {
+        if (!appJsonFile.exists()) {
+            throw new GradleException("Release build failed: app.json is missing at '${appJsonFile.absolutePath}'.")
+        }
+        def appJson = new groovy.json.JsonSlurper().parse(appJsonFile)
+        def appRuntimeVersion = appJson?.expo?.runtimeVersion
+        if (!appRuntimeVersion) {
+            throw new GradleException("Release build failed: 'expo.runtimeVersion' is missing or empty in app.json.")
+        }
+
+        if (!stringsXmlFile.exists()) {
+            throw new GradleException("Release build failed: strings.xml is missing at '${stringsXmlFile.absolutePath}'.")
+        }
+        def stringsXmlText = stringsXmlFile.text
+        def runtimeVersionMatcher = stringsXmlText =~ /<string[^>]*name=["']expo_runtime_version["'][^>]*>([^<]+)<\/string>/
+        if (!runtimeVersionMatcher.find()) {
+            throw new GradleException("Release build failed: 'expo_runtime_version' string resource is missing in '${stringsXmlFile.absolutePath}'.")
+        }
+        def stringsRuntimeVersion = runtimeVersionMatcher.group(1).trim()
+        if (stringsRuntimeVersion != appRuntimeVersion.toString().trim()) {
+            throw new GradleException("Release build failed: runtimeVersion mismatch! app.json (${appRuntimeVersion}) != strings.xml (${stringsRuntimeVersion}).")
+        }
+
+        if (!manifestFile.exists()) {
+            throw new GradleException("Release build failed: AndroidManifest.xml is missing at '${manifestFile.absolutePath}'.")
+        }
+        def manifestText = manifestFile.text
+        if (!manifestText.contains('android:name="expo.modules.updates.ENABLED" android:value="true"')) {
+            throw new GradleException("Release build failed: 'expo.modules.updates.ENABLED' must be 'true' in AndroidManifest.xml.")
+        }
+        if (!manifestText.contains('android:name="expo.modules.updates.EXPO_UPDATE_URL"')) {
+            throw new GradleException("Release build failed: 'expo.modules.updates.EXPO_UPDATE_URL' meta-data is missing in AndroidManifest.xml.")
+        }
+        if (!manifestText.contains('android:name="expo.modules.updates.EXPO_RUNTIME_VERSION" android:value="@string/expo_runtime_version"')) {
+            throw new GradleException("Release build failed: 'expo.modules.updates.EXPO_RUNTIME_VERSION' must reference '@string/expo_runtime_version' in AndroidManifest.xml.")
+        }
+
+        def marker = layout.buildDirectory.file("intermediates/expo-updates-verified.marker").get().asFile
+        marker.parentFile.mkdirs()
+        marker.text = "verified at ${System.currentTimeMillis()}"
+    }
+}

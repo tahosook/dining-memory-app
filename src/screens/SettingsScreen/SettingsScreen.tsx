@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import {
+  checkAndApplyOtaUpdate,
   getAndroidVersionCode,
   getAppVersion,
   getBuildDate,
@@ -18,6 +19,9 @@ import {
   getExpoSdkVersion,
   getGitCommitHash,
   getIosBuildNumber,
+  getRuntimeVersion,
+  getUpdateSummary,
+  isUpdatesEnabled,
 } from '../../utils/buildInfo';
 import {
   DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
@@ -77,6 +81,7 @@ export default function SettingsScreen() {
   const [modelDownloadProgress, setModelDownloadProgress] =
     useState<MealInputAssistModelDownloadProgress | null>(null);
   const [backupActionState, setBackupActionState] = useState<BackupActionState>('idle');
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [showAiDetails, setShowAiDetails] = useState(false);
   const [selectedMediaPipeModelId, setSelectedMediaPipeModelId] =
     useState<MediaPipeClassifierModelId>(DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID);
@@ -506,6 +511,29 @@ export default function SettingsScreen() {
           : 'バックアップの読み込みに失敗しました。';
       Alert.alert('インポート失敗', message);
       setBackupActionState('idle');
+    }
+  }, []);
+
+  const handleCheckUpdate = useCallback(async () => {
+    setCheckingUpdate(true);
+    try {
+      const result = await checkAndApplyOtaUpdate();
+      if (result.status === 'applied') {
+        Alert.alert('更新完了', '新しいアップデートを適用しました。');
+      } else if (result.status === 'no_update') {
+        Alert.alert('最新の状態です', '利用可能なアップデートはありません。');
+      } else if (result.status === 'disabled') {
+        Alert.alert('確認不可', '開発環境またはスタンドアロンビルド外では更新を確認できません。');
+      }
+      if (result.error) {
+        Alert.alert('更新確認エラー', result.error);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '更新の確認中にエラーが発生しました。';
+      Alert.alert('更新確認エラー', message);
+    } finally {
+      setCheckingUpdate(false);
     }
   }, []);
 
@@ -965,6 +993,26 @@ export default function SettingsScreen() {
         <BuildInfoRow label="Commit" value={getGitCommitHash()} />
         <BuildInfoRow label="Built" value={getBuildDate()} />
         <BuildInfoRow label="Expo SDK" value={getExpoSdkVersion()} />
+        <BuildInfoRow label="Runtime Version" value={getRuntimeVersion()} />
+        <BuildInfoRow label="Update" value={getUpdateSummary()} />
+        {isUpdatesEnabled() ? (
+          <TouchableOpacity
+            style={[
+              styles.secondaryButton,
+              styles.checkUpdateButton,
+              checkingUpdate && styles.actionButtonDisabled,
+            ]}
+            onPress={handleCheckUpdate}
+            disabled={checkingUpdate}
+            testID="settings-check-update-button"
+          >
+            {checkingUpdate ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <Text style={styles.secondaryButtonText}>アプリの更新を確認</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
         <Text style={styles.metaText}>端末内保存を基本にした食事記録アプリ</Text>
       </Section>
     </ScrollView>
@@ -1528,6 +1576,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 10,
     alignItems: 'center',
+  },
+  checkUpdateButton: {
+    marginTop: 8,
   },
   secondaryButtonText: {
     color: Colors.text,

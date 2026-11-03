@@ -37,3 +37,7 @@
 
 # Dining Memory custom native modules
 -keep class com.tahosook.diningmemory.** { *; }
+
+# expo-updates (OTA update manifest parsing, Room database, and state machine)
+-keep class expo.modules.updates.** { *; }
+

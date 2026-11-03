@@ -65,7 +65,7 @@ Dependabot の通常更新からは **完全に `ignore`** します。
 | パッケージ名 | 分類 | 判断理由 |
 | :--- | :--- | :--- |
 | `expo` | Expo Core | Expo SDK の基盤。個別更新不可。`npx expo upgrade` で管理。 |
-| `expo-*` (全15パッケージ)<br>*(camera, file-system, image-picker, sqlite 等)* | Expo Native Modules | Expo SDK と 1対1 でネイティブ実装が結合。メジャー更新は新 SDK 向け。 |
+| `expo-*` (全16パッケージ)<br>*(camera, file-system, image-picker, sqlite, updates 等)* | Expo Native Modules | Expo SDK と 1対1 でネイティブ実装が結合。メジャー更新は新 SDK 向け。 |
 | `@expo/vector-icons` | Expo Asset | Expo SDK のバンドルアイコンアセット。 |
 | `react`, `react-dom` | Core Runtime | Expo SDK 58 が指定する React 19.3.0 に固定。 |
 | `react-native` | Core Runtime | Expo SDK 58 が指定する React Native 0.88.1 に固定。 |
@@ -266,6 +266,11 @@ CI での自動実行に加え、以下のいずれかに該当する PR / コ�
 2. `android/` ディレクトリ配下のネイティブ設定・Gradle スクリプトの変更
 3. Expo SDK のアップグレード
 4. Android Permission や File System 関連のネイティブ契約変更
+
+### OTA (EAS Update) 互換性ゲート
+EAS Update による OTA 配信では、端末側のネイティブ実装と配信 JS コードの完全な整合性が要求されます。
+- `npm run update:check`（`scripts/verify-ota-compatibility.sh`）により、Tier 1 ネイティブ依存、`android/` 配下、ビルド設定ファイル（`babel.config.js`, `metro.config.js`, `eas.json` 等）に変更があるコミットの OTA 配信を機械的に遮断します。
+- ネイティブ変更を伴う場合は、`app.json` および `strings.xml` の `runtimeVersion` をバンプし、ローカルフルビルド（`npm run release:android`）を実施します（詳細は [docs/engineering/eas-update-guidelines.md](eas-update-guidelines.md) を参照）。
 
 ---
 

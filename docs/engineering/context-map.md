@@ -83,9 +83,9 @@
 - Generated / state files: `state/mediapipe_labeling_state.json`, `state/mediapipe_labeling_runs/`
 - Reading boundaries: `state/` 配下の全件走査は行わず、対象の run や state ファイルのみを参照する。タスクで明示されない限り generated state は編集しない。
 
-### Expo / Android / Build
-- Read first: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md)
-- Common files: `app.json`, `eas.json`, `metro.config.js`, `babel.config.js`, `android/app/build.gradle`, `.github/workflows/ci.yml`
+### Expo / Android / Build / OTA Update
+- Read first: [README.md](../../README.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/engineering/release-keystore-guidelines.md](release-keystore-guidelines.md), [docs/engineering/eas-update-guidelines.md](eas-update-guidelines.md)
+- Common files: `app.json`, `eas.json`, `metro.config.js`, `babel.config.js`, `android/app/build.gradle`, `scripts/verify-ota-compatibility.sh`, `scripts/build-android-release.sh`, `.github/workflows/ci.yml`
 - If dependency or runtime assumptions change, also read `package.json`, `package-lock.json`, [docs/engineering/development-workflow.md](development-workflow.md), and [docs/engineering/dependency-policy.md](dependency-policy.md)
 
 ### Tests / CI / Quality
