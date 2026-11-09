@@ -89,11 +89,11 @@
     "jest": "~30.5.2",
     "jest-environment-jsdom": "~30.5.1",
     "jest-expo": "~58.0.14",
-    "knip": "^6.44.0",
+    "knip": "^6.44.1",
     "prettier": "^3.9.10",
     "react-native-web": "~0.21.4",
     "react-test-renderer": "19.3.0",
-    "semver": "^7.8.5",
+    "semver": "^7.8.6",
     "typescript": "~6.0.3"
   },
   "expo": {
