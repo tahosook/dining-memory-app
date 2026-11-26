@@ -270,11 +270,11 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     try {
       const updatedMeal = await MealService.updateMeal(editingMeal.id, {
         meal_name: editDraft.mealName,
-        cuisine_type: editDraft.cuisineType || undefined,
-        location_name: editDraft.location || undefined,
-        notes: editDraft.notes || undefined,
+        cuisine_type: editDraft.cuisineType.trim() || null,
+        location_name: editDraft.location.trim() || null,
+        notes: editDraft.notes.trim() || null,
         is_homemade: editDraft.isHomemade,
-        cooking_level: editDraft.isHomemade ? editDraft.cookingLevel || undefined : undefined,
+        cooking_level: editDraft.isHomemade ? editDraft.cookingLevel || null : null,
         ...(editMealInputAssist.appliedMetadata
           ? {
               ai_confidence: editMealInputAssist.appliedMetadata.aiConfidence,
