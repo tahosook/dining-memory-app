@@ -853,5 +853,52 @@ describe('mealThumbnail', () => {
 
       warnSpy.mockRestore();
     });
+
+    test('sanitizes photo paths in warning logs when original photo is missing or inspection throws', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+
+      try {
+        (MealService.getMealById as jest.Mock).mockResolvedValueOnce(
+          createMockMeal({
+            id: 'meal-1',
+            photo_path: 'file:///Users/alice/Documents/meal-missing.jpg',
+          })
+        );
+        (getInfoAsync as jest.Mock).mockResolvedValueOnce({ exists: false });
+        const missingResult = await ensureMealThumbnail(
+          'meal-1',
+          'file:///Users/alice/Documents/meal-missing.jpg'
+        );
+        expect(missingResult).toBeNull();
+        expect(warnSpy).toHaveBeenCalledWith(
+          'Original photo does not exist for meal thumbnail generation:',
+          'file://.../meal-missing.jpg'
+        );
+
+        warnSpy.mockClear();
+
+        (MealService.getMealById as jest.Mock).mockResolvedValueOnce(
+          createMockMeal({
+            id: 'meal-2',
+            photo_path: 'file:///Users/alice/Documents/meal-unreadable.jpg',
+          })
+        );
+        (getInfoAsync as jest.Mock).mockRejectedValueOnce(new Error('Permission error'));
+        const errorResult = await ensureMealThumbnail(
+          'meal-2',
+          'file:///Users/alice/Documents/meal-unreadable.jpg'
+        );
+        expect(errorResult).toBeNull();
+        expect(warnSpy).toHaveBeenCalledWith(
+          'Failed to verify original photo for meal thumbnail generation:',
+          'file://.../meal-unreadable.jpg'
+        );
+
+        const serializedLogs = warnSpy.mock.calls.flat().map(arg => String(arg));
+        expect(serializedLogs.join(' ')).not.toContain('/Users/alice');
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 });

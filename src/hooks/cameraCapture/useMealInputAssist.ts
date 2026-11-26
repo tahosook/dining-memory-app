@@ -37,6 +37,7 @@ import {
 } from '../../ai/mealInputAssist/types';
 import type { CaptureReviewEditableField, CaptureReviewState } from './useCameraCapture';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 type CaptureReviewField = CaptureReviewEditableField;
 
@@ -184,7 +185,7 @@ export function useMealInputAssist({
 
           return environment;
         } catch (error) {
-          console.error('Failed to load AI input assist environment:', error);
+          console.error('Failed to load AI input assist environment:', sanitizeLogObject(error));
 
           const fallbackEnvironment = createMealInputAssistEnvironmentLoadFailure();
 
@@ -269,7 +270,7 @@ export function useMealInputAssist({
         }
       })
       .catch(error => {
-        console.error('Failed to load AI input assist setting:', error);
+        console.error('Failed to load AI input assist setting:', sanitizeLogObject(error));
         if (!cancelled) {
           setIsAiInputAssistEnabled(false);
         }
@@ -346,57 +347,60 @@ export function useMealInputAssist({
       return;
     }
 
-    isRunningRef.current = true;
-    requestStartedAtRef.current = Date.now();
-    setProgressState({
-      stage: 'preparing',
-      message: 'AI 入力補助の準備をしています。',
-      progress: 0.02,
-      estimatedRemainingMs: 60000,
-    });
-    const environment = await getRequestEnvironment();
-    const nextPolicy =
-      policy ??
-      createMealInputAssistPolicy({
-        isEnabled: environment.isAiInputAssistEnabled,
-        runtimeAvailability: environment.runtimeAvailability,
-      });
-    const nextAvailability = nextPolicy(request);
-
-    if (nextAvailability.kind === 'disabled') {
-      isRunningRef.current = false;
-      setStatus('idle');
-      setErrorMessage(null);
-      setProgressState(null);
-      return;
-    }
-
-    const activeProvider =
-      environment.runtimeAvailability?.kind === 'ready'
-        ? environment.runtimeAvailability.provider
-        : null;
-    if (!activeProvider) {
-      isRunningRef.current = false;
-      setStatus('error');
-      setProgressState(null);
-      setErrorMessage('AI provider を初期化できませんでした。');
-      return;
-    }
-
     const requestId = requestIdRef.current + 1;
     requestIdRef.current = requestId;
-    setStatus('running');
-    setErrorMessage(null);
-    setProgressState({
-      stage: 'preparing',
-      message: 'AI 解析用に写真を縮小しています。',
-      progress: 0.06,
-      estimatedRemainingMs: 30000,
-    });
+    isRunningRef.current = true;
+    requestStartedAtRef.current = Date.now();
 
     let cleanupPreparedRequest = async () => {};
 
     try {
+      setProgressState({
+        stage: 'preparing',
+        message: 'AI 入力補助の準備をしています。',
+        progress: 0.02,
+        estimatedRemainingMs: 60000,
+      });
+      const environment = await getRequestEnvironment();
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+
+      const nextPolicy =
+        policy ??
+        createMealInputAssistPolicy({
+          isEnabled: environment.isAiInputAssistEnabled,
+          runtimeAvailability: environment.runtimeAvailability,
+        });
+      const nextAvailability = nextPolicy(request);
+
+      if (nextAvailability.kind === 'disabled') {
+        setStatus('idle');
+        setErrorMessage(null);
+        setProgressState(null);
+        return;
+      }
+
+      const activeProvider =
+        environment.runtimeAvailability?.kind === 'ready'
+          ? environment.runtimeAvailability.provider
+          : null;
+      if (!activeProvider) {
+        setStatus('error');
+        setProgressState(null);
+        setErrorMessage('AI provider を初期化できませんでした。');
+        return;
+      }
+
+      setStatus('running');
+      setErrorMessage(null);
+      setProgressState({
+        stage: 'preparing',
+        message: 'AI 解析用に写真を縮小しています。',
+        progress: 0.06,
+        estimatedRemainingMs: 30000,
+      });
+
       const preparedRequest = await prepareMealInputAssistRequest(request);
       cleanupPreparedRequest = preparedRequest.cleanup;
 
@@ -410,7 +414,6 @@ export function useMealInputAssist({
       const rawResult = await activeProvider.suggest(preparedRequest.request, {
         onProgress: setProgressState,
       });
-      isRunningRef.current = false;
       if (requestIdRef.current !== requestId) {
         return;
       }
@@ -442,17 +445,21 @@ export function useMealInputAssist({
       setSuggestions(normalizedSuggestions);
       setStatus('success');
     } catch (error) {
-      isRunningRef.current = false;
       if (requestIdRef.current !== requestId) {
         return;
       }
 
-      console.warn('Meal input assist failed:', error);
+      console.warn('Meal input assist failed:', sanitizeLogObject(error));
       setProgressState(null);
       setStatus('error');
       setErrorMessage('端末内解析に失敗しました。もう一度お試しください。');
     } finally {
-      await cleanupPreparedRequest();
+      if (requestIdRef.current === requestId) {
+        isRunningRef.current = false;
+      }
+      await cleanupPreparedRequest().catch(cleanupError => {
+        console.warn('Failed to clean up prepared AI request:', sanitizeLogObject(cleanupError));
+      });
     }
   }, [getRequestEnvironment, policy, request, setProgressState]);
 

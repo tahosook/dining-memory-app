@@ -8,6 +8,7 @@ import { getAllPersistedMealRows } from '../database/services/localDatabase';
 import { extractPhotoFileName, validateSafeFileName } from '../domain/backup/pathNormalizer';
 import { resolveThumbnailDestinationUri } from './photoStorage';
 import { getInFlightThumbnailPhotoPaths } from './mealThumbnail';
+import { sanitizeLogObject, sanitizeUriForLog } from '../utils/logSanitizer';
 
 /**
  * Dining Memory が管理する食事写真（メイン写真または派生サムネイル）の命名パターン。
@@ -156,7 +157,10 @@ export async function findOrphanedPhotoFiles(
   try {
     entries = await readDirectoryAsync(documentDirectory);
   } catch (readError) {
-    console.warn('[photoLifecycle] Failed to read documentDirectory:', readError);
+    console.warn(
+      '[photoLifecycle] Failed to read documentDirectory:',
+      sanitizeLogObject(readError)
+    );
     return {
       referencedFileNames: referenced,
       scannedFileCount: 0,
@@ -254,7 +258,7 @@ export async function cleanupOrphanedPhotoFiles(
     if (!uri.startsWith(docDir) || !matcher(fileName)) {
       console.warn(
         '[photoLifecycle] Refusing to delete file that violated safety invariants:',
-        uri
+        sanitizeUriForLog(uri)
       );
       failedFileNames.push(fileName);
       continue;
@@ -286,7 +290,10 @@ export async function cleanupOrphanedPhotoFiles(
       await deleteAsync(uri, { idempotent: true });
       deletedFileNames.push(fileName);
     } catch (deleteError) {
-      console.warn(`[photoLifecycle] Failed to delete orphan photo: ${uri}`, deleteError);
+      console.warn(
+        `[photoLifecycle] Failed to delete orphan photo: ${sanitizeUriForLog(uri) ?? 'unknown'}`,
+        sanitizeLogObject(deleteError)
+      );
       failedFileNames.push(fileName);
     }
   }

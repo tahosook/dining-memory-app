@@ -189,31 +189,44 @@ function extractJsonText(text: string | null | undefined) {
   return withoutFences.slice(start, end + 1);
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toTextCandidate(candidate: unknown): { value: string; confidence?: number } | null {
+  if (!isPlainObject(candidate) || typeof candidate.value !== 'string') {
+    return null;
+  }
+
+  return typeof candidate.confidence === 'number'
+    ? { value: candidate.value, confidence: candidate.confidence }
+    : { value: candidate.value };
+}
+
 function parseMealInputAssistResponse(
   text: string | null | undefined
 ): MealInputAssistProviderResult {
-  const parsed = JSON.parse(extractJsonText(text)) as {
-    noteDraft?: string | { value?: string; confidence?: number } | null;
-    mealNames?: Array<{ value?: string; confidence?: number }>;
-    cuisineTypes?: Array<{ value?: string; confidence?: number }>;
-  };
+  const parsed: unknown = JSON.parse(extractJsonText(text));
+  if (!isPlainObject(parsed)) {
+    throw new Error('Meal input assist response JSON must be an object.');
+  }
+
   const noteDraft =
-    typeof parsed.noteDraft === 'string'
-      ? parsed.noteDraft
-      : parsed.noteDraft && typeof parsed.noteDraft.value === 'string'
-        ? {
-            value: parsed.noteDraft.value,
-            confidence: parsed.noteDraft.confidence,
-          }
-        : null;
-  const mealNames = (parsed.mealNames ?? []).filter(
-    (candidate): candidate is { value: string; confidence?: number } =>
-      typeof candidate.value === 'string'
-  );
-  const cuisineTypes = (parsed.cuisineTypes ?? []).filter(
-    (candidate): candidate is { value: string; confidence?: number } =>
-      typeof candidate.value === 'string'
-  );
+    typeof parsed.noteDraft === 'string' ? parsed.noteDraft : toTextCandidate(parsed.noteDraft);
+  const mealNames = Array.isArray(parsed.mealNames)
+    ? parsed.mealNames
+        .map(toTextCandidate)
+        .filter(
+          (candidate): candidate is { value: string; confidence?: number } => candidate !== null
+        )
+    : [];
+  const cuisineTypes = Array.isArray(parsed.cuisineTypes)
+    ? parsed.cuisineTypes
+        .map(toTextCandidate)
+        .filter(
+          (candidate): candidate is { value: string; confidence?: number } => candidate !== null
+        )
+    : [];
 
   return {
     source: LOCAL_MEAL_INPUT_ASSIST_SOURCE,

@@ -5,7 +5,7 @@ import { MealService } from '../database/services/MealService';
 import type { Meal } from '../types/MealTypes';
 import { persistThumbnailToStablePath } from './photoStorage';
 import { cleanupTempFile } from './tempFiles';
-import { sanitizeLogObject } from '../utils/logSanitizer';
+import { sanitizeLogObject, sanitizeTextForLog, sanitizeUriForLog } from '../utils/logSanitizer';
 
 export const MAX_CONCURRENT_THUMBNAILS = 2;
 
@@ -44,8 +44,8 @@ function pumpQueue() {
       .then(nextTask.resolve)
       .catch(error => {
         console.warn(
-          `Unexpected failure in thumbnail queue for generation ${nextTask.generationKey}:`,
-          error
+          `Unexpected failure in thumbnail queue for generation ${sanitizeTextForLog(nextTask.generationKey)}:`,
+          sanitizeLogObject(error)
         );
         nextTask.resolve(null);
       })
@@ -102,14 +102,14 @@ async function processMealThumbnail(
       if (!originalInfo.exists) {
         console.warn(
           'Original photo does not exist for meal thumbnail generation:',
-          targetPhotoPath
+          sanitizeUriForLog(targetPhotoPath)
         );
         return null;
       }
     } catch {
       console.warn(
         'Failed to verify original photo for meal thumbnail generation:',
-        targetPhotoPath
+        sanitizeUriForLog(targetPhotoPath)
       );
       return null;
     }
@@ -147,7 +147,7 @@ async function processMealThumbnail(
     try {
       updated = await MealService.updateMealThumbnail(mealId, stableThumbnailUri, targetPhotoPath);
     } catch (dbError) {
-      console.warn('Failed to update meal thumbnail in DB:', dbError);
+      console.warn('Failed to update meal thumbnail in DB:', sanitizeLogObject(dbError));
       await cleanupTempFile(stableThumbnailUri);
       return null;
     }
@@ -160,7 +160,7 @@ async function processMealThumbnail(
 
     return stableThumbnailUri;
   } catch (error) {
-    console.warn('Meal thumbnail generation failed:', error);
+    console.warn('Meal thumbnail generation failed:', sanitizeLogObject(error));
     return null;
   }
 }

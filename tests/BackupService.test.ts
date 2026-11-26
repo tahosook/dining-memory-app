@@ -11,6 +11,11 @@ import {
 import * as Sharing from 'expo-sharing';
 import { unzip, zip, listContents } from 'react-native-zip-archive';
 import { BackupService } from '../src/database/services/BackupService';
+import type {
+  BackupValidationResult,
+  InvalidBackupValidationResult,
+  ValidBackupValidationResult,
+} from '../src/domain/backup';
 import {
   getAllAppSettingsRows,
   getAllPersistedMealRows,
@@ -56,6 +61,45 @@ jest.mock('../src/database/services/localDatabase', () => ({
 jest.mock('../src/utils/buildInfo', () => ({
   getAppVersion: jest.fn(() => '1.0.0'),
 }));
+
+function expectValidResult(result: BackupValidationResult): ValidBackupValidationResult {
+  expect(result.valid).toBe(true);
+  if (!result.valid) {
+    throw new Error(`Expected valid backup result, got error: ${result.error ?? 'unknown'}`);
+  }
+  return result;
+}
+
+function expectInvalidResult(result: BackupValidationResult): InvalidBackupValidationResult {
+  expect(result.valid).toBe(false);
+  if (result.valid) {
+    throw new Error('Expected invalid backup result');
+  }
+  return result;
+}
+
+function createValidBackupFixture(
+  meals: ValidBackupValidationResult['meals'],
+  appSettings: ValidBackupValidationResult['appSettings'] = []
+): ValidBackupValidationResult {
+  const photoFileNames = Array.from(new Set(meals.map(meal => meal.photo_file_name)));
+  return {
+    valid: true,
+    manifest: {
+      formatVersion: 1,
+      appId: 'com.tahosook.diningmemory',
+      appVersion: '1.0.0',
+      schemaVersion: 2,
+      exportedAt: '2026-09-19T10:00:00.000Z',
+      mealCount: meals.length,
+      photoCount: photoFileNames.length,
+    },
+    meals,
+    appSettings,
+    photoFileNames,
+    stagingDirectory: 'file:///mock-cache/dm-import-123/',
+  };
+}
 
 describe('BackupService', () => {
   const mockMealRows: PersistedMealRow[] = [
@@ -351,8 +395,7 @@ describe('BackupService', () => {
         assets: null,
       });
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.canceled).toBe(true);
     });
 
@@ -396,10 +439,9 @@ describe('BackupService', () => {
         return Promise.resolve('{}');
       });
 
-      const result = await BackupService.pickAndValidateBackup();
+      const result = expectValidResult(await BackupService.pickAndValidateBackup());
 
-      expect(result.valid).toBe(true);
-      expect(result.manifest?.mealCount).toBe(1);
+      expect(result.manifest.mealCount).toBe(1);
       expect(result.meals).toHaveLength(1);
       expect(result.appSettings).toHaveLength(1);
       expect(result.stagingDirectory).toBeTruthy();
@@ -416,8 +458,7 @@ describe('BackupService', () => {
         return Promise.resolve({ exists: true });
       });
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('manifest.json が見つかりません');
     });
 
@@ -438,8 +479,7 @@ describe('BackupService', () => {
         })
       );
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('新しいバージョンのアプリ');
     });
 
@@ -467,8 +507,7 @@ describe('BackupService', () => {
         return Promise.resolve('{}');
       });
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('別のアプリ');
     });
 
@@ -496,8 +535,7 @@ describe('BackupService', () => {
         return Promise.resolve('{}');
       });
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('データベーススキーマバージョン');
       expect(result.error).toContain('互換性がありません');
     });
@@ -552,8 +590,7 @@ describe('BackupService', () => {
       // photos/ contains 2 files, but meal-soba.jpg is missing (replaced by another file)
       (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-udon.jpg', 'other-photo.jpg']);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('バックアップ内の写真が不足しています');
       expect(result.error).toContain('必要: 2枚, 検出: 1枚（不足: 1枚）');
     });
@@ -598,8 +635,7 @@ describe('BackupService', () => {
       // Actual photos count is only 1
       (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-udon.jpg']);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('写真ファイル数（1枚）がマニフェスト（5枚）と一致しません');
     });
 
@@ -611,8 +647,7 @@ describe('BackupService', () => {
 
       (listContents as jest.Mock).mockRejectedValue(new Error('Zip format invalid'));
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe(
         'バックアップファイルの読み取りに失敗しました。ファイルが破損している可能性があります。'
       );
@@ -630,8 +665,7 @@ describe('BackupService', () => {
         { path: 'unknown.txt' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe('バックアップファイルに未許可のファイルが含まれています。');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -648,8 +682,7 @@ describe('BackupService', () => {
         { path: '../evil.sh' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -665,8 +698,7 @@ describe('BackupService', () => {
         { path: 'photos/../../evil.sh' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -682,8 +714,7 @@ describe('BackupService', () => {
         { path: 'photos\\..\\evil.sh' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -699,8 +730,7 @@ describe('BackupService', () => {
         { path: 'photos/meal.jpg\0evil.jpg' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -716,8 +746,7 @@ describe('BackupService', () => {
         { path: '/etc/passwd' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('不正な絶対パス');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -733,8 +762,7 @@ describe('BackupService', () => {
         { path: '\\Windows\\evil.exe' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('不正な絶対パス');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -750,8 +778,7 @@ describe('BackupService', () => {
         { path: '/photos/meal-20260422-01.jpg' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('不正な絶対パス');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -764,8 +791,7 @@ describe('BackupService', () => {
 
       (listContents as jest.Mock).mockResolvedValue([{ path: 'manifest.json' }, { path: '/' }]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('不正な絶対パス');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -781,8 +807,7 @@ describe('BackupService', () => {
         { path: 'photos/../' },
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe('バックアップファイルに不正なパスが含まれています。');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -795,8 +820,7 @@ describe('BackupService', () => {
 
       (listContents as jest.Mock).mockResolvedValue([{ path: 'manifest.json' }, { path: '..' }]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toBe('バックアップファイルに未許可のファイルが含まれています。');
       expect(unzip).not.toHaveBeenCalled();
     });
@@ -851,8 +875,8 @@ describe('BackupService', () => {
 
       (readDirectoryAsync as jest.Mock).mockResolvedValue([photoFileName]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(true);
+      const result = expectValidResult(await BackupService.pickAndValidateBackup());
+      expect(result.photoFileNames).toEqual([photoFileName]);
       expect(unzip).toHaveBeenCalled();
     });
 
@@ -905,8 +929,7 @@ describe('BackupService', () => {
 
       (readDirectoryAsync as jest.Mock).mockResolvedValue(['meal-20260422-01.jpg']);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('写真ファイル名が不正または非オリジナルです');
       expect(unzip).toHaveBeenCalled();
     });
@@ -941,8 +964,7 @@ describe('BackupService', () => {
 
       (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('JSON構文エラー');
     });
 
@@ -978,8 +1000,7 @@ describe('BackupService', () => {
 
       (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('設定データ');
       expect(result.error).toContain('キーが不正です');
     });
@@ -1013,8 +1034,7 @@ describe('BackupService', () => {
 
       (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('database/app_settings.json');
       expect(result.error).toContain('見つかりません');
     });
@@ -1046,8 +1066,7 @@ describe('BackupService', () => {
 
       (readDirectoryAsync as jest.Mock).mockResolvedValue([]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(true);
+      const result = expectValidResult(await BackupService.pickAndValidateBackup());
       expect(result.appSettings).toEqual([]);
     });
 
@@ -1095,19 +1114,68 @@ describe('BackupService', () => {
         'extra-unreferenced.jpg',
       ]);
 
-      const result = await BackupService.pickAndValidateBackup();
-      expect(result.valid).toBe(false);
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
       expect(result.error).toContain('余分な写真');
+    });
+
+    test('rejects backup when manifest.json has invalid JSON syntax and cleans up staging', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve('{ invalid json');
+        return Promise.resolve('[]');
+      });
+
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
+      expect(result.error).toBe(
+        'マニフェスト（manifest.json）が破損しています（JSON構文エラー）。'
+      );
+      expect(deleteAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/file:\/\/\/mock-cache\/dm-import-\d+\//),
+        { idempotent: true }
+      );
+    });
+
+    test('rejects backup when database/meals.json has invalid JSON syntax and cleans up staging', async () => {
+      (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
+        canceled: false,
+        assets: [{ uri: 'file:///mock-picker/backup.zip' }],
+      });
+      const manifestContent = JSON.stringify({
+        formatVersion: 1,
+        appId: 'com.tahosook.diningmemory',
+        appVersion: '1.0.0',
+        schemaVersion: 2,
+        exportedAt: '2026-09-19T10:00:00.000Z',
+        mealCount: 0,
+        photoCount: 0,
+      });
+      (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
+      (readAsStringAsync as jest.Mock).mockImplementation((path: string) => {
+        if (path.endsWith('manifest.json')) return Promise.resolve(manifestContent);
+        if (path.endsWith('meals.json')) return Promise.resolve('[broken');
+        return Promise.resolve('[]');
+      });
+
+      const result = expectInvalidResult(await BackupService.pickAndValidateBackup());
+      expect(result.error).toBe(
+        '食事データ（database/meals.json）が破損しています（JSON構文エラー）。'
+      );
+      expect(deleteAsync).toHaveBeenCalledWith(
+        expect.stringMatching(/file:\/\/\/mock-cache\/dm-import-\d+\//),
+        { idempotent: true }
+      );
     });
   });
 
   describe('restoreVerifiedBackup', () => {
     // Test H: Full valid backup restored completely
     test('copies photos to documentDirectory and replaces database records atomically', async () => {
-      const validationResult = {
-        valid: true,
-        stagingDirectory: 'file:///mock-cache/dm-import-123/',
-        meals: [
+      const validationResult = createValidBackupFixture(
+        [
           {
             id: 'meal-1',
             uuid: 'uuid-1',
@@ -1120,8 +1188,8 @@ describe('BackupService', () => {
             updated_at: 1713800000000,
           },
         ],
-        appSettings: [{ key: 'ai_input_assist_enabled', value: 'true', updated_at: 1713800000000 }],
-      };
+        [{ key: 'ai_input_assist_enabled', value: 'true', updated_at: 1713800000000 }]
+      );
 
       const result = await BackupService.restoreVerifiedBackup(validationResult);
 
@@ -1180,23 +1248,19 @@ describe('BackupService', () => {
         },
       ]);
 
-      const validationResult = {
-        valid: true,
-        stagingDirectory: 'file:///mock-cache/dm-import-123/',
-        meals: [
-          {
-            id: 'meal-1',
-            uuid: 'uuid-1',
-            meal_name: 'とんかつ定食',
-            photo_file_name: 'meal-20260422-01.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713800000000,
-            created_at: 1713800000000,
-            updated_at: 1713800000000,
-          },
-        ],
-      };
+      const validationResult = createValidBackupFixture([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: 'とんかつ定食',
+          photo_file_name: 'meal-20260422-01.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+      ]);
 
       await BackupService.restoreVerifiedBackup(validationResult);
 
@@ -1221,34 +1285,30 @@ describe('BackupService', () => {
 
     // Test E: Photo copy failure rollback
     test('rolls back photo changes when copying a photo fails midway, without modifying DB', async () => {
-      const validationResult = {
-        valid: true,
-        stagingDirectory: 'file:///mock-cache/dm-import-123/',
-        meals: [
-          {
-            id: 'meal-1',
-            uuid: 'uuid-1',
-            meal_name: '既存上書き写真の食事',
-            photo_file_name: 'existing-photo.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713800000000,
-            created_at: 1713800000000,
-            updated_at: 1713800000000,
-          },
-          {
-            id: 'meal-2',
-            uuid: 'uuid-2',
-            meal_name: '新規写真の食事',
-            photo_file_name: 'new-photo.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713900000000,
-            created_at: 1713900000000,
-            updated_at: 1713900000000,
-          },
-        ],
-      };
+      const validationResult = createValidBackupFixture([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: '既存上書き写真の食事',
+          photo_file_name: 'existing-photo.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+        {
+          id: 'meal-2',
+          uuid: 'uuid-2',
+          meal_name: '新規写真の食事',
+          photo_file_name: 'new-photo.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713900000000,
+          created_at: 1713900000000,
+          updated_at: 1713900000000,
+        },
+      ]);
 
       // Mock getInfoAsync:
       // - existing-photo.jpg exists in documentDirectory
@@ -1301,34 +1361,30 @@ describe('BackupService', () => {
 
     // Test F: DB transaction failure rollback
     test('rolls back photos when replaceDatabaseWithBackup throws error', async () => {
-      const validationResult = {
-        valid: true,
-        stagingDirectory: 'file:///mock-cache/dm-import-123/',
-        meals: [
-          {
-            id: 'meal-1',
-            uuid: 'uuid-1',
-            meal_name: '既存上書き写真の食事',
-            photo_file_name: 'existing-photo.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713800000000,
-            created_at: 1713800000000,
-            updated_at: 1713800000000,
-          },
-          {
-            id: 'meal-2',
-            uuid: 'uuid-2',
-            meal_name: '新規写真の食事',
-            photo_file_name: 'new-photo.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713900000000,
-            created_at: 1713900000000,
-            updated_at: 1713900000000,
-          },
-        ],
-      };
+      const validationResult = createValidBackupFixture([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: '既存上書き写真の食事',
+          photo_file_name: 'existing-photo.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+        {
+          id: 'meal-2',
+          uuid: 'uuid-2',
+          meal_name: '新規写真の食事',
+          photo_file_name: 'new-photo.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713900000000,
+          created_at: 1713900000000,
+          updated_at: 1713900000000,
+        },
+      ]);
 
       let newPhotoCopied = false;
       (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
@@ -1382,23 +1438,19 @@ describe('BackupService', () => {
     });
 
     test('warns and reports error when photo rollback restoration itself fails', async () => {
-      const validationResult = {
-        valid: true,
-        stagingDirectory: 'file:///mock-cache/dm-import-123/',
-        meals: [
-          {
-            id: 'meal-1',
-            uuid: 'uuid-1',
-            meal_name: '既存上書き写真の食事',
-            photo_file_name: 'existing-photo.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713800000000,
-            created_at: 1713800000000,
-            updated_at: 1713800000000,
-          },
-        ],
-      };
+      const validationResult = createValidBackupFixture([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: '既存上書き写真の食事',
+          photo_file_name: 'existing-photo.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+      ]);
 
       (getInfoAsync as jest.Mock).mockResolvedValue({ exists: true });
       (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
@@ -1417,34 +1469,30 @@ describe('BackupService', () => {
     });
 
     test('increments rollbackFailedCount for both new file deletion and backed-up file copy failures', async () => {
-      const validationResult = {
-        valid: true,
-        stagingDirectory: 'file:///mock-cache/dm-import-123/',
-        meals: [
-          {
-            id: 'meal-1',
-            uuid: 'uuid-1',
-            meal_name: '既存上書き写真の食事',
-            photo_file_name: 'existing-photo.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713800000000,
-            created_at: 1713800000000,
-            updated_at: 1713800000000,
-          },
-          {
-            id: 'meal-2',
-            uuid: 'uuid-2',
-            meal_name: '新規写真の食事',
-            photo_file_name: 'new-photo.jpg',
-            is_homemade: 0,
-            is_deleted: 0,
-            meal_datetime: 1713900000000,
-            created_at: 1713900000000,
-            updated_at: 1713900000000,
-          },
-        ],
-      };
+      const validationResult = createValidBackupFixture([
+        {
+          id: 'meal-1',
+          uuid: 'uuid-1',
+          meal_name: '既存上書き写真の食事',
+          photo_file_name: 'existing-photo.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713800000000,
+          created_at: 1713800000000,
+          updated_at: 1713800000000,
+        },
+        {
+          id: 'meal-2',
+          uuid: 'uuid-2',
+          meal_name: '新規写真の食事',
+          photo_file_name: 'new-photo.jpg',
+          is_homemade: 0,
+          is_deleted: 0,
+          meal_datetime: 1713900000000,
+          created_at: 1713900000000,
+          updated_at: 1713900000000,
+        },
+      ]);
 
       let newPhotoCopied = false;
       (copyAsync as jest.Mock).mockImplementation((options: { from: string; to: string }) => {
@@ -1507,6 +1555,27 @@ describe('BackupService', () => {
 
     test('handles undefined without error', async () => {
       await expect(BackupService.cleanupStaging(undefined)).resolves.not.toThrow();
+    });
+
+    test('sanitizes paths in warning logs when cleanupStaging fails', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+      try {
+        (deleteAsync as jest.Mock).mockRejectedValueOnce(
+          new Error('Permission denied on file:///Users/alice/cache/dm-import-123/')
+        );
+
+        await BackupService.cleanupStaging('file:///Users/alice/cache/dm-import-123/');
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[BackupService] Failed to clean up staging directory:',
+          expect.objectContaining({
+            message: 'Permission denied on file://...',
+          })
+        );
+        expect(String(warnSpy.mock.calls[0]?.[1])).not.toContain('/Users/alice');
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 });

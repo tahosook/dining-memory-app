@@ -419,8 +419,16 @@ export default function SettingsScreen() {
           text: '削除する',
           style: 'destructive',
           onPress: async () => {
-            await MealService.clearAllMeals({ cleanupPhotos: true });
-            Alert.alert('削除完了', '食事記録を削除しました。');
+            try {
+              await MealService.clearAllMeals({ cleanupPhotos: true });
+              Alert.alert('削除完了', '食事記録を削除しました。');
+            } catch (error) {
+              console.error('Failed to delete all meals:', sanitizeLogObject(error));
+              Alert.alert(
+                '削除に失敗しました',
+                '食事記録の削除に失敗しました。もう一度お試しください。'
+              );
+            }
           },
         },
       ]
@@ -451,13 +459,10 @@ export default function SettingsScreen() {
     setBackupActionState('importing');
     try {
       const validation = await BackupService.pickAndValidateBackup();
-      if (validation.canceled) {
-        setBackupActionState('idle');
-        return;
-      }
-
-      if (!validation.valid || !validation.manifest) {
-        Alert.alert('インポート失敗', validation.error ?? '無効なバックアップファイルです。');
+      if (!validation.valid) {
+        if (!validation.canceled) {
+          Alert.alert('インポート失敗', validation.error ?? '無効なバックアップファイルです。');
+        }
         setBackupActionState('idle');
         return;
       }

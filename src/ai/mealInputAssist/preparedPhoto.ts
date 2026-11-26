@@ -1,6 +1,7 @@
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { deleteAsync } from 'expo-file-system/legacy';
 import { CAMERA_CONSTANTS } from '../../constants/CameraConstants';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 import type { MealInputAssistRequest } from './types';
 
 export interface PreparedMealInputAssistRequest {
@@ -19,7 +20,7 @@ export async function cleanupPreparedMealInputAssistPhoto(
   try {
     await deleteAsync(preparedPhotoUri, { idempotent: true });
   } catch (error) {
-    console.warn('Failed to clean up AI analysis photo:', error);
+    console.warn('Failed to clean up AI analysis photo:', sanitizeLogObject(error));
   }
 }
 

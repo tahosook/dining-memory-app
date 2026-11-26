@@ -32,6 +32,7 @@ import { normalizeMealRow, type MealRowInput } from '../../domain/meals/mealRow'
 import { normalizeCookingLevel } from '../../utils/cookingLevel';
 import * as Crypto from 'expo-crypto';
 import { cleanupOrphanedPhotoFiles } from '../../media/photoLifecycle';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 
 export interface CreateMealData {
   meal_name: string;
@@ -640,7 +641,7 @@ export class MealService {
       } catch (cleanupError) {
         console.warn(
           '[MealService] Non-fatal warning: Failed to clean up orphaned photos after clearAllMeals:',
-          cleanupError
+          sanitizeLogObject(cleanupError)
         );
       }
     }
