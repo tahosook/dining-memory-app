@@ -493,6 +493,90 @@ describe('MealDetailScreen', () => {
     });
   });
 
+  test('passes null to MealService.updateMeal when optional edit fields are cleared or whitespace-only', async () => {
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...baseMeal,
+      cuisine_type: undefined,
+      location_name: undefined,
+      notes: undefined,
+      is_homemade: false,
+      cooking_level: undefined,
+    });
+
+    const { getAllByText, getByTestId, getByText } = render(
+      <MealDetailScreen {...createProps()} />
+    );
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.changeText(getByTestId('detail-edit-location-input'), '   ');
+    fireEvent.changeText(getByTestId('detail-edit-notes-input'), '');
+    fireEvent.press(getByTestId('detail-edit-cuisine-和食'));
+    fireEvent(getByTestId('detail-edit-homemade-switch'), 'valueChange', false);
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
+        meal_name: '焼き魚定食',
+        cuisine_type: null,
+        location_name: null,
+        notes: null,
+        is_homemade: false,
+        cooking_level: null,
+      });
+    });
+
+    await waitFor(() => {
+      expect(getByText('外食')).toBeTruthy();
+      expect(getAllByText('未設定')).toHaveLength(4);
+    });
+  });
+
+  test('passes null for cooking_level when saving a homemade meal without a selected cooking level', async () => {
+    const homemadeNoLevel = {
+      ...baseMeal,
+      cooking_level: undefined,
+    };
+    (MealService.updateMeal as jest.Mock).mockResolvedValue({
+      ...homemadeNoLevel,
+      location_name: undefined,
+      notes: undefined,
+    });
+
+    const { getAllByText, getByTestId } = render(
+      <MealDetailScreen
+        {...createProps({
+          route: {
+            key: 'MealDetail-test',
+            name: 'MealDetail',
+            params: {
+              meal: homemadeNoLevel,
+            },
+          },
+        })}
+      />
+    );
+
+    fireEvent.press(getByTestId('meal-detail-edit-button'));
+    fireEvent.changeText(getByTestId('detail-edit-location-input'), '');
+    fireEvent.changeText(getByTestId('detail-edit-notes-input'), '  \n  ');
+    fireEvent.press(getByTestId('detail-edit-save-button'));
+
+    await waitFor(() => {
+      expect(MealService.updateMeal).toHaveBeenCalledWith('meal-1', {
+        meal_name: '焼き魚定食',
+        cuisine_type: '和食',
+        location_name: null,
+        notes: null,
+        is_homemade: true,
+        cooking_level: null,
+      });
+    });
+
+    await waitFor(() => {
+      expect(getAllByText('未設定')).toHaveLength(3);
+    });
+  });
+
   test('shows an alert and keeps the edit modal open when meal update fails', async () => {
     const error = new Error('update failed: /Users/developer/data/db.sqlite');
     (MealService.updateMeal as jest.Mock).mockRejectedValue(error);

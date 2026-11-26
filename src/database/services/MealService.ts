@@ -28,7 +28,7 @@ import {
   type StatisticsOptions,
   type StatisticsSummary,
 } from '../../domain/meals/statistics';
-import { normalizeMealRow } from '../../domain/meals/mealRow';
+import { normalizeMealRow, type MealRowInput } from '../../domain/meals/mealRow';
 import { normalizeCookingLevel } from '../../utils/cookingLevel';
 import * as Crypto from 'expo-crypto';
 import { cleanupOrphanedPhotoFiles } from '../../media/photoLifecycle';
@@ -68,18 +68,25 @@ export interface GetRecentMealsOptions {
 export type { SearchFilters } from '../../domain/meals/search';
 export type { StatisticsOptions, StatisticsSummary } from '../../domain/meals/statistics';
 
-type MealUpdateData = Partial<CreateMealData>;
+export type MealUpdateData = Partial<MealRowInput>;
 
 function createId() {
   return `${Date.now()}-${Crypto.randomUUID()}`;
 }
 
-function normalizeRow(data: CreateMealData, existing?: PersistedMealRow): PersistedMealRow {
+function normalizeRow(data: MealRowInput, existing?: PersistedMealRow): PersistedMealRow {
   return normalizeMealRow(data, {
     existing,
     nowMs: Date.now(),
     createId,
   });
+}
+
+function resolveNullableUpdate<T>(
+  nextValue: T | null | undefined,
+  existingValue: T | null | undefined
+): T | null | undefined {
+  return nextValue !== undefined ? nextValue : (existingValue ?? undefined);
 }
 
 function escapeSqliteLike(value: string): string {
@@ -479,26 +486,43 @@ export class MealService {
       return null;
     }
 
-    const merged: CreateMealData = {
+    const hasSearchFieldUpdate =
+      updates.meal_name !== undefined ||
+      updates.cuisine_type !== undefined ||
+      updates.location_name !== undefined ||
+      updates.notes !== undefined ||
+      updates.tags !== undefined;
+
+    const merged: MealRowInput = {
       meal_name: updates.meal_name ?? row.meal_name,
-      meal_type: updates.meal_type ?? row.meal_type ?? undefined,
-      cuisine_type: updates.cuisine_type ?? row.cuisine_type ?? undefined,
-      ai_confidence: updates.ai_confidence ?? row.ai_confidence ?? undefined,
-      ai_source: updates.ai_source ?? row.ai_source ?? undefined,
-      notes: updates.notes ?? row.notes ?? undefined,
-      cooking_level: updates.cooking_level ?? row.cooking_level ?? undefined,
+      meal_type: resolveNullableUpdate(updates.meal_type, row.meal_type),
+      cuisine_type: resolveNullableUpdate(updates.cuisine_type, row.cuisine_type),
+      ai_confidence: resolveNullableUpdate(updates.ai_confidence, row.ai_confidence),
+      ai_source: resolveNullableUpdate(updates.ai_source, row.ai_source),
+      notes: resolveNullableUpdate(updates.notes, row.notes),
+      cooking_level:
+        updates.cooking_level !== undefined
+          ? updates.cooking_level
+          : row.is_homemade
+            ? (row.cooking_level ?? null)
+            : undefined,
       is_homemade: updates.is_homemade ?? Boolean(row.is_homemade),
       photo_path: updates.photo_path ?? row.photo_path,
-      photo_thumbnail_path:
-        updates.photo_thumbnail_path !== undefined
-          ? updates.photo_thumbnail_path
-          : (row.photo_thumbnail_path ?? undefined),
-      location_name: updates.location_name ?? row.location_name ?? undefined,
-      latitude: updates.latitude ?? row.latitude ?? undefined,
-      longitude: updates.longitude ?? row.longitude ?? undefined,
+      photo_thumbnail_path: resolveNullableUpdate(
+        updates.photo_thumbnail_path,
+        row.photo_thumbnail_path
+      ),
+      location_name: resolveNullableUpdate(updates.location_name, row.location_name),
+      latitude: resolveNullableUpdate(updates.latitude, row.latitude),
+      longitude: resolveNullableUpdate(updates.longitude, row.longitude),
       meal_datetime: updates.meal_datetime ?? new Date(row.meal_datetime),
-      search_text: updates.search_text ?? row.search_text ?? undefined,
-      tags: updates.tags ?? row.tags ?? undefined,
+      search_text:
+        updates.search_text !== undefined
+          ? updates.search_text
+          : hasSearchFieldUpdate
+            ? undefined
+            : row.search_text,
+      tags: resolveNullableUpdate(updates.tags, row.tags),
     };
 
     const nextRow = normalizeRow(merged, row);

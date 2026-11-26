@@ -2,6 +2,7 @@ import { MealService } from '../src/database/services/MealService';
 import {
   isUsingNativeDatabase,
   getDatabase,
+  getInMemoryMeals,
   setInMemoryMeals,
 } from '../src/database/services/localDatabase';
 import { buildStatisticsSummary, filterRowsForStatistics } from '../src/domain/meals/statistics';
@@ -740,6 +741,141 @@ describe('MealService', () => {
     });
 
     expect(updated?.cooking_level).toBeUndefined();
+  });
+
+  test('updateMeal preserves fields on undefined and clears nullable fields on null in InMemory mode', async () => {
+    const created = await MealService.createMeal({
+      meal_name: '特製カレー',
+      meal_type: 'dinner',
+      cuisine_type: '洋食',
+      ai_confidence: 0.88,
+      ai_source: 'mediapipe-static-image',
+      notes: 'スパイシーな夜ご飯',
+      cooking_level: 'gourmet',
+      is_homemade: true,
+      photo_path: 'file:///curry-contract.jpg',
+      photo_thumbnail_path: 'file:///curry-contract-thumb.jpg',
+      location_name: '神田キッチン',
+      latitude: 35.6917,
+      longitude: 139.7709,
+      meal_datetime: new Date('2026-04-20T19:00:00+09:00'),
+      tags: 'スパイス,週末',
+    });
+
+    // 1. Non-search partial update (other fields omitted / undefined) preserves all fields including search_text
+    const preserved = await MealService.updateMeal(created.id, {
+      photo_path: 'file:///curry-contract-v2.jpg',
+      notes: undefined,
+    });
+    expect(preserved?.meal_name).toBe('特製カレー');
+    expect(preserved?.is_homemade).toBe(true);
+    expect(preserved?.photo_path).toBe('file:///curry-contract-v2.jpg');
+    expect(preserved?.meal_datetime).toBe(new Date('2026-04-20T19:00:00+09:00').getTime());
+    expect(preserved?.meal_type).toBe('dinner');
+    expect(preserved?.cuisine_type).toBe('洋食');
+    expect(preserved?.ai_confidence).toBe(0.88);
+    expect(preserved?.ai_source).toBe('mediapipe-static-image');
+    expect(preserved?.notes).toBe('スパイシーな夜ご飯');
+    expect(preserved?.cooking_level).toBe('gourmet');
+    expect(preserved?.photo_thumbnail_path).toBe('file:///curry-contract-thumb.jpg');
+    expect(preserved?.location_name).toBe('神田キッチン');
+    expect(preserved?.latitude).toBe(35.6917);
+    expect(preserved?.longitude).toBe(139.7709);
+    expect(preserved?.tags).toBe('スパイス,週末');
+    expect(preserved?.search_text).toBe(created.search_text);
+
+    // 2. Explicit null clears nullable fields and removes cleared terms from search_text
+    const cleared = await MealService.updateMeal(created.id, {
+      meal_type: null,
+      cuisine_type: null,
+      ai_confidence: null,
+      ai_source: null,
+      notes: null,
+      cooking_level: null,
+      photo_thumbnail_path: null,
+      location_name: null,
+      latitude: null,
+      longitude: null,
+      tags: null,
+    });
+
+    expect(cleared?.meal_type).toBeUndefined();
+    expect(cleared?.cuisine_type).toBeUndefined();
+    expect(cleared?.ai_confidence).toBeUndefined();
+    expect(cleared?.ai_source).toBeUndefined();
+    expect(cleared?.notes).toBeUndefined();
+    expect(cleared?.cooking_level).toBeUndefined();
+    expect(cleared?.photo_thumbnail_path).toBeUndefined();
+    expect(cleared?.location_name).toBeUndefined();
+    expect(cleared?.latitude).toBeUndefined();
+    expect(cleared?.longitude).toBeUndefined();
+    expect(cleared?.tags).toBeUndefined();
+    expect(cleared?.search_text).toBe('特製カレー');
+
+    const persistedRow = getInMemoryMeals().find(item => item.id === created.id);
+    expect(persistedRow?.meal_type).toBeNull();
+    expect(persistedRow?.cuisine_type).toBeNull();
+    expect(persistedRow?.ai_confidence).toBeNull();
+    expect(persistedRow?.ai_source).toBeNull();
+    expect(persistedRow?.notes).toBeNull();
+    expect(persistedRow?.cooking_level).toBeNull();
+    expect(persistedRow?.photo_thumbnail_path).toBeNull();
+    expect(persistedRow?.location_name).toBeNull();
+    expect(persistedRow?.latitude).toBeNull();
+    expect(persistedRow?.longitude).toBeNull();
+    expect(persistedRow?.tags).toBeNull();
+
+    await expect(MealService.searchMeals({ text: '神田キッチン' })).resolves.toHaveLength(0);
+    await expect(MealService.searchMeals({ text: 'スパイシー' })).resolves.toHaveLength(0);
+    await expect(MealService.searchMeals({ text: 'スパイス' })).resolves.toHaveLength(0);
+    await expect(MealService.searchMeals({ text: '特製カレー' })).resolves.toHaveLength(1);
+
+    // 3. Subsequent partial update on homemade meal does NOT resurrect cleared cooking_level
+    const afterPartial = await MealService.updateMeal(created.id, {
+      notes: '再追記',
+    });
+    expect(afterPartial?.cooking_level).toBeUndefined();
+    expect(afterPartial?.search_text).toBe('特製カレー 再追記');
+
+    // 4. Explicit search_text: null clears search_text and non-search update preserves null
+    const clearedSearchText = await MealService.updateMeal(created.id, {
+      search_text: null,
+    });
+    expect(clearedSearchText?.search_text).toBeUndefined();
+    expect(getInMemoryMeals().find(item => item.id === created.id)?.search_text).toBeNull();
+
+    const afterPhotoOnly = await MealService.updateMeal(created.id, {
+      photo_path: 'file:///curry-contract-v3.jpg',
+    });
+    expect(afterPhotoOnly?.search_text).toBeUndefined();
+    expect(getInMemoryMeals().find(item => item.id === created.id)?.search_text).toBeNull();
+  });
+
+  test('updateMeal infers cooking_level when switching eating out to homemade unless explicitly null', async () => {
+    const eatingOut = await MealService.createMeal({
+      meal_name: 'カレー',
+      is_homemade: false,
+      photo_path: 'file:///outside-to-home.jpg',
+      meal_datetime: new Date('2026-04-21T12:00:00+09:00'),
+    });
+    expect(eatingOut.cooking_level).toBeUndefined();
+
+    const switchedWithInference = await MealService.updateMeal(eatingOut.id, {
+      is_homemade: true,
+    });
+    expect(switchedWithInference?.cooking_level).toBe('daily');
+
+    const eatingOutExplicitNull = await MealService.createMeal({
+      meal_name: 'カレー',
+      is_homemade: false,
+      photo_path: 'file:///outside-to-home-null.jpg',
+      meal_datetime: new Date('2026-04-21T13:00:00+09:00'),
+    });
+    const switchedWithNull = await MealService.updateMeal(eatingOutExplicitNull.id, {
+      is_homemade: true,
+      cooking_level: null,
+    });
+    expect(switchedWithNull?.cooking_level).toBeUndefined();
   });
 
   describe('native database direct SQL operations', () => {
@@ -2298,6 +2434,159 @@ describe('MealService', () => {
         const spyResult = await getAllSpy.mock.results[0].value;
         expect(spyResult).toHaveLength(1);
         expect(spyResult[0].id).toBe('near-1');
+      });
+    });
+
+    describe('updateMeal Native SQLite and InMemory Parity', () => {
+      let parityDbFixture: ReturnType<typeof createRealSqliteDatabase>;
+
+      beforeEach(() => {
+        parityDbFixture = createRealSqliteDatabase();
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(true);
+        (getDatabase as jest.Mock).mockReturnValue(parityDbFixture.adapter);
+      });
+
+      afterEach(() => {
+        (isUsingNativeDatabase as jest.Mock).mockReturnValue(false);
+        (getDatabase as jest.Mock).mockReturnValue(null);
+      });
+
+      test('Native SQLite: updateMeal preserves fields on undefined and clears nullable fields to SQL NULL on null', async () => {
+        const created = await MealService.createMeal({
+          meal_name: '特製カレー',
+          meal_type: 'dinner',
+          cuisine_type: '洋食',
+          ai_confidence: 0.91,
+          ai_source: 'mediapipe-static-image',
+          notes: 'スパイシーな夜ご飯',
+          cooking_level: 'gourmet',
+          is_homemade: true,
+          photo_path: 'file:///native-curry.jpg',
+          photo_thumbnail_path: 'file:///native-curry-thumb.jpg',
+          location_name: '神田キッチン',
+          latitude: 35.6917,
+          longitude: 139.7709,
+          meal_datetime: new Date('2026-04-20T19:00:00+09:00'),
+          tags: 'スパイス,週末',
+        });
+
+        // 1. Partial update on non-search field preserves existing values and search_text
+        const preserved = await MealService.updateMeal(created.id, {
+          photo_path: 'file:///native-curry-v2.jpg',
+          notes: undefined,
+        });
+        expect(preserved?.meal_type).toBe('dinner');
+        expect(preserved?.cuisine_type).toBe('洋食');
+        expect(preserved?.ai_confidence).toBe(0.91);
+        expect(preserved?.ai_source).toBe('mediapipe-static-image');
+        expect(preserved?.notes).toBe('スパイシーな夜ご飯');
+        expect(preserved?.cooking_level).toBe('gourmet');
+        expect(preserved?.photo_thumbnail_path).toBe('file:///native-curry-thumb.jpg');
+        expect(preserved?.location_name).toBe('神田キッチン');
+        expect(preserved?.latitude).toBe(35.6917);
+        expect(preserved?.longitude).toBe(139.7709);
+        expect(preserved?.tags).toBe('スパイス,週末');
+        expect(preserved?.search_text).toBe(created.search_text);
+
+        // 2. Explicit null clears nullable fields to SQL NULL and removes cleared terms from search_text
+        const cleared = await MealService.updateMeal(created.id, {
+          meal_type: null,
+          cuisine_type: null,
+          ai_confidence: null,
+          ai_source: null,
+          notes: null,
+          cooking_level: null,
+          photo_thumbnail_path: null,
+          location_name: null,
+          latitude: null,
+          longitude: null,
+          tags: null,
+        });
+        expect(cleared?.meal_name).toBe('特製カレー');
+        expect(cleared?.is_homemade).toBe(true);
+        expect(cleared?.photo_path).toBe('file:///native-curry-v2.jpg');
+        expect(cleared?.meal_datetime).toBe(new Date('2026-04-20T19:00:00+09:00').getTime());
+        expect(cleared?.meal_type).toBeUndefined();
+        expect(cleared?.cuisine_type).toBeUndefined();
+        expect(cleared?.ai_confidence).toBeUndefined();
+        expect(cleared?.ai_source).toBeUndefined();
+        expect(cleared?.notes).toBeUndefined();
+        expect(cleared?.cooking_level).toBeUndefined();
+        expect(cleared?.photo_thumbnail_path).toBeUndefined();
+        expect(cleared?.location_name).toBeUndefined();
+        expect(cleared?.latitude).toBeUndefined();
+        expect(cleared?.longitude).toBeUndefined();
+        expect(cleared?.tags).toBeUndefined();
+        expect(cleared?.search_text).toBe('特製カレー');
+
+        const rawRow = await parityDbFixture.adapter.getFirstAsync(
+          'SELECT * FROM meals WHERE id = ?',
+          created.id
+        );
+        expect(rawRow.meal_type).toBeNull();
+        expect(rawRow.cuisine_type).toBeNull();
+        expect(rawRow.ai_confidence).toBeNull();
+        expect(rawRow.ai_source).toBeNull();
+        expect(rawRow.notes).toBeNull();
+        expect(rawRow.cooking_level).toBeNull();
+        expect(rawRow.photo_thumbnail_path).toBeNull();
+        expect(rawRow.location_name).toBeNull();
+        expect(rawRow.latitude).toBeNull();
+        expect(rawRow.longitude).toBeNull();
+        expect(rawRow.tags).toBeNull();
+        expect(rawRow.search_text).toBe('特製カレー');
+
+        await expect(MealService.searchMeals({ text: '神田キッチン' })).resolves.toHaveLength(0);
+        await expect(MealService.searchMeals({ text: 'スパイシー' })).resolves.toHaveLength(0);
+        await expect(MealService.searchMeals({ text: 'スパイス' })).resolves.toHaveLength(0);
+        await expect(MealService.searchMeals({ text: '特製カレー' })).resolves.toHaveLength(1);
+
+        // 3. Subsequent partial update on homemade meal does NOT resurrect cleared cooking_level
+        const afterPartial = await MealService.updateMeal(created.id, {
+          notes: '再追記',
+        });
+        expect(afterPartial?.cooking_level).toBeUndefined();
+        expect(afterPartial?.search_text).toBe('特製カレー 再追記');
+
+        const rawAfterPartial = await parityDbFixture.adapter.getFirstAsync(
+          'SELECT cooking_level, search_text FROM meals WHERE id = ?',
+          created.id
+        );
+        expect(rawAfterPartial.cooking_level).toBeNull();
+        expect(rawAfterPartial.search_text).toBe('特製カレー 再追記');
+
+        // 4. Switching eating out -> homemade infers cooking_level when omitted, unless explicitly null
+        const eatingOut = await MealService.createMeal({
+          meal_name: 'カレー',
+          is_homemade: false,
+          photo_path: 'file:///native-outside.jpg',
+          meal_datetime: new Date('2026-04-21T12:00:00+09:00'),
+        });
+        const switchedToHomemade = await MealService.updateMeal(eatingOut.id, {
+          is_homemade: true,
+        });
+        expect(switchedToHomemade?.cooking_level).toBe('daily');
+
+        const eatingOutExplicitNull = await MealService.createMeal({
+          meal_name: 'カレー',
+          is_homemade: false,
+          photo_path: 'file:///native-outside-null.jpg',
+          meal_datetime: new Date('2026-04-21T13:00:00+09:00'),
+        });
+        const switchedWithNull = await MealService.updateMeal(eatingOutExplicitNull.id, {
+          is_homemade: true,
+          cooking_level: null,
+        });
+        expect(switchedWithNull?.cooking_level).toBeUndefined();
+
+        // 5. Explicit search_text: null sets SQL NULL and non-search update preserves SQL NULL
+        await MealService.updateMeal(created.id, { search_text: null });
+        await MealService.updateMeal(created.id, { photo_path: 'file:///native-curry-v3.jpg' });
+        const rawSearchNull = await parityDbFixture.adapter.getFirstAsync(
+          'SELECT search_text FROM meals WHERE id = ?',
+          created.id
+        );
+        expect(rawSearchNull.search_text).toBeNull();
       });
     });
   });
