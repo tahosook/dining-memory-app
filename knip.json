@@ -18,6 +18,7 @@
     "@typescript-eslint/eslint-plugin",
     "@typescript-eslint/parser",
     "@react-native-community/cli",
+    "babel-preset-expo",
     "eslint-config-prettier",
     "eslint-plugin-react-hooks",
     "expo-build-properties",
