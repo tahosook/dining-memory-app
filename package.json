@@ -110,9 +110,6 @@
   },
   "overrides": {
     "eslint-plugin-ft-flow": "3.0.11",
-    "@expo/metro-config": {
-      "postcss": "8.5.14"
-    },
     "jest-environment-jsdom": {
       "jsdom": "23.2.0"
     },
