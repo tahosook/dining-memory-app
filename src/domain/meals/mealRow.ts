@@ -5,21 +5,21 @@ import { generateSearchText } from './search';
 
 export interface MealRowInput {
   meal_name: string;
-  meal_type?: string;
-  cuisine_type?: string;
-  ai_confidence?: number;
-  ai_source?: string;
-  notes?: string;
-  cooking_level?: CookingLevel | string;
+  meal_type?: string | null;
+  cuisine_type?: string | null;
+  ai_confidence?: number | null;
+  ai_source?: string | null;
+  notes?: string | null;
+  cooking_level?: CookingLevel | string | null;
   is_homemade: boolean;
   photo_path: string;
   photo_thumbnail_path?: string | null;
-  location_name?: string;
-  latitude?: number;
-  longitude?: number;
+  location_name?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   meal_datetime: Date;
-  search_text?: string;
-  tags?: string;
+  search_text?: string | null;
+  tags?: string | null;
 }
 
 interface NormalizeMealRowOptions {
@@ -31,7 +31,7 @@ interface NormalizeMealRowOptions {
 export function resolveCookingLevelForSave(
   data: Pick<MealRowInput, 'cooking_level' | 'is_homemade' | 'meal_name' | 'cuisine_type' | 'notes'>
 ): CookingLevel | undefined {
-  if (!data.is_homemade) {
+  if (!data.is_homemade || data.cooking_level === null) {
     return undefined;
   }
 
@@ -50,7 +50,7 @@ export function normalizeMealRow(
   data: MealRowInput,
   { existing, nowMs, createId }: NormalizeMealRowOptions
 ): PersistedMealRow {
-  const searchText = data.search_text ?? generateSearchText(data);
+  const searchText = data.search_text !== undefined ? data.search_text : generateSearchText(data);
 
   return {
     id: existing?.id ?? createId(),

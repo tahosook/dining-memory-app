@@ -15,11 +15,11 @@ export interface SearchFilters {
 }
 
 export function generateSearchText(data: {
-  meal_name?: string;
-  cuisine_type?: string;
-  location_name?: string;
-  notes?: string;
-  tags?: string;
+  meal_name?: string | null;
+  cuisine_type?: string | null;
+  location_name?: string | null;
+  notes?: string | null;
+  tags?: string | null;
 }): string {
   return [data.meal_name, data.cuisine_type, data.location_name, data.notes, data.tags]
     .filter(Boolean)

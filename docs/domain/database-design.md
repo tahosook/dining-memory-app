@@ -52,6 +52,8 @@
 - The active schema is intentionally small while capture, save, search, and settings behavior stabilizes.
 - `search_text` は current text and filter search path を支える field として扱う。
 - `cooking_level` は legacy `easy` / `medium` / `hard` を service layer で `quick` / `daily` / `gourmet` に正規化し、自炊記録では明示入力または保存時推論で設定する。
+- `MealService.updateMeal` では、nullable な optional フィールドについて `undefined`（キー未指定）は既存値を維持し、`null`（明示指定）は DB 上 `NULL` にクリアする（必須フィールド `meal_name`, `is_homemade`, `photo_path`, `meal_datetime` は `null` 不可）。
+- `MealService.updateMeal` で検索対象フィールド（`meal_name` / `cuisine_type` / `location_name` / `notes` / `tags`）が更新またはクリアされた場合、`search_text` 未指定時は最新値から再生成される（検索対象外フィールドのみの更新では既存の `search_text` を維持する）。
 - `search_vectors` は既存 install の migration 互換性のため残し、current feature path では更新しない。
 
 ## Schema Versioning
