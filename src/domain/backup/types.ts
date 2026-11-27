@@ -37,12 +37,20 @@ export interface PortableAppSettingRecord {
   updated_at: number;
 }
 
-export interface BackupValidationResult {
-  valid: boolean;
-  manifest?: BackupManifest;
-  meals?: PortableMealRecord[];
-  appSettings?: PortableAppSettingRecord[];
-  photoFileNames?: string[];
-  stagingDirectory?: string;
-  error?: string;
+export interface ValidBackupValidationResult {
+  valid: true;
+  manifest: BackupManifest;
+  meals: PortableMealRecord[];
+  appSettings: PortableAppSettingRecord[];
+  photoFileNames: string[];
+  stagingDirectory: string;
 }
+
+export interface InvalidBackupValidationResult {
+  valid: false;
+  error?: string;
+  canceled?: boolean;
+  stagingDirectory?: string;
+}
+
+export type BackupValidationResult = ValidBackupValidationResult | InvalidBackupValidationResult;

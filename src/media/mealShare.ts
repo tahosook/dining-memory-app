@@ -124,7 +124,7 @@ export async function inspectSharePhoto(
       debugInfo.fileSize = fileInfo.size;
     }
   } catch (error) {
-    console.warn('[MealShare] Failed to inspect photoUri file info:', error);
+    console.warn('[MealShare] Failed to inspect photoUri file info:', sanitizeLogObject(error));
   }
 
   return debugInfo;

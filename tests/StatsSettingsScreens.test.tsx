@@ -482,6 +482,37 @@ describe('SettingsScreen', () => {
     );
   });
 
+  test('shows error alert and sanitized log when clearAllMeals fails', async () => {
+    (MealService.clearAllMeals as jest.Mock).mockRejectedValueOnce(
+      new Error('sqlite delete failed at /Users/alice/DiningMemory.db')
+    );
+
+    const { getByText } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    fireEvent.press(getByText('すべての食事記録を削除'));
+
+    const alertButtons = (Alert.alert as jest.Mock).mock.calls[0]?.[2] as
+      Array<{ text?: string; onPress?: () => Promise<void> | void }> | undefined;
+    const deleteButton = alertButtons?.find(button => button.text === '削除する');
+
+    await act(async () => {
+      await deleteButton?.onPress?.();
+    });
+
+    expect(MealService.clearAllMeals).toHaveBeenCalledWith({ cleanupPhotos: true });
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      'Failed to delete all meals:',
+      expect.objectContaining({
+        message: 'sqlite delete failed at [MASKED_PATH]/DiningMemory.db',
+      })
+    );
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '削除に失敗しました',
+      '食事記録の削除に失敗しました。もう一度お試しください。'
+    );
+  });
+
   test('shows model and runtime technical details only after opening details', async () => {
     const { getByText, getByTestId, queryAllByText, queryByText } = render(<SettingsScreen />);
     await triggerLatestFocus();
@@ -729,6 +760,7 @@ describe('SettingsScreen', () => {
       },
       meals: [],
       appSettings: [],
+      photoFileNames: [],
       stagingDirectory: 'file:///mock-cache/dm-import-123/',
     });
 
@@ -771,6 +803,7 @@ describe('SettingsScreen', () => {
       },
       meals: [],
       appSettings: [],
+      photoFileNames: [],
       stagingDirectory: 'file:///mock-cache/dm-import-123/',
     });
 

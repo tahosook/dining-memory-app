@@ -739,4 +739,57 @@ describe('meal input assist runtime availability', () => {
       reason: 'この Android ABI では端末内 AI 入力補助を利用できません。',
     });
   });
+
+  test('guards against non-array mealNames/cuisineTypes and malformed field values in local runtime response', async () => {
+    const fakeContext = {
+      clearCache: jest.fn().mockResolvedValue(undefined),
+      initMultimodal: jest.fn().mockResolvedValue(true),
+      getMultimodalSupport: jest.fn().mockResolvedValue({ vision: true, audio: false }),
+      completion: jest
+        .fn()
+        .mockResolvedValueOnce({
+          text: JSON.stringify({
+            noteDraft: { value: '料理名: カレー\nメモ: 非配列ガードテスト', confidence: 0.8 },
+            mealNames: 'ラーメン',
+            cuisineTypes: [null, 123, { value: '洋食', confidence: 0.9 }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          text: JSON.stringify({
+            noteDraft: ['invalid-array-note'],
+            mealNames: { unexpected: 'object' },
+            cuisineTypes: null,
+          }),
+        }),
+    };
+    jest.spyOn(llamaRn, 'initLlama').mockResolvedValue(fakeContext as never);
+
+    const availability = await loadMealInputAssistRuntimeAvailability('local-runtime-prototype');
+    expect(availability.kind).toBe('ready');
+    if (availability.kind !== 'ready') {
+      throw new Error('Expected local runtime availability to be ready.');
+    }
+
+    const request = {
+      photoUri: 'file:///tmp/mock-meal.jpg',
+      mealName: '',
+      cuisineType: '' as const,
+      notes: '',
+      locationName: '',
+      isHomemade: true,
+    };
+
+    const rawResult = await availability.provider.suggest(request);
+    expect(rawResult.noteDraft).toEqual({
+      value: '料理名: カレー\nメモ: 非配列ガードテスト',
+      confidence: 0.8,
+    });
+    expect(rawResult.mealNames).toEqual([]);
+    expect(rawResult.cuisineTypes).toEqual([{ value: '洋食', confidence: 0.9 }]);
+
+    const malformedResult = await availability.provider.suggest(request);
+    expect(malformedResult.noteDraft).toBeNull();
+    expect(malformedResult.mealNames).toEqual([]);
+    expect(malformedResult.cuisineTypes).toEqual([]);
+  });
 });

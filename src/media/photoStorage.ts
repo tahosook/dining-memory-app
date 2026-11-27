@@ -11,6 +11,7 @@ import {
   type PhotoLocationSnapshot,
   writePhotoExifToJpeg,
 } from './photoExif';
+import { sanitizeLogObject } from '../utils/logSanitizer';
 
 export const ANDROID_PHOTO_ALBUM_NAME = 'Dining Memory';
 export const DEFAULT_PHOTO_SOFTWARE_NAME =
@@ -82,7 +83,10 @@ export async function persistPhotoToStablePath(
     resizedTempUri = resizedPhoto.uri;
     sourceToCopy = resizedPhoto.uri;
   } catch (resizeError: unknown) {
-    console.warn('Photo native resize failed, falling back to original image:', resizeError);
+    console.warn(
+      'Photo native resize failed, falling back to original image:',
+      sanitizeLogObject(resizeError)
+    );
     sourceToCopy = photoUri;
   }
 
@@ -110,7 +114,10 @@ export async function persistPhotoToStablePath(
         softwareName: options.softwareName?.trim() || DEFAULT_PHOTO_SOFTWARE_NAME,
       });
     } catch (photoExifError: unknown) {
-      console.warn('Photo EXIF update skipped, but local photo copy is preserved:', photoExifError);
+      console.warn(
+        'Photo EXIF update skipped, but local photo copy is preserved:',
+        sanitizeLogObject(photoExifError)
+      );
     }
   } finally {
     if (resizedTempUri && resizedTempUri !== photoUri) {
@@ -140,7 +147,10 @@ export async function persistPhotoToStablePath(
       }
       savedToMediaLibrary = true;
     } catch (albumError: unknown) {
-      console.warn('Android album save failed, but local photo copy is preserved:', albumError);
+      console.warn(
+        'Android album save failed, but local photo copy is preserved:',
+        sanitizeLogObject(albumError)
+      );
     }
 
     return {

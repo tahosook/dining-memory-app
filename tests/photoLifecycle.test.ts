@@ -562,5 +562,48 @@ describe('photoLifecycle', () => {
       expect(failResult.deletedFileNames).toHaveLength(0);
       expect(failResult.failedFileNames).toEqual(['meal-orphan-fail.jpg']);
     });
+
+    test('sanitizes photo URIs and file paths in warning logs on read and delete failures', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+
+      try {
+        (getAllPersistedMealRows as jest.Mock).mockResolvedValue([]);
+        (readDirectoryAsync as jest.Mock).mockRejectedValueOnce(
+          new Error('Read failed at /Users/alice/Documents/DiningMemory')
+        );
+
+        await cleanupOrphanedPhotoFiles();
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[photoLifecycle] Failed to read documentDirectory:',
+          expect.objectContaining({
+            message: 'Read failed at [MASKED_PATH]/DiningMemory',
+          })
+        );
+
+        warnSpy.mockClear();
+
+        setupMockFileSystem({
+          'meal-orphan-secret.jpg': { exists: true },
+        });
+        (deleteAsync as jest.Mock).mockRejectedValueOnce(
+          new Error('Cannot unlink file:///Users/alice/Documents/meal-orphan-secret.jpg')
+        );
+
+        await cleanupOrphanedPhotoFiles();
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[photoLifecycle] Failed to delete orphan photo: file://.../meal-orphan-secret.jpg',
+          expect.objectContaining({
+            message: 'Cannot unlink file://.../meal-orphan-secret.jpg',
+          })
+        );
+        const serializedLogs = warnSpy.mock.calls.flat().map(arg => String(arg));
+        expect(serializedLogs.join(' ')).not.toContain('/Users/alice');
+        expect(serializedLogs.join(' ')).not.toContain('file:///mock-documents/');
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 });

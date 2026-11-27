@@ -31,8 +31,11 @@ import {
   validateSafeFileName,
   type BackupManifest,
   type BackupValidationResult,
+  type PortableAppSettingRecord,
+  type PortableMealRecord,
 } from '../../domain/backup';
 import { getAppVersion } from '../../utils/buildInfo';
+import { sanitizeLogObject } from '../../utils/logSanitizer';
 import {
   DATABASE_SCHEMA_VERSION,
   getAllAppSettingsRows,
@@ -40,6 +43,16 @@ import {
   replaceDatabaseWithBackup,
 } from './localDatabase';
 import { cleanupOrphanedPhotoFiles } from '../../media/photoLifecycle';
+
+type JsonReadStepResult = { valid: true; data: unknown } | { valid: false; error: string };
+type ManifestStepResult =
+  { valid: true; manifest: BackupManifest } | { valid: false; error: string };
+type MealsStepResult =
+  { valid: true; meals: PortableMealRecord[] } | { valid: false; error: string };
+type AppSettingsStepResult =
+  { valid: true; appSettings: PortableAppSettingRecord[] } | { valid: false; error: string };
+type PhotoValidationStepResult =
+  { valid: true; photoFileNames: string[] } | { valid: false; error: string };
 
 export interface ExportBackupResult {
   zipFileName: string;
@@ -183,7 +196,7 @@ export class BackupService {
       await deleteAsync(stagingDir, { idempotent: true }).catch(err => {
         console.warn(
           '[BackupService] Failed to clean up export staging directory:',
-          err instanceof Error ? err.message : err
+          sanitizeLogObject(err)
         );
       });
     }
@@ -198,7 +211,7 @@ export class BackupService {
    * the confirmation dialog to the user. The directory is cleaned up upon cancel
    * (via cleanupStaging) or after restore execution (via restoreVerifiedBackup's finally block).
    */
-  static async pickAndValidateBackup(): Promise<BackupValidationResult & { canceled?: boolean }> {
+  static async pickAndValidateBackup(): Promise<BackupValidationResult> {
     if (!cacheDirectory) {
       return { valid: false, error: '一時保存ディレクトリを利用できません。' };
     }
@@ -293,8 +306,8 @@ export class BackupService {
 
       const photosResult = await this.validatePhotos(
         stagingDir,
-        manifestResult.manifest!,
-        mealsResult.meals!
+        manifestResult.manifest,
+        mealsResult.meals
       );
       if (!photosResult.valid) {
         await this.cleanupStaging(stagingDir);
@@ -319,18 +332,35 @@ export class BackupService {
     }
   }
 
-  private static async extractManifest(stagingDir: string): Promise<BackupValidationResult> {
-    const manifestInfo = await getInfoAsync(`${stagingDir}manifest.json`);
-    if (!manifestInfo.exists) {
-      return {
-        valid: false,
-        error:
-          'バックアップファイルに manifest.json が見つかりません。対応外のアーカイブ形式です。',
-      };
+  private static async readAndParseJsonFile(
+    filePath: string,
+    missingError: string,
+    syntaxError: string
+  ): Promise<JsonReadStepResult> {
+    const fileInfo = await getInfoAsync(filePath);
+    if (!fileInfo.exists) {
+      return { valid: false, error: missingError };
     }
 
-    const rawManifest = JSON.parse(await readAsStringAsync(`${stagingDir}manifest.json`));
-    const manifestValidation = validateBackupManifest(rawManifest, DATABASE_SCHEMA_VERSION);
+    try {
+      const data: unknown = JSON.parse(await readAsStringAsync(filePath));
+      return { valid: true, data };
+    } catch {
+      return { valid: false, error: syntaxError };
+    }
+  }
+
+  private static async extractManifest(stagingDir: string): Promise<ManifestStepResult> {
+    const parsed = await this.readAndParseJsonFile(
+      `${stagingDir}manifest.json`,
+      'バックアップファイルに manifest.json が見つかりません。対応外のアーカイブ形式です。',
+      'マニフェスト（manifest.json）が破損しています（JSON構文エラー）。'
+    );
+    if (!parsed.valid) {
+      return parsed;
+    }
+
+    const manifestValidation = validateBackupManifest(parsed.data, DATABASE_SCHEMA_VERSION);
     if (!manifestValidation.valid || !manifestValidation.manifest) {
       return {
         valid: false,
@@ -341,17 +371,17 @@ export class BackupService {
     return { valid: true, manifest: manifestValidation.manifest };
   }
 
-  private static async extractMeals(stagingDir: string): Promise<BackupValidationResult> {
-    const mealsInfo = await getInfoAsync(`${stagingDir}database/meals.json`);
-    if (!mealsInfo.exists) {
-      return {
-        valid: false,
-        error: '食事データ（database/meals.json）が見つかりません。',
-      };
+  private static async extractMeals(stagingDir: string): Promise<MealsStepResult> {
+    const parsed = await this.readAndParseJsonFile(
+      `${stagingDir}database/meals.json`,
+      '食事データ（database/meals.json）が見つかりません。',
+      '食事データ（database/meals.json）が破損しています（JSON構文エラー）。'
+    );
+    if (!parsed.valid) {
+      return parsed;
     }
 
-    const rawMeals = JSON.parse(await readAsStringAsync(`${stagingDir}database/meals.json`));
-    const mealsValidation = validatePortableMeals(rawMeals);
+    const mealsValidation = validatePortableMeals(parsed.data);
     if (!mealsValidation.valid || !mealsValidation.meals) {
       return {
         valid: false,
@@ -362,26 +392,17 @@ export class BackupService {
     return { valid: true, meals: mealsValidation.meals };
   }
 
-  private static async extractAppSettings(stagingDir: string): Promise<BackupValidationResult> {
-    const settingsInfo = await getInfoAsync(`${stagingDir}database/app_settings.json`);
-    if (!settingsInfo.exists) {
-      return {
-        valid: false,
-        error: 'アプリ設定データ（database/app_settings.json）が見つかりません。',
-      };
+  private static async extractAppSettings(stagingDir: string): Promise<AppSettingsStepResult> {
+    const parsed = await this.readAndParseJsonFile(
+      `${stagingDir}database/app_settings.json`,
+      'アプリ設定データ（database/app_settings.json）が見つかりません。',
+      'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。'
+    );
+    if (!parsed.valid) {
+      return parsed;
     }
 
-    let rawSettings: unknown;
-    try {
-      rawSettings = JSON.parse(await readAsStringAsync(`${stagingDir}database/app_settings.json`));
-    } catch {
-      return {
-        valid: false,
-        error: 'アプリ設定データ（database/app_settings.json）が破損しています（JSON構文エラー）。',
-      };
-    }
-
-    const settingsValidation = validatePortableAppSettings(rawSettings);
+    const settingsValidation = validatePortableAppSettings(parsed.data);
     if (!settingsValidation.valid || !settingsValidation.appSettings) {
       return {
         valid: false,
@@ -395,12 +416,8 @@ export class BackupService {
   private static async validatePhotos(
     stagingDir: string,
     manifest: BackupManifest,
-    meals: BackupValidationResult['meals']
-  ): Promise<BackupValidationResult> {
-    if (!meals) {
-      return { valid: false, error: '食事データが不正です。' };
-    }
-
+    meals: PortableMealRecord[]
+  ): Promise<PhotoValidationStepResult> {
     if (meals.length !== manifest.mealCount) {
       return {
         valid: false,
@@ -443,9 +460,10 @@ export class BackupService {
       }
     }
 
+    const actualPhotoFileSet = new Set(actualPhotoFiles);
     const missingPhotos: string[] = [];
     for (const photoName of requiredPhotos) {
-      if (!actualPhotoFiles.includes(photoName)) {
+      if (!actualPhotoFileSet.has(photoName)) {
         missingPhotos.push(photoName);
       }
     }
@@ -586,7 +604,7 @@ export class BackupService {
       } catch (cleanupError) {
         console.warn(
           '[BackupService] Non-fatal warning: Failed to clean up orphaned photos after restore:',
-          cleanupError
+          sanitizeLogObject(cleanupError)
         );
       }
 
@@ -635,7 +653,7 @@ export class BackupService {
       await deleteAsync(rollbackDir, { idempotent: true }).catch(err => {
         console.warn(
           '[BackupService] Failed to clean up rollback directory:',
-          err instanceof Error ? err.message : err
+          sanitizeLogObject(err)
         );
       });
       await this.cleanupStaging(stagingDir);
@@ -651,10 +669,7 @@ export class BackupService {
     }
 
     await deleteAsync(stagingDirectory, { idempotent: true }).catch(err => {
-      console.warn(
-        '[BackupService] Failed to clean up staging directory:',
-        err instanceof Error ? err.message : err
-      );
+      console.warn('[BackupService] Failed to clean up staging directory:', sanitizeLogObject(err));
     });
   }
 }

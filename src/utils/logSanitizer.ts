@@ -46,7 +46,7 @@ export function sanitizeTextForLog(text: string): string {
   // 3. Mask Unix absolute paths with at least 2 segments (e.g. /data/user/0/com.app/photos/meal.jpg -> [MASKED_PATH]/meal.jpg)
   // or stack traces like (/Users/dev/app/src/index.ts:10:5)
   result = result.replace(
-    /(^|[[\]\s'"<>,;(`{}=])(\/(?:[A-Za-z0-9_.\-~@]+\/)+[A-Za-z0-9_.\-~@]+(?::\d+(?::\d+)?)?)/g,
+    /(^|[[\]\s'"<>,;(`{}=:])(\/(?:[A-Za-z0-9_.\-~@]+\/)+[A-Za-z0-9_.\-~@]+(?::\d+(?::\d+)?)?)/g,
     (_match, prefix, pathStr) => {
       const slashIdx = Math.max(pathStr.lastIndexOf('/'), pathStr.lastIndexOf('\\'));
       const filename =
@@ -76,13 +76,7 @@ export function sanitizeLogObject<T>(obj: T): T {
   }
 
   if (typeof obj === 'string') {
-    // We only sanitize strings if they look like file paths in a root level call,
-    // but typically this is called with objects. We'll leave raw strings alone
-    // unless they start with file:// to be safe.
-    if (obj.startsWith('file://') || obj.startsWith('/')) {
-      return sanitizeUriForLog(obj) as unknown as T;
-    }
-    return obj;
+    return sanitizeTextForLog(obj) as unknown as T;
   }
 
   if (Array.isArray(obj)) {
@@ -115,8 +109,8 @@ export function sanitizeLogObject<T>(obj: T): T {
   if (typeof obj === 'object') {
     const sanitized: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === 'string' && isUriKey(key)) {
-        sanitized[key] = sanitizeUriForLog(value);
+      if (typeof value === 'string') {
+        sanitized[key] = isUriKey(key) ? sanitizeUriForLog(value) : sanitizeTextForLog(value);
       } else if (typeof value === 'object' && value !== null) {
         sanitized[key] = sanitizeLogObject(value);
       } else {

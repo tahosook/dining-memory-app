@@ -1,4 +1,8 @@
-import { sanitizeUriForLog, sanitizeLogObject } from '../src/utils/logSanitizer';
+import {
+  sanitizeUriForLog,
+  sanitizeTextForLog,
+  sanitizeLogObject,
+} from '../src/utils/logSanitizer';
 
 describe('logSanitizer', () => {
   describe('sanitizeUriForLog', () => {
@@ -29,6 +33,23 @@ describe('logSanitizer', () => {
     });
   });
 
+  describe('sanitizeTextForLog', () => {
+    it('masks Unix absolute paths immediately following a colon while preserving the prefix', () => {
+      const generationKey = 'meal-123:/data/user/0/com.app/files/meal.jpg';
+      expect(sanitizeTextForLog(generationKey)).toBe('meal-123:[MASKED_PATH]/meal.jpg');
+    });
+
+    it('preserves HTTPS URLs without breaking them', () => {
+      const url = 'https://example.com/path/to/page';
+      expect(sanitizeTextForLog(url)).toBe('https://example.com/path/to/page');
+    });
+
+    it('preserves time strings containing colons', () => {
+      const timeStr = '12:30:45';
+      expect(sanitizeTextForLog(timeStr)).toBe('12:30:45');
+    });
+  });
+
   describe('sanitizeLogObject', () => {
     it('returns the same value for non-objects', () => {
       expect(sanitizeLogObject(null)).toBeNull();
@@ -56,7 +77,7 @@ describe('logSanitizer', () => {
         },
         items: [
           { path: '/absolute/path/file1.txt' },
-          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' },
+          { otherField: 'file:///should/be/sanitized/in/text/matched.jpg' },
         ],
       };
 
@@ -73,11 +94,53 @@ describe('logSanitizer', () => {
             url: '[MASKED_PATH]/image.jpg',
           },
         },
-        items: [
-          { path: '[MASKED_PATH]/file1.txt' },
-          { otherField: 'file:///should/not/be/sanitized/unless/matched.jpg' },
-        ],
+        items: [{ path: '[MASKED_PATH]/file1.txt' }, { otherField: 'file://.../matched.jpg' }],
       });
+    });
+
+    it('sanitizes absolute paths and file:// URIs embedded in plain strings', () => {
+      const result = sanitizeLogObject('Permission denied at /Users/alice/Documents/meal.jpg');
+      expect(result).toBe('Permission denied at [MASKED_PATH]/meal.jpg');
+      expect(result).not.toContain('/Users/alice');
+
+      const uriResult = sanitizeLogObject(
+        'Cannot open file:///data/user/0/com.example/files/meal.jpg'
+      );
+      expect(uriResult).toBe('Cannot open file://.../meal.jpg');
+      expect(uriResult).not.toContain('/data/user/0/com.example');
+    });
+
+    it('sanitizes absolute paths in non-URI string properties of plain objects', () => {
+      const input = {
+        error: 'Failed to copy /Users/alice/Documents/meal.jpg to cache',
+        detail: 'Source file:///var/mobile/Containers/Data/photo.jpg missing',
+        note: 'plain text without paths',
+        photoPath: '/Users/alice/Documents/photo.jpg',
+      };
+
+      const sanitized = sanitizeLogObject(input);
+
+      expect(sanitized).toEqual({
+        error: 'Failed to copy [MASKED_PATH]/meal.jpg to cache',
+        detail: 'Source file://.../photo.jpg missing',
+        note: 'plain text without paths',
+        photoPath: '[MASKED_PATH]/photo.jpg',
+      });
+      expect(sanitized.error).not.toContain('/Users/alice');
+      expect(sanitized.detail).not.toContain('/var/mobile');
+    });
+
+    it('masks raw paths when a caught non-Error string rejection value is passed to sanitizeLogObject', async () => {
+      let caught: unknown;
+      try {
+        await Promise.reject('Permission denied at /Users/alice/Documents/meal.jpg');
+      } catch (err) {
+        caught = err;
+      }
+
+      const sanitized = sanitizeLogObject(caught);
+      expect(sanitized).toBe('Permission denied at [MASKED_PATH]/meal.jpg');
+      expect(String(sanitized)).not.toContain('/Users/alice');
     });
   });
 

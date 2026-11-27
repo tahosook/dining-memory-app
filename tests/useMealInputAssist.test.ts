@@ -881,4 +881,108 @@ describe('useMealInputAssist', () => {
     expect(providerCooking.suggest).toHaveBeenCalledTimes(1);
     expect(providerUniversal.suggest).toHaveBeenCalledTimes(1);
   });
+
+  test('releases running lock and sanitizes error logs when suggestion setup throws', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(jest.fn());
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+
+    try {
+      const provider = {
+        suggest: jest.fn().mockResolvedValue({
+          source: 'mock-local',
+          noteDraft: '料理名: カレー\nメモ: 再試行で成功',
+          mealNames: [],
+          cuisineTypes: [],
+        }),
+      };
+
+      // 1. Environment load error logs sanitized path
+      let shouldFailEnv = true;
+      const loadAiInputAssistEnabled = jest.fn(async () => {
+        if (shouldFailEnv) {
+          throw new Error('Failed reading /Users/alice/app_settings.sqlite');
+        }
+        return true;
+      });
+      const resolveRuntimeAvailability = jest.fn(async () =>
+        createReadyRuntimeAvailability(provider)
+      );
+
+      const { result: envResult } = renderHook(() =>
+        useMealInputAssist({
+          captureReview: createCaptureReview(),
+          onCaptureReviewChange: jest.fn(),
+          loadAiInputAssistEnabled,
+          resolveRuntimeAvailability,
+        })
+      );
+
+      await flushEffects();
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Failed to load AI input assist environment:',
+        expect.objectContaining({
+          message: 'Failed reading [MASKED_PATH]/app_settings.sqlite',
+        })
+      );
+
+      shouldFailEnv = false;
+      act(() => {
+        invalidateMealInputAssistEnvironment();
+      });
+      await flushEffects();
+      await act(async () => {
+        await envResult.current.requestSuggestions();
+      });
+      expect(envResult.current.status).toBe('success');
+
+      // 2. Error thrown in policy() inside requestSuggestions() must still release running lock for retry
+      let shouldThrowPolicy = false;
+      const flakyPolicy = jest.fn(() => {
+        if (shouldThrowPolicy) {
+          shouldThrowPolicy = false;
+          throw new Error('Policy evaluation failed at /Users/alice/policy.json');
+        }
+        return { kind: 'enabled' as const };
+      });
+
+      const { result } = renderHook(() =>
+        useMealInputAssist({
+          captureReview: createCaptureReview(),
+          onCaptureReviewChange: jest.fn(),
+          provider,
+          policy: flakyPolicy,
+        })
+      );
+
+      await flushEffects();
+
+      shouldThrowPolicy = true;
+      await act(async () => {
+        await result.current.requestSuggestions();
+      });
+
+      expect(result.current.status).toBe('error');
+      expect(result.current.errorMessage).toBe(
+        '端末内解析に失敗しました。もう一度お試しください。'
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Meal input assist failed:',
+        expect.objectContaining({
+          message: 'Policy evaluation failed at [MASKED_PATH]/policy.json',
+        })
+      );
+
+      // Running lock must be released so a retry succeeds
+      await act(async () => {
+        await result.current.requestSuggestions();
+      });
+
+      expect(result.current.status).toBe('success');
+      expect(provider.suggest).toHaveBeenCalledTimes(2);
+      expect(result.current.suggestions.noteDraft?.value).toContain('再試行で成功');
+    } finally {
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
 });
