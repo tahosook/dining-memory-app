@@ -1,569 +1,87 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import React from 'react';
+import { StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { buildMealShareText, shareMealContent } from '../../media/mealShare';
-import { DetailRow } from '../../components/common/DetailRow';
-import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
-import { buildMealInputAssistUiProps } from '../../components/common/MealInputAssistSection';
-import {
-  MealPhotoViewer,
-  type MealPhotoViewerPhoto,
-} from '../../components/common/MealPhotoViewer';
+import { MealEditModal } from '../../components/common/MealEditModal';
+import { MealPhotoViewer } from '../../components/common/MealPhotoViewer';
+import { MealDetailContent } from '../../components/screens/mealDetail/MealDetailContent';
+import { MealShareComposerModal } from '../../components/screens/mealDetail/MealShareComposerModal';
 import { Colors } from '../../constants/Colors';
-import { MealService } from '../../database/services/MealService';
-import { sanitizeLogObject } from '../../utils/logSanitizer';
-import { useMealInputAssist } from '../../hooks/cameraCapture/useMealInputAssist';
-import type { Meal } from '../../types/MealTypes';
-import type {
-  CaptureReviewEditableField,
-  CaptureReviewState,
-} from '../../hooks/cameraCapture/useCameraCapture';
+import { useMealDetailScreen } from '../../hooks/mealDetail/useMealDetailScreen';
 import type { RootStackParamList } from '../../navigation/types';
-import { getMealDetailImageUri } from '../../utils/mealImage';
-import { formatCookingLevel, normalizeCookingLevel } from '../../utils/cookingLevel';
-import { deleteMealPhotoFileIfSafe, rotateMealPhotoClockwise } from '../../utils/mealPhotoRotation';
-import { requestMealThumbnail } from '../../media/mealThumbnail';
+
+export type { DetailNavigationDirection } from '../../hooks/mealDetail/mealDetailHelpers';
+export {
+  canNavigateMealDetail,
+  createMealDetailViewerPhotos,
+  getAdjacentMealIndex,
+  getMealDetailViewerPhotoIndex,
+} from '../../hooks/mealDetail/mealDetailHelpers';
 
 type MealDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'MealDetail'>;
-export type DetailNavigationDirection = 'previous' | 'next';
-
-type MealDetailViewerPhoto = MealPhotoViewerPhoto & {
-  mealIndex: number;
-};
-
-const emptyEditDraft: MealEditDraft = {
-  mealName: '',
-  cuisineType: '',
-  location: '',
-  notes: '',
-  isHomemade: true,
-  cookingLevel: '',
-};
-
-function createMealEditDraft(meal: Meal): MealEditDraft {
-  return {
-    mealName: meal.meal_name,
-    cuisineType: meal.cuisine_type ?? '',
-    location: meal.location_name ?? '',
-    notes: meal.notes ?? '',
-    isHomemade: meal.is_homemade,
-    cookingLevel: normalizeCookingLevel(meal.cooking_level) ?? '',
-  };
-}
-
-function buildInitialShareText(meal: Meal): string {
-  return buildMealShareText(meal);
-}
-
-function formatMealDate(mealDatetime: number): string {
-  return new Date(mealDatetime).toLocaleString('ja-JP');
-}
-
-function createInitialDetailMeals(meal: Meal, meals?: Meal[]): Meal[] {
-  return meals?.length ? meals : [meal];
-}
-
-function clampDetailIndex(index: number, mealsLength: number): number {
-  return Math.max(0, Math.min(index, mealsLength - 1));
-}
-
-export function getAdjacentMealIndex(
-  currentIndex: number,
-  mealsLength: number,
-  direction: DetailNavigationDirection
-): number {
-  if (mealsLength <= 0) {
-    return currentIndex;
-  }
-
-  if (direction === 'next') {
-    return Math.min(currentIndex + 1, mealsLength - 1);
-  }
-
-  return Math.max(currentIndex - 1, 0);
-}
-
-export function canNavigateMealDetail(
-  editingVisible: boolean,
-  shareComposerVisible: boolean
-): boolean {
-  return !editingVisible && !shareComposerVisible;
-}
-
-export function createMealDetailViewerPhotos(meals: Meal[]): MealDetailViewerPhoto[] {
-  return meals.reduce<MealDetailViewerPhoto[]>((photos, item, index) => {
-    const uri = getMealDetailImageUri(item);
-
-    if (!uri) {
-      return photos;
-    }
-
-    photos.push({
-      id: item.id,
-      uri,
-      title: item.meal_name,
-      mealIndex: index,
-    });
-
-    return photos;
-  }, []);
-}
-
-export function getMealDetailViewerPhotoIndex(
-  photos: readonly Pick<MealDetailViewerPhoto, 'mealIndex'>[],
-  currentIndex: number
-): number {
-  const viewerIndex = photos.findIndex(photo => photo.mealIndex === currentIndex);
-  return viewerIndex >= 0 ? viewerIndex : 0;
-}
 
 export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navigation }) => {
-  const [detailMeals, setDetailMeals] = useState<Meal[]>(() =>
-    createInitialDetailMeals(route.params.meal, route.params.meals)
-  );
-  const [currentIndex, setCurrentIndex] = useState(() => {
-    const initialMeals = createInitialDetailMeals(route.params.meal, route.params.meals);
-    const index = route.params.initialIndex ?? 0;
-    return clampDetailIndex(index, initialMeals.length);
-  });
-  const meal = detailMeals[currentIndex] ?? detailMeals[0] ?? route.params.meal;
-  const [editingMeal, setEditingMeal] = useState<Meal | null>(null);
-  const [editDraft, setEditDraft] = useState<MealEditDraft>(emptyEditDraft);
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [rotatingPhoto, setRotatingPhoto] = useState(false);
-  const [shareComposerVisible, setShareComposerVisible] = useState(false);
-  const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
-  const [shareText, setShareText] = useState(() => buildInitialShareText(meal));
-
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  const photoUri = useMemo(() => getMealDetailImageUri(meal), [meal]);
-  const viewerPhotos = useMemo(() => createMealDetailViewerPhotos(detailMeals), [detailMeals]);
-  const viewerPhotoIndex = useMemo(
-    () => getMealDetailViewerPhotoIndex(viewerPhotos, currentIndex),
-    [currentIndex, viewerPhotos]
-  );
-
-  const editCaptureReview = useMemo<CaptureReviewState | null>(() => {
-    if (!editingMeal || !photoUri) {
-      return null;
-    }
-
-    return {
-      source: 'camera',
-      photoUri,
-      width: 0,
-      height: 0,
-      capturedAtMs: editingMeal.meal_datetime,
-      mealName: editDraft.mealName,
-      cuisineType: editDraft.cuisineType as CaptureReviewState['cuisineType'],
-      notes: editDraft.notes,
-      locationName: editDraft.location,
-      isHomemade: editDraft.isHomemade,
-    };
-  }, [editDraft, editingMeal, photoUri]);
-
-  const handleEditCaptureReviewChange = useCallback(
-    (field: CaptureReviewEditableField, value: string | boolean) => {
-      setEditDraft(current => {
-        if (field === 'mealName') {
-          return { ...current, mealName: String(value) };
-        }
-
-        if (field === 'cuisineType') {
-          return { ...current, cuisineType: String(value) };
-        }
-
-        if (field === 'notes') {
-          return { ...current, notes: String(value) };
-        }
-
-        if (field === 'locationName') {
-          return { ...current, location: String(value) };
-        }
-
-        if (field === 'isHomemade') {
-          const isHomemade = Boolean(value);
-          return {
-            ...current,
-            isHomemade,
-            cookingLevel: isHomemade ? current.cookingLevel : '',
-          };
-        }
-
-        return current;
-      });
-    },
-    []
-  );
-
-  const editMealInputAssist = useMealInputAssist({
-    captureReview: editCaptureReview,
-    onCaptureReviewChange: handleEditCaptureReviewChange,
-  });
-
-  const editAiAssist = useMemo(
-    () =>
-      buildMealInputAssistUiProps({
-        status: editMealInputAssist.status,
-        suggestions: editMealInputAssist.suggestions,
-        errorMessage: editMealInputAssist.errorMessage,
-        progress: editMealInputAssist.progress,
-        disabledReason: editMealInputAssist.disabledReason,
-        requestSuggestions: editMealInputAssist.requestSuggestions,
-        applyNoteDraftSuggestion: editMealInputAssist.applyNoteDraftSuggestion,
-        applyMealNameSuggestion: editMealInputAssist.applyMealNameSuggestion,
-        applyCuisineSuggestion: editMealInputAssist.applyCuisineSuggestion,
-      }),
-    [
-      editMealInputAssist.status,
-      editMealInputAssist.suggestions,
-      editMealInputAssist.errorMessage,
-      editMealInputAssist.progress,
-      editMealInputAssist.disabledReason,
-      editMealInputAssist.requestSuggestions,
-      editMealInputAssist.applyNoteDraftSuggestion,
-      editMealInputAssist.applyMealNameSuggestion,
-      editMealInputAssist.applyCuisineSuggestion,
-    ]
-  );
-
-  const openEditModal = useCallback(() => {
-    setEditingMeal(meal);
-    setEditDraft(createMealEditDraft(meal));
-  }, [meal]);
-
-  const openShareComposer = useCallback(() => {
-    setShareText(buildInitialShareText(meal));
-    setShareComposerVisible(true);
-  }, [meal]);
-
-  const openPhotoViewer = useCallback(() => {
-    if (!photoUri) {
-      return;
-    }
-
-    setPhotoViewerVisible(true);
-  }, [photoUri]);
-
-  const closePhotoViewer = useCallback(() => {
-    setPhotoViewerVisible(false);
-  }, []);
-
-  const handlePhotoViewerIndexChange = useCallback(
-    (viewerIndex: number) => {
-      const nextMealIndex = viewerPhotos[viewerIndex]?.mealIndex;
-
-      if (typeof nextMealIndex !== 'number' || nextMealIndex === currentIndex) {
-        return;
-      }
-
-      const nextMeal = detailMeals[nextMealIndex];
-
-      if (!nextMeal) {
-        return;
-      }
-
-      setCurrentIndex(nextMealIndex);
-      setShareText(buildInitialShareText(nextMeal));
-    },
-    [currentIndex, detailMeals, viewerPhotos]
-  );
-
-  const saveEdit = useCallback(async () => {
-    if (!editingMeal) {
-      return;
-    }
-
-    setSavingEdit(true);
-
-    try {
-      const updatedMeal = await MealService.updateMeal(editingMeal.id, {
-        meal_name: editDraft.mealName,
-        cuisine_type: editDraft.cuisineType.trim() || null,
-        location_name: editDraft.location.trim() || null,
-        notes: editDraft.notes.trim() || null,
-        is_homemade: editDraft.isHomemade,
-        cooking_level: editDraft.isHomemade ? editDraft.cookingLevel || null : null,
-        ...(editMealInputAssist.appliedMetadata
-          ? {
-              ai_confidence: editMealInputAssist.appliedMetadata.aiConfidence,
-              ai_source: editMealInputAssist.appliedMetadata.aiSource,
-            }
-          : {}),
-      });
-
-      if (updatedMeal) {
-        setDetailMeals(current =>
-          current.map((item, index) => (index === currentIndex ? updatedMeal : item))
-        );
-        if (!shareComposerVisible) {
-          setShareText(buildInitialShareText(updatedMeal));
-        }
-      }
-
-      setEditingMeal(null);
-    } catch (error) {
-      console.error('Failed to update meal:', sanitizeLogObject(error));
-      Alert.alert('エラー', '更新に失敗しました。');
-    } finally {
-      setSavingEdit(false);
-    }
-  }, [
+  const {
+    meal,
+    detailMealsCount,
     currentIndex,
-    editDraft,
-    editMealInputAssist.appliedMetadata,
-    editingMeal,
+    photoUri,
+    viewerPhotos,
+    viewerPhotoIndex,
+    photoViewerVisible,
+    openPhotoViewer,
+    closePhotoViewer,
+    handlePhotoViewerIndexChange,
+    canNavigateDetail,
+    isAtFirstMeal,
+    isAtLastMeal,
+    navigateToAdjacentMeal,
     shareComposerVisible,
-  ]);
-
-  const rotatePhotoClockwise = useCallback(async () => {
-    if (!photoUri || rotatingPhoto) {
-      return;
-    }
-
-    setRotatingPhoto(true);
-    let rotatedUri: string | null = null;
-
-    try {
-      rotatedUri = await rotateMealPhotoClockwise(photoUri);
-      const updatedMeal = await MealService.updateMeal(meal.id, {
-        photo_path: rotatedUri,
-        photo_thumbnail_path: null,
-      });
-
-      if (!updatedMeal) {
-        await deleteMealPhotoFileIfSafe(rotatedUri);
-        Alert.alert('エラー', '写真の回転に失敗しました。');
-        return;
-      }
-
-      setDetailMeals(current =>
-        current.map((item, index) => (index === currentIndex ? updatedMeal : item))
-      );
-
-      requestMealThumbnail(meal.id, rotatedUri, {
-        onGenerated: (mealId, thumbUri) => {
-          if (!isMountedRef.current) {
-            return;
-          }
-          setDetailMeals(current =>
-            current.map(item =>
-              item.id === mealId ? { ...item, photo_thumbnail_path: thumbUri } : item
-            )
-          );
-        },
-      });
-    } catch {
-      if (rotatedUri) {
-        await deleteMealPhotoFileIfSafe(rotatedUri).catch(() => undefined);
-      }
-      console.error('Failed to rotate meal photo.');
-      Alert.alert('エラー', '写真の回転に失敗しました。');
-    } finally {
-      if (isMountedRef.current) {
-        setRotatingPhoto(false);
-      }
-    }
-  }, [currentIndex, meal.id, photoUri, rotatingPhoto]);
-
-  const confirmDelete = useCallback(() => {
-    Alert.alert('削除確認', `${meal.meal_name} を削除してもよろしいですか？`, [
-      { text: 'キャンセル', style: 'cancel' },
-      {
-        text: '削除',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await MealService.softDeleteMeal(meal.id);
-            navigation.goBack();
-          } catch (error) {
-            console.error('Failed to delete meal:', sanitizeLogObject(error));
-            Alert.alert('エラー', '削除に失敗しました。');
-          }
-        },
-      },
-    ]);
-  }, [meal.id, meal.meal_name, navigation]);
-
-  const canNavigateDetail = canNavigateMealDetail(
-    Boolean(editingMeal),
-    shareComposerVisible || photoViewerVisible
-  );
-  const isAtFirstMeal = currentIndex === 0;
-  const isAtLastMeal = currentIndex >= detailMeals.length - 1;
-
-  const navigateToAdjacentMeal = useCallback(
-    (direction: DetailNavigationDirection) => {
-      if (!canNavigateDetail) {
-        return;
-      }
-
-      const nextIndex = getAdjacentMealIndex(currentIndex, detailMeals.length, direction);
-
-      if (nextIndex !== currentIndex) {
-        setCurrentIndex(nextIndex);
-        setShareText(buildInitialShareText(detailMeals[nextIndex]));
-      }
-    },
-    [canNavigateDetail, currentIndex, detailMeals]
-  );
-
-  const submitShare = useCallback(async () => {
-    try {
-      await shareMealContent({
-        title: meal.meal_name,
-        text: shareText,
-        photoUri,
-        mimeType: 'image/jpeg',
-      });
-
-      setShareComposerVisible(false);
-    } catch (error) {
-      console.error('Failed to open share sheet:', sanitizeLogObject(error));
-      Alert.alert('エラー', '共有シートを開けませんでした。');
-    }
-  }, [meal.meal_name, photoUri, shareText]);
+    shareText,
+    setShareText,
+    openShareComposer,
+    closeShareComposer,
+    submitShare,
+    confirmDelete,
+    editingMeal,
+    editDraft,
+    savingEdit,
+    rotatingPhoto,
+    editAiAssist,
+    setEditDraft,
+    openEditModal,
+    closeEditModal,
+    saveEdit,
+    rotatePhotoClockwise,
+  } = useMealDetailScreen({
+    initialMeal: route.params.meal,
+    initialMeals: route.params.meals,
+    initialIndex: route.params.initialIndex,
+    onNavigateBack: () => navigation.goBack(),
+  });
 
   return (
     <View style={styles.container} testID="meal-detail-container">
-      <ScrollView testID="meal-detail-scroll" contentContainerStyle={styles.content}>
-        <View style={styles.heroImageFrame}>
-          {photoUri ? (
-            <TouchableOpacity
-              accessibilityHint="写真全体を黒背景の画面で表示します"
-              accessibilityLabel={`${meal.meal_name}の写真を全画面表示`}
-              accessibilityRole="imagebutton"
-              activeOpacity={0.88}
-              onPress={openPhotoViewer}
-              style={styles.heroImageButton}
-              testID="meal-detail-image-button"
-            >
-              <Image
-                source={{ uri: photoUri }}
-                style={styles.heroImage}
-                resizeMode="cover"
-                testID="meal-detail-image"
-              />
-            </TouchableOpacity>
-          ) : (
-            <View
-              style={[styles.heroImage, styles.noImageHero]}
-              testID="meal-detail-image-placeholder"
-            >
-              <Text style={styles.noImageText}>写真はありません</Text>
-            </View>
-          )}
-        </View>
-        {detailMeals.length > 1 ? (
-          <View style={styles.photoNavRow}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="前の食事記録へ"
-              accessibilityState={{ disabled: !canNavigateDetail || isAtFirstMeal }}
-              disabled={!canNavigateDetail || isAtFirstMeal}
-              onPress={() => navigateToAdjacentMeal('previous')}
-              style={[
-                styles.photoNavButton,
-                !canNavigateDetail || isAtFirstMeal ? styles.photoNavButtonDisabled : null,
-              ]}
-              testID="meal-detail-photo-nav-previous"
-            >
-              <Text style={styles.photoNavButtonText}>前の記録</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="次の食事記録へ"
-              accessibilityState={{ disabled: !canNavigateDetail || isAtLastMeal }}
-              disabled={!canNavigateDetail || isAtLastMeal}
-              onPress={() => navigateToAdjacentMeal('next')}
-              style={[
-                styles.photoNavButton,
-                !canNavigateDetail || isAtLastMeal ? styles.photoNavButtonDisabled : null,
-              ]}
-              testID="meal-detail-photo-nav-next"
-            >
-              <Text style={styles.photoNavButtonText}>次の記録</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        <View style={styles.headerCard}>
-          {detailMeals.length > 1 ? (
-            <Text style={styles.positionText}>
-              {currentIndex + 1} / {detailMeals.length}
-            </Text>
-          ) : null}
-          <Text style={styles.mealName}>{meal.meal_name}</Text>
-          <Text style={styles.mealDate}>{formatMealDate(meal.meal_datetime)}</Text>
-        </View>
-
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={openEditModal}
-            testID="meal-detail-edit-button"
-            accessibilityRole="button"
-            accessibilityLabel="編集"
-          >
-            <Text style={styles.secondaryButtonText}>編集</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={openShareComposer}
-            testID="meal-detail-share-button"
-            accessibilityRole="button"
-            accessibilityLabel="共有"
-          >
-            <Text style={styles.primaryButtonText}>共有</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.dangerButton}
-            onPress={confirmDelete}
-            testID="meal-detail-delete-button"
-            accessibilityRole="button"
-            accessibilityLabel="削除"
-          >
-            <Text style={styles.dangerButtonText}>削除</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.detailsCard}>
-          <DetailRow label="日時" value={formatMealDate(meal.meal_datetime)} />
-          <DetailRow label="場所" value={meal.location_name ?? '未設定'} />
-          <DetailRow label="料理ジャンル" value={meal.cuisine_type ?? '未設定'} />
-          <DetailRow label="メモ" value={meal.notes?.trim() ? meal.notes : '未設定'} />
-          <DetailRow label="食事タイプ" value={meal.is_homemade ? '自家製' : '外食'} />
-          <DetailRow
-            label="自炊スタイル"
-            value={meal.is_homemade ? formatCookingLevel(meal.cooking_level) : '未設定'}
-          />
-        </View>
-      </ScrollView>
+      <MealDetailContent
+        meal={meal}
+        photoUri={photoUri}
+        detailMealsCount={detailMealsCount}
+        currentIndex={currentIndex}
+        canNavigateDetail={canNavigateDetail}
+        isAtFirstMeal={isAtFirstMeal}
+        isAtLastMeal={isAtLastMeal}
+        onOpenPhotoViewer={openPhotoViewer}
+        onNavigateToAdjacentMeal={navigateToAdjacentMeal}
+        onOpenEditModal={openEditModal}
+        onOpenShareComposer={openShareComposer}
+        onConfirmDelete={confirmDelete}
+      />
 
       <MealEditModal
         visible={Boolean(editingMeal)}
         draft={editDraft}
         onChange={setEditDraft}
         onSave={saveEdit}
-        onClose={() => setEditingMeal(null)}
+        onClose={closeEditModal}
         saving={savingEdit}
         testIDPrefix="detail-edit"
         imageUri={photoUri}
@@ -582,57 +100,14 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         />
       ) : null}
 
-      <Modal
-        animationType="slide"
-        transparent
+      <MealShareComposerModal
         visible={shareComposerVisible}
-        onRequestClose={() => setShareComposerVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.shareCard}>
-            <Text style={styles.shareTitle}>共有する前に確認</Text>
-            {photoUri ? (
-              <Image
-                source={{ uri: photoUri }}
-                style={styles.sharePreviewImage}
-                resizeMode="cover"
-                testID="share-preview-image"
-              />
-            ) : null}
-            <TextInput
-              style={styles.shareInput}
-              value={shareText}
-              onChangeText={setShareText}
-              placeholder="写真のみ共有されます（テキストを追加可能）"
-              multiline
-              testID="share-text-input"
-            />
-            {Platform.OS === 'android' && photoUri ? (
-              <Text style={styles.shareNote}>写真を共有します。投稿文は共有先で調整できます。</Text>
-            ) : null}
-            <View style={styles.shareButtonRow}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => setShareComposerVisible(false)}
-                testID="share-cancel-button"
-                accessibilityRole="button"
-                accessibilityLabel="閉じる"
-              >
-                <Text style={styles.secondaryButtonText}>閉じる</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={submitShare}
-                testID="share-submit-button"
-                accessibilityRole="button"
-                accessibilityLabel="共有を開く"
-              >
-                <Text style={styles.primaryButtonText}>共有を開く</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        photoUri={photoUri}
+        shareText={shareText}
+        onChangeShareText={setShareText}
+        onClose={closeShareComposer}
+        onSubmit={submitShare}
+      />
     </View>
   );
 };
@@ -641,166 +116,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  content: {
-    padding: 16,
-    gap: 16,
-  },
-  heroImageFrame: {
-    position: 'relative',
-    width: '100%',
-    height: 320,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#e9ecef',
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#e9ecef',
-  },
-  heroImageButton: {
-    width: '100%',
-    height: '100%',
-  },
-  photoNavRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  photoNavButton: {
-    flex: 1,
-    minHeight: 44,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-  },
-  photoNavButtonDisabled: {
-    opacity: 0.45,
-  },
-  photoNavButtonText: {
-    color: Colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  noImageHero: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noImageText: {
-    color: Colors.gray,
-    fontSize: 16,
-  },
-  headerCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    gap: 6,
-  },
-  positionText: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 6,
-  },
-  mealName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  mealDate: {
-    fontSize: 14,
-    color: Colors.gray,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: Colors.white,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    flex: 1,
-    backgroundColor: Colors.white,
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-  },
-  secondaryButtonText: {
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  dangerButton: {
-    flex: 1,
-    backgroundColor: '#fff3f2',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#f1c2bf',
-  },
-  dangerButtonText: {
-    color: Colors.error,
-    fontWeight: '700',
-  },
-  detailsCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    gap: 14,
-  },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-  },
-  shareCard: {
-    backgroundColor: Colors.white,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    gap: 14,
-  },
-  shareTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  sharePreviewImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 14,
-    backgroundColor: '#e9ecef',
-  },
-  shareInput: {
-    minHeight: 120,
-    borderWidth: 1,
-    borderColor: '#d9d9d9',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    color: Colors.text,
-    fontSize: 16,
-    textAlignVertical: 'top',
-  },
-  shareNote: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: Colors.gray,
-  },
-  shareButtonRow: {
-    flexDirection: 'row',
-    gap: 12,
   },
 });

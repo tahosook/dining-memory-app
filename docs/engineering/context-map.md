@@ -36,7 +36,7 @@
 
 ### UI / Screen Improvements
 - Read first: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md)
-- Common source: `src/screens/`, `src/components/`, `src/components/screens/SettingsScreen/`, `src/components/screens/camera/`, `src/hooks/settings/`, `src/navigation/RootNavigator.tsx`
+- Common source: `src/screens/`, `src/components/`, `src/components/screens/SettingsScreen/`, `src/components/screens/camera/`, `src/components/screens/mealDetail/`, `src/hooks/settings/`, `src/hooks/mealDetail/`, `src/navigation/RootNavigator.tsx`
 - Common tests: `tests/*Screen*.test.tsx`, focused hook/service tests when behavior crosses layers
 
 ### Camera / Save / EXIF / GPS / File Paths
@@ -46,7 +46,7 @@
 
 ### Records / Search / X Share
 - Read first: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md)
-- Common source: `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`, `src/database/services/MealService.ts`, `src/domain/meals/`
+- Common source: `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/hooks/mealDetail/`, `src/components/screens/mealDetail/`, `src/components/common/MealEditModal.tsx`, `src/database/services/MealService.ts`, `src/domain/meals/`
 - Common tests: `tests/RecordsScreen.test.tsx`, `tests/MealDetailScreen.test.tsx`, `tests/SearchScreen.test.tsx`, `tests/MealService.test.ts`
 
 ### Stats
@@ -106,7 +106,7 @@ When source changes, check the smallest matching canonical docs before finishing
 
 - `src/ai/mealInputAssist/`, `src/ai/mealInputAssist/installer/`, `src/ai/runtime/`, `src/domain/ai/`, `src/screens/SettingsScreen/`, `src/hooks/settings/`, `src/components/screens/SettingsScreen/`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/product/progress.md](../product/progress.md), relevant `docs/notes/ai-input-*`
 - `src/hooks/cameraCapture/`, `src/components/screens/camera/`, `src/media/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
-- `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/product/progress.md](../product/progress.md)
+- `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/hooks/mealDetail/`, `src/components/screens/mealDetail/`, `src/components/common/MealEditModal.tsx`: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/product/progress.md](../product/progress.md)
 - `src/screens/StatsScreen/`, stats aggregation in `src/database/services/MealService.ts`: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/domain/database-design.md](../domain/database-design.md)
 - `src/database/services/`, `src/domain/meals/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
 - `scripts/*.py`, `scripts/*.sh`, `config/mediapipe_labeling_goals.json`, `prompts/mediapipe_labeling_implementer.txt`: [docs/engineering/mediapipe-overview.md](mediapipe-overview.md), [scripts/README.md](../../scripts/README.md), [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/golden-test-set-v2-specification.md](golden-test-set-v2-specification.md)
