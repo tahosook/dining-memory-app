@@ -21,7 +21,7 @@ Review 画面で AI メモ下書きを要求してから表示までの体感待
 - raw AI output や厚い runtime metadata を保存しない。
 
 ### Suggested Steps
-- 現在の stage 表示、downsized image、live preview 停止の実装を確認する。
+- 現在の stage 表示、downsized image、および capture review 中に `ExpoCameraView` を不透明なバックドロップの背後でマウント維持する実装を確認する。
 - 待ち時間の律速が image preparation、model load、inference、normalization のどこかを切り分ける。
 - 既存 contract を変えずに、precheck、temporary file cleanup、progress update、provider call の小さな改善を行う。
 - 失敗時も review 入力と保存導線が残ることを確認する。
@@ -35,7 +35,7 @@ Review 画面で AI メモ下書きを要求してから表示までの体感待
 - `tests/useMealInputAssist.test.ts`
 
 ### Notes
-- すでに progress / remaining time 表示と review 中の live preview 停止はある。
+- すでに progress / remaining time 表示と review 中の背面マウント維持＋不透明バックドロップはある。
 - 実測方法は要確認。
 - model / projector の配布や差し替え UI は current scope ではない。
 
@@ -49,7 +49,7 @@ Review 画面で AI メモ下書きを要求してから表示までの体感待
 - 既存入力を自動上書きしない。
 - 保存する AI metadata は thin に保つ。
 - MediaPipe の rich result や raw categories を DB に保存しない。
-- `mealNames` / `cuisineTypes` は hidden separate path / normalizer contract として扱い、current Camera UI の主表示へ勝手に戻さない。
+- `mealNames` / `cuisineTypes` は MediaPipe 静的画像パス（現行既定ランタイム）の正規化契約として扱い、tap-to-apply サジェストボタンによるユーザー明示反映を維持する。
 
 ### Suggested Steps
 - 現在の provider / prompt / normalizer / policy / Camera UI の責務を確認する。
@@ -64,7 +64,8 @@ Review 画面で AI メモ下書きを要求してから表示までの体感待
 - `src/ai/mealInputAssist/localRuntimePrototype.ts`
 - `src/ai/mealInputAssist/normalizer.ts`
 - `src/ai/mealInputAssist/policy.ts`
-- `src/components/screens/camera/CameraView.tsx`
+- `src/components/screens/camera/CaptureReview.tsx`
+- `src/components/common/MealInputAssistSection.tsx`
 - `tests/CameraScreen.test.tsx`
 - `tests/mealInputAssistNormalizer.test.ts`
 
@@ -165,9 +166,7 @@ MediaPipe 用ラベル改善 loop を、local LLM / Ollama を使って bounded 
 MediaPipe static-image classifier の `.task` model を Android build で利用できる状態へ近づける。
 
 ### Constraints
-- 現在は model asset を repo commit しない manual local drop-in 前提。
-- model license、file size、配布方法、build impact を確認するまで同梱を断定しない。
-- MediaPipe path は hidden separate path のまま扱い、default runtime や Settings readiness へ勝手に切り替えない。
+- 当時の制約として model asset を repo commit しない manual local drop-in / hidden separate path 前提で開始された計画（現在は `mediapipe-static-image` が既定ランタイムかつ同梱自動シード＋リモート更新に接続済み）。
 - UI へ渡す shape は既存 suggestion contract に正規化する。
 
 ### Suggested Steps

@@ -31,7 +31,7 @@
 
 | スクリプト名 | 役割 / 責務 | 主要な入力 | 主要な出力 | 実行コマンド例 | 対応テスト |
 |---|---|---|---|---|---|
-| `ensure-mediapipe-model.sh` | GitHub Releases から MediaPipe モデルバイナリ（標準9クラス、汎用23クラス、わたし専用44タグ）を取得し、SHA-256 検証を経てアセットディレクトリへ配置・旧モデルをクリーンアップする。 | GitHub Releases, 環境変数 | `android/app/src/main/assets/mediapipe/*.task` | `./scripts/ensure-mediapipe-model.sh` | `tests/buildAndroidRelease.test.ts` (Jest) |
+| `ensure-mediapipe-model.sh` | GitHub Releases から現行 MediaPipe モデルバイナリ（`meal-input-assist.task`［標準（調理法・9クラス）］、`universal_dining_23class.task`［汎用（定番料理・23クラス）］、`personal_main_dish.task` + `personal_side_dish.task`［わたし専用（主菜＋副菜ペア）］）を取得し、SHA-256 検証を経てアセットディレクトリへ配置・退役モデル（`universal_scene_7class.task`, `personal_household_8class.task`, `personal_multilabel_44tag.task`）を削除対象としてクリーンアップする。 | GitHub Releases, 環境変数 | `android/app/src/main/assets/mediapipe/*.task` | `./scripts/ensure-mediapipe-model.sh` | `tests/buildAndroidRelease.test.ts` (Jest) |
 | `publish_mediapipe_model.py` | MediaPipe モデルのバイナリ検証、GitHub Releases への正式アップロード、DL検証、および4 canonical ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `build.gradle`）の SHA-256 チェックサム一括更新を自動化する。 | `--model-id`, `--model-path`, `--release-tag` | GitHub Releases アセット、4ファイル更新 | `python3 scripts/publish_mediapipe_model.py --model-id universal_dining_23class --model-path model.task` | `test_publish_mediapipe_model.py` |
 
 ---

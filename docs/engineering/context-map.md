@@ -36,13 +36,13 @@
 
 ### UI / Screen Improvements
 - Read first: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md)
-- Common source: `src/screens/`, `src/components/`, `src/navigation/RootNavigator.tsx`
+- Common source: `src/screens/`, `src/components/`, `src/components/screens/SettingsScreen/`, `src/components/screens/camera/`, `src/hooks/settings/`, `src/navigation/RootNavigator.tsx`
 - Common tests: `tests/*Screen*.test.tsx`, focused hook/service tests when behavior crosses layers
 
 ### Camera / Save / EXIF / GPS / File Paths
 - Read first: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
-- Common source: `src/hooks/cameraCapture/`, `src/media/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`, `src/database/services/MealService.ts`
-- Common tests: `tests/useCameraCapture.test.ts`, `tests/photoStorage.test.ts`, `tests/photoExif.test.ts`, `tests/mealPhotoRotation.test.ts`
+- Common source: `src/hooks/cameraCapture/`, `src/components/screens/camera/`, `src/media/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`, `src/database/services/MealService.ts`
+- Common tests: `tests/useCameraCapture.test.ts`, `tests/CameraScreen.test.tsx`, `tests/CameraView.test.tsx`, `tests/photoStorage.test.ts`, `tests/photoExif.test.ts`, `tests/mealPhotoRotation.test.ts`
 
 ### Records / Search / X Share
 - Read first: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md)
@@ -56,13 +56,13 @@
 
 ### AI Input Assist
 - Read first: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/notes/ai-input-assist-phase1.md](../notes/ai-input-assist-phase1.md), [docs/notes/local-ai-provider-spike.md](../notes/local-ai-provider-spike.md)
-- Common source: `src/hooks/cameraCapture/useMealInputAssist.ts`, `src/ai/mealInputAssist/`, `src/ai/runtime/`, `src/screens/SettingsScreen/SettingsScreen.tsx`
+- Common source: `src/hooks/cameraCapture/useMealInputAssist.ts`, `src/ai/mealInputAssist/`, `src/ai/mealInputAssist/installer/`, `src/ai/runtime/`, `src/domain/ai/`, `src/screens/SettingsScreen/SettingsScreen.tsx`, `src/hooks/settings/`, `src/components/screens/SettingsScreen/`, `src/components/screens/camera/`
 - Common tests: `tests/useMealInputAssist.test.ts`, `tests/mealInputAssistRuntime.test.ts`, `tests/mealInputAssistPolicy.test.ts`, `tests/mealInputAssistNormalizer.test.ts`, `tests/localAiRuntimeStatus.test.ts`
 - Preserve: AI is optional, user-triggered, local-first, and tap-to-apply only.
 
 ### Food Labeling / Classification / MediaPipe
 - Overview & Entry Point: [docs/engineering/mediapipe-overview.md](mediapipe-overview.md) (全体像・正本リンク・Runbook はまずここを参照)
-- Script Catalog: [scripts/README.md](../../scripts/README.md) (全33スクリプトの入出力・対応テスト一覧)
+- Script Catalog: [scripts/README.md](../../scripts/README.md) (スクリプトの入出力・対応テスト一覧)
 - Task-specific entry points:
   - **App Inference & UI**: `mediapipe-overview.md`, `src/ai/mealInputAssist/mediapipe*`, `android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssist*`
   - **Model Training & Promotion Gate**: `mediapipe-overview.md`, `scripts/train-mediapipe-model.py`, `scripts/evaluate-mediapipe-model.py`, `scripts/run-autonomous-model-improvement.sh`
@@ -71,11 +71,12 @@
   - **Golden Test Benchmarking**: `mediapipe-overview.md`, [docs/engineering/golden-test-set-v2-specification.md](golden-test-set-v2-specification.md), `scripts/verify-golden-dataset-v2.py`
   - **Exploration & Labeling Loop (Historical/Auxiliary)**: [docs/engineering/food-labeling-guidelines.md](food-labeling-guidelines.md), [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md), `scripts/explore-food-labels.py`, `scripts/analyze-food-labels.py`
 - Reading boundaries:
+  - `docs/deprecated/` と `docs/working/` は既定で `grep` 探索から除外する。
   - `state/` 配下の全件走査（`find state/` や `grep -r state/`）は禁止。必要な場合はマニフェストファイルや README から対象ファイルを特定してピンポイントで参照する。
   - 完了済み Issue（`docs/issues/issue-17`〜`22` 等）は初期調査では一律に読まない。仕様決定の経緯や未解決事項を深掘りする場合に限定して該当 Issue を参照する。
   - このファイル自体にはステータス数値を書かず、案内に徹する。
 - Common tests: `npm run test:python:fast`, `npm test -- --testPathPattern=mealInputAssist`
-- Preserve: MediaPipe path stays separate unless a task explicitly changes runtime selection.
+- Preserve: MediaPipe static-image path (`mediapipe-static-image`) is the current default runtime; keep `llama.rn` / GGUF path separate unless a task explicitly changes runtime selection.
 
 ### Local LLM / Ollama / Batch Labeling
 - Read first: [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md), [docs/notes/local-ai-provider-spike.md](../notes/local-ai-provider-spike.md)
@@ -103,8 +104,8 @@
 ## Doc Sync Targets
 When source changes, check the smallest matching canonical docs before finishing.
 
-- `src/ai/mealInputAssist/`, `src/ai/runtime/`, `src/screens/SettingsScreen/`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/product/progress.md](../product/progress.md), relevant `docs/notes/ai-input-*`
-- `src/hooks/cameraCapture/`, `src/media/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
+- `src/ai/mealInputAssist/`, `src/ai/mealInputAssist/installer/`, `src/ai/runtime/`, `src/domain/ai/`, `src/screens/SettingsScreen/`, `src/hooks/settings/`, `src/components/screens/SettingsScreen/`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/product/progress.md](../product/progress.md), relevant `docs/notes/ai-input-*`
+- `src/hooks/cameraCapture/`, `src/components/screens/camera/`, `src/media/`, `src/utils/mealPhotoRotation.ts`, `src/utils/mealImage.ts`: [docs/architecture/tech-spec.md](../architecture/tech-spec.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/ux/user-flows.md](../ux/user-flows.md)
 - `src/navigation/RootNavigator.tsx`, `src/navigation/types.ts`, `src/screens/RecordsScreen/`, `src/screens/SearchScreen/`, `src/components/common/MealEditModal.tsx`: [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/ux/user-flows.md](../ux/user-flows.md), [docs/domain/database-design.md](../domain/database-design.md), [docs/product/progress.md](../product/progress.md)
 - `src/screens/StatsScreen/`, stats aggregation in `src/database/services/MealService.ts`: [docs/product/progress.md](../product/progress.md), [docs/ux/screen-designs.md](../ux/screen-designs.md), [docs/domain/database-design.md](../domain/database-design.md)
 - `src/database/services/`, `src/domain/meals/`, schema or persistence contracts: [docs/domain/database-design.md](../domain/database-design.md), [docs/architecture/tech-spec.md](../architecture/tech-spec.md)
