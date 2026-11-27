@@ -30,7 +30,7 @@
 - AI suggestion section の `解析中` では、少なくとも current stage、進捗の目安、経過時間、残り時間の目安を表示する。
 - Current visible AI output includes a `noteDraft` card (`メモに追加` appends it to notes only when the user taps the action) as well as tap-to-apply suggestion buttons (`サジェストボタン`) for `mealNames` and `cuisineTypes` when provided by the MediaPipe static-image classifier.
 - AI suggestion section の `無効` 理由は、少なくとも `設定で未許可` `この build では未対応` `model / projector 未準備` を区別できるようにする。
-- capture review を開いたら live camera preview は止め、review 中の端末負荷を抑える。
+- capture review 中は Android カメラプレビュー安定性のため `ExpoCameraView` を背面にマウントしたまま維持し、不透明なバックドロップと review overlay で前面を覆う。
 - AI 入力補助は captured original をそのまま解析せず、端末内で一時的に downsized image を作ってから推論し、終わったら一時 file を片付ける。
 - Saved photos should be resized to a practical review size for the device-first experience instead of preserving the original full-resolution capture.
 - Capture review save should lock immediately after the save action starts, show `保存中...`, and disable save, cancel, close, and Android back until the save settles.
@@ -75,7 +75,7 @@
 ## Settings Screen
 - Prioritize privacy, current scope, data management (backup export / restore, local data deletion), and app information.
 - AI 入力補助の事前許可トグルを置き、端末内処理だけで外部送信しないことを短く説明する。デフォルトの MediaPipe static-image ランタイムまたは GGUF model / runtime のいずれかが利用可能な場合にトグルを有効化できる。
-- MediaPipe ランタイムが利用可能な場合、「分類モデル」ブロックを表示し、写真から提案する候補の分類体系（調理法9クラス［既定］、汎用シーン7クラス、わたし専用8クラス）をラジオ選択カード形式で切り替える。選択は SQLite `app_settings` に永続化され、即座に推論ランタイムへ反映される。
+- MediaPipe ランタイムが利用可能な場合、「分類モデル」ブロックを表示し、写真から提案する候補の分類体系（標準（調理法・9クラス）［既定］、汎用（定番料理・23クラス）、わたし専用（主菜＋副菜ペア））をラジオ選択カード形式で切り替える。選択は SQLite `app_settings` に永続化され、即座に推論ランタイムへ反映される。
 - GGUF meal input assist model の status を `未導入 / ダウンロード中 / 利用可能 / エラー` で表示し、`ダウンロード / 再ダウンロード / 削除` を提供する。また、MediaPipe 食事分類モデルのリモート取得・削除導線も提供する。
 - `Local AI Runtime Status` では AI 入力補助だけを表示し、ready / unavailable、reason、expected path を確認できる。
 - 「データ管理」セクションに「バックアップをエクスポート」と「バックアップから復元」ボタンを提供し、食事記録とオリジナル写真の単一 ZIP 書き出しおよび復元を行う。復元時は検証成功後に日時・件数・置換警告を含む確認ダイアログを表示する。

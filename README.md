@@ -19,7 +19,6 @@
 ### 実装向けドキュメント
 - [コンテキストマップ](docs/engineering/context-map.md): task ごとに読むべき最小 context の索引
 - [技術仕様](docs/architecture/tech-spec.md): current implementation と runtime assumptions
-- [食事分類パイプライン仕様](docs/architecture/food-labeling-pipeline.md): MediaPipe 食事分類モデルのリモートオンデマンド配布・端末内ローカル読み込みパイプライン仕様
 - [画面設計](docs/ux/screen-designs.md): current screen behavior
 - [ユーザーフロー](docs/ux/user-flows.md): current implemented flows
 - [DB設計](docs/domain/database-design.md): current schema and storage rules
@@ -99,7 +98,7 @@ npx expo start --dev-client
 - document picker や設定画面からの path 上書きは現在サポートしません
 - デフォルトの MediaPipe ランタイムまたは app-local の固定 path に GGUF ファイルが揃っている場合に Settings の AI 入力補助トグルを有効化できます
 - review 画面の AI 入力補助は current stage、進捗の目安、残り時間の目安を表示します
-- capture review 中は live camera preview を止め、AI 解析時の端末負荷を下げます
+- capture review 中も Android プレビュー安定性のため `ExpoCameraView` を不透明なバックドロップの背後でマウント維持し、前面に review overlay を表示します
 - meal input assist model: `documentDirectory/ai-models/meal-input-assist.gguf`
 - meal input assist projector: `documentDirectory/ai-models/meal-input-assist.mmproj`
 - model の導入状態、readiness、blocker reason は Settings 画面で確認します

@@ -11,7 +11,7 @@
 ## Summary
 Dining Memory は、撮影して保存し、一覧・検索・期間別の統計サマリーで振り返るところまでが動く段階にあります。
 review 画面と詳細編集モーダルには、メモ下書きを明示タップで notes に追加する AI 入力補助が入り、real local runtime path も app-local model / projector がある build で使える状態になりました。
-AI 実行中は current stage、進捗の目安、残り時間の目安を AI UI 上に表示し、capture review 中は live camera preview を止めて端末負荷を抑えます。
+AI 実行中は current stage、進捗の目安、残り時間の目安を AI UI 上に表示し、capture review 中は Android プレビュー安定性のため `ExpoCameraView` を不透明なバックドロップの背後でマウント維持したまま review overlay を重ねます。
 Settings には local AI の事前許可、meal input assist model のダウンロード管理、local AI runtime status が入り、条件を満たさない build では引き続き disabled reason を返します。
 本格的な AI 解析、クラウド自動バックアップはまだ実装していません。ローカル ZIP バックアップのエクスポートと復元は実装済みです。
 一覧の詳細画面から、明示的な操作で X 共有に進む最小導線を持っています。
@@ -49,9 +49,9 @@ Settings には local AI の事前許可、meal input assist model のダウン�
   - running 中は current stage、進捗の目安、残り時間の目安を表示する
   - Settings の opt-in と `app_settings` 保存あり
   - model / projector は Settings から direct URL を使って端末へ明示ダウンロードする
-  - supported device/runtime と app-local model / projector が揃う build では `llama.rn` の real local runtime を使う
-  - MediaPipe custom food classifier 向け static-image classification path は Android native bridge および同梱モデル自動シードを配備し、デフォルトランタイム環境および Settings の readiness 判定に接続済み
-  - capture review 中は live camera preview を止め、AI 解析時の memory pressure を下げる
+  - MediaPipe custom food classifier 向け static-image classification path（`mediapipe-static-image`）が current default runtime として Android native bridge および同梱モデル自動シードを配備し、Settings のモデル選択（標準（調理法・9クラス）／汎用（定番料理・23クラス）／わたし専用（主菜＋副菜ペア））および readiness 判定に接続済み
+  - `llama.rn` の GGUF local runtime path は非既定の補助パスとして共存しており、supported device/runtime と app-local model / projector が揃う build で利用できる
+  - capture review 中も Android プレビュー安定性のため `ExpoCameraView` を不透明なバックドロップの背後でマウント維持する
   - 条件を満たさない build では disabled reason を返し、manual save はそのまま使える
   - Settings で meal input assist model の導入状態、ready / unavailable reason、固定 model path を確認できる
 - 統計
@@ -72,7 +72,7 @@ Settings には local AI の事前許可、meal input assist model のダウン�
 - 権限拒否時の設定アプリ導線
 - 写真撮影
 - 撮影後レビュー
-- review / 詳細編集上の `AIでメモを作成` ボタン、`noteDraft` card、`メモに追加` 操作
+- review / 詳細編集上の `AIで提案を作成` ボタン、料理名／料理ジャンルサジェストボタン、`noteDraft` card、`メモに追加` 操作
 - 保存前にネイティブリサイズ（最大長辺1600px / JPEG 80% / アスペクト比維持）と安全なフォールバックで端末内向けに軽量化
 - 手動入力
 - 保存後に Records へ即時遷移

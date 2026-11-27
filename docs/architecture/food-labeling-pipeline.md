@@ -1,10 +1,13 @@
-# Food Labeling Pipeline Architecture
+# Food Labeling Pipeline Architecture (Historical Pre-Implementation Design Note)
+
+> [!WARNING]
+> **歴史的設計メモ（Historical Pre-Implementation Design Record）**: 本文書は Issue #13 実装前の設計メモであり、**現行実装の正規仕様ではありません**（一部に旧モデル構成・分割前のファイル構成・旧前提が含まれます）。現行の MediaPipe 食事分類システムの正規仕様およびモジュール構成は [docs/engineering/mediapipe-overview.md](../engineering/mediapipe-overview.md) を参照してください。
 
 ## Meta
-- Purpose: MediaPipe 食事分類モデルのリモートオンデマンド配布パイプラインのアーキテクチャ仕様。既存 GGUF パイプラインとの共存を前提とする。
-- Audience: この仕様の PR レビューアおよび実装担当者。
-- Update trigger: ダウンロード基盤、Native bridge、ランタイム選択、または学習パイプラインの前提が変わったとき。
-- Related docs: [docs/notes/ai-input-assist-mediapipe-static-image-groundwork.md](../notes/ai-input-assist-mediapipe-static-image-groundwork.md), [docs/architecture/tech-spec.md](tech-spec.md), [docs/engineering/food-labeling-guidelines.md](../engineering/food-labeling-guidelines.md)
+- Purpose: MediaPipe 食事分類モデルのリモートオンデマンド配布パイプライン導入前の初期設計メモ（歴史的資料）。現行仕様の正本は [docs/engineering/mediapipe-overview.md](../engineering/mediapipe-overview.md)。
+- Audience: この設計経緯の参照者・保守者。
+- Update trigger: 原則更新しない（現行仕様の更新は `docs/engineering/mediapipe-overview.md` で行う）。
+- Related docs: [docs/engineering/mediapipe-overview.md](../engineering/mediapipe-overview.md), [docs/notes/ai-input-assist-mediapipe-static-image-groundwork.md](../notes/ai-input-assist-mediapipe-static-image-groundwork.md), [docs/architecture/tech-spec.md](tech-spec.md), [docs/engineering/food-labeling-guidelines.md](../engineering/food-labeling-guidelines.md)
 
 ---
 

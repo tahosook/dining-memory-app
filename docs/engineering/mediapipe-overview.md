@@ -38,7 +38,7 @@ flowchart TD
 
   subgraph Distribution ["3. モデル配布基盤 (Network)"]
     Asset -.-> Release["GitHub Releases\n(mediapipe-model-v0.2.0\n.task + SHA256)"]
-    Release --> Downloader["modelInstaller.ts\n(端末オンデマンドダウンロード\nペア不可分トランザクション)"]
+    Release --> Downloader["modelInstaller.ts ファサード +\ninstaller/ 配下モジュール\n(端末オンデマンドダウンロード\nペア不可分トランザクション)"]
     Downloader --> LocalModel["filesDir/ai-models/\n*.task"]
   end
 
@@ -62,7 +62,7 @@ flowchart TD
 | 情報項目 | 正本ファイル / エビデンス | 概要 |
 |---|---|---|
 | **Champion モデルバイナリ** | `android/app/src/main/assets/mediapipe/meal-input-assist.task`<br>[docs/issues/issue-22-integrate-agreed-pending-and-promote-challenger.md](../issues/issue-22-integrate-agreed-pending-and-promote-challenger.md) | Promotion Gate を突破し本番アセットへ昇格された最新モデルバイナリとハッシュ記録。 |
-| **マルチモデル仕様・定義** | `src/ai/mealInputAssist/modelConfig.ts`<br>`android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssistSupport.kt`<br>[docs/issues/issue-27-refresh-step3-app-integration.md](../issues/issue-27-refresh-step3-app-integration.md) | 3モデル枠（調理法9クラス、汎用23クラス Lite2、わたし専用ペア[主菜 Lite0・副菜 Lite2]）のID、ラベル、説明、SHA-256、アセット名。 |
+| **マルチモデル仕様・定義** | `src/domain/ai/mediapipeModelIds.ts`<br>`src/ai/mealInputAssist/modelConfig.ts`<br>`android/app/src/main/java/com/tahosook/diningmemory/MediaPipeMealInputAssistSupport.kt`<br>[docs/issues/issue-27-refresh-step3-app-integration.md](../issues/issue-27-refresh-step3-app-integration.md) | モデルID・退役マッピングの正本（`mediapipeModelIds.ts`）および3モデル枠（標準（調理法・9クラス）、汎用（定番料理・23クラス）、わたし専用（主菜＋副菜ペア））のラベル、説明、SHA-256、アセット名。 |
 | **Golden Test Set v2** | `docs/engineering/golden-test-set-v2-specification.md`<br>`state/mediapipe-dataset/golden_eval_v2/manifest.jsonl` | 106枚・9クラスの包括的ベンチマークデータセット仕様およびマニフェスト。 |
 | **現行 Promotion Gate 回帰ガード (旧Golden 7枚)** | `state/mediapipe-dataset/golden_eval/test/`<br>`scripts/run-autonomous-model-improvement.sh` | 自律改善ループで回帰防止ガードとして参照される少数固定データセット（N=7）。 |
 | **データセット外部保管 & 復元手順** | [docs/engineering/mediapipe-dataset-recovery.md](mediapipe-dataset-recovery.md) | `.gitignore` 対象の実画像データセット構成、外部保管方針、復元手順 Runbook。 |
@@ -91,7 +91,7 @@ flowchart TD
 
 ### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
 - **ステータス**: **確認済み**
-- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード（Release タグ `mediapipe-model-v0.2.0`）、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`modelInstaller.ts` では `personal_dual_dish` の2ファイルを2ファイル単位のトランザクション処理（バックアップ退避・ロールバック・状態確認時の片肺検知と再ダウンロード案内、および設定画面など明示保守経路 `cleanupOrphanedDualMediaPipeModel` による残存ファイル掃除付き）および旧退役モデルファイルの安全削除を実装。`scripts/ensure-mediapipe-model.sh` は Releases から 4 モデルファイルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
+- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード（Release タグ `mediapipe-model-v0.2.0`）、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`modelInstaller.ts` ファサード + `src/ai/mealInputAssist/installer/` 配下のモジュールでは `personal_dual_dish` の2ファイルを2ファイル単位のトランザクション処理（バックアップ退避・ロールバック・状態確認時の片肺検知と再ダウンロード案内、および設定画面など明示保守経路 `cleanupOrphanedDualMediaPipeModel` による残存ファイル掃除付き）および旧退役モデルファイルの安全削除を実装。`scripts/ensure-mediapipe-model.sh` は Releases から 4 モデルファイルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
 
 ### 3.3 モデル学習 & 二段階昇格判定 (Training & Two-Tier Gate)
 - **ステータス**: **確認済み**
@@ -173,8 +173,8 @@ flowchart TD
 
 ## 5. テスト・検証コマンド集
 
-### Python ユニットテスト (全 295 件 / CI 連携)
-`scripts/tests/` 配下の全 22 テストスイート（295 件）を実行します。標準ライブラリのみで完走し、GitHub Actions CI でも自動検証されます（詳細は [scripts/README.md](../../scripts/README.md) 参照）。
+### Python ユニットテスト (CI 連携)
+`scripts/tests/` 配下のユニットテストスイートを実行します。標準ライブラリのみで完走し、GitHub Actions CI でも自動検証されます（スイート・件数一覧は [scripts/README.md](../../scripts/README.md) 参照）。
 ```bash
 npm run test:python:fast
 ```
