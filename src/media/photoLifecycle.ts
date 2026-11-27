@@ -7,7 +7,7 @@ import {
 import { getAllPersistedMealRows } from '../database/services/localDatabase';
 import { extractPhotoFileName, validateSafeFileName } from '../domain/backup/pathNormalizer';
 import { resolveThumbnailDestinationUri } from './photoStorage';
-import { getInFlightThumbnailPhotoPaths } from './mealThumbnail';
+import { getInFlightThumbnailPhotoPaths } from './thumbnailTaskRegistry';
 import { sanitizeLogObject, sanitizeUriForLog } from '../utils/logSanitizer';
 
 /**

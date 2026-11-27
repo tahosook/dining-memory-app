@@ -1,4 +1,4 @@
-import type { PersistedMealRow } from '../../database/services/localDatabase';
+import type { PersistedMealRow } from '../persistedTypes';
 
 const SAME_LOCATION_THRESHOLD_METERS = 100;
 

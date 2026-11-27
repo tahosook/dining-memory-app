@@ -5,7 +5,15 @@ import { MealService } from '../database/services/MealService';
 import type { Meal } from '../types/MealTypes';
 import { persistThumbnailToStablePath } from './photoStorage';
 import { cleanupTempFile } from './tempFiles';
+import {
+  clearInFlightThumbnailRegistry,
+  getInFlightThumbnailPhotoPaths,
+  registerInFlightThumbnailGeneration,
+  unregisterInFlightThumbnailGeneration,
+} from './thumbnailTaskRegistry';
 import { sanitizeLogObject, sanitizeTextForLog, sanitizeUriForLog } from '../utils/logSanitizer';
+
+export { getInFlightThumbnailPhotoPaths };
 
 export const MAX_CONCURRENT_THUMBNAILS = 2;
 
@@ -52,6 +60,7 @@ function pumpQueue() {
       .finally(() => {
         activeTaskCount -= 1;
         inFlightGenerationMap.delete(nextTask.generationKey);
+        unregisterInFlightThumbnailGeneration(nextTask.generationKey);
         pumpQueue();
       });
   }
@@ -183,6 +192,7 @@ export function ensureMealThumbnail(
       return inFlight;
     }
 
+    registerInFlightThumbnailGeneration(generationKey, targetPhotoPath);
     const promise = enqueueThumbnailTask(generationKey, mealId, targetPhotoPath, () =>
       processMealThumbnail(mealId, targetPhotoPath)
     );
@@ -306,31 +316,10 @@ export function requestMealThumbnails(
   });
 }
 
-export function getInFlightThumbnailPhotoPaths(): Set<string> {
-  const inFlightPaths = new Set<string>();
-
-  for (const task of taskQueue) {
-    if (task.photoPath) {
-      inFlightPaths.add(task.photoPath);
-    }
-  }
-
-  for (const key of inFlightGenerationMap.keys()) {
-    const colonIndex = key.indexOf(':');
-    if (colonIndex !== -1) {
-      const path = key.slice(colonIndex + 1);
-      if (path) {
-        inFlightPaths.add(path);
-      }
-    }
-  }
-
-  return inFlightPaths;
-}
-
 export function __clearThumbnailQueueForTest(): void {
   taskQueue.length = 0;
   inFlightGenerationMap.clear();
   inFlightMealMap.clear();
+  clearInFlightThumbnailRegistry();
   activeTaskCount = 0;
 }

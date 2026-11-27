@@ -1,5 +1,5 @@
 import type { CookingLevel } from '../../types/MealTypes';
-import type { PersistedMealRow } from '../../database/services/localDatabase';
+import type { PersistedMealRow } from '../persistedTypes';
 import { normalizeCookingLevel } from '../../utils/cookingLevel';
 
 export interface SearchFilters {
