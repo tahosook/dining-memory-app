@@ -1,16 +1,14 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import {
-  MEDIAPIPE_MODEL_DISPLAY_NAME,
-  type MediaPipeModelDownloadProgress,
-  type MediaPipeModelStatus,
-} from '../../ai/mealInputAssist';
-import {
   deleteMediaPipeModel,
   getMediaPipeModelStatus,
   installMediaPipeModel,
+  MEDIAPIPE_MODEL_DISPLAY_NAME,
   redownloadMediaPipeModel,
-} from '../../ai/mealInputAssist/modelInstaller';
+  type MediaPipeModelDownloadProgress,
+  type MediaPipeModelStatus,
+} from '../../ai/mealInputAssist';
 import { sanitizeLogObject } from '../../utils/logSanitizer';
 import type { ModelActionState } from './useSettingsAiInputAssist';
 

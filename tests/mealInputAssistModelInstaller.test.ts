@@ -80,18 +80,9 @@ jest.mock('../src/database/services/localDatabase', () => {
 import { NativeModules } from 'react-native';
 import { AppSettingsService } from '../src/database/services/AppSettingsService';
 import {
-  DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
-  MEDIAPIPE_CLASSIFIER_MODELS,
-  MEDIAPIPE_MODEL_CONFIG,
-  resolveMealInputAssistModelDirectoryPath,
-  resolveMealInputAssistModelPath,
-  resolveMealInputAssistProjectorPath,
-  resolveMediaPipeModelPath,
-  resolveMediaPipeModelPaths,
-} from '../src/ai/mealInputAssist';
-import {
   cleanupOrphanedDualMediaPipeModel,
   cleanupRetiredMediaPipeModels,
+  DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
   deleteMediaPipeModel,
@@ -102,9 +93,16 @@ import {
   installMealInputAssistModel,
   installMediaPipeModel,
   installMediaPipeModelForModel,
+  MEDIAPIPE_CLASSIFIER_MODELS,
+  MEDIAPIPE_MODEL_CONFIG,
   redownloadMealInputAssistModel,
   redownloadMediaPipeModel,
-} from '../src/ai/mealInputAssist/modelInstaller';
+  resolveMealInputAssistModelDirectoryPath,
+  resolveMealInputAssistModelPath,
+  resolveMealInputAssistProjectorPath,
+  resolveMediaPipeModelPath,
+  resolveMediaPipeModelPaths,
+} from '../src/ai/mealInputAssist';
 import { MEDIAPIPE_CLASSIFIER_MODEL_IDS } from '../src/domain/ai/mediapipeModelIds';
 
 const fileSystemMock = jest.requireMock('expo-file-system/legacy') as {

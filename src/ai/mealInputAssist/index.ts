@@ -1,30 +1,14 @@
-export { defaultMealInputAssistProvider, MockMealInputAssistProvider } from './provider';
 export { normalizeMealInputAssistResult } from './normalizer';
 export {
-  MEDIAPIPE_STATIC_IMAGE_SOURCE,
   deriveSceneFromDishes,
   normalizeMediaPipeStaticImageResult,
 } from './mediapipeStaticImageNormalizer';
-export { createMealInputAssistPolicy, defaultMealInputAssistPolicy } from './policy';
-export {
-  getMealInputAssistEnvironmentRevision,
-  invalidateMealInputAssistEnvironment,
-  subscribeMealInputAssistEnvironmentChange,
-} from './environment';
-export {
-  LocalRuntimePrototypeMealInputAssistProvider,
-  getLocalRuntimePrototypeAvailability,
-} from './localRuntimePrototype';
-export {
-  MediaPipeStaticImageMealInputAssistProvider,
-  MediaPipeStaticImageNativeModuleClassifier,
-  getMediaPipeStaticImageAvailability,
-} from './mediapipeStaticImageProvider';
+export { createMealInputAssistPolicy } from './policy';
+export { invalidateMealInputAssistEnvironment } from './environment';
+export { getMediaPipeStaticImageAvailability } from './mediapipeStaticImageProvider';
 export {
   getMealInputAssistManagedFiles,
-  getMealInputAssistExpectedPaths,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
-  MEAL_INPUT_ASSIST_MODEL_CONFIG,
   DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
   MEDIAPIPE_CLASSIFIER_MODELS,
   MEDIAPIPE_CLASSIFIER_MODEL_LIST,
@@ -36,8 +20,6 @@ export {
   resolveMediaPipeModelPath,
   resolveMediaPipeModelPaths,
 } from './modelConfig';
-export type { MediaPipeClassifierModelMeta } from './modelConfig';
-
 export {
   cleanupOrphanedDualMediaPipeModel,
   cleanupRetiredMediaPipeModels,
@@ -53,53 +35,20 @@ export {
   installMediaPipeModelForModel,
   redownloadMealInputAssistModel,
   redownloadMediaPipeModel,
-  redownloadMediaPipeModelForModel,
 } from './modelInstaller';
-export {
-  createNoopRuntimeAvailability,
-  createOverrideRuntimeAvailability,
-  createUnavailableRuntimeAvailability,
-  loadMealInputAssistRuntimeAvailability,
-} from './runtime';
+export { loadMealInputAssistRuntimeAvailability } from './runtime';
 export type {
   AppliedMealInputAssistMetadata,
-  MealInputAssistAvailability,
   MealInputAssistCuisineSuggestion,
-  MealInputAssistField,
   MealInputAssistProgress,
-  MealInputAssistProgressStage,
-  MealInputAssistProgressUpdate,
   MealInputAssistModelDownloadProgress,
-  MealInputAssistModelFileKey,
-  MealInputAssistModelInstallerOptions,
   MealInputAssistModelStatus,
-  MealInputAssistModelStatusKind,
   MediaPipeClassifierModelId,
   MediaPipeModelDownloadProgress,
-  MediaPipeModelInstallerOptions,
   MediaPipeModelStatus,
-  MediaPipeModelStatusKind,
-  MealInputAssistPolicy,
-  MealInputAssistPrewarmOptions,
-  MealInputAssistPrewarmStatus,
-  MealInputAssistProvider,
-  MealInputAssistProviderMode,
   MealInputAssistProviderResult,
-  MealInputAssistRequest,
-  MealInputAssistSuggestOptions,
   MealInputAssistRuntimeAvailability,
-  MealInputAssistRuntimeUnavailableCode,
   MealInputAssistStatus,
   MealInputAssistSuggestions,
-  MealInputAssistTextProviderCandidate,
   MealInputAssistTextSuggestion,
 } from './types';
-export type {
-  MediaPipeStaticImageCategory,
-  MediaPipeStaticImageClassifier,
-  MediaPipeStaticImageClassifierStatus,
-  MediaPipeStaticImageNormalizedMetadata,
-  MediaPipeStaticImageNormalizedResult,
-  MediaPipeStaticImageRawResult,
-} from './mediapipeStaticImageTypes';
-export { EMPTY_MEAL_INPUT_ASSIST_SUGGESTIONS } from './types';

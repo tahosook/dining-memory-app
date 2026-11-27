@@ -1,25 +1,23 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import {
+  cleanupOrphanedDualMediaPipeModel,
+  cleanupRetiredMediaPipeModels,
   DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
-  MEDIAPIPE_CLASSIFIER_MODELS,
+  deleteAllDownloadedLocalAiModels,
+  getMealInputAssistModelStatus,
+  getMediaPipeModelStatusForModel,
   getMediaPipeStaticImageAvailability,
+  installMealInputAssistModel,
   invalidateMealInputAssistEnvironment,
   MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME,
+  MEDIAPIPE_CLASSIFIER_MODELS,
+  redownloadMealInputAssistModel,
   type MealInputAssistModelDownloadProgress,
   type MealInputAssistModelStatus,
   type MealInputAssistRuntimeAvailability,
   type MediaPipeClassifierModelId,
 } from '../../ai/mealInputAssist';
-import {
-  cleanupOrphanedDualMediaPipeModel,
-  cleanupRetiredMediaPipeModels,
-  deleteAllDownloadedLocalAiModels,
-  getMealInputAssistModelStatus,
-  getMediaPipeModelStatusForModel,
-  installMealInputAssistModel,
-  redownloadMealInputAssistModel,
-} from '../../ai/mealInputAssist/modelInstaller';
 import {
   getLocalAiRuntimeStatusSnapshot,
   type LocalAiRuntimeStatusSnapshot,
