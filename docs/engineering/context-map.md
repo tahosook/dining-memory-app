@@ -76,7 +76,7 @@
   - 完了済み Issue（`docs/issues/issue-17`〜`22` 等）は初期調査では一律に読まない。仕様決定の経緯や未解決事項を深掘りする場合に限定して該当 Issue を参照する。
   - このファイル自体にはステータス数値を書かず、案内に徹する。
 - Common tests: `npm run test:python:fast`, `npm test -- --testPathPattern=mealInputAssist`
-- Preserve: MediaPipe path stays separate unless a task explicitly changes runtime selection.
+- Preserve: MediaPipe static-image path (`mediapipe-static-image`) is the current default runtime; keep `llama.rn` / GGUF path separate unless a task explicitly changes runtime selection.
 
 ### Local LLM / Ollama / Batch Labeling
 - Read first: [docs/engineering/mediapipe-labeling-workflow.md](mediapipe-labeling-workflow.md), [docs/notes/local-ai-provider-spike.md](../notes/local-ai-provider-spike.md)

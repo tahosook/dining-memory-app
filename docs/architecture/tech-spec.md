@@ -53,7 +53,7 @@
 - MealService keeps the public create/search/update/delete/statistics API, while pure default-name, nearby-location, search-filter, recency-sort, row-normalization, and statistics helpers live under `src/domain/meals/`.
 - `llama.rn` の multimodal path を使う場合は、supported device/runtime と app-local の `documentDirectory/ai-models/meal-input-assist.gguf` / `documentDirectory/ai-models/meal-input-assist.mmproj` が揃うときだけ ready とする。
 - MediaPipe custom food classifier 向けの static-image path（Android native bridge + 同梱モデル自動シード + Settings からのオンデマンド取得・3モデル枠選択）が current default runtime（`mediapipe-static-image`）として接続済みである。
-- MediaPipe static-image path は分類結果を provider contract 上の `mealNames` / `cuisineTypes` suggestions およびルールベース導出 `noteDraft` へ正規化して Review / 詳細編集 UI へ提示し、保存時の persistent AI metadata は引き続き thin に保つ。
+- MediaPipe static-image path は分類結果を provider contract へ正規化して Review / 詳細編集 UI へ提示する。具体的には、単一モデル（標準（調理法・9クラス）・汎用（定番料理・23クラス））は `mealNames` / `cuisineTypes` suggestions のみを生成し、個人用デュアルモデル（わたし専用（主菜＋副菜ペア））を選択した場合のみ主菜・副菜とルールベースシーン導出から `noteDraft` も合成する。保存時の persistent AI metadata は引き続き thin に保つ。
 - meal input assist は captured original をそのまま渡さず、AI 解析前に一時的な downsized JPEG を作って推論へ渡し、終了後に削除して初回 token までの待ち時間と memory pressure を抑える。
 - capture review では Android カメラプレビュー安定性のため `<ExpoCameraView>` をアンマウントせず背面マウントしたまま維持し、不透明なバックドロップと review overlay で前面を覆う。
 - meal input assist の running state は `準備 / model 読み込み / 画像解析 / 下書き整形` の近似 stage を UI に返し、進捗の目安と残り時間の目安を表示する。

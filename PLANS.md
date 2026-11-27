@@ -21,7 +21,7 @@ Review 画面で AI メモ下書きを要求してから表示までの体感待
 - raw AI output や厚い runtime metadata を保存しない。
 
 ### Suggested Steps
-- 現在の stage 表示、downsized image、live preview 停止の実装を確認する。
+- 現在の stage 表示、downsized image、および capture review 中に `ExpoCameraView` を不透明なバックドロップの背後でマウント維持する実装を確認する。
 - 待ち時間の律速が image preparation、model load、inference、normalization のどこかを切り分ける。
 - 既存 contract を変えずに、precheck、temporary file cleanup、progress update、provider call の小さな改善を行う。
 - 失敗時も review 入力と保存導線が残ることを確認する。
