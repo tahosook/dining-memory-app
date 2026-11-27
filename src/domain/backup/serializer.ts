@@ -1,7 +1,4 @@
-import type {
-  PersistedAppSettingRow,
-  PersistedMealRow,
-} from '../../database/services/localDatabase';
+import type { PersistedAppSettingRow, PersistedMealRow } from '../persistedTypes';
 import {
   extractPhotoFileName,
   isOriginalPhotoFileName,

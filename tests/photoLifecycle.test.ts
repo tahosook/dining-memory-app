@@ -1,7 +1,7 @@
 import { deleteAsync, getInfoAsync, readDirectoryAsync } from 'expo-file-system/legacy';
 
 import { getAllPersistedMealRows } from '../src/database/services/localDatabase';
-import { getInFlightThumbnailPhotoPaths } from '../src/media/mealThumbnail';
+import { getInFlightThumbnailPhotoPaths } from '../src/media/thumbnailTaskRegistry';
 import {
   cleanupOrphanedPhotoFiles,
   findOrphanedPhotoFiles,
@@ -32,7 +32,7 @@ jest.mock('../src/database/services/localDatabase', () => ({
   getAllPersistedMealRows: jest.fn(),
 }));
 
-jest.mock('../src/media/mealThumbnail', () => ({
+jest.mock('../src/media/thumbnailTaskRegistry', () => ({
   getInFlightThumbnailPhotoPaths: jest.fn(),
 }));
 

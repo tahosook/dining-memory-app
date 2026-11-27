@@ -1,4 +1,4 @@
-import type { PersistedMealRow } from '../../database/services/localDatabase';
+import type { PersistedMealRow } from '../persistedTypes';
 
 export interface StatisticsSummary {
   totalMeals: number;
