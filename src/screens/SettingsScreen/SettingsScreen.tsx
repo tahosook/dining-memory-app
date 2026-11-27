@@ -41,10 +41,13 @@ import {
 } from '../../ai/mealInputAssist';
 
 import {
+  cleanupOrphanedDualMediaPipeModel,
+  cleanupRetiredMediaPipeModels,
   deleteAllDownloadedLocalAiModels,
   deleteMediaPipeModel,
   getMealInputAssistModelStatus,
   getMediaPipeModelStatus,
+  getMediaPipeModelStatusForModel,
   installMealInputAssistModel,
   installMediaPipeModel,
   redownloadMealInputAssistModel,
@@ -127,6 +130,14 @@ export default function SettingsScreen() {
     setLocalAiRuntimeStatusLoading(true);
 
     try {
+      const migrated = await AppSettingsService.migrateLegacyMediaPipeModelSettings().catch(
+        () => false
+      );
+      if (migrated) {
+        invalidateMealInputAssistEnvironment();
+      }
+      await cleanupRetiredMediaPipeModels().catch(() => {});
+
       let currentModelId =
         (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
         DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
@@ -136,6 +147,7 @@ export default function SettingsScreen() {
         await AppSettingsService.setMediaPipeClassifierModelId?.(
           DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID
         ).catch(() => {});
+        invalidateMealInputAssistEnvironment();
       }
 
       setSelectedMediaPipeModelId(currentModelId);
@@ -146,6 +158,15 @@ export default function SettingsScreen() {
       ]);
       setLocalAiRuntimeStatus(snapshot);
       setMediaPipeRuntimeAvailability(nextMediaPipeAvailability);
+
+      if (MEDIAPIPE_CLASSIFIER_MODELS[currentModelId]?.isDual) {
+        const dualModelStatus = await getMediaPipeModelStatusForModel(currentModelId).catch(
+          () => null
+        );
+        if (dualModelStatus?.isOrphanedPartialFiles) {
+          await cleanupOrphanedDualMediaPipeModel(currentModelId).catch(() => {});
+        }
+      }
 
       if (
         nextMediaPipeAvailability?.kind !== 'ready' &&

@@ -91,7 +91,7 @@ flowchart TD
 
 ### 3.2 モデル配布 & アセット取得基盤 (Distribution & Acquisition)
 - **ステータス**: **確認済み**
-- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード（Release タグ `mediapipe-model-v0.2.0`）、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`modelInstaller.ts` では `personal_dual_dish` の2ファイルを2ファイル単位のトランザクション処理（バックアップ退避・ロールバック・片肺状態検知時の自動掃除と再ダウンロード案内付き）および旧退役モデルファイルの安全削除を実装。`scripts/ensure-mediapipe-model.sh` は Releases から 4 モデルファイルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
+- **役割**: `scripts/publish_mediapipe_model.py` により、モデルのバイナリ検証、GitHub Releases へのアップロード（Release タグ `mediapipe-model-v0.2.0`）、およびアプリ側設定・検証スクリプト4ファイル（`modelConfig.ts`, `ensure-mediapipe-model.sh`, `build-android-release.sh`, `android/app/build.gradle`）の SHA-256 チェックサム一括自動更新を実行。`modelInstaller.ts` では `personal_dual_dish` の2ファイルを2ファイル単位のトランザクション処理（バックアップ退避・ロールバック・状態確認時の片肺検知と再ダウンロード案内、および設定画面など明示保守経路 `cleanupOrphanedDualMediaPipeModel` による残存ファイル掃除付き）および旧退役モデルファイルの安全削除を実装。`scripts/ensure-mediapipe-model.sh` は Releases から 4 モデルファイルを取得・SHA-256 検証して同梱アセットに配置し、旧モデルアセットの自動削除クリーンアップを行う。
 
 ### 3.3 モデル学習 & 二段階昇格判定 (Training & Two-Tier Gate)
 - **ステータス**: **確認済み**

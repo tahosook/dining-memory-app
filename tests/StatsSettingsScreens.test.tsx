@@ -17,17 +17,21 @@ import { AppSettingsService } from '../src/database/services/AppSettingsService'
 import { BackupService } from '../src/database/services/BackupService';
 import { getLocalAiRuntimeStatusSnapshot } from '../src/ai/runtime';
 import {
+  cleanupOrphanedDualMediaPipeModel,
+  cleanupRetiredMediaPipeModels,
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
   deleteMediaPipeModel,
   getMealInputAssistModelStatus,
   getMediaPipeModelStatus,
+  getMediaPipeModelStatusForModel,
   installMealInputAssistModel,
   installMediaPipeModel,
   redownloadMealInputAssistModel,
   redownloadMediaPipeModel,
 } from '../src/ai/mealInputAssist/modelInstaller';
 import {
+  MEDIAPIPE_CLASSIFIER_MODELS,
   MEDIAPIPE_MODEL_DISPLAY_NAME,
   resolveMediaPipeModelPath,
 } from '../src/ai/mealInputAssist/modelConfig';
@@ -55,6 +59,7 @@ jest.mock('../src/database/services/AppSettingsService', () => ({
     setAiInputAssistEnabled: jest.fn(),
     getMediaPipeClassifierModelId: jest.fn(),
     setMediaPipeClassifierModelId: jest.fn(),
+    migrateLegacyMediaPipeModelSettings: jest.fn(),
   },
 }));
 
@@ -76,12 +81,15 @@ jest.mock('../src/ai/mealInputAssist/mediapipeStaticImageProvider', () => ({
 }));
 
 jest.mock('../src/ai/mealInputAssist/modelInstaller', () => ({
+  cleanupOrphanedDualMediaPipeModel: jest.fn(),
+  cleanupRetiredMediaPipeModels: jest.fn(),
   deleteAllDownloadedLocalAiModels: jest.fn(),
   getMealInputAssistModelStatus: jest.fn(),
   installMealInputAssistModel: jest.fn(),
   redownloadMealInputAssistModel: jest.fn(),
   deleteMealInputAssistModel: jest.fn(),
   getMediaPipeModelStatus: jest.fn(),
+  getMediaPipeModelStatusForModel: jest.fn(),
   installMediaPipeModel: jest.fn(),
   redownloadMediaPipeModel: jest.fn(),
   deleteMediaPipeModel: jest.fn(),
@@ -398,6 +406,7 @@ describe('SettingsScreen', () => {
       'cooking_method_9class'
     );
     (AppSettingsService.setMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(undefined);
+    (AppSettingsService.migrateLegacyMediaPipeModelSettings as jest.Mock).mockResolvedValue(false);
     (getMealInputAssistModelStatus as jest.Mock).mockResolvedValue(
       createModelStatus('not_installed')
     );
@@ -417,6 +426,11 @@ describe('SettingsScreen', () => {
     (getMediaPipeModelStatus as jest.Mock).mockResolvedValue(
       createMediaPipeModelStatus('not_installed')
     );
+    (getMediaPipeModelStatusForModel as jest.Mock).mockResolvedValue(
+      createMediaPipeModelStatus('not_installed')
+    );
+    (cleanupOrphanedDualMediaPipeModel as jest.Mock).mockResolvedValue(null);
+    (cleanupRetiredMediaPipeModels as jest.Mock).mockResolvedValue(undefined);
     (installMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
     (redownloadMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
     (deleteMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
@@ -1261,6 +1275,90 @@ describe('SettingsScreen', () => {
       selected: false,
     });
     expect(queryByTestId('mediapipe-model-recovery-notice')).toBeNull();
+  });
+
+  test('runs explicit legacy model migration and orphaned dual-model cleanup during loadLocalAiRuntimeStatus', async () => {
+    (AppSettingsService.migrateLegacyMediaPipeModelSettings as jest.Mock).mockResolvedValue(true);
+    (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+      'personal_dual_dish'
+    );
+    (getMediaPipeStaticImageAvailability as jest.Mock).mockResolvedValue({
+      kind: 'unavailable',
+      mode: 'mediapipe-static-image',
+      code: 'model_unavailable',
+      reason: 'モデルファイルが見つかりません',
+    });
+    (getMediaPipeModelStatusForModel as jest.Mock).mockResolvedValue({
+      kind: 'error',
+      version: 'mediapipe-model-v0.2.0',
+      downloadedAt: null,
+      errorMessage: '主菜・副菜モデルの片方のみが端末に残っています。',
+      expectedPath: 'file:///documents/ai-models/personal_main_dish.task',
+      modelExists: false,
+      isOrphanedPartialFiles: true,
+    });
+
+    const initialRevision = getMealInputAssistEnvironmentRevision();
+    render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    await waitFor(() => {
+      expect(AppSettingsService.migrateLegacyMediaPipeModelSettings).toHaveBeenCalledTimes(1);
+    });
+    expect(cleanupRetiredMediaPipeModels).toHaveBeenCalledTimes(1);
+    expect(
+      (AppSettingsService.migrateLegacyMediaPipeModelSettings as jest.Mock).mock
+        .invocationCallOrder[0]
+    ).toBeLessThan((cleanupRetiredMediaPipeModels as jest.Mock).mock.invocationCallOrder[0]);
+    expect(getMealInputAssistEnvironmentRevision()).toBeGreaterThan(initialRevision);
+    expect(getMediaPipeModelStatusForModel).toHaveBeenCalledWith('personal_dual_dish');
+    await waitFor(() => {
+      expect(cleanupOrphanedDualMediaPipeModel).toHaveBeenCalledWith('personal_dual_dish');
+    });
+  });
+
+  test('triggers retired model cleanup safely without invalidating environment when no migration occurs', async () => {
+    (AppSettingsService.migrateLegacyMediaPipeModelSettings as jest.Mock).mockResolvedValue(false);
+    (cleanupRetiredMediaPipeModels as jest.Mock).mockRejectedValueOnce(new Error('cleanup failed'));
+
+    const initialRevision = getMealInputAssistEnvironmentRevision();
+    const { getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    await waitFor(() => {
+      expect(cleanupRetiredMediaPipeModels).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(getLocalAiRuntimeStatusSnapshot).toHaveBeenCalledTimes(1);
+    });
+    expect(getByTestId('toggle-ai-details-button')).toBeTruthy();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    expect(getMealInputAssistEnvironmentRevision()).toBe(initialRevision);
+  });
+
+  test('invalidates environment when unavailable stored model falls back to default', async () => {
+    const originalAvailable = MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class.available;
+    MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class.available = false;
+
+    try {
+      (AppSettingsService.getMediaPipeClassifierModelId as jest.Mock).mockResolvedValue(
+        'universal_dining_23class'
+      );
+      const initialRevision = getMealInputAssistEnvironmentRevision();
+
+      render(<SettingsScreen />);
+      await triggerLatestFocus();
+
+      await waitFor(() => {
+        expect(AppSettingsService.setMediaPipeClassifierModelId).toHaveBeenCalledWith(
+          'cooking_method_9class'
+        );
+      });
+      expect(getMealInputAssistEnvironmentRevision()).toBeGreaterThan(initialRevision);
+      expect(cleanupOrphanedDualMediaPipeModel).not.toHaveBeenCalled();
+    } finally {
+      MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class.available = originalAvailable;
+    }
   });
 
   describe('EAS Update UI in SettingsScreen', () => {

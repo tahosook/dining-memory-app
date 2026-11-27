@@ -1,4 +1,9 @@
 import type { CuisineTypeOption } from '../../constants/MealOptions';
+import type {
+  LegacyMediaPipeClassifierModelId,
+  LocalAiModelStatusKind,
+  MediaPipeClassifierModelId,
+} from '../../domain/ai/mediapipeModelIds';
 import type { AiRuntimeUnavailableCode } from '../runtime/types';
 
 export type MealInputAssistStatus = 'idle' | 'running' | 'success' | 'error' | 'disabled';
@@ -88,7 +93,7 @@ export interface MealInputAssistProvider {
 }
 
 export type MealInputAssistModelFileKey = 'model' | 'projector';
-export type MealInputAssistModelStatusKind = 'not_installed' | 'ready' | 'error';
+export type MealInputAssistModelStatusKind = LocalAiModelStatusKind;
 
 export interface MealInputAssistModelStatus {
   kind: MealInputAssistModelStatusKind;
@@ -120,7 +125,7 @@ export interface MealInputAssistModelInstallerOptions {
   onProgress?: (progress: MealInputAssistModelDownloadProgress) => void;
 }
 
-export type MediaPipeModelStatusKind = 'not_installed' | 'ready' | 'error';
+export type MediaPipeModelStatusKind = LocalAiModelStatusKind;
 
 export interface MediaPipeModelStatus {
   kind: MediaPipeModelStatusKind;
@@ -130,6 +135,7 @@ export interface MediaPipeModelStatus {
   expectedPath: string | null;
   expectedPaths?: string[];
   modelExists: boolean;
+  isOrphanedPartialFiles?: boolean;
 }
 
 export interface MediaPipeModelDownloadProgress {
@@ -146,11 +152,7 @@ export interface MediaPipeModelInstallerOptions {
   version?: string;
 }
 
-export type MediaPipeClassifierModelId =
-  'cooking_method_9class' | 'universal_dining_23class' | 'personal_dual_dish';
-
-export type LegacyMediaPipeClassifierModelId =
-  'personal_multilabel_44tag' | 'personal_household_8class' | 'universal_scene_7class';
+export type { MediaPipeClassifierModelId, LegacyMediaPipeClassifierModelId };
 
 export type MealInputAssistProviderMode =
   'mock' | 'local-runtime-prototype' | 'mediapipe-static-image' | 'override';

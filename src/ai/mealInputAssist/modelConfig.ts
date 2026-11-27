@@ -1,5 +1,11 @@
 import { documentDirectory } from 'expo-file-system/legacy';
-import type { MediaPipeClassifierModelId } from './types';
+import {
+  DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID,
+  MEDIAPIPE_CLASSIFIER_MODEL_IDS,
+  type MediaPipeClassifierModelId,
+} from '../../domain/ai/mediapipeModelIds';
+
+export { DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID };
 
 export const MEAL_INPUT_ASSIST_MODEL_DISPLAY_NAME = 'Qwen2.5-VL-3B-Instruct';
 
@@ -20,13 +26,6 @@ export const MEAL_INPUT_ASSIST_MODEL_CONFIG = {
 } as const;
 
 export const MEDIAPIPE_MODEL_DISPLAY_NAME = 'MediaPipe Meal Classifier';
-
-export const MEDIAPIPE_MODEL_CONFIG = {
-  version: 'mediapipe-model-v0.2.0',
-  fileName: 'meal-input-assist.task',
-  url: 'https://github.com/tahosook/dining-memory-app/releases/download/mediapipe-model-v0.2.0/meal-input-assist.task',
-  sha256: '3b3916614aae9e8d6ea85358b4b26aba024c54902b9257ae28338c80eadaa601',
-} as const;
 
 export interface MediaPipeClassifierModelFileMeta {
   fileName: string;
@@ -52,9 +51,6 @@ export interface MediaPipeClassifierModelMeta {
     personal_side_dish: MediaPipeClassifierModelFileMeta;
   };
 }
-
-export const DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID: MediaPipeClassifierModelId =
-  'cooking_method_9class';
 
 export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
   MediaPipeClassifierModelId,
@@ -115,11 +111,17 @@ export const MEDIAPIPE_CLASSIFIER_MODELS: Record<
   },
 };
 
-export const MEDIAPIPE_CLASSIFIER_MODEL_LIST: MediaPipeClassifierModelMeta[] = [
-  MEDIAPIPE_CLASSIFIER_MODELS.cooking_method_9class,
-  MEDIAPIPE_CLASSIFIER_MODELS.universal_dining_23class,
-  MEDIAPIPE_CLASSIFIER_MODELS.personal_dual_dish,
-];
+const defaultMediaPipeModel = MEDIAPIPE_CLASSIFIER_MODELS[DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID];
+
+export const MEDIAPIPE_MODEL_CONFIG = {
+  version: defaultMediaPipeModel.version,
+  fileName: defaultMediaPipeModel.fileName,
+  url: defaultMediaPipeModel.url,
+  sha256: defaultMediaPipeModel.sha256,
+} as const;
+
+export const MEDIAPIPE_CLASSIFIER_MODEL_LIST: MediaPipeClassifierModelMeta[] =
+  MEDIAPIPE_CLASSIFIER_MODEL_IDS.map(id => MEDIAPIPE_CLASSIFIER_MODELS[id]);
 
 const LOCAL_MODEL_DIRECTORY = 'ai-models';
 const MANAGED_FILE_ORDER = ['model', 'projector'] as const;
