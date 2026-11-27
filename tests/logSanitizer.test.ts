@@ -1,4 +1,8 @@
-import { sanitizeUriForLog, sanitizeLogObject } from '../src/utils/logSanitizer';
+import {
+  sanitizeUriForLog,
+  sanitizeTextForLog,
+  sanitizeLogObject,
+} from '../src/utils/logSanitizer';
 
 describe('logSanitizer', () => {
   describe('sanitizeUriForLog', () => {
@@ -26,6 +30,23 @@ describe('logSanitizer', () => {
     it('handles paths with backslashes', () => {
       const absolutePath = 'C:\\Users\\user\\AppData\\Local\\meal-20231010-101010.jpg';
       expect(sanitizeUriForLog(absolutePath)).toBe('[MASKED_PATH]/meal-20231010-101010.jpg');
+    });
+  });
+
+  describe('sanitizeTextForLog', () => {
+    it('masks Unix absolute paths immediately following a colon while preserving the prefix', () => {
+      const generationKey = 'meal-123:/data/user/0/com.app/files/meal.jpg';
+      expect(sanitizeTextForLog(generationKey)).toBe('meal-123:[MASKED_PATH]/meal.jpg');
+    });
+
+    it('preserves HTTPS URLs without breaking them', () => {
+      const url = 'https://example.com/path/to/page';
+      expect(sanitizeTextForLog(url)).toBe('https://example.com/path/to/page');
+    });
+
+    it('preserves time strings containing colons', () => {
+      const timeStr = '12:30:45';
+      expect(sanitizeTextForLog(timeStr)).toBe('12:30:45');
     });
   });
 

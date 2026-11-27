@@ -46,7 +46,7 @@ export function sanitizeTextForLog(text: string): string {
   // 3. Mask Unix absolute paths with at least 2 segments (e.g. /data/user/0/com.app/photos/meal.jpg -> [MASKED_PATH]/meal.jpg)
   // or stack traces like (/Users/dev/app/src/index.ts:10:5)
   result = result.replace(
-    /(^|[[\]\s'"<>,;(`{}=])(\/(?:[A-Za-z0-9_.\-~@]+\/)+[A-Za-z0-9_.\-~@]+(?::\d+(?::\d+)?)?)/g,
+    /(^|[[\]\s'"<>,;(`{}=:])(\/(?:[A-Za-z0-9_.\-~@]+\/)+[A-Za-z0-9_.\-~@]+(?::\d+(?::\d+)?)?)/g,
     (_match, prefix, pathStr) => {
       const slashIdx = Math.max(pathStr.lastIndexOf('/'), pathStr.lastIndexOf('\\'));
       const filename =
