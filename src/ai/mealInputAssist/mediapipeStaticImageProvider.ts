@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import { PERSONAL_DUAL_DISH_SUBMODEL_IDS } from '../../domain/ai/mediapipeModelIds';
 import { normalizeMediaPipeStaticImageResult } from './mediapipeStaticImageNormalizer';
 import { DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID, MEDIAPIPE_CLASSIFIER_MODELS } from './modelConfig';
 import { AppSettingsService } from '../../database/services/AppSettingsService';
@@ -83,22 +84,23 @@ export class MediaPipeStaticImageNativeModuleClassifier implements MediaPipeStat
       this.modelId ??
       (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
       DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+    const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[activeModelId];
 
-    if (activeModelId === 'personal_dual_dish') {
+    if (modelMeta?.isDual) {
       if (typeof this.nativeModule.classifyStaticImageWithModel === 'function') {
         const mainResult = await this.nativeModule.classifyStaticImageWithModel(
           photoUri,
-          'personal_main_dish'
+          PERSONAL_DUAL_DISH_SUBMODEL_IDS.main
         );
         const sideResult = await this.nativeModule.classifyStaticImageWithModel(
           photoUri,
-          'personal_side_dish'
+          PERSONAL_DUAL_DISH_SUBMODEL_IDS.side
         );
         return {
           photoUri,
           categories: [...(mainResult?.categories ?? []), ...(sideResult?.categories ?? [])],
           classifierName: 'personal-dual-dish-classifier',
-          modelVersion: 'mediapipe-model-v0.2.0',
+          modelVersion: modelMeta.version,
           timestamp: Date.now(),
         };
       }
@@ -146,12 +148,13 @@ export async function getMediaPipeStaticImageAvailability(
     modelId ??
     (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
     DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID;
+  const resolvedModelMeta = MEDIAPIPE_CLASSIFIER_MODELS[resolvedModelId];
 
-  if (resolvedModelId === 'personal_dual_dish') {
+  if (resolvedModelMeta?.isDual) {
     if (typeof nativeModule.getClassifierStatusForModel === 'function') {
       const [statusMain, statusSide] = await Promise.all([
-        nativeModule.getClassifierStatusForModel('personal_main_dish'),
-        nativeModule.getClassifierStatusForModel('personal_side_dish'),
+        nativeModule.getClassifierStatusForModel(PERSONAL_DUAL_DISH_SUBMODEL_IDS.main),
+        nativeModule.getClassifierStatusForModel(PERSONAL_DUAL_DISH_SUBMODEL_IDS.side),
       ]);
       if (statusMain.kind === 'unavailable') {
         return createUnavailableAvailability(
@@ -182,11 +185,10 @@ export async function getMediaPipeStaticImageAvailability(
     }
   }
 
-  const modelMeta = MEDIAPIPE_CLASSIFIER_MODELS[resolvedModelId];
   const description =
     resolvedModelId === DEFAULT_MEDIAPIPE_CLASSIFIER_MODEL_ID
       ? 'MediaPipe static-image meal input assist provider'
-      : `MediaPipe static-image meal input assist provider (${modelMeta?.label ?? resolvedModelId})`;
+      : `MediaPipe static-image meal input assist provider (${resolvedModelMeta?.label ?? resolvedModelId})`;
 
   return {
     kind: 'ready',

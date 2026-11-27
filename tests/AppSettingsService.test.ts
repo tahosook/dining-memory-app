@@ -1,3 +1,4 @@
+import { getMealInputAssistEnvironmentRevision } from '../src/ai/mealInputAssist/environment';
 import { AppSettingsService } from '../src/database/services/AppSettingsService';
 
 jest.mock('../src/database/services/localDatabase', () => {
@@ -147,10 +148,14 @@ describe('AppSettingsService', () => {
     );
   });
 
-  test('migrates legacy model IDs to direct successors for backward compatibility', async () => {
+  test('resolves legacy model IDs to direct successors without mutating persisted settings', async () => {
+    const initialRevision = getMealInputAssistEnvironmentRevision();
     await AppSettingsService.setString('mediapipe_classifier_model_id', 'universal_scene_7class');
     await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
       'universal_dining_23class'
+    );
+    await expect(AppSettingsService.getString('mediapipe_classifier_model_id', null)).resolves.toBe(
+      'universal_scene_7class'
     );
 
     await AppSettingsService.setString(
@@ -160,14 +165,120 @@ describe('AppSettingsService', () => {
     await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
       'personal_dual_dish'
     );
+    await expect(AppSettingsService.getString('mediapipe_classifier_model_id', null)).resolves.toBe(
+      'personal_household_8class'
+    );
 
     await AppSettingsService.setString(
       'mediapipe_classifier_model_id',
       'personal_multilabel_44tag'
     );
+    await AppSettingsService.setString('mediapipe_model_personal_multilabel_44tag_status', 'ready');
     await expect(AppSettingsService.getMediaPipeClassifierModelId()).resolves.toBe(
       'personal_dual_dish'
     );
+    await expect(AppSettingsService.getString('mediapipe_classifier_model_id', null)).resolves.toBe(
+      'personal_multilabel_44tag'
+    );
+    await expect(
+      AppSettingsService.getString('mediapipe_model_personal_multilabel_44tag_status', null)
+    ).resolves.toBe('ready');
+    expect(getMealInputAssistEnvironmentRevision()).toBe(initialRevision);
+  });
+
+  test('migrateLegacyMediaPipeModelSettings explicitly migrates legacy ID and deletes 12 legacy keys', async () => {
+    await AppSettingsService.setString(
+      'mediapipe_classifier_model_id',
+      'personal_multilabel_44tag'
+    );
+    await AppSettingsService.setString('mediapipe_model_personal_multilabel_44tag_status', 'ready');
+    await AppSettingsService.setString('mediapipe_model_personal_household_8class_version', 'v1');
+    await AppSettingsService.setString(
+      'mediapipe_model_universal_scene_7class_error_message',
+      'legacy-err'
+    );
+
+    await expect(AppSettingsService.migrateLegacyMediaPipeModelSettings()).resolves.toBe(true);
+
+    await expect(AppSettingsService.getString('mediapipe_classifier_model_id', null)).resolves.toBe(
+      'personal_dual_dish'
+    );
+    await expect(
+      AppSettingsService.getString('mediapipe_model_personal_multilabel_44tag_status', null)
+    ).resolves.toBeNull();
+    await expect(
+      AppSettingsService.getString('mediapipe_model_personal_household_8class_version', null)
+    ).resolves.toBeNull();
+    await expect(
+      AppSettingsService.getString('mediapipe_model_universal_scene_7class_error_message', null)
+    ).resolves.toBeNull();
+
+    await expect(AppSettingsService.migrateLegacyMediaPipeModelSettings()).resolves.toBe(false);
+  });
+
+  test('does not invalidate AI environment directly when saving settings (no layer inversion)', async () => {
+    const initialRevision = getMealInputAssistEnvironmentRevision();
+
+    await AppSettingsService.setAiInputAssistEnabled(true);
+    await AppSettingsService.setMediaPipeClassifierModelId('universal_dining_23class');
+
+    expect(getMealInputAssistEnvironmentRevision()).toBe(initialRevision);
+  });
+
+  test('persists and clears per-model MediaPipe state via unified prefix helpers', async () => {
+    await AppSettingsService.setMediaPipeModelStatusForModel('universal_dining_23class', 'ready');
+    await AppSettingsService.setMediaPipeModelVersionForModel(
+      'universal_dining_23class',
+      'mediapipe-model-v0.2.0'
+    );
+    await AppSettingsService.setMediaPipeModelDownloadedAtForModel(
+      'universal_dining_23class',
+      987654
+    );
+    await AppSettingsService.setMediaPipeModelErrorMessageForModel(
+      'universal_dining_23class',
+      'minor warning'
+    );
+
+    await expect(
+      AppSettingsService.getMediaPipeModelStatusForModel('universal_dining_23class')
+    ).resolves.toBe('ready');
+    await expect(
+      AppSettingsService.getMediaPipeModelVersionForModel('universal_dining_23class')
+    ).resolves.toBe('mediapipe-model-v0.2.0');
+    await expect(
+      AppSettingsService.getMediaPipeModelDownloadedAtForModel('universal_dining_23class')
+    ).resolves.toBe(987654);
+    await expect(
+      AppSettingsService.getMediaPipeModelErrorMessageForModel('universal_dining_23class')
+    ).resolves.toBe('minor warning');
+
+    await AppSettingsService.setMediaPipeModelVersionForModel('universal_dining_23class', null);
+    await AppSettingsService.setMediaPipeModelDownloadedAtForModel(
+      'universal_dining_23class',
+      null
+    );
+    await AppSettingsService.setMediaPipeModelErrorMessageForModel(
+      'universal_dining_23class',
+      null
+    );
+    await AppSettingsService.setString(
+      'mediapipe_model_universal_dining_23class_status',
+      'invalid'
+    );
+
+    await expect(
+      AppSettingsService.getMediaPipeModelStatusForModel('universal_dining_23class')
+    ).resolves.toBe('not_installed');
+    await expect(
+      AppSettingsService.getMediaPipeModelVersionForModel('universal_dining_23class')
+    ).resolves.toBeNull();
+    await expect(
+      AppSettingsService.getMediaPipeModelDownloadedAtForModel('universal_dining_23class')
+    ).resolves.toBeNull();
+    await expect(
+      AppSettingsService.getMediaPipeModelErrorMessageForModel('universal_dining_23class')
+    ).resolves.toBeNull();
   });
 
   test('falls back to cooking_method_9class for unknown model ID', async () => {

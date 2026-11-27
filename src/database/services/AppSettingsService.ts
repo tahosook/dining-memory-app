@@ -1,4 +1,11 @@
 import {
+  isLegacyMediaPipeClassifierModelId,
+  LEGACY_MEDIAPIPE_CLASSIFIER_MODEL_IDS,
+  resolveMediaPipeClassifierModelId,
+  type LocalAiModelStatusKind,
+  type MediaPipeClassifierModelId,
+} from '../../domain/ai/mediapipeModelIds';
+import {
   getDatabase,
   getInMemoryAppSettings,
   initializeDatabase,
@@ -8,21 +15,15 @@ import {
 } from './localDatabase';
 
 const AI_INPUT_ASSIST_ENABLED_KEY = 'ai_input_assist_enabled';
-const MEAL_INPUT_ASSIST_MODEL_VERSION_KEY = 'meal_input_assist_model_version';
-const MEAL_INPUT_ASSIST_MODEL_STATUS_KEY = 'meal_input_assist_model_status';
-const MEAL_INPUT_ASSIST_MODEL_DOWNLOADED_AT_KEY = 'meal_input_assist_model_downloaded_at';
-const MEAL_INPUT_ASSIST_MODEL_ERROR_MESSAGE_KEY = 'meal_input_assist_model_error_message';
-import type { MediaPipeClassifierModelId } from '../../ai/mealInputAssist/types';
-import { invalidateMealInputAssistEnvironment } from '../../ai/mealInputAssist/environment';
-
-const MEDIAPIPE_MODEL_STATUS_KEY = 'mediapipe_model_status';
-const MEDIAPIPE_MODEL_VERSION_KEY = 'mediapipe_model_version';
-const MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY = 'mediapipe_model_downloaded_at';
-const MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY = 'mediapipe_model_error_message';
+const MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX = 'meal_input_assist_model';
+const MEDIAPIPE_MODEL_KEY_PREFIX = 'mediapipe_model';
 const MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY = 'mediapipe_classifier_model_id';
 
-export type MealInputAssistModelStatusSetting = 'not_installed' | 'ready' | 'error';
-export type MediaPipeModelStatusSetting = 'not_installed' | 'ready' | 'error';
+const MODEL_STATE_KEY_SUFFIXES = ['status', 'version', 'downloaded_at', 'error_message'] as const;
+type ModelStateKeySuffix = (typeof MODEL_STATE_KEY_SUFFIXES)[number];
+
+export type MealInputAssistModelStatusSetting = LocalAiModelStatusKind;
+export type MediaPipeModelStatusSetting = LocalAiModelStatusKind;
 
 function parseBooleanSetting(value: string | null | undefined, defaultValue: boolean) {
   if (typeof value !== 'string') {
@@ -52,176 +53,209 @@ export class AppSettingsService {
 
   static async setAiInputAssistEnabled(enabled: boolean): Promise<void> {
     await this.setBoolean(AI_INPUT_ASSIST_ENABLED_KEY, enabled);
-    invalidateMealInputAssistEnvironment();
   }
 
   static async getMealInputAssistModelVersion(): Promise<string | null> {
-    return this.getString(MEAL_INPUT_ASSIST_MODEL_VERSION_KEY, null);
+    return this.getModelVersionByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX);
   }
 
   static async setMealInputAssistModelVersion(version: string | null): Promise<void> {
-    await this.setString(MEAL_INPUT_ASSIST_MODEL_VERSION_KEY, version);
+    await this.setModelVersionByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX, version);
   }
 
   static async getMealInputAssistModelStatus(): Promise<MealInputAssistModelStatusSetting> {
-    const value = await this.getString(MEAL_INPUT_ASSIST_MODEL_STATUS_KEY, 'not_installed');
-    return value === 'ready' || value === 'error' ? value : 'not_installed';
+    return this.getModelStatusByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX);
   }
 
   static async setMealInputAssistModelStatus(
     status: MealInputAssistModelStatusSetting
   ): Promise<void> {
-    await this.setString(MEAL_INPUT_ASSIST_MODEL_STATUS_KEY, status);
+    await this.setModelStatusByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX, status);
   }
 
   static async getMealInputAssistModelDownloadedAt(): Promise<number | null> {
-    return this.getNumber(MEAL_INPUT_ASSIST_MODEL_DOWNLOADED_AT_KEY, null);
+    return this.getModelDownloadedAtByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX);
   }
 
   static async setMealInputAssistModelDownloadedAt(downloadedAt: number | null): Promise<void> {
-    await this.setNumber(MEAL_INPUT_ASSIST_MODEL_DOWNLOADED_AT_KEY, downloadedAt);
+    await this.setModelDownloadedAtByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX, downloadedAt);
   }
 
   static async getMealInputAssistModelErrorMessage(): Promise<string | null> {
-    return this.getString(MEAL_INPUT_ASSIST_MODEL_ERROR_MESSAGE_KEY, null);
+    return this.getModelErrorMessageByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX);
   }
 
   static async setMealInputAssistModelErrorMessage(message: string | null): Promise<void> {
-    await this.setString(MEAL_INPUT_ASSIST_MODEL_ERROR_MESSAGE_KEY, message);
+    await this.setModelErrorMessageByPrefix(MEAL_INPUT_ASSIST_MODEL_KEY_PREFIX, message);
   }
 
   static async getMediaPipeModelStatus(): Promise<MediaPipeModelStatusSetting> {
-    const value = await this.getString(MEDIAPIPE_MODEL_STATUS_KEY, 'not_installed');
-    return value === 'ready' || value === 'error' ? value : 'not_installed';
+    return this.getModelStatusByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX);
   }
 
   static async setMediaPipeModelStatus(status: MediaPipeModelStatusSetting): Promise<void> {
-    await this.setString(MEDIAPIPE_MODEL_STATUS_KEY, status);
+    await this.setModelStatusByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX, status);
   }
 
   static async getMediaPipeModelVersion(): Promise<string | null> {
-    return this.getString(MEDIAPIPE_MODEL_VERSION_KEY, null);
+    return this.getModelVersionByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX);
   }
 
   static async setMediaPipeModelVersion(version: string | null): Promise<void> {
-    await this.setString(MEDIAPIPE_MODEL_VERSION_KEY, version);
+    await this.setModelVersionByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX, version);
   }
 
   static async getMediaPipeModelDownloadedAt(): Promise<number | null> {
-    return this.getNumber(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, null);
+    return this.getModelDownloadedAtByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX);
   }
 
   static async setMediaPipeModelDownloadedAt(downloadedAt: number | null): Promise<void> {
-    await this.setNumber(MEDIAPIPE_MODEL_DOWNLOADED_AT_KEY, downloadedAt);
+    await this.setModelDownloadedAtByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX, downloadedAt);
   }
 
   static async getMediaPipeModelErrorMessage(): Promise<string | null> {
-    return this.getString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, null);
+    return this.getModelErrorMessageByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX);
   }
 
   static async setMediaPipeModelErrorMessage(errorMessage: string | null): Promise<void> {
-    await this.setString(MEDIAPIPE_MODEL_ERROR_MESSAGE_KEY, errorMessage);
+    await this.setModelErrorMessageByPrefix(MEDIAPIPE_MODEL_KEY_PREFIX, errorMessage);
   }
 
   static async getMediaPipeClassifierModelId(): Promise<MediaPipeClassifierModelId> {
-    const value = await this.getString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, 'cooking_method_9class');
-    if (
-      value === 'cooking_method_9class' ||
-      value === 'universal_dining_23class' ||
-      value === 'personal_dual_dish'
-    ) {
-      return value;
+    const value = await this.getString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, null);
+    return resolveMediaPipeClassifierModelId(value);
+  }
+
+  static async migrateLegacyMediaPipeModelSettings(): Promise<boolean> {
+    const rawValue = await this.getString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, null);
+    if (!isLegacyMediaPipeClassifierModelId(rawValue)) {
+      return false;
     }
-    // Backward compatibility: migrate legacy models to their direct successors
-    if (value === 'universal_scene_7class') {
-      await this.setMediaPipeClassifierModelId('universal_dining_23class').catch(() => {});
-      return 'universal_dining_23class';
-    }
-    if (value === 'personal_household_8class' || value === 'personal_multilabel_44tag') {
-      await this.setMediaPipeClassifierModelId('personal_dual_dish').catch(() => {});
-      await this.cleanupLegacyMediaPipeModelSettings().catch(() => {});
-      return 'personal_dual_dish';
-    }
-    return 'cooking_method_9class';
+
+    const successorModelId = resolveMediaPipeClassifierModelId(rawValue);
+    await this.setMediaPipeClassifierModelId(successorModelId);
+    await this.cleanupLegacyMediaPipeModelSettings();
+    return true;
   }
 
   static async cleanupLegacyMediaPipeModelSettings(): Promise<void> {
-    const legacyKeys = [
-      'mediapipe_model_personal_multilabel_44tag_status',
-      'mediapipe_model_personal_multilabel_44tag_version',
-      'mediapipe_model_personal_multilabel_44tag_downloaded_at',
-      'mediapipe_model_personal_multilabel_44tag_error_message',
-      'mediapipe_model_personal_household_8class_status',
-      'mediapipe_model_personal_household_8class_version',
-      'mediapipe_model_personal_household_8class_downloaded_at',
-      'mediapipe_model_personal_household_8class_error_message',
-      'mediapipe_model_universal_scene_7class_status',
-      'mediapipe_model_universal_scene_7class_version',
-      'mediapipe_model_universal_scene_7class_downloaded_at',
-      'mediapipe_model_universal_scene_7class_error_message',
-    ];
+    const legacyKeys = LEGACY_MEDIAPIPE_CLASSIFIER_MODEL_IDS.flatMap(legacyModelId =>
+      MODEL_STATE_KEY_SUFFIXES.map(suffix =>
+        this.getModelStateKey(`${MEDIAPIPE_MODEL_KEY_PREFIX}_${legacyModelId}`, suffix)
+      )
+    );
     await Promise.all(legacyKeys.map(key => this.setString(key, null)));
   }
 
   static async setMediaPipeClassifierModelId(modelId: MediaPipeClassifierModelId): Promise<void> {
     await this.setString(MEDIAPIPE_CLASSIFIER_MODEL_ID_KEY, modelId);
-    invalidateMealInputAssistEnvironment();
   }
 
   static async getMediaPipeModelStatusForModel(
     modelId: MediaPipeClassifierModelId
   ): Promise<MediaPipeModelStatusSetting> {
-    const value = await this.getString(`mediapipe_model_${modelId}_status`, null);
-    if (value === 'ready' || value === 'error') {
-      return value;
-    }
-    return 'not_installed';
+    return this.getModelStatusByPrefix(`${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`);
   }
 
   static async setMediaPipeModelStatusForModel(
     modelId: MediaPipeClassifierModelId,
     status: MediaPipeModelStatusSetting
   ): Promise<void> {
-    await this.setString(`mediapipe_model_${modelId}_status`, status);
+    await this.setModelStatusByPrefix(`${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`, status);
   }
 
   static async getMediaPipeModelVersionForModel(
     modelId: MediaPipeClassifierModelId
   ): Promise<string | null> {
-    return this.getString(`mediapipe_model_${modelId}_version`, null);
+    return this.getModelVersionByPrefix(`${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`);
   }
 
   static async setMediaPipeModelVersionForModel(
     modelId: MediaPipeClassifierModelId,
     version: string | null
   ): Promise<void> {
-    await this.setString(`mediapipe_model_${modelId}_version`, version);
+    await this.setModelVersionByPrefix(`${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`, version);
   }
 
   static async getMediaPipeModelDownloadedAtForModel(
     modelId: MediaPipeClassifierModelId
   ): Promise<number | null> {
-    return this.getNumber(`mediapipe_model_${modelId}_downloaded_at`, null);
+    return this.getModelDownloadedAtByPrefix(`${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`);
   }
 
   static async setMediaPipeModelDownloadedAtForModel(
     modelId: MediaPipeClassifierModelId,
     downloadedAt: number | null
   ): Promise<void> {
-    await this.setNumber(`mediapipe_model_${modelId}_downloaded_at`, downloadedAt);
+    await this.setModelDownloadedAtByPrefix(
+      `${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`,
+      downloadedAt
+    );
   }
 
   static async getMediaPipeModelErrorMessageForModel(
     modelId: MediaPipeClassifierModelId
   ): Promise<string | null> {
-    return this.getString(`mediapipe_model_${modelId}_error_message`, null);
+    return this.getModelErrorMessageByPrefix(`${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`);
   }
 
   static async setMediaPipeModelErrorMessageForModel(
     modelId: MediaPipeClassifierModelId,
     errorMessage: string | null
   ): Promise<void> {
-    await this.setString(`mediapipe_model_${modelId}_error_message`, errorMessage);
+    await this.setModelErrorMessageByPrefix(
+      `${MEDIAPIPE_MODEL_KEY_PREFIX}_${modelId}`,
+      errorMessage
+    );
+  }
+
+  private static getModelStateKey(prefix: string, suffix: ModelStateKeySuffix): string {
+    return `${prefix}_${suffix}`;
+  }
+
+  private static async getModelStatusByPrefix(prefix: string): Promise<LocalAiModelStatusKind> {
+    const value = await this.getString(this.getModelStateKey(prefix, 'status'), 'not_installed');
+    return value === 'ready' || value === 'error' ? value : 'not_installed';
+  }
+
+  private static async setModelStatusByPrefix(
+    prefix: string,
+    status: LocalAiModelStatusKind
+  ): Promise<void> {
+    await this.setString(this.getModelStateKey(prefix, 'status'), status);
+  }
+
+  private static async getModelVersionByPrefix(prefix: string): Promise<string | null> {
+    return this.getString(this.getModelStateKey(prefix, 'version'), null);
+  }
+
+  private static async setModelVersionByPrefix(
+    prefix: string,
+    version: string | null
+  ): Promise<void> {
+    await this.setString(this.getModelStateKey(prefix, 'version'), version);
+  }
+
+  private static async getModelDownloadedAtByPrefix(prefix: string): Promise<number | null> {
+    return this.getNumber(this.getModelStateKey(prefix, 'downloaded_at'), null);
+  }
+
+  private static async setModelDownloadedAtByPrefix(
+    prefix: string,
+    downloadedAt: number | null
+  ): Promise<void> {
+    await this.setNumber(this.getModelStateKey(prefix, 'downloaded_at'), downloadedAt);
+  }
+
+  private static async getModelErrorMessageByPrefix(prefix: string): Promise<string | null> {
+    return this.getString(this.getModelStateKey(prefix, 'error_message'), null);
+  }
+
+  private static async setModelErrorMessageByPrefix(
+    prefix: string,
+    errorMessage: string | null
+  ): Promise<void> {
+    await this.setString(this.getModelStateKey(prefix, 'error_message'), errorMessage);
   }
 
   static async getBoolean(key: string, defaultValue: boolean): Promise<boolean> {

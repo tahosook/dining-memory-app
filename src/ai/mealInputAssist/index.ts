@@ -39,6 +39,7 @@ export {
 export type { MediaPipeClassifierModelMeta } from './modelConfig';
 
 export {
+  cleanupOrphanedDualMediaPipeModel,
   cleanupRetiredMediaPipeModels,
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
