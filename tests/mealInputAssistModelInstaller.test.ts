@@ -115,12 +115,18 @@ const fileSystemMock = jest.requireMock('expo-file-system/legacy') as {
   };
   createDownloadResumable: jest.Mock;
   moveAsync: jest.Mock;
+  deleteAsync: jest.Mock;
 };
 
 const defaultMoveAsync = async ({ from, to }: { from: string; to: string }) => {
   fileSystemMock.__mock.existingFiles.delete(from);
   fileSystemMock.__mock.downloads.delete(from);
   fileSystemMock.__mock.existingFiles.add(to);
+};
+
+const defaultDeleteAsync = async (path: string) => {
+  fileSystemMock.__mock.existingFiles.delete(path);
+  fileSystemMock.__mock.downloads.delete(path);
 };
 
 describe('meal input assist model installer', () => {
@@ -634,6 +640,35 @@ describe('MediaPipe model installer', () => {
       await expect(cleanupOrphanedDualMediaPipeModel('personal_dual_dish')).resolves.toBeNull();
       expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[0])).toBe(true);
       expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[1])).toBe(true);
+    });
+
+    test('cleanupOrphanedDualMediaPipeModel reports isOrphanedPartialFiles: true and persists failure state when deletion fails', async () => {
+      const expectedPaths = resolveMediaPipeModelPaths('personal_dual_dish');
+      fileSystemMock.__mock.existingFiles.add(expectedPaths[0]); // Only main exists
+      await AppSettingsService.setMediaPipeModelStatusForModel('personal_dual_dish', 'ready');
+
+      fileSystemMock.deleteAsync.mockRejectedValueOnce(new Error('permission denied'));
+
+      try {
+        const result = await cleanupOrphanedDualMediaPipeModel('personal_dual_dish');
+
+        expect(fileSystemMock.__mock.existingFiles.has(expectedPaths[0])).toBe(true);
+        expect(result).toMatchObject({
+          kind: 'error',
+          modelExists: false,
+          isOrphanedPartialFiles: true,
+          errorMessage: expect.stringContaining('削除に失敗しました'),
+        });
+        expect(result?.errorMessage).not.toContain('クリーンアップしました');
+        await expect(
+          AppSettingsService.getMediaPipeModelStatusForModel('personal_dual_dish')
+        ).resolves.toBe('error');
+        await expect(
+          AppSettingsService.getMediaPipeModelErrorMessageForModel('personal_dual_dish')
+        ).resolves.toContain('削除に失敗しました');
+      } finally {
+        fileSystemMock.deleteAsync.mockImplementation(defaultDeleteAsync);
+      }
     });
 
     test('restores both existing files from backups when dual model replacement fails during side dish placement', async () => {

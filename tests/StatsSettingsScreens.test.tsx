@@ -18,6 +18,7 @@ import { BackupService } from '../src/database/services/BackupService';
 import { getLocalAiRuntimeStatusSnapshot } from '../src/ai/runtime';
 import {
   cleanupOrphanedDualMediaPipeModel,
+  cleanupRetiredMediaPipeModels,
   deleteAllDownloadedLocalAiModels,
   deleteMealInputAssistModel,
   deleteMediaPipeModel,
@@ -81,6 +82,7 @@ jest.mock('../src/ai/mealInputAssist/mediapipeStaticImageProvider', () => ({
 
 jest.mock('../src/ai/mealInputAssist/modelInstaller', () => ({
   cleanupOrphanedDualMediaPipeModel: jest.fn(),
+  cleanupRetiredMediaPipeModels: jest.fn(),
   deleteAllDownloadedLocalAiModels: jest.fn(),
   getMealInputAssistModelStatus: jest.fn(),
   installMealInputAssistModel: jest.fn(),
@@ -428,6 +430,7 @@ describe('SettingsScreen', () => {
       createMediaPipeModelStatus('not_installed')
     );
     (cleanupOrphanedDualMediaPipeModel as jest.Mock).mockResolvedValue(null);
+    (cleanupRetiredMediaPipeModels as jest.Mock).mockResolvedValue(undefined);
     (installMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
     (redownloadMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
     (deleteMediaPipeModel as jest.Mock).mockResolvedValue(undefined);
@@ -1302,11 +1305,35 @@ describe('SettingsScreen', () => {
     await waitFor(() => {
       expect(AppSettingsService.migrateLegacyMediaPipeModelSettings).toHaveBeenCalledTimes(1);
     });
+    expect(cleanupRetiredMediaPipeModels).toHaveBeenCalledTimes(1);
+    expect(
+      (AppSettingsService.migrateLegacyMediaPipeModelSettings as jest.Mock).mock
+        .invocationCallOrder[0]
+    ).toBeLessThan((cleanupRetiredMediaPipeModels as jest.Mock).mock.invocationCallOrder[0]);
     expect(getMealInputAssistEnvironmentRevision()).toBeGreaterThan(initialRevision);
     expect(getMediaPipeModelStatusForModel).toHaveBeenCalledWith('personal_dual_dish');
     await waitFor(() => {
       expect(cleanupOrphanedDualMediaPipeModel).toHaveBeenCalledWith('personal_dual_dish');
     });
+  });
+
+  test('triggers retired model cleanup safely without invalidating environment when no migration occurs', async () => {
+    (AppSettingsService.migrateLegacyMediaPipeModelSettings as jest.Mock).mockResolvedValue(false);
+    (cleanupRetiredMediaPipeModels as jest.Mock).mockRejectedValueOnce(new Error('cleanup failed'));
+
+    const initialRevision = getMealInputAssistEnvironmentRevision();
+    const { getByTestId } = render(<SettingsScreen />);
+    await triggerLatestFocus();
+
+    await waitFor(() => {
+      expect(cleanupRetiredMediaPipeModels).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(getLocalAiRuntimeStatusSnapshot).toHaveBeenCalledTimes(1);
+    });
+    expect(getByTestId('toggle-ai-details-button')).toBeTruthy();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    expect(getMealInputAssistEnvironmentRevision()).toBe(initialRevision);
   });
 
   test('invalidates environment when unavailable stored model falls back to default', async () => {

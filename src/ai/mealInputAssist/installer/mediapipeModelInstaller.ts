@@ -36,6 +36,8 @@ const ORPHANED_DUAL_MODEL_STATUS_ERROR_MESSAGE =
   '主菜・副菜モデルの片方のみが端末に残っています。モデルを再ダウンロードしてください。';
 const ORPHANED_DUAL_MODEL_CLEANUP_ERROR_MESSAGE =
   '主菜・副菜モデルの片方のみが端末に残っていたためクリーンアップしました。モデルを再ダウンロードしてください。';
+const ORPHANED_DUAL_MODEL_CLEANUP_FAILED_ERROR_MESSAGE =
+  '主菜・副菜モデルの片方のみが端末に残っており、残存ファイルの削除に失敗しました。モデルを再ダウンロードしてください。';
 
 function resolveDualModelPaths(modelMeta: MediaPipeClassifierModelMeta) {
   if (!modelMeta.isDual || !modelMeta.files) {
@@ -474,22 +476,47 @@ export async function cleanupOrphanedDualMediaPipeModel(
     sideExists ? cleanupFile(dualPaths.sidePath) : Promise.resolve(),
   ]);
 
+  const [remainingMainExists, remainingSideExists] = await Promise.all([
+    fileExists(dualPaths.mainPath),
+    fileExists(dualPaths.sidePath),
+  ]);
+
   const persisted = await readMediaPipeModelPersistedStateForModel(modelId);
-  await persistMediaPipeErrorStateForModel(
-    modelId,
-    ORPHANED_DUAL_MODEL_CLEANUP_ERROR_MESSAGE,
-    persisted.version
-  ).catch(() => {});
+  const bothExistAfter = remainingMainExists && remainingSideExists;
+  if (bothExistAfter) {
+    const resolvedVersion =
+      persisted.version ?? modelMeta?.version ?? MEDIAPIPE_MODEL_CONFIG.version;
+    await persistMediaPipeReadyStateForModel(modelId, resolvedVersion).catch(() => {});
+    return {
+      kind: 'ready',
+      version: resolvedVersion,
+      downloadedAt: persisted.downloadedAt,
+      errorMessage: null,
+      expectedPath: dualPaths.mainPath,
+      expectedPaths: dualPaths.expectedPaths,
+      modelExists: true,
+      isOrphanedPartialFiles: false,
+    };
+  }
+
+  const stillOrphaned = remainingMainExists !== remainingSideExists;
+  const errorMessage = stillOrphaned
+    ? ORPHANED_DUAL_MODEL_CLEANUP_FAILED_ERROR_MESSAGE
+    : ORPHANED_DUAL_MODEL_CLEANUP_ERROR_MESSAGE;
+
+  await persistMediaPipeErrorStateForModel(modelId, errorMessage, persisted.version).catch(
+    () => {}
+  );
 
   return {
     kind: 'error',
     version: persisted.version,
     downloadedAt: persisted.downloadedAt,
-    errorMessage: ORPHANED_DUAL_MODEL_CLEANUP_ERROR_MESSAGE,
+    errorMessage,
     expectedPath: dualPaths.mainPath,
     expectedPaths: dualPaths.expectedPaths,
     modelExists: false,
-    isOrphanedPartialFiles: false,
+    isOrphanedPartialFiles: stillOrphaned,
   };
 }
 

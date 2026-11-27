@@ -42,6 +42,7 @@ import {
 
 import {
   cleanupOrphanedDualMediaPipeModel,
+  cleanupRetiredMediaPipeModels,
   deleteAllDownloadedLocalAiModels,
   deleteMediaPipeModel,
   getMealInputAssistModelStatus,
@@ -135,6 +136,7 @@ export default function SettingsScreen() {
       if (migrated) {
         invalidateMealInputAssistEnvironment();
       }
+      await cleanupRetiredMediaPipeModels().catch(() => {});
 
       let currentModelId =
         (await AppSettingsService.getMediaPipeClassifierModelId?.().catch(() => null)) ??
