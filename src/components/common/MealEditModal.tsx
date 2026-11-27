@@ -12,14 +12,7 @@ import {
 } from 'react-native';
 import { Colors } from '../../constants/Colors';
 import { CuisineTypeSelector } from './CuisineTypeSelector';
-import { MealInputAssistSection } from './MealInputAssistSection';
-import type {
-  MealInputAssistCuisineSuggestion,
-  MealInputAssistProgress,
-  MealInputAssistStatus,
-  MealInputAssistSuggestions,
-  MealInputAssistTextSuggestion,
-} from '../../ai/mealInputAssist';
+import { MealInputAssistSection, type MealInputAssistUiProps } from './MealInputAssistSection';
 import type { CookingLevel } from '../../types/MealTypes';
 import { formatCookingLevel } from '../../utils/cookingLevel';
 
@@ -43,15 +36,7 @@ export type MealEditModalProps = {
   imageUri?: string;
   onRotateImage?: () => void | Promise<void>;
   rotatingImage?: boolean;
-  aiAssistStatus?: MealInputAssistStatus;
-  aiAssistSuggestions?: MealInputAssistSuggestions;
-  aiAssistErrorMessage?: string | null;
-  aiAssistProgress?: MealInputAssistProgress | null;
-  aiAssistDisabledReason?: string | null;
-  onRequestAiSuggestions?: () => Promise<void>;
-  onApplyNoteDraftSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyMealNameSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyCuisineSuggestion?: (suggestion: MealInputAssistCuisineSuggestion) => void;
+  aiAssist?: MealInputAssistUiProps;
 };
 
 export function MealEditModal({
@@ -65,15 +50,7 @@ export function MealEditModal({
   imageUri,
   onRotateImage,
   rotatingImage = false,
-  aiAssistStatus,
-  aiAssistSuggestions,
-  aiAssistErrorMessage = null,
-  aiAssistProgress = null,
-  aiAssistDisabledReason = null,
-  onRequestAiSuggestions,
-  onApplyNoteDraftSuggestion,
-  onApplyMealNameSuggestion,
-  onApplyCuisineSuggestion,
+  aiAssist,
 }: MealEditModalProps) {
   const updateDraft = <Key extends keyof MealEditDraft>(key: Key, value: MealEditDraft[Key]) => {
     onChange({ ...draft, [key]: value });
@@ -85,13 +62,7 @@ export function MealEditModal({
       cookingLevel: value ? draft.cookingLevel : '',
     });
   };
-  const canShowAiAssist = Boolean(
-    imageUri &&
-    aiAssistStatus &&
-    aiAssistSuggestions &&
-    onRequestAiSuggestions &&
-    onApplyNoteDraftSuggestion
-  );
+  const canShowAiAssist = Boolean(imageUri && aiAssist);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -153,21 +124,9 @@ export function MealEditModal({
               onChange={value => updateDraft('cuisineType', value)}
               testIDPrefix={`${testIDPrefix}-cuisine`}
             />
-            {canShowAiAssist &&
-            aiAssistStatus &&
-            aiAssistSuggestions &&
-            onRequestAiSuggestions &&
-            onApplyNoteDraftSuggestion ? (
+            {canShowAiAssist && aiAssist ? (
               <MealInputAssistSection
-                status={aiAssistStatus}
-                suggestions={aiAssistSuggestions}
-                errorMessage={aiAssistErrorMessage}
-                progress={aiAssistProgress}
-                disabledReason={aiAssistDisabledReason}
-                onRequestSuggestions={onRequestAiSuggestions}
-                onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
-                onApplyMealNameSuggestion={onApplyMealNameSuggestion}
-                onApplyCuisineSuggestion={onApplyCuisineSuggestion}
+                {...aiAssist}
                 variant="light"
                 testIDs={{
                   section: `${testIDPrefix}-ai-input-assist-section`,

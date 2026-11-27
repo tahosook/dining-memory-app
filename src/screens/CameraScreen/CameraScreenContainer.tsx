@@ -1,4 +1,5 @@
 import React from 'react';
+import { buildMealInputAssistUiProps } from '../../components/common/MealInputAssistSection';
 import { CameraView } from '../../components/screens/camera';
 import {
   useCameraCapture,
@@ -83,6 +84,32 @@ const CameraScreenContainer: React.FC = () => {
     [mealInputAssist.appliedMetadata, onCaptureReviewSave]
   );
 
+  const aiAssist = React.useMemo(
+    () =>
+      buildMealInputAssistUiProps({
+        status: mealInputAssist.status,
+        suggestions: mealInputAssist.suggestions,
+        errorMessage: mealInputAssist.errorMessage,
+        progress: mealInputAssist.progress,
+        disabledReason: mealInputAssist.disabledReason,
+        requestSuggestions: mealInputAssist.requestSuggestions,
+        applyNoteDraftSuggestion: mealInputAssist.applyNoteDraftSuggestion,
+        applyMealNameSuggestion: mealInputAssist.applyMealNameSuggestion,
+        applyCuisineSuggestion: mealInputAssist.applyCuisineSuggestion,
+      }),
+    [
+      mealInputAssist.status,
+      mealInputAssist.suggestions,
+      mealInputAssist.errorMessage,
+      mealInputAssist.progress,
+      mealInputAssist.disabledReason,
+      mealInputAssist.requestSuggestions,
+      mealInputAssist.applyNoteDraftSuggestion,
+      mealInputAssist.applyMealNameSuggestion,
+      mealInputAssist.applyCuisineSuggestion,
+    ]
+  );
+
   // Presentational層にデータを渡すのみ
   return (
     <CameraView
@@ -94,6 +121,7 @@ const CameraScreenContainer: React.FC = () => {
       permissionUiState={cameraPermissionState.uiState}
       cameraRef={cameraRef}
       captureReview={captureReview}
+      aiAssist={aiAssist}
       onTakePicture={takePicture}
       onAddPhotoFromLibrary={addPhotoFromLibrary}
       onFlipCamera={flipCamera}
@@ -103,15 +131,6 @@ const CameraScreenContainer: React.FC = () => {
       onCaptureReviewChange={onCaptureReviewChange}
       onCaptureReviewCancel={onCaptureReviewCancel}
       onCaptureReviewSave={handleCaptureReviewSave}
-      aiAssistStatus={mealInputAssist.status}
-      aiAssistSuggestions={mealInputAssist.suggestions}
-      aiAssistErrorMessage={mealInputAssist.errorMessage}
-      aiAssistProgress={mealInputAssist.progress}
-      aiAssistDisabledReason={mealInputAssist.disabledReason}
-      onRequestAiSuggestions={mealInputAssist.requestSuggestions}
-      onApplyNoteDraftSuggestion={mealInputAssist.applyNoteDraftSuggestion}
-      onApplyMealNameSuggestion={mealInputAssist.applyMealNameSuggestion}
-      onApplyCuisineSuggestion={mealInputAssist.applyCuisineSuggestion}
     />
   );
 };
