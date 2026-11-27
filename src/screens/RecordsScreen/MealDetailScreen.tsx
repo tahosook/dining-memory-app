@@ -15,6 +15,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { buildMealShareText, shareMealContent } from '../../media/mealShare';
 import { DetailRow } from '../../components/common/DetailRow';
 import { MealEditModal, type MealEditDraft } from '../../components/common/MealEditModal';
+import { buildMealInputAssistUiProps } from '../../components/common/MealInputAssistSection';
 import {
   MealPhotoViewer,
   type MealPhotoViewerPhoto,
@@ -217,6 +218,32 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
     captureReview: editCaptureReview,
     onCaptureReviewChange: handleEditCaptureReviewChange,
   });
+
+  const editAiAssist = useMemo(
+    () =>
+      buildMealInputAssistUiProps({
+        status: editMealInputAssist.status,
+        suggestions: editMealInputAssist.suggestions,
+        errorMessage: editMealInputAssist.errorMessage,
+        progress: editMealInputAssist.progress,
+        disabledReason: editMealInputAssist.disabledReason,
+        requestSuggestions: editMealInputAssist.requestSuggestions,
+        applyNoteDraftSuggestion: editMealInputAssist.applyNoteDraftSuggestion,
+        applyMealNameSuggestion: editMealInputAssist.applyMealNameSuggestion,
+        applyCuisineSuggestion: editMealInputAssist.applyCuisineSuggestion,
+      }),
+    [
+      editMealInputAssist.status,
+      editMealInputAssist.suggestions,
+      editMealInputAssist.errorMessage,
+      editMealInputAssist.progress,
+      editMealInputAssist.disabledReason,
+      editMealInputAssist.requestSuggestions,
+      editMealInputAssist.applyNoteDraftSuggestion,
+      editMealInputAssist.applyMealNameSuggestion,
+      editMealInputAssist.applyCuisineSuggestion,
+    ]
+  );
 
   const openEditModal = useCallback(() => {
     setEditingMeal(meal);
@@ -542,15 +569,7 @@ export const MealDetailScreen: React.FC<MealDetailScreenProps> = ({ route, navig
         imageUri={photoUri}
         onRotateImage={rotatePhotoClockwise}
         rotatingImage={rotatingPhoto}
-        aiAssistStatus={editMealInputAssist.status}
-        aiAssistSuggestions={editMealInputAssist.suggestions}
-        aiAssistErrorMessage={editMealInputAssist.errorMessage}
-        aiAssistProgress={editMealInputAssist.progress}
-        aiAssistDisabledReason={editMealInputAssist.disabledReason}
-        onRequestAiSuggestions={editMealInputAssist.requestSuggestions}
-        onApplyNoteDraftSuggestion={editMealInputAssist.applyNoteDraftSuggestion}
-        onApplyMealNameSuggestion={editMealInputAssist.applyMealNameSuggestion}
-        onApplyCuisineSuggestion={editMealInputAssist.applyCuisineSuggestion}
+        aiAssist={editAiAssist}
       />
 
       {photoViewerVisible ? (

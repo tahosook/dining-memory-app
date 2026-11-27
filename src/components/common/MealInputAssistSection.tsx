@@ -49,6 +49,39 @@ export interface MealInputAssistSectionProps {
   testIDs?: MealInputAssistSectionTestIDs;
 }
 
+export type MealInputAssistUiProps = Omit<MealInputAssistSectionProps, 'variant' | 'testIDs'>;
+
+export interface MealInputAssistHookLike {
+  status: MealInputAssistStatus;
+  suggestions: MealInputAssistSuggestions;
+  errorMessage: string | null;
+  progress: MealInputAssistProgress | null;
+  disabledReason: string | null;
+  requestSuggestions: () => Promise<void>;
+  applyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
+  applyMealNameSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
+  applyCuisineSuggestion?: (suggestion: MealInputAssistCuisineSuggestion) => void;
+}
+
+/**
+ * Bundles `useMealInputAssist` return fields into the typed UI prop object expected by `MealInputAssistSection`.
+ */
+export function buildMealInputAssistUiProps(
+  assist: MealInputAssistHookLike
+): MealInputAssistUiProps {
+  return {
+    status: assist.status,
+    suggestions: assist.suggestions,
+    errorMessage: assist.errorMessage,
+    progress: assist.progress,
+    disabledReason: assist.disabledReason,
+    onRequestSuggestions: assist.requestSuggestions,
+    onApplyNoteDraftSuggestion: assist.applyNoteDraftSuggestion,
+    onApplyMealNameSuggestion: assist.applyMealNameSuggestion,
+    onApplyCuisineSuggestion: assist.applyCuisineSuggestion,
+  };
+}
+
 function formatAiAssistDuration(durationMs: number | null | undefined) {
   if (typeof durationMs !== 'number' || Number.isNaN(durationMs) || durationMs < 0) {
     return null;

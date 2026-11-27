@@ -1,469 +1,51 @@
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  TextInput,
-  Switch,
-  ScrollView,
-  type ScrollViewInstance,
-  Platform,
-  ActivityIndicator,
-  type LayoutChangeEvent,
-} from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView as ExpoCameraView, CameraView as CameraViewType } from 'expo-camera';
 import { Colors } from '../../../constants/Colors';
-import { GlobalStyles } from '../../../constants/Styles';
-import { PLATFORM_CONFIGS, CAMERA_CONSTANTS } from '../../../constants/CameraConstants';
+import { PLATFORM_CONFIGS } from '../../../constants/CameraConstants';
 import { ErrorBoundary } from '../../../components/common/ErrorBoundary';
-import { CuisineTypeSelector } from '../../../components/common/CuisineTypeSelector';
-import { MealInputAssistSection } from '../../common/MealInputAssistSection';
+import type { MealInputAssistUiProps } from '../../common/MealInputAssistSection';
 import type { CameraPermissionState } from '../../../hooks/cameraCapture';
 import type {
   CaptureReviewEditableField,
   CaptureReviewState,
 } from '../../../hooks/cameraCapture/useCameraCapture';
-import type {
-  MealInputAssistCuisineSuggestion,
-  MealInputAssistProgress,
-  MealInputAssistStatus,
-  MealInputAssistSuggestions,
-  MealInputAssistTextSuggestion,
-} from '../../../ai/mealInputAssist';
+import { CameraBottomControls } from './CameraBottomControls';
+import { CaptureReview } from './CaptureReview';
+import {
+  PermissionDeniedView,
+  PermissionLoadingView,
+  PermissionRequestView,
+} from './PermissionViews';
 import TopBar from './TopBar';
-import CaptureButton from './CaptureButton';
 
 const platformConfig =
   PLATFORM_CONFIGS[Platform.OS as keyof typeof PLATFORM_CONFIGS] || PLATFORM_CONFIGS.default;
 const safeAreaEdges = platformConfig.safeAreaEdges as ('top' | 'bottom' | 'left' | 'right')[];
-const bottomBarMarginBottom = platformConfig.bottomBarMarginBottom;
 
-type CameraLogicState = {
+export type CameraViewProps = {
   takingPhoto: boolean;
   pickingPhotoFromLibrary: boolean;
   facing: 'front' | 'back';
   cameraRef: React.RefObject<CameraViewType | null>;
-};
-
-type CameraOperations = {
+  cameraPermission: CameraPermissionState['permission'];
+  permissionUiState: CameraPermissionState['uiState'];
+  captureReview: CaptureReviewState | null;
+  savingCapture: boolean;
+  aiAssist: MealInputAssistUiProps;
   onTakePicture: () => Promise<void>;
   onAddPhotoFromLibrary: () => Promise<void>;
   onFlipCamera: () => void;
   onClose: () => void;
   onRequestPermission: () => Promise<void>;
   onOpenSettings: () => Promise<void>;
-};
-
-type CameraReviewState = {
-  captureReview: CaptureReviewState | null;
-  savingCapture: boolean;
-};
-
-type CameraReviewOperations = {
   onCaptureReviewChange: (field: CaptureReviewEditableField, value: string | boolean) => void;
   onCaptureReviewCancel: () => void;
   onCaptureReviewSave: () => Promise<void>;
 };
 
-type CameraAiAssistState = {
-  aiAssistStatus: MealInputAssistStatus;
-  aiAssistSuggestions: MealInputAssistSuggestions;
-  aiAssistErrorMessage: string | null;
-  aiAssistProgress: MealInputAssistProgress | null;
-  aiAssistDisabledReason: string | null;
-};
-
-type CameraAiAssistOperations = {
-  onRequestAiSuggestions: () => Promise<void>;
-  onApplyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyMealNameSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyCuisineSuggestion?: (suggestion: MealInputAssistCuisineSuggestion) => void;
-};
-
-export type CameraViewProps = Pick<
-  CameraLogicState,
-  'takingPhoto' | 'pickingPhotoFromLibrary' | 'facing' | 'cameraRef'
-> &
-  Pick<
-    CameraOperations,
-    | 'onTakePicture'
-    | 'onAddPhotoFromLibrary'
-    | 'onFlipCamera'
-    | 'onClose'
-    | 'onRequestPermission'
-    | 'onOpenSettings'
-  > & {
-    cameraPermission: CameraPermissionState['permission'];
-    permissionUiState: CameraPermissionState['uiState'];
-  } & Pick<CameraReviewState, 'captureReview' | 'savingCapture'> &
-  Pick<
-    CameraReviewOperations,
-    'onCaptureReviewChange' | 'onCaptureReviewCancel' | 'onCaptureReviewSave'
-  > &
-  Pick<
-    CameraAiAssistState,
-    | 'aiAssistStatus'
-    | 'aiAssistSuggestions'
-    | 'aiAssistErrorMessage'
-    | 'aiAssistProgress'
-    | 'aiAssistDisabledReason'
-  > &
-  Pick<
-    CameraAiAssistOperations,
-    | 'onRequestAiSuggestions'
-    | 'onApplyNoteDraftSuggestion'
-    | 'onApplyMealNameSuggestion'
-    | 'onApplyCuisineSuggestion'
-  >;
-
-interface RevealableReviewFieldProps {
-  placeholder: string;
-  triggerLabel: string;
-  accessibilityLabel: string;
-  value: string;
-  visible: boolean;
-  onPress: () => void;
-  onChange: (value: string) => void;
-  onLayout: (event: LayoutChangeEvent) => void;
-  multiline?: boolean;
-  testID: string;
-}
-
-const PermissionLoadingView: React.FC = () => (
-  <View style={styles.container}>
-    <Text style={styles.permissionText}>カメラ権限を確認中...</Text>
-  </View>
-);
-
-const PermissionRequestView: React.FC<{ onRequestPermission: () => Promise<void> }> = ({
-  onRequestPermission,
-}) => (
-  <View style={styles.permissionScreen}>
-    <View style={styles.permissionCard}>
-      <Text style={styles.permissionTitle}>撮影を始めるにはカメラ権限が必要です</Text>
-      <Text style={styles.permissionText}>
-        食事の写真は端末内に保存します。保存時には現在地を内部利用して、同じ場所の記録をまとめやすくします。
-      </Text>
-      <TouchableOpacity
-        style={styles.permissionButton}
-        onPress={onRequestPermission}
-        testID="request-camera-permission-button"
-        accessibilityRole="button"
-      >
-        <Text style={styles.permissionButtonText}>カメラを許可する</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-);
-
-const PermissionDeniedView: React.FC<{ onOpenSettings: () => Promise<void> }> = ({
-  onOpenSettings,
-}) => (
-  <View style={styles.permissionScreen}>
-    <View style={styles.permissionCard}>
-      <Text style={styles.permissionTitle}>カメラ権限がオフになっています</Text>
-      <Text style={styles.permissionText}>
-        設定アプリからカメラ権限を許可すると、撮影を再開できます。写真と位置情報は引き続き端末内中心で扱います。
-      </Text>
-      <TouchableOpacity
-        style={styles.permissionButton}
-        onPress={onOpenSettings}
-        testID="open-camera-settings-button"
-        accessibilityRole="button"
-      >
-        <Text style={styles.permissionButtonText}>設定を開く</Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-);
-
 const CameraPreviewSpacer: React.FC = () => <View style={styles.cameraPreviewSpacer} />;
-
-const RevealableReviewField: React.FC<RevealableReviewFieldProps> = ({
-  placeholder,
-  triggerLabel,
-  accessibilityLabel,
-  value,
-  visible,
-  onPress,
-  onChange,
-  onLayout,
-  multiline = false,
-  testID,
-}) => (
-  <View onLayout={onLayout}>
-    {visible ? (
-      <TextInput
-        style={[styles.reviewInput, multiline && styles.reviewNotes]}
-        placeholder={placeholder}
-        placeholderTextColor={Colors.gray}
-        value={value}
-        onChangeText={onChange}
-        multiline={multiline}
-        testID={testID}
-        accessibilityLabel={accessibilityLabel}
-      />
-    ) : (
-      <TouchableOpacity
-        style={styles.reviewCompactButton}
-        onPress={onPress}
-        testID={`${testID}-trigger`}
-        accessibilityRole="button"
-      >
-        <Text style={styles.reviewCompactButtonText}>{triggerLabel}</Text>
-      </TouchableOpacity>
-    )}
-  </View>
-);
-
-interface CaptureReviewProps {
-  captureReview: CaptureReviewState;
-  savingCapture: boolean;
-  onChange: (field: CaptureReviewEditableField, value: string | boolean) => void;
-  onCancel: () => void;
-  onSave: () => Promise<void>;
-  aiAssistStatus: MealInputAssistStatus;
-  aiAssistSuggestions: MealInputAssistSuggestions;
-  aiAssistErrorMessage: string | null;
-  aiAssistProgress: MealInputAssistProgress | null;
-  aiAssistDisabledReason: string | null;
-  onRequestAiSuggestions: () => Promise<void>;
-  onApplyNoteDraftSuggestion: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyMealNameSuggestion?: (suggestion: MealInputAssistTextSuggestion) => void;
-  onApplyCuisineSuggestion?: (suggestion: MealInputAssistCuisineSuggestion) => void;
-}
-
-const CaptureReview: React.FC<CaptureReviewProps> = ({
-  captureReview,
-  savingCapture,
-  onChange,
-  onCancel,
-  onSave,
-  aiAssistStatus,
-  aiAssistSuggestions,
-  aiAssistErrorMessage,
-  aiAssistProgress,
-  aiAssistDisabledReason,
-  onRequestAiSuggestions,
-  onApplyNoteDraftSuggestion,
-  onApplyMealNameSuggestion,
-  onApplyCuisineSuggestion,
-}) => {
-  const [showLocationInput, setShowLocationInput] = React.useState(
-    Boolean(captureReview.locationName.trim())
-  );
-  const [showNotesInput, setShowNotesInput] = React.useState(Boolean(captureReview.notes.trim()));
-  const reviewScrollViewRef = React.useRef<ScrollViewInstance | null>(null);
-  const [sectionOffsets, setSectionOffsets] = React.useState({ location: 0, notes: 0 });
-
-  React.useEffect(() => {
-    if (captureReview.locationName.trim()) {
-      setShowLocationInput(true);
-    }
-
-    if (captureReview.notes.trim()) {
-      setShowNotesInput(true);
-    }
-  }, [captureReview.locationName, captureReview.notes]);
-
-  const revealField = React.useCallback(
-    (field: 'location' | 'notes') => {
-      if (field === 'location') {
-        setShowLocationInput(true);
-      } else {
-        setShowNotesInput(true);
-      }
-
-      setTimeout(() => {
-        reviewScrollViewRef.current?.scrollTo({
-          y: Math.max(sectionOffsets[field] - 24, 0),
-          animated: true,
-        });
-      }, 0);
-    },
-    [sectionOffsets]
-  );
-
-  const updateSectionOffset = React.useCallback(
-    (field: 'location' | 'notes', event: LayoutChangeEvent) => {
-      const nextY = event.nativeEvent.layout.y;
-      setSectionOffsets(current =>
-        current[field] === nextY ? current : { ...current, [field]: nextY }
-      );
-    },
-    []
-  );
-
-  return (
-    <View style={styles.reviewContainer} testID="capture-review-container">
-      <View style={styles.reviewCard}>
-        <ScrollView
-          ref={reviewScrollViewRef}
-          style={styles.reviewScroll}
-          contentContainerStyle={styles.reviewScrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.reviewTitle}>撮影内容を確認</Text>
-          {captureReview.source === 'library' ? (
-            <Text style={styles.reviewSubtext}>選択した写真から記録を作成します</Text>
-          ) : null}
-          <Image
-            source={{ uri: captureReview.photoUri }}
-            style={styles.reviewImage}
-            resizeMode="cover"
-          />
-
-          <MealInputAssistSection
-            status={aiAssistStatus}
-            suggestions={aiAssistSuggestions}
-            errorMessage={aiAssistErrorMessage}
-            progress={aiAssistProgress}
-            disabledReason={aiAssistDisabledReason}
-            onRequestSuggestions={onRequestAiSuggestions}
-            onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
-            onApplyMealNameSuggestion={onApplyMealNameSuggestion}
-            onApplyCuisineSuggestion={onApplyCuisineSuggestion}
-            variant="dark"
-          />
-
-          <TextInput
-            style={styles.reviewInput}
-            placeholder="料理名（入力しない場合は自動で名前が付きます）"
-            placeholderTextColor={Colors.gray}
-            value={captureReview.mealName}
-            onChangeText={value => onChange('mealName', value)}
-            testID="meal-name-input"
-            accessibilityLabel="料理名"
-          />
-
-          <CuisineTypeSelector
-            value={captureReview.cuisineType}
-            onChange={value => onChange('cuisineType', value)}
-            testIDPrefix="capture-review-cuisine"
-            labelColor={Colors.white}
-            showLabel={false}
-          />
-
-          <View style={styles.reviewSwitchRow}>
-            <Text style={styles.reviewSwitchLabel}>自炊</Text>
-            <Switch
-              value={captureReview.isHomemade}
-              onValueChange={value => onChange('isHomemade', value)}
-              accessibilityRole="switch"
-              accessibilityLabel="自炊"
-              accessibilityState={{ checked: captureReview.isHomemade }}
-              testID="homemade-switch"
-            />
-          </View>
-
-          <RevealableReviewField
-            placeholder="場所"
-            triggerLabel="場所を追加"
-            accessibilityLabel="場所"
-            value={captureReview.locationName}
-            visible={showLocationInput}
-            onPress={() => revealField('location')}
-            onChange={value => onChange('locationName', value)}
-            onLayout={event => updateSectionOffset('location', event)}
-            testID="location-input"
-          />
-
-          <RevealableReviewField
-            placeholder="メモ"
-            triggerLabel="メモを追加"
-            accessibilityLabel="メモ"
-            value={captureReview.notes}
-            visible={showNotesInput}
-            onPress={() => revealField('notes')}
-            onChange={value => onChange('notes', value)}
-            onLayout={event => updateSectionOffset('notes', event)}
-            multiline
-            testID="notes-input"
-          />
-        </ScrollView>
-
-        <View style={styles.reviewButtonRow}>
-          <TouchableOpacity
-            style={[
-              styles.reviewButton,
-              styles.reviewCancelButton,
-              savingCapture && styles.reviewButtonDisabled,
-            ]}
-            onPress={onCancel}
-            disabled={savingCapture}
-            testID="cancel-capture-review-button"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: savingCapture }}
-          >
-            <Text style={styles.reviewCancelText}>キャンセル</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.reviewButton,
-              styles.reviewSaveButton,
-              savingCapture && styles.reviewSaveButtonDisabled,
-            ]}
-            onPress={onSave}
-            disabled={savingCapture}
-            testID="save-meal-button"
-            accessibilityRole="button"
-            accessibilityLabel={savingCapture ? '保存中' : '保存'}
-            accessibilityState={{ disabled: savingCapture, busy: savingCapture }}
-          >
-            {savingCapture ? (
-              <View style={styles.reviewSavingContent}>
-                <ActivityIndicator size="small" color={Colors.white} />
-                <Text style={styles.reviewSaveText}>保存中...</Text>
-              </View>
-            ) : (
-              <Text style={styles.reviewSaveText}>保存</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
-  );
-};
-
-interface BottomControlsProps {
-  takingPhoto: boolean;
-  pickingPhotoFromLibrary: boolean;
-  onTakePicture: () => Promise<void>;
-  onAddPhotoFromLibrary: () => Promise<void>;
-}
-
-const BottomControls: React.FC<BottomControlsProps> = ({
-  takingPhoto,
-  pickingPhotoFromLibrary,
-  onTakePicture,
-  onAddPhotoFromLibrary,
-}) => (
-  <View style={[styles.bottomBar, { marginBottom: bottomBarMarginBottom }]}>
-    <View style={styles.captureActionsRow}>
-      <CaptureButton takingPhoto={takingPhoto} onPress={onTakePicture} />
-      <TouchableOpacity
-        style={[
-          styles.secondaryActionButton,
-          pickingPhotoFromLibrary && styles.secondaryActionButtonDisabled,
-        ]}
-        onPress={onAddPhotoFromLibrary}
-        disabled={pickingPhotoFromLibrary}
-        testID="add-photo-from-library-button"
-        accessibilityRole="button"
-        accessibilityLabel={pickingPhotoFromLibrary ? '写真を選択中' : '写真から追加'}
-        accessibilityState={{ disabled: pickingPhotoFromLibrary }}
-      >
-        <Text style={styles.secondaryActionButtonText}>
-          {pickingPhotoFromLibrary ? '選択中...' : '写真から追加'}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  </View>
-);
 
 const CameraView: React.FC<CameraViewProps> = ({
   takingPhoto,
@@ -474,6 +56,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   permissionUiState,
   cameraRef,
   captureReview,
+  aiAssist,
   onClose,
   onTakePicture,
   onAddPhotoFromLibrary,
@@ -483,15 +66,6 @@ const CameraView: React.FC<CameraViewProps> = ({
   onCaptureReviewChange,
   onCaptureReviewCancel,
   onCaptureReviewSave,
-  aiAssistStatus,
-  aiAssistSuggestions,
-  aiAssistErrorMessage,
-  aiAssistProgress,
-  aiAssistDisabledReason,
-  onRequestAiSuggestions,
-  onApplyNoteDraftSuggestion,
-  onApplyMealNameSuggestion,
-  onApplyCuisineSuggestion,
 }) => {
   const isWebWithoutPermissions =
     Platform.OS === 'web' && (!cameraPermission || !cameraPermission.granted);
@@ -511,6 +85,7 @@ const CameraView: React.FC<CameraViewProps> = ({
   return (
     <ErrorBoundary>
       <SafeAreaView style={styles.container} edges={safeAreaEdges}>
+        {/* Keep ExpoCameraView mounted behind review UI to avoid Android camera teardown/re-init glitches. */}
         <ExpoCameraView
           style={styles.camera}
           facing={facing}
@@ -527,25 +102,17 @@ const CameraView: React.FC<CameraViewProps> = ({
             <CaptureReview
               captureReview={captureReview}
               savingCapture={savingCapture}
+              aiAssist={aiAssist}
               onChange={onCaptureReviewChange}
               onCancel={onCaptureReviewCancel}
               onSave={onCaptureReviewSave}
-              aiAssistStatus={aiAssistStatus}
-              aiAssistSuggestions={aiAssistSuggestions}
-              aiAssistErrorMessage={aiAssistErrorMessage}
-              aiAssistProgress={aiAssistProgress}
-              aiAssistDisabledReason={aiAssistDisabledReason}
-              onRequestAiSuggestions={onRequestAiSuggestions}
-              onApplyNoteDraftSuggestion={onApplyNoteDraftSuggestion}
-              onApplyMealNameSuggestion={onApplyMealNameSuggestion}
-              onApplyCuisineSuggestion={onApplyCuisineSuggestion}
             />
           ) : (
             <CameraPreviewSpacer />
           )}
 
           {!captureReview ? (
-            <BottomControls
+            <CameraBottomControls
               takingPhoto={takingPhoto}
               pickingPhotoFromLibrary={pickingPhotoFromLibrary}
               onTakePicture={onTakePicture}
@@ -562,40 +129,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.black,
-  },
-  permissionScreen: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    backgroundColor: Colors.black,
-  },
-  permissionCard: {
-    backgroundColor: 'rgba(0,0,0,0.88)',
-    borderRadius: 16,
-    padding: 20,
-    gap: 14,
-  },
-  permissionTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: Colors.white,
-    textAlign: 'center',
-  },
-  permissionText: {
-    ...GlobalStyles.body,
-    color: Colors.white,
-    textAlign: 'center',
-  },
-  permissionButton: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  permissionButtonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '700',
   },
   camera: {
     position: 'absolute',
@@ -621,147 +154,6 @@ const styles = StyleSheet.create({
   },
   cameraPreviewSpacer: {
     flex: 1,
-  },
-  bottomBar: {
-    width: '100%',
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-    alignItems: 'center',
-  },
-  captureActionsRow: {
-    width: '100%',
-    minHeight: CAMERA_CONSTANTS.CAMERA_BUTTON_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryActionButton: {
-    position: 'absolute',
-    right: 0,
-    top: 20,
-    minHeight: 40,
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  secondaryActionButtonDisabled: {
-    opacity: 0.55,
-  },
-  secondaryActionButtonText: {
-    color: Colors.white,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  reviewContainer: {
-    flex: 1,
-    justifyContent: 'flex-start',
-    paddingTop: 12,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
-  },
-  reviewCard: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.88)',
-    borderRadius: 16,
-    padding: 16,
-  },
-  reviewScroll: {
-    flex: 1,
-  },
-  reviewScrollContent: {
-    gap: 14,
-    paddingBottom: 16,
-  },
-  reviewTitle: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  reviewSubtext: {
-    color: '#d7dce1',
-    fontSize: 13,
-  },
-  reviewImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: 12,
-    backgroundColor: Colors.gray,
-  },
-  reviewInput: {
-    backgroundColor: Colors.white,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    color: Colors.text,
-  },
-  reviewNotes: {
-    minHeight: 84,
-    textAlignVertical: 'top',
-  },
-  reviewCompactButton: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-  },
-  reviewCompactButtonText: {
-    ...GlobalStyles.body,
-    color: '#d7dce1',
-  },
-  reviewSwitchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  reviewSwitchLabel: {
-    color: Colors.white,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  reviewButtonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    paddingTop: 12,
-  },
-  reviewButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  reviewCancelButton: {
-    backgroundColor: Colors.white,
-  },
-  reviewButtonDisabled: {
-    opacity: 0.55,
-  },
-  reviewSaveButton: {
-    backgroundColor: Colors.primary,
-  },
-  reviewSaveButtonDisabled: {
-    opacity: 0.55,
-  },
-  reviewSavingContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  reviewCancelText: {
-    color: Colors.black,
-    fontWeight: '600',
-  },
-  reviewSaveText: {
-    color: Colors.white,
-    fontWeight: '600',
   },
 });
 
