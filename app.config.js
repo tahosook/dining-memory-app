@@ -3,7 +3,6 @@
 
 module.exports = (props = {}) => {
   const { config = {} } = props;
-  const expo = config.expo || {};
 
   // Try multiple sources for commit hash: EAS_BUILD_COMMIT_HASH, COMMIT_HASH env var, or use git rev-parse
   let resolvedCommitHash = process.env.EAS_BUILD_COMMIT_HASH || process.env.COMMIT_HASH;
@@ -28,7 +27,7 @@ module.exports = (props = {}) => {
     resolvedBuildDate = new Date().toISOString();
   }
 
-  const extra = { ...expo.extra };
+  const extra = { ...config.extra };
   if (resolvedCommitHash) {
     extra.commitHash = resolvedCommitHash;
   }
@@ -36,18 +35,15 @@ module.exports = (props = {}) => {
 
   return {
     ...config,
-    expo: {
-      ...expo,
-      version: expo.version,
-      android: {
-        ...expo.android,
-        versionCode: expo.android?.versionCode ?? 1,
-      },
-      ios: {
-        ...expo.ios,
-        buildNumber: expo.ios?.buildNumber ?? '1',
-      },
-      extra,
+    ...(config.version !== undefined ? { version: config.version } : {}),
+    android: {
+      ...config.android,
+      versionCode: config.android?.versionCode ?? 1,
     },
+    ios: {
+      ...config.ios,
+      buildNumber: config.ios?.buildNumber ?? '1',
+    },
+    extra,
   };
 };
